@@ -1,0 +1,390 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    html {
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    body {
+        background: #f4f7fb;
+    }
+}
+
+@layer components {
+    .admin-page {
+        min-height: 100vh;
+        padding: 4.5rem 0.75rem 1rem;
+    }
+
+    .admin-content {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        border-radius: 1rem;
+        background: #ffffff;
+        padding: 1rem;
+        box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+    }
+
+    .admin-content h1 {
+        line-height: 1.15;
+    }
+
+    .admin-content form {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .admin-content input,
+    .admin-content select,
+    .admin-content textarea {
+        max-width: 100%;
+    }
+
+    .admin-content table {
+        width: 100%;
+    }
+
+    #logo-sidebar > div {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    #logo-sidebar a,
+    #logo-sidebar button {
+        transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+    }
+
+    #logo-sidebar a:hover,
+    #logo-sidebar button:hover {
+        transform: translateX(2px);
+    }
+
+    #logo-sidebar i {
+        width: 1.25rem;
+        text-align: center;
+    }
+
+    #logo-sidebar span {
+        font-size: 0.95rem;
+    }
+
+    .oncology-mixture {
+        max-width: 100%;
+        overflow: hidden;
+        border-radius: 0.875rem;
+        background: #ffffff;
+    }
+
+    .oncology-mixture > .flex:first-child {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .oncology-medicine-table-wrap {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+    }
+
+    .oncology-medicine-table {
+        min-width: 42rem;
+        border-collapse: collapse;
+    }
+
+    .oncology-medicine-table th,
+    .oncology-medicine-table td {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    @media (max-width: 1023px) {
+        .oncology-medicine-table-wrap {
+            overflow-x: visible;
+            border: 0;
+        }
+
+        .oncology-medicine-table {
+            display: block;
+            min-width: 0;
+            border: 0;
+        }
+
+        .oncology-medicine-table thead {
+            display: none;
+        }
+
+        .oncology-medicine-table tbody {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .oncology-medicine-table tr {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.85rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            background: #ffffff;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+            padding: 0.95rem;
+        }
+
+        .oncology-medicine-table td {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            gap: 0.25rem;
+            border: 0 !important;
+            padding: 0;
+            text-align: left;
+            white-space: normal;
+        }
+
+        .oncology-medicine-table td {
+            grid-column: 1 / -1;
+        }
+
+        .oncology-medicine-table td:nth-child(1)::before {
+            content: "Medicamento";
+        }
+
+        .oncology-medicine-table td:nth-child(2)::before {
+            content: "Dosis";
+        }
+
+        .oncology-medicine-table td:nth-child(3)::before {
+            content: "Diluyente";
+        }
+
+        .oncology-medicine-table td:nth-child(4)::before {
+            content: "Via de administracion";
+        }
+
+        .oncology-medicine-table td:nth-child(5)::before {
+            content: "Accion";
+        }
+
+        .oncology-medicine-table td::before {
+            color: #475569;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .oncology-medicine-table select,
+        .oncology-medicine-table input {
+            min-width: 0 !important;
+            width: 100%;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 0.5rem;
+            background-color: #ffffff;
+            min-height: 2.35rem;
+            padding: 0.45rem 0.65rem;
+        }
+
+        .oncology-medicine-table td:nth-child(5) {
+            align-items: flex-start;
+        }
+
+        .oncology-medicine-table td:nth-child(5):empty {
+            display: none;
+        }
+
+        .oncology-medicine-table td:nth-child(5) button {
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: max-content;
+            min-height: 2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.78rem;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .oncology-medicine-table td:nth-child(5) button:has(i):not(:has(span)),
+        .oncology-medicine-table td:nth-child(5) button:has(svg):not(:has(span)) {
+            min-width: 2.25rem;
+            min-height: 2.25rem;
+            padding: 0.5rem;
+        }
+    }
+
+    @media (min-width: 640px) {
+        .admin-page {
+            padding: 5rem 1rem 1.5rem;
+        }
+
+        .admin-content {
+            padding: 1.25rem;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .admin-page {
+            padding: 5rem 1.5rem 1.5rem;
+        }
+    }
+
+    @media (max-width: 1023px) {
+        .admin-content {
+            border: 0;
+        }
+
+        .admin-content form > .flex,
+        .admin-content form .flex.gap-4 {
+            flex-wrap: wrap;
+        }
+
+        .admin-content form .flex.gap-4 > * {
+            flex: 1 1 16rem;
+            min-width: min(100%, 16rem);
+        }
+
+        .admin-content form .items-baseline,
+        .admin-content form .items-stretch {
+            align-items: flex-start;
+        }
+
+        .admin-content label {
+            white-space: normal !important;
+        }
+
+        .admin-content input,
+        .admin-content select,
+        .admin-content textarea {
+            min-height: 2.5rem;
+            font-size: 0.95rem;
+        }
+
+        .admin-content table {
+            min-width: 48rem;
+        }
+
+        .admin-content .oncology-medicine-table {
+            width: 100%;
+            min-width: 0 !important;
+            max-width: 100%;
+        }
+
+        .admin-content .oncology-medicine-table-wrap,
+        .admin-content .oncology-medicine-table tbody,
+        .admin-content .oncology-medicine-table tr,
+        .admin-content .oncology-medicine-table td {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        .admin-content .oncology-medicine-table select,
+        .admin-content .oncology-medicine-table input {
+            display: block;
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box;
+        }
+    }
+
+    @media (max-width: 767px) {
+        .admin-page {
+            padding: 4.25rem 0.5rem 0.75rem;
+        }
+
+        .admin-content {
+            border-radius: 0.875rem;
+            padding: 0.875rem;
+        }
+
+        .admin-content h1 {
+            font-size: 1.35rem;
+        }
+
+        .admin-content form .flex.gap-4 {
+            gap: 0.75rem;
+        }
+
+        .admin-content form .flex.gap-4 > * {
+            flex-basis: 100%;
+            min-width: 100%;
+        }
+    }
+}
+
+
+
+[x-cloak] {
+    display: none;
+}
+
+.swal-button-confirm {
+    background-color: #3498db !important; /* Cambiar el color aquí */
+    color: white !important;
+    border-radius: 8px !important;
+}
+
+.swal-button-cancel {
+    background-color: #e74c3c !important; /* Cambiar el color aquí */
+    color: white !important;
+    border-radius: 8px !important;
+}
+
+.swal-button-confirm {
+    background-color: #2f3f82 !important;
+}
+
+.swal2-popup {
+    background: #ffffff !important;
+    color: #111827 !important;
+    border-radius: 8px !important;
+}
+
+.swal2-title {
+    color: #374151 !important;
+}
+
+.swal2-html-container {
+    color: #4b5563 !important;
+}
+
+.swal2-actions {
+    gap: 10px;
+}
+
+.swal2-styled.swal2-confirm,
+.swal2-styled.swal-button-confirm {
+    background-color: #2f3f82 !important;
+    color: #ffffff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.swal2-styled.swal2-confirm:hover,
+.swal2-styled.swal-button-confirm:hover {
+    background-color: #24336f !important;
+}
+
+.swal2-styled.swal2-cancel,
+.swal2-styled.swal-button-cancel {
+    background-color: #e74c3c !important;
+    color: #ffffff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.swal2-styled.swal2-cancel:hover,
+.swal2-styled.swal-button-cancel:hover {
+    background-color: #cf3f31 !important;
+}
+
+.swal2-styled:focus {
+    box-shadow: 0 0 0 3px rgba(47, 63, 130, 0.25) !important;
+}

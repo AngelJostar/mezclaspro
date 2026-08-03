@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Http\Controllers\Admin\Oncologicos;
+
+use App\Http\Controllers\Controller;
+use App\Models\Oncologicos\Laboratory;
+use Illuminate\Http\Request;
+
+class LaboratoryController extends Controller
+{
+    public function index(Request $request)
+    {
+        $laboratories = Laboratory::query()
+            ->when($request->filled('q'), function ($q) use ($request) {
+                $term = $request->q;
+                $q->where(function ($qq) use ($term) {
+                    $qq->where('nombre', 'like', "%{$term}%")
+                        ->orWhere('estado', 'like', "%{$term}%")
+                        ->orWhere('direccion', 'like', "%{$term}%");
+                });
+            })
+            ->when($request->filled('activo'), fn($q) => $q->where('activo', (bool) $request->activo))
+            ->orderBy('nombre')
+            ->paginate(10);
+
+        return view('admin.oncologicos.laboratory.index', compact('laboratories'));
+    }
+
+    public function create()
+    {
+        return view('admin.oncologicos.laboratory.create');
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'nombre'    => 'required|string|max:255',
+            'estado'    => 'nullable|string|max:255',
+            'direccion' => 'nullable|string|max:255',
+            'activo'    => 'nullable|boolean',
+        ]);
+
+        // Si el checkbox no viene, lo forzamos a false
+        $validated['activo'] = $request->has('activo');
+
+        Laboratory::create($validated);
+
+        return redirect()
+            ->route('admin.oncologicos.laboratory.index')
+            ->with('success', 'Laboratorio creado correctamente.');
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(string $id)
+    {
+        //
+    }
+
+    public function edit(Laboratory $laboratory)
+    {
+        return view('admin.oncologicos.laboratory.edit', compact('laboratory'));
+    }
+
+
+    public function update(Request $request, Laboratory $laboratory)
+    {
+        $validated = $request->validate([
+            'nombre'    => 'required|string|max:255',
+            'estado'    => 'nullable|string|max:255',
+            'direccion' => 'nullable|string|max:255',
+            'activo'    => 'nullable|boolean',
+        ]);
+
+        // Checkbox: si no viene en el request, es false
+        $validated['activo'] = $request->has('activo');
+
+        $laboratory->update($validated);
+
+        return redirect()
+            ->route('admin.oncologicos.laboratory.index')
+            ->with('success', 'Laboratorio actualizado correctamente.');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(string $id)
+    {
+        //
+    }
+}
