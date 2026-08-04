@@ -48,6 +48,50 @@
         width: 100%;
     }
 
+    .sticky-x-source.is-sticky-x-managed {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .sticky-x-source.is-sticky-x-managed::-webkit-scrollbar {
+        height: 0;
+    }
+
+    .sticky-x-proxy {
+        position: sticky;
+        bottom: 0;
+        z-index: 35;
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 18px;
+        margin-top: 0.25rem;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.08);
+        backdrop-filter: blur(4px);
+    }
+
+    .sticky-x-proxy.is-hidden {
+        display: none;
+    }
+
+    .sticky-x-proxy-track {
+        height: 1px;
+    }
+
+    .sticky-x-proxy::-webkit-scrollbar {
+        height: 12px;
+    }
+
+    .sticky-x-proxy::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sticky-x-proxy::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.6);
+        border-radius: 9999px;
+    }
+
     #logo-sidebar > div {
         background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     }

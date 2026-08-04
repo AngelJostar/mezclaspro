@@ -12,6 +12,87 @@
         </a>
     </div>
 
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+        <div class="p-6 pb-4">
+            <x-validation-errors class="mb-4" />
+
+            <div class="border rounded-lg p-4 bg-slate-50">
+                <div class="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800">Crear hospital desde esta institucion</h2>
+                        <p class="text-sm text-gray-500">
+                            El hospital se crea y queda vinculado automaticamente a
+                            {{ $institucion->nombre }}.
+                        </p>
+                    </div>
+                </div>
+
+                <form action="{{ route('admin.instituciones.hospitals.store', $institucion) }}" method="POST">
+                    @csrf
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <div>
+                            <x-label class="mb-2">Laboratorio de mezclas</x-label>
+                            <select name="laboratory_id" class="w-full rounded border-gray-300">
+                                <option value="">-- Selecciona un laboratorio --</option>
+                                @foreach ($laboratories as $lab)
+                                    <option value="{{ $lab->id }}"
+                                        {{ old('laboratory_id') == $lab->id ? 'selected' : '' }}>
+                                        {{ $lab->nombre }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <x-label class="mb-2">Nombre</x-label>
+                            <x-input value="{{ old('name_hp') }}" name="name_hp" class="w-full"
+                                placeholder="Escriba el nombre del hospital" />
+                        </div>
+
+                        <div class="md:col-span-2 xl:col-span-1">
+                            <x-label class="mb-2">Direccion</x-label>
+                            <x-input value="{{ old('adress') }}" name="adress" class="w-full"
+                                placeholder="Tlacotalpan 59, Col. Roma Sur, Cuauhtemoc, CDMX, 06760" />
+                        </div>
+
+                        <div>
+                            <x-label class="mb-2">Lista de medicamentos oncologica</x-label>
+                            <select name="onco_medicine_list_id" class="w-full rounded border-gray-300">
+                                <option value="">Seleccione una lista</option>
+                                @foreach ($oncoMedicineLists as $list)
+                                    <option value="{{ $list->id }}"
+                                        {{ old('onco_medicine_list_id') == $list->id ? 'selected' : '' }}>
+                                        {{ $list->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <x-label class="mb-2">Lista nutricional</x-label>
+                            <select name="nutri_medicine_list_id" class="w-full rounded border-gray-300">
+                                <option value="">Seleccione una lista</option>
+                                @foreach ($nutriMedicineLists as $list)
+                                    <option value="{{ $list->id }}"
+                                        {{ old('nutri_medicine_list_id') == $list->id ? 'selected' : '' }}>
+                                        {{ $list->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex justify-end">
+                        <x-button type="submit">
+                            Crear hospital
+                        </x-button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <form action="{{ route('admin.instituciones.hospitals.update', $institucion) }}" method="POST"
         class="bg-white rounded-lg shadow-lg overflow-hidden"
         x-data="hospitalesPicker(@js($hospitals), @js(old('hospitals', $selectedHospitalIds ?? [])))">
@@ -19,7 +100,6 @@
         @method('PUT')
 
         <div class="p-6 pb-4">
-            <x-validation-errors class="mb-4" />
 
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div class="border rounded-lg p-3 flex flex-col min-h-0">

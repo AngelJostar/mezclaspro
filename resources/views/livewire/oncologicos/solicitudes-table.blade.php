@@ -16,7 +16,7 @@
                     <th class="px-6 py-3 cursor-pointer" wire:click="sortBy('id')">
                         No. Solicitud
                         <span class="{{ $sortField === 'id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
@@ -24,7 +24,7 @@
                         Hospital
                         <span
                             class="{{ $sortField === 'hospital_name' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'hospital_name' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'hospital_name' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
@@ -32,14 +32,14 @@
                         Paciente
                         <span
                             class="{{ $sortField === 'nombre_paciente' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'nombre_paciente' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'nombre_paciente' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
                     <th class="px-6 py-3 cursor-pointer" wire:click="sortBy('created_at')">
                         Fecha y Hora de Solicitud
                         <span class="{{ $sortField === 'created_at' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
@@ -47,14 +47,14 @@
                         Fecha y Hora de Entrega
                         <span
                             class="{{ $sortField === 'fecha_entrega' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'fecha_entrega' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'fecha_entrega' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
                     <th class="px-6 py-3 cursor-pointer" wire:click="sortBy('estado')">
                         Estado
                         <span class="{{ $sortField === 'estado' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
@@ -63,9 +63,9 @@
                     </th>
 
                     <th class="px-6 py-3 cursor-pointer" wire:click="sortBy('remision')">
-                        Remisión
+                        RemisiÃ³n
                         <span class="{{ $sortField === 'remision' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
                 </tr>
@@ -91,14 +91,14 @@
                         </td>
 
                         <td class="px-6 py-4">
-                            {{ $solicitud->created_at?->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? '—' }}
+                            {{ $solicitud->created_at?->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? 'â€”' }}
                         </td>
 
                         <td class="px-6 py-4">
                             @if ($solicitud->fecha_entrega)
                                 {{ \Carbon\Carbon::parse($solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i') }}
                             @else
-                                —
+                                â€”
                             @endif
                         </td>
 
@@ -165,7 +165,7 @@
                         </td>
 
                         <td class="px-6 py-4">
-                            {{ $solicitud->remision ?? '—' }}
+                            {{ $solicitud->remision ?? 'â€”' }}
                         </td>
                     </tr>
                 @endforeach

@@ -134,18 +134,6 @@
                 </ul>
             </li>
 
-            <!-- Hospitales -->
-            @can('hospitales')
-                <li>
-                    <a href="{{ route('admin.hospitals.index') }}"
-                        x-on:click="open = false"
-                        class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group {{ request()->routeIs('admin.hospitals.*') ? 'bg-gray-100' : '' }}">
-                        <i class="fa-solid fa-hospital text-gray-500"></i>
-                        <span class="ms-3">Hospitales</span>
-                    </a>
-                </li>
-            @endcan
-
             <!-- Usuarios -->
             @can('usuarios')
                 <li>

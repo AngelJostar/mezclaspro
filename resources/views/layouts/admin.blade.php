@@ -80,6 +80,112 @@
         integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
+    <script>
+        (function() {
+            function syncStickyProxy(source, proxy, fromSource) {
+                if (fromSource) {
+                    if (Math.abs(proxy.scrollLeft - source.scrollLeft) > 1) {
+                        proxy.scrollLeft = source.scrollLeft;
+                    }
+                    return;
+                }
+
+                if (Math.abs(source.scrollLeft - proxy.scrollLeft) > 1) {
+                    source.scrollLeft = proxy.scrollLeft;
+                }
+            }
+
+            function ensureStickyHorizontalScroll(root = document) {
+                const selectors = [
+                    '.admin-content .overflow-x-auto',
+                    '.admin-content .billing-table-scroll'
+                ];
+
+                root.querySelectorAll(selectors.join(', ')).forEach((source) => {
+                    if (source.dataset.stickyXReady === '1') {
+                        if (typeof source._stickyXRefresh === 'function') {
+                            source._stickyXRefresh();
+                        }
+                        return;
+                    }
+
+                    const parent = source.parentElement;
+                    if (!parent) return;
+
+                    const proxy = document.createElement('div');
+                    proxy.className = 'sticky-x-proxy is-hidden';
+                    proxy.innerHTML = '<div class="sticky-x-proxy-track"></div>';
+
+                    parent.insertBefore(proxy, source.nextSibling);
+
+                    const track = proxy.firstElementChild;
+                    source.dataset.stickyXReady = '1';
+                    source.classList.add('sticky-x-source', 'is-sticky-x-managed');
+
+                    let syncingFromSource = false;
+                    let syncingFromProxy = false;
+
+                    const refresh = () => {
+                        const needsScroll = source.scrollWidth > source.clientWidth + 2;
+
+                        proxy.classList.toggle('is-hidden', !needsScroll);
+                        track.style.width = `${source.scrollWidth}px`;
+
+                        if (needsScroll) {
+                            proxy.scrollLeft = source.scrollLeft;
+                        }
+                    };
+
+                    source.addEventListener('scroll', () => {
+                        if (syncingFromProxy) return;
+                        syncingFromSource = true;
+                        syncStickyProxy(source, proxy, true);
+                        syncingFromSource = false;
+                    }, {
+                        passive: true
+                    });
+
+                    proxy.addEventListener('scroll', () => {
+                        if (syncingFromSource) return;
+                        syncingFromProxy = true;
+                        syncStickyProxy(source, proxy, false);
+                        syncingFromProxy = false;
+                    }, {
+                        passive: true
+                    });
+
+                    if (window.ResizeObserver) {
+                        const observer = new ResizeObserver(() => refresh());
+                        observer.observe(source);
+                        if (source.firstElementChild) {
+                            observer.observe(source.firstElementChild);
+                        }
+                    }
+
+                    source._stickyXRefresh = refresh;
+                    refresh();
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                ensureStickyHorizontalScroll();
+            });
+
+            window.addEventListener('resize', () => {
+                ensureStickyHorizontalScroll();
+            }, {
+                passive: true
+            });
+
+            document.addEventListener('livewire:init', () => {
+                if (window.Livewire && typeof window.Livewire.hook === 'function') {
+                    window.Livewire.hook('message.processed', () => {
+                        ensureStickyHorizontalScroll();
+                    });
+                }
+            });
+        })();
+    </script>
     <font></font>
 
 

@@ -1,4 +1,54 @@
 <x-admin-layout>
+    <style>
+        .billing-page-shell {
+            height: calc(100vh - 225px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .billing-table-shell {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .billing-table-scroll {
+            overflow-x: auto;
+            overflow-y: auto;
+            height: 100%;
+            border-radius: 1rem;
+            border: 1px solid rgb(241 245 249);
+            background: #fff;
+        }
+
+        .billing-table-legacy-filters {
+            display: none;
+        }
+
+        .billing-sticky-patient {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            background: #fff;
+            box-shadow: 8px 0 12px -10px rgba(15, 23, 42, 0.18);
+        }
+
+        .billing-sticky-remision {
+            position: sticky;
+            left: 240px;
+            z-index: 20;
+            background: #fff;
+            box-shadow: 8px 0 12px -10px rgba(15, 23, 42, 0.18);
+        }
+
+        thead .billing-sticky-patient,
+        thead .billing-sticky-remision {
+            z-index: 30;
+            background: rgb(248 250 252);
+        }
+    </style>
+
     <div class="mt-2 mb-4">
         <h1 class="text-2xl font-medium text-gray-800">Facturacion / Solicitudes</h1>
         <p class="text-sm text-gray-500 mt-1">
@@ -18,7 +68,7 @@
         </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5"
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 billing-page-shell"
         x-data="billingModule(@js($instituciones->mapWithKeys(fn($institucion) => [
             $institucion->id => $institucion->hospitals->map(fn($hospital) => [
                 'id' => $hospital->id,
@@ -53,14 +103,14 @@
         </div>
 
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end mb-5">
-            <a href="{{ route('admin.instituciones.billing.export', array_filter(['institucion_id' => $institucionId, 'hospital_id' => $hospitalId, 'search' => $search, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'billing_status' => $billingStatus, 'facturacion_status' => $facturacionStatus, 'conciliable_filter' => $conciliableFilter])) }}"
+            <a href="{{ route('admin.instituciones.billing.export', array_filter(['institucion_id' => $institucionId, 'hospital_id' => $hospitalId, 'search' => $search, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'billing_status' => $billingStatus, 'facturacion_status' => $facturacionStatus, 'conciliable_filter' => $conciliableFilter, 'sort_by' => $sortBy, 'sort_dir' => $sortDir])) }}"
                 class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
                 <i class="fa-solid fa-file-excel mr-2"></i>
                 Exportar a Excel
             </a>
         </div>
 
-        <form method="GET" action="{{ route('admin.instituciones.billing.index') }}"
+        <form id="billing-filters-form" method="GET" action="{{ route('admin.instituciones.billing.index') }}"
             class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-9 gap-4 mb-5">
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Institucion</label>
@@ -157,16 +207,76 @@
             </div>
         </form>
 
-        <div class="overflow-x-auto">
-            <table class="min-w-[3200px] w-full text-sm text-left text-slate-600">
+        <div class="billing-table-shell">
+            <div class="billing-table-scroll js-billing-table-scroll">
+                @php
+                    $buildSortUrl = function (string $column) use ($institucionId, $hospitalId, $search, $dateFrom, $dateTo, $billingStatus, $facturacionStatus, $conciliableFilter, $sortBy, $sortDir) {
+                        $nextDir = $sortBy === $column && $sortDir === 'asc' ? 'desc' : 'asc';
+
+                        return route('admin.instituciones.billing.index', array_filter([
+                            'institucion_id' => $institucionId,
+                            'hospital_id' => $hospitalId,
+                            'search' => $search,
+                            'date_from' => $dateFrom,
+                            'date_to' => $dateTo,
+                            'billing_status' => $billingStatus,
+                            'facturacion_status' => $facturacionStatus,
+                            'conciliable_filter' => $conciliableFilter,
+                            'sort_by' => $column,
+                            'sort_dir' => $nextDir,
+                        ]));
+                    };
+
+                    $sortIcon = function (string $column) use ($sortBy, $sortDir) {
+                        if ($sortBy !== $column) {
+                            return '↕';
+                        }
+
+                        return $sortDir === 'asc'
+                            ? '↑'
+                            : '↓';
+                    };
+                @endphp
+
+                <table class="min-w-[3200px] w-full text-sm text-left text-slate-600">
                 <thead class="text-xs uppercase text-slate-500 bg-slate-50">
                     <tr>
-                        <th class="px-4 py-4">Institucion</th>
-                        <th class="px-4 py-4">Unidad</th>
-                        <th class="px-4 py-4">Nombre del Medico</th>
-                        <th class="px-4 py-4">Nombre del Paciente</th>
-                        <th class="px-4 py-4">No. de remision</th>
-                        <th class="px-4 py-4">Fecha de Remision</th>
+                        <th class="px-4 py-4">
+                            <a href="{{ $buildSortUrl('institucion') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
+                                <span>Institucion</span>
+                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('institucion') }}</span>
+                            </a>
+                        </th>
+                        <th class="px-4 py-4">
+                            <a href="{{ $buildSortUrl('unidad') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
+                                <span>Unidad</span>
+                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('unidad') }}</span>
+                            </a>
+                        </th>
+                        <th class="px-4 py-4">
+                            <a href="{{ $buildSortUrl('medico') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
+                                <span>Nombre del Medico</span>
+                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('medico') }}</span>
+                            </a>
+                        </th>
+                        <th class="px-4 py-4 billing-sticky-patient min-w-[240px]">
+                            <a href="{{ $buildSortUrl('paciente') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
+                                <span>Nombre del Paciente</span>
+                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('paciente') }}</span>
+                            </a>
+                        </th>
+                        <th class="px-4 py-4 billing-sticky-remision min-w-[140px]">
+                            <a href="{{ $buildSortUrl('remision') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
+                                <span>No. de remision</span>
+                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('remision') }}</span>
+                            </a>
+                        </th>
+                        <th class="px-4 py-4">
+                            <a href="{{ $buildSortUrl('fecha') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
+                                <span>Fecha de Remision</span>
+                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('fecha') }}</span>
+                            </a>
+                        </th>
                         <th class="px-4 py-4">Cantidad</th>
                         <th class="px-4 py-4">Descripcion</th>
                         <th class="px-4 py-4">P.V. unitario IVA Incluido</th>
@@ -180,6 +290,57 @@
                         <th class="px-4 py-4">Numero Carta Factura</th>
                         <th class="px-4 py-4">Fecha Carta Factura</th>
                         <th class="px-4 py-4">Guardar</th>
+                    </tr>
+                    <tr class="billing-table-legacy-filters border-t border-slate-200 bg-white normal-case">
+                        <th class="px-4 py-3 min-w-[260px]">
+                            <input type="text" name="table_institucion" form="billing-filters-form"
+                                value="{{ $tableFilters['institucion'] ?? '' }}"
+                                placeholder="Filtrar institución"
+                                class="w-full rounded-lg border-slate-200 text-sm">
+                        </th>
+                        <th class="px-4 py-3 min-w-[220px]">
+                            <input type="text" name="table_unidad" form="billing-filters-form"
+                                value="{{ $tableFilters['unidad'] ?? '' }}"
+                                placeholder="Filtrar unidad"
+                                class="w-full rounded-lg border-slate-200 text-sm">
+                        </th>
+                        <th class="px-4 py-3 min-w-[240px]">
+                            <input type="text" name="table_medico" form="billing-filters-form"
+                                value="{{ $tableFilters['medico'] ?? '' }}"
+                                placeholder="Filtrar médico"
+                                class="w-full rounded-lg border-slate-200 text-sm">
+                        </th>
+                        <th class="px-4 py-3 min-w-[240px]">
+                            <input type="text" name="table_paciente" form="billing-filters-form"
+                                value="{{ $tableFilters['paciente'] ?? '' }}"
+                                placeholder="Filtrar paciente"
+                                class="w-full rounded-lg border-slate-200 text-sm">
+                        </th>
+                        <th class="px-4 py-3 min-w-[140px]">
+                            <input type="text" name="table_remision" form="billing-filters-form"
+                                value="{{ $tableFilters['remision'] ?? '' }}"
+                                placeholder="Filtrar remisión"
+                                class="w-full rounded-lg border-slate-200 text-sm">
+                        </th>
+                        <th class="px-4 py-3 min-w-[180px]">
+                            <input type="text" name="table_fecha" form="billing-filters-form"
+                                value="{{ $tableFilters['fecha'] ?? '' }}"
+                                placeholder="Filtrar fecha"
+                                class="w-full rounded-lg border-slate-200 text-sm">
+                        </th>
+                        <th class="px-4 py-3 min-w-[120px]"></th>
+                        <th class="px-4 py-3 min-w-[280px]"></th>
+                        <th class="px-4 py-3 min-w-[180px]"></th>
+                        <th class="px-4 py-3 min-w-[180px]"></th>
+                        <th class="px-4 py-3 min-w-[240px]"></th>
+                        <th class="px-4 py-3 min-w-[160px]"></th>
+                        <th class="px-4 py-3 min-w-[210px]"></th>
+                        <th class="px-4 py-3 min-w-[240px]"></th>
+                        <th class="px-4 py-3 min-w-[200px]"></th>
+                        <th class="px-4 py-3 min-w-[200px]"></th>
+                        <th class="px-4 py-3 min-w-[220px]"></th>
+                        <th class="px-4 py-3 min-w-[200px]"></th>
+                        <th class="px-4 py-3 min-w-[140px]"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -203,8 +364,8 @@
                             </td>
                             <td class="px-4 py-4 min-w-[220px]">{{ $hospital?->name ?: '—' }}</td>
                             <td class="px-4 py-4 min-w-[240px]">{{ $item['medico'] }}</td>
-                            <td class="px-4 py-4 min-w-[240px]">{{ $patientName }}</td>
-                            <td class="px-4 py-4 min-w-[140px]">{{ $record->remision ?: '—' }}</td>
+                            <td class="px-4 py-4 min-w-[240px] billing-sticky-patient">{{ $patientName }}</td>
+                            <td class="px-4 py-4 min-w-[140px] billing-sticky-remision">{{ $record->remision ?: '?' }}</td>
                             <td class="px-4 py-4 whitespace-nowrap min-w-[180px]">{{ $fecha }}</td>
                             <td class="px-4 py-4 min-w-[120px]">1</td>
                             <td class="px-4 py-4 min-w-[280px]">
@@ -218,12 +379,13 @@
                                     </a>
                                 </div>
                             </td>
-                            <td class="px-4 py-4 min-w-[180px]">{{ $billing?->precio_total ?: '—' }}</td>
-                            <td class="px-4 py-4 min-w-[180px]">{{ $billing?->precio_total ?: '—' }}</td>
+                            <td class="px-4 py-4 min-w-[180px]">{{ $item['precio_total_final'] ?? '?' }}</td>
+                            <td class="px-4 py-4 min-w-[180px]">{{ $item['precio_total_final'] ?? '?' }}</td>
                             <td class="px-4 py-4 min-w-[240px]">{{ $item['empresa'] }}</td>
                             <td class="px-4 py-3 min-w-[160px]">
-                                <input type="text" form="{{ $formId }}" name="precio_total" value="{{ $billing?->precio_total }}"
-                                    class="w-full rounded-lg border-slate-200 text-sm">
+                                <div class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                    {{ $item['precio_total_final'] ?? '?' }}
+                                </div>
                             </td>
                             <td class="px-4 py-3 min-w-[210px]">
                                 <select form="{{ $formId }}" name="conciliable" class="w-full rounded-lg border-slate-200 text-sm">
@@ -268,6 +430,7 @@
                                     <input type="hidden" name="hospital_id" value="{{ $hospital?->id }}">
                                     <input type="hidden" name="origen_tipo" value="{{ $origenTipo }}">
                                     <input type="hidden" name="origen_id" value="{{ $record->id }}">
+                                    <input type="hidden" name="precio_total" value="{{ $item['precio_total_final'] ?? '' }}">
                                     <input type="hidden" name="estatus_facturacion" value="{{ $billing?->estatus_facturacion }}">
                                 </form>
                             </td>
@@ -287,7 +450,8 @@
                         </tr>
                     @endforelse
                 </tbody>
-            </table>
+                </table>
+            </div>
         </div>
 
         <div class="mt-5 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">

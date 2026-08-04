@@ -372,6 +372,10 @@ Route::get('instituciones/{institucion}/hospitals', [InstitucionController::clas
     ->name('instituciones.hospitals')
     ->middleware(['role:Super Admin']);
 
+Route::post('instituciones/{institucion}/hospitals', [InstitucionController::class, 'storeHospital'])
+    ->name('instituciones.hospitals.store')
+    ->middleware(['role:Super Admin']);
+
 Route::put('instituciones/{institucion}/hospitals', [InstitucionController::class, 'actualizarHospitales'])
     ->name('instituciones.hospitals.update')
     ->middleware(['role:Super Admin']);

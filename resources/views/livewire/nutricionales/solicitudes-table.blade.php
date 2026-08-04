@@ -17,14 +17,14 @@
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('id')">
                         ID
                         <span class="{{ $sortField === 'id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('user_id')">
                         Hospital
                         <span class="{{ $sortField === 'user_id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'user_id' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'user_id' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
@@ -33,7 +33,7 @@
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('created_at')">
                         Fecha y hora de solicitud
                         <span class="{{ $sortField === 'created_at' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
@@ -42,24 +42,21 @@
                         Fecha y hora programada de entrega
                         <span
                             class="{{ $sortField === 'solicitud_details.fecha_hora_entrega' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'solicitud_details.fecha_hora_entrega' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'solicitud_details.fecha_hora_entrega' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('estado')">
                         Estado operativo
                         <span class="{{ $sortField === 'estado' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
+                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('lote')">
                         Lote
-
                         <span class="{{ $sortField === 'lote' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-
-                            {!! $sortField === 'lote' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
-
+                            {!! $sortField === 'lote' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
                         </span>
                     </th>
 
@@ -112,7 +109,7 @@
                         <td class="px-2 py-2 text-center">
                             {{ $solicitud->solicitud_detail?->fecha_hora_entrega
                                 ? \Carbon\Carbon::parse($solicitud->solicitud_detail->fecha_hora_entrega)->format('Y-m-d H:i')
-                                : '—' }}
+                                : 'â€”' }}
                         </td>
 
                         <td class="px-2 py-2 text-center">
@@ -177,7 +174,6 @@
                                         </form>
                                     @endif
 
-                                    {{-- ADMIN / SUPER ADMIN --}}
                                     @hasanyrole('Admin|Super Admin')
                                         @if (in_array($estado, ['pendiente', 'aprobada', 'preparada', 'revisada'], true))
                                             <form method="POST"
@@ -192,6 +188,7 @@
                                         @endif
                                     @endhasanyrole
                                 @endhasanyrole
+
                                 @hasanyrole('Cliente|Institucion')
                                     @if ($estado === 'pendiente')
                                         <form method="POST"
@@ -258,35 +255,35 @@
             }
 
             confirmacionSweet('.form-confirmar-preparar', {
-                title: '¿Marcar solicitud como preparada?',
-                text: 'La solicitud pasará al estado PREPARADA.',
+                title: 'Â¿Marcar solicitud como preparada?',
+                text: 'La solicitud pasarÃ¡ al estado PREPARADA.',
                 icon: 'question',
                 confirmButtonColor: '#16a34a',
-                confirmButtonText: 'Sí, preparar'
+                confirmButtonText: 'SÃ­, preparar'
             });
 
             confirmacionSweet('.form-confirmar-revisar', {
-                title: '¿Marcar solicitud como revisada?',
-                text: 'La solicitud pasará al estado REVISADA.',
+                title: 'Â¿Marcar solicitud como revisada?',
+                text: 'La solicitud pasarÃ¡ al estado REVISADA.',
                 icon: 'question',
                 confirmButtonColor: '#7c3aed',
-                confirmButtonText: 'Sí, revisar'
+                confirmButtonText: 'SÃ­, revisar'
             });
 
             confirmacionSweet('.form-confirmar-entregar', {
-                title: '¿Marcar solicitud como entregada?',
-                text: 'La solicitud quedará como ENTREGADA.',
+                title: 'Â¿Marcar solicitud como entregada?',
+                text: 'La solicitud quedarÃ¡ como ENTREGADA.',
                 icon: 'success',
                 confirmButtonColor: '#374151',
-                confirmButtonText: 'Sí, entregar'
+                confirmButtonText: 'SÃ­, entregar'
             });
 
             confirmacionSweet('.form-confirmar-cancelar', {
-                title: '¿Cancelar solicitud?',
-                text: 'Si ya se descontó inventario, será devuelto automáticamente.',
+                title: 'Â¿Cancelar solicitud?',
+                text: 'Si ya se descontÃ³ inventario, serÃ¡ devuelto automÃ¡ticamente.',
                 icon: 'warning',
                 confirmButtonColor: '#dc2626',
-                confirmButtonText: 'Sí, cancelar'
+                confirmButtonText: 'SÃ­, cancelar'
             });
         }
 

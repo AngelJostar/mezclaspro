@@ -9,6 +9,9 @@ use App\Exports\Instituciones\InstitucionHospitalExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
 use App\Models\Institucion;
+use App\Models\Nutricionales\NutriMedicineList;
+use App\Models\Oncologicos\Laboratory;
+use App\Models\Oncologicos\MedicineList;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -136,12 +139,51 @@ class InstitucionController extends Controller
 
         $hospitals = Hospital::orderBy('name')->get();
         $selectedHospitalIds = $institucion->hospitals->pluck('id')->toArray();
+        $laboratories = Laboratory::where('activo', 1)
+            ->orderBy('nombre')
+            ->get();
+        $nutriMedicineLists = NutriMedicineList::where('is_active', 1)
+            ->orderBy('name')
+            ->get();
+        $oncoMedicineLists = MedicineList::orderBy('name')->get();
 
         return view('admin.instituciones.hospitals', compact(
             'institucion',
             'hospitals',
-            'selectedHospitalIds'
+            'selectedHospitalIds',
+            'laboratories',
+            'nutriMedicineLists',
+            'oncoMedicineLists'
         ));
+    }
+
+    public function storeHospital(Request $request, Institucion $institucion)
+    {
+        $data = $request->validate([
+            'name_hp' => ['required', 'string', 'max:255'],
+            'adress' => ['required', 'string', 'max:400'],
+            'laboratory_id' => ['nullable', 'integer', 'exists:laboratories,id'],
+            'nutri_medicine_list_id' => ['nullable', 'integer', 'exists:nutri_medicine_lists,id'],
+            'onco_medicine_list_id' => ['nullable', 'integer', 'exists:medicine_lists,id'],
+        ]);
+
+        $hospital = Hospital::create([
+            'name' => $data['name_hp'],
+            'adress' => $data['adress'],
+            'laboratory_id' => $data['laboratory_id'] ?? null,
+            'nutri_medicine_list_id' => $data['nutri_medicine_list_id'] ?? null,
+            'onco_medicine_list_id' => $data['onco_medicine_list_id'] ?? null,
+        ]);
+
+        $institucion->hospitals()->syncWithoutDetaching([$hospital->id]);
+
+        session()->flash('swal', [
+            'icon' => 'success',
+            'title' => 'Hospital creado',
+            'text' => 'El hospital se creo y quedo vinculado a la institucion correctamente.',
+        ]);
+
+        return redirect()->route('admin.instituciones.hospitals', $institucion);
     }
 
     public function actualizarHospitales(Request $request, Institucion $institucion)
