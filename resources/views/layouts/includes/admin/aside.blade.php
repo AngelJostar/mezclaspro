@@ -7,11 +7,12 @@
         <ul class="space-y-2 font-medium">
 
             <!-- Nutricionales -->
-            <li>
+            <li
+                class="rounded-lg border border-emerald-200 bg-emerald-50 p-1 dark:border-emerald-700 dark:bg-emerald-900/20">
                 <button @click="openMenu === 'nutricionales' ? openMenu = null : openMenu = 'nutricionales'"
-                    class="flex w-full items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <i class="fas fa-vial text-gray-500"></i>
-                    <span class="ms-3">Nutricionales</span>
+                    class="flex w-full items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-emerald-100 dark:hover:bg-emerald-800/50">
+                    <i class="fas fa-vial text-emerald-600 dark:text-emerald-300"></i>
+                    <span class="ms-3 font-bold">Nutricionales</span>
                 </button>
                 <ul x-show="openMenu === 'nutricionales'" class="pl-4 space-y-2">
                     @can('nutricionales_solicitudes_index')
@@ -66,11 +67,12 @@
             </li>
 
             <!-- Oncológicas -->
-            <li>
+            <li
+                class="rounded-lg border border-indigo-200 bg-indigo-50 p-1 dark:border-indigo-700 dark:bg-indigo-900/20">
                 <button @click="openMenu === 'oncologicas' ? openMenu = null : openMenu = 'oncologicas'"
-                    class="flex w-full items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <i class="fas fa-vial text-gray-500"></i>
-                    <span class="ms-3">Oncológicas</span>
+                    class="flex w-full items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-indigo-100 dark:hover:bg-indigo-800/50">
+                    <i class="fas fa-vial text-indigo-600 dark:text-indigo-300"></i>
+                    <span class="ms-3 font-bold">Oncológicas</span>
                 </button>
 
                 <ul x-show="openMenu === 'oncologicas'" class="pl-4 space-y-2">

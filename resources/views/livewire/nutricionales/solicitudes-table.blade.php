@@ -53,6 +53,16 @@
                         </span>
                     </th>
 
+                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('remision')">
+                        Remision
+
+                        <span class="hidden {{ $sortField === 'remision' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
+
+                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+
+                        </span>
+                    </th>
+
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('lote')">
                         Lote
 
@@ -64,6 +74,18 @@
                     </th>
 
                     <th class="px-2 py-2 text-center">Acciones</th>
+
+                    <th class="px-4 py-2 text-center whitespace-nowrap">
+                        Solicitud Completa
+                    </th>
+
+                    <th class="px-4 py-2 text-center whitespace-nowrap">
+                        Registros de Envio
+                    </th>
+
+                    <th class="px-4 py-2 text-center whitespace-nowrap">
+                        Remision
+                    </th>
                 </tr>
             </thead>
 
@@ -75,8 +97,10 @@
                         $estadoClasses = [
                             'pendiente' => 'bg-yellow-100 text-yellow-700',
                             'aprobada' => 'bg-green-100 text-green-700',
+                            'enproceso' => 'bg-blue-100 text-blue-700',
                             'preparada' => 'bg-blue-100 text-blue-700',
                             'revisada' => 'bg-purple-100 text-purple-700',
+                            'finalizada' => 'bg-gray-200 text-gray-700',
                             'entregada' => 'bg-gray-200 text-gray-700',
                             'cancelada' => 'bg-red-100 text-red-700',
                             'no_aprobada' => 'bg-red-200 text-red-800',
@@ -85,8 +109,10 @@
                         $estadoLabel = [
                             'pendiente' => 'Pendiente',
                             'aprobada' => 'Aprobada',
+                            'enproceso' => 'Preparada',
                             'preparada' => 'Preparada',
                             'revisada' => 'inspeccionada',
+                            'finalizada' => 'Entregada',
                             'entregada' => 'Entregada',
                             'cancelada' => 'Cancelada',
                             'no_aprobada' => 'No Aprobada',
@@ -117,9 +143,13 @@
 
                         <td class="px-2 py-2 text-center">
                             <span
-                                class="px-2 py-1 rounded-full text-xs font-semibold {{ $estadoClasses[$estado] ?? 'bg-gray-100 text-gray-700' }}">
+                                class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ $estadoClasses[$estado] ?? 'bg-gray-100 text-gray-700' }}">
                                 {{ $estadoLabel[$estado] ?? ucfirst($estado) }}
                             </span>
+                        </td>
+
+                        <td class="px-2 py-2 text-center">
+                            {{ $solicitud->remision ?? '—' }}
                         </td>
 
                         <td class="px-2 py-2 text-center">
@@ -206,6 +236,33 @@
                                     @endif
                                 @endhasanyrole
                             </x-row-actions>
+                        </td>
+
+                        <td class="px-4 py-2 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.nutricionales.solicitudes.solicitud', $solicitud) }}"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                Solicitud Completa
+                            </a>
+                        </td>
+
+                        <td class="px-4 py-2 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.nutricionales.solicitudes.envio', $solicitud) }}"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                Registros de Envio
+                            </a>
+                        </td>
+
+                        <td class="px-4 py-2 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.nutricionales.solicitudes.remision', $solicitud) }}"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                Remision
+                            </a>
                         </td>
                     </tr>
                 @endforeach

@@ -17,7 +17,10 @@
                     <th scope="col" class="px-6 py-3">Id</th>
                     <th scope="col" class="px-6 py-3">Nombre</th>
                     <th scope="col" class="px-6 py-3">Razon social</th>
-                    <th scope="col" class="px-6 py-3"></th>
+                    <th scope="col" class="px-4 py-3 text-center">Editar</th>
+                    <th scope="col" class="px-4 py-3 text-center">Hospitales</th>
+                    <th scope="col" class="px-4 py-3 text-center">Eliminar</th>
+                    <th scope="col" class="px-4 py-3 text-center">Reporte</th>
                 </tr>
             </thead>
 
@@ -37,36 +40,45 @@
                             {{ $institucion->razon_social }}
                         </td>
 
-                        <td class="px-6 py-4">
-                            <x-row-actions>
-                                <a href="{{ route('admin.instituciones.edit', $institucion) }}">
-                                    <i class="fa-solid fa-pen pr-1"></i> Editar
-                                </a>
+                        <td class="px-4 py-4 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.instituciones.edit', $institucion) }}"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                <i class="fa-solid fa-pen pr-1"></i> Editar
+                            </a>
+                        </td>
 
-                                <a href="{{ route('admin.instituciones.hospitals', $institucion) }}">
-                                    <i class="fa-solid fa-hospital pr-1"></i> Hospitales
-                                </a>
+                        <td class="px-4 py-4 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.instituciones.hospitals', $institucion) }}"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                <i class="fa-solid fa-hospital pr-1"></i> Hospitales
+                            </a>
+                        </td>
 
-                                <form action="{{ route('admin.instituciones.destroy', $institucion) }}" method="POST"
-                                    onsubmit="return confirm('Seguro que deseas eliminar esta institucion?');">
-                                    @csrf
-                                    @method('DELETE')
+                        <td class="px-4 py-4 text-center whitespace-nowrap">
+                            <form action="{{ route('admin.instituciones.destroy', $institucion) }}" method="POST"
+                                onsubmit="return confirm('Seguro que deseas eliminar esta institucion?');">
+                                @csrf
+                                @method('DELETE')
 
-                                    <button type="submit" class="action-danger">
-                                        <i class="fa-solid fa-trash pr-1"></i> Eliminar
-                                    </button>
-                                </form>
+                                <button type="submit"
+                                    class="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300">
+                                    <i class="fa-solid fa-trash pr-1"></i> Eliminar
+                                </button>
+                            </form>
+                        </td>
 
-                                <a href="{{ route('admin.instituciones.exportarMezclasOnco', $institucion) }}"
-                                    target="_blank">
-                                    <i class="fa-solid fa-file-excel pr-1"></i> Reporte
-                                </a>
-                            </x-row-actions>
+                        <td class="px-4 py-4 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.instituciones.exportarMezclasOnco', $institucion) }}"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex items-center justify-center rounded-full bg-green-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-800 focus:outline-none focus:ring-4 focus:ring-green-300">
+                                <i class="fa-solid fa-file-excel pr-1"></i> Reporte
+                            </a>
                         </td>
                     </tr>
                 @empty
                     <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
-                        <td colspan="4" class="px-6 py-6 text-center text-gray-500">
+                        <td colspan="7" class="px-6 py-6 text-center text-gray-500">
                             No hay instituciones registradas.
                         </td>
                     </tr>

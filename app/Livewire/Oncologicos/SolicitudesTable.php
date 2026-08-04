@@ -46,6 +46,7 @@ class SolicitudesTable extends Component
             ->with([
                 'hospital',
                 'user',
+                'mezclas:id,solicitud_id,lote',
             ]);
 
         // ✅ Igual que Nutricionales: si es Cliente, limita lo que ve
@@ -67,6 +68,9 @@ class SolicitudesTable extends Component
                     ->orWhereDate('solicitud_oncos.created_at', $s)
                     ->orWhereHas('hospital', function ($h) use ($s) {
                         $h->where('name', 'like', "%{$s}%");
+                    })
+                    ->orWhereHas('mezclas', function ($m) use ($s) {
+                        $m->where('lote', 'like', "%{$s}%");
                     });
             });
         }
