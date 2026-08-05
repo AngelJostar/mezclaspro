@@ -17,7 +17,7 @@
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('id')">
                         ID
                         <span class="{{ $sortField === 'id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
@@ -25,7 +25,7 @@
                         Hospital
                         <span
                             class="{{ $sortField === 'hospital_name' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'hospital_name' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'hospital_name' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
@@ -33,14 +33,14 @@
                         Paciente
                         <span
                             class="{{ $sortField === 'nombre_paciente' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'nombre_paciente' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'nombre_paciente' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('created_at')">
                         Fecha y hora de solicitud
                         <span class="{{ $sortField === 'created_at' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
@@ -48,25 +48,21 @@
                         Fecha y hora programada de entrega
                         <span
                             class="{{ $sortField === 'fecha_entrega' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'fecha_entrega' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'fecha_entrega' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('estado')">
                         Estado operativo
                         <span class="{{ $sortField === 'estado' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
-                    <th class="px-6 py-3">
-                        Acciones
-                    </th>
-
-                    <th class="px-6 py-3 cursor-pointer" wire:click="sortBy('remision')">
-                        RemisiÃ³n
+                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('remision')">
+                        Remisión
                         <span class="{{ $sortField === 'remision' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
@@ -74,24 +70,63 @@
                         Lote
                     </th>
 
-                    <th class="px-2 py-2 text-center">Acciones</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">
+                        Ver
+                    </th>
 
-                    <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Solicitud Completa
+                    <th class="px-2 py-2 text-center whitespace-nowrap">
+                        No aprobar
                     </th>
 
                     <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Registros de Envio
+                        Solicitud completa
                     </th>
 
                     <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Remision
+                        Registros de envío
+                    </th>
+
+                    <th class="px-4 py-2 text-center whitespace-nowrap">
+                        Remisión
                     </th>
                 </tr>
             </thead>
 
             <tbody>
                 @foreach ($solicitudes as $solicitud)
+                    @php
+                        $estadoClasses = [
+                            'pendiente' => 'bg-yellow-100 text-yellow-700',
+                            'aprobada' => 'bg-green-100 text-green-700',
+                            'enproceso' => 'bg-blue-100 text-blue-700',
+                            'preparada' => 'bg-blue-100 text-blue-700',
+                            'revisada' => 'bg-purple-100 text-purple-700',
+                            'finalizada' => 'bg-gray-200 text-gray-700',
+                            'entregada' => 'bg-gray-200 text-gray-700',
+                            'cancelada' => 'bg-red-100 text-red-700',
+                            'no_aprobada' => 'bg-red-200 text-red-800',
+                        ];
+
+                        $estadoLabels = [
+                            'pendiente' => 'Pendiente',
+                            'aprobada' => 'Aprobada',
+                            'enproceso' => 'Preparada',
+                            'preparada' => 'Preparada',
+                            'revisada' => 'Inspeccionada',
+                            'finalizada' => 'Entregada',
+                            'entregada' => 'Entregada',
+                            'cancelada' => 'Cancelada',
+                            'no_aprobada' => 'No aprobada',
+                        ];
+
+                        $lotes = $solicitud->mezclas
+                            ->pluck('lote')
+                            ->filter()
+                            ->unique()
+                            ->values()
+                            ->join(', ');
+                    @endphp
+
                     <tr class="border-b">
                         <td class="px-2 py-2 text-center">
                             {{ $solicitud->id }}
@@ -105,53 +140,19 @@
                             {{ $solicitud->nombre_paciente }}
                         </td>
 
-                        <td class="px-6 py-4">
-                            {{ $solicitud->created_at?->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? 'â€”' }}
-                        </td>
-
-                        <td class="px-6 py-4">
-                            @if ($solicitud->fecha_entrega)
-                                {{ \Carbon\Carbon::parse($solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i') }}
-                            @else
-                                â€”
-                            @endif
+                        <td class="px-2 py-2 text-center">
+                            {{ $solicitud->created_at?->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? '—' }}
                         </td>
 
                         <td class="px-2 py-2 text-center">
                             @if ($solicitud->fecha_entrega)
                                 {{ \Carbon\Carbon::parse($solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i') }}
                             @else
-                                &mdash;
+                                —
                             @endif
                         </td>
 
                         <td class="px-2 py-2 text-center">
-                            @php
-                                $estadoClasses = [
-                                    'pendiente' => 'bg-yellow-100 text-yellow-700',
-                                    'aprobada' => 'bg-green-100 text-green-700',
-                                    'enproceso' => 'bg-blue-100 text-blue-700',
-                                    'preparada' => 'bg-blue-100 text-blue-700',
-                                    'revisada' => 'bg-purple-100 text-purple-700',
-                                    'finalizada' => 'bg-gray-200 text-gray-700',
-                                    'entregada' => 'bg-gray-200 text-gray-700',
-                                    'cancelada' => 'bg-red-100 text-red-700',
-                                    'no_aprobada' => 'bg-red-200 text-red-800',
-                                ];
-
-                                $estadoLabels = [
-                                    'pendiente' => 'Pendiente',
-                                    'aprobada' => 'Aprobada',
-                                    'enproceso' => 'Preparada',
-                                    'preparada' => 'Preparada',
-                                    'revisada' => 'inspeccionada',
-                                    'finalizada' => 'Entregada',
-                                    'entregada' => 'Entregada',
-                                    'cancelada' => 'Cancelada',
-                                    'no_aprobada' => 'No Aprobada',
-                                ];
-                            @endphp
-
                             <span
                                 class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ $estadoClasses[$solicitud->estado] ?? 'bg-gray-100 text-gray-700' }}">
                                 {{ $estadoLabels[$solicitud->estado] ?? ucfirst($solicitud->estado) }}
@@ -163,53 +164,56 @@
                         </td>
 
                         <td class="px-2 py-2 text-center">
-                            @php
-                                $lotes = $solicitud->mezclas
-                                    ->pluck('lote')
-                                    ->filter()
-                                    ->unique()
-                                    ->values()
-                                    ->join(', ');
-                            @endphp
-
                             {{ $lotes !== '' ? $lotes : '-' }}
                         </td>
 
-                        <td class="px-2 py-2 text-center">
-                            <x-row-actions>
-                                <a href="{{ route('admin.oncologicos.mezclas.index', $solicitud->id) }}"
-                                    class="">
-                                    Ver
-                                </a>
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.oncologicos.mezclas.index', $solicitud->id) }}"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                Ver
+                            </a>
+                        </td>
 
-                                @hasanyrole('Cliente|Institucion')
-                                    @if ($solicitud->estado === 'pendiente')
-                                        <form method="POST"
-                                            action="{{ route('admin.oncologicos.solicitudes.cancelar', $solicitud) }}"
-                                            class="form-confirmar-cancelar">
-                                            @csrf
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Cliente|Institucion')
+                                @if ($solicitud->estado === 'pendiente')
+                                    <form method="POST"
+                                        action="{{ route('admin.oncologicos.solicitudes.cancelar', $solicitud) }}"
+                                        class="form-confirmar-cancelar inline-block">
+                                        @csrf
 
-                                            <button type="submit" class="action-danger">
-                                                Cancelar
-                                            </button>
-                                        </form>
-                                    @endif
-                                @endhasanyrole
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-200">
+                                            Cancelar
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" disabled
+                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                        Cancelar
+                                    </button>
+                                @endif
+                            @endhasanyrole
 
-                                @hasanyrole('Admin|Super Admin')
-                                    @if (in_array($solicitud->estado, ['pendiente', 'enproceso'], true))
-                                        <form method="POST"
-                                            action="{{ route('admin.oncologicos.solicitudes.cancelar', $solicitud) }}"
-                                            class="form-confirmar-cancelar">
-                                            @csrf
+                            @hasanyrole('Admin|Super Admin')
+                                @if (in_array($solicitud->estado, ['pendiente', 'enproceso'], true))
+                                    <form method="POST"
+                                        action="{{ route('admin.oncologicos.solicitudes.cancelar', $solicitud) }}"
+                                        class="form-confirmar-cancelar inline-block">
+                                        @csrf
 
-                                            <button type="submit" class="action-danger">
-                                                No aprobar
-                                            </button>
-                                        </form>
-                                    @endif
-                                @endhasanyrole
-                            </x-row-actions>
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-200">
+                                            No aprobar
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" disabled
+                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                        No aprobar
+                                    </button>
+                                @endif
+                            @endhasanyrole
                         </td>
 
                         <td class="px-4 py-2 text-center whitespace-nowrap">
@@ -217,7 +221,7 @@
                                 target="_blank"
                                 rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Solicitud Completa
+                                Solicitud completa
                             </a>
                         </td>
 
@@ -226,7 +230,7 @@
                                 target="_blank"
                                 rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Registros de Envio
+                                Registros de envío
                             </a>
                         </td>
 
@@ -235,7 +239,7 @@
                                 target="_blank"
                                 rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Remision
+                                Remisión
                             </a>
                         </td>
                     </tr>

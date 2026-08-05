@@ -17,14 +17,14 @@
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('id')">
                         ID
                         <span class="{{ $sortField === 'id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('user_id')">
                         Hospital
                         <span class="{{ $sortField === 'user_id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'user_id' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'user_id' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
@@ -33,7 +33,7 @@
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('created_at')">
                         Fecha y hora de solicitud
                         <span class="{{ $sortField === 'created_at' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
@@ -42,46 +42,46 @@
                         Fecha y hora programada de entrega
                         <span
                             class="{{ $sortField === 'solicitud_details.fecha_hora_entrega' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'solicitud_details.fecha_hora_entrega' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'solicitud_details.fecha_hora_entrega' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('estado')">
                         Estado operativo
                         <span class="{{ $sortField === 'estado' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('remision')">
-                        Remision
-
+                        Remisión
                         <span class="hidden {{ $sortField === 'remision' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-
-                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
-
+                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
                     <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('lote')">
                         Lote
                         <span class="{{ $sortField === 'lote' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'lote' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
+                            {!! $sortField === 'lote' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
                         </span>
                     </th>
 
-                    <th class="px-2 py-2 text-center">Acciones</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Ver</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Editar / Aprobar</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Proceso</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">No aprobar</th>
 
                     <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Solicitud Completa
+                        Solicitud completa
                     </th>
 
                     <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Registros de Envio
+                        Registros de envío
                     </th>
 
                     <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Remision
+                        Remisión
                     </th>
                 </tr>
             </thead>
@@ -108,11 +108,11 @@
                             'aprobada' => 'Aprobada',
                             'enproceso' => 'Preparada',
                             'preparada' => 'Preparada',
-                            'revisada' => 'inspeccionada',
+                            'revisada' => 'Inspeccionada',
                             'finalizada' => 'Entregada',
                             'entregada' => 'Entregada',
                             'cancelada' => 'Cancelada',
-                            'no_aprobada' => 'No Aprobada',
+                            'no_aprobada' => 'No aprobada',
                         ];
                     @endphp
 
@@ -135,7 +135,7 @@
                         <td class="px-2 py-2 text-center">
                             {{ $solicitud->solicitud_detail?->fecha_hora_entrega
                                 ? \Carbon\Carbon::parse($solicitud->solicitud_detail->fecha_hora_entrega)->format('Y-m-d H:i')
-                                : 'â€”' }}
+                                : '—' }}
                         </td>
 
                         <td class="px-2 py-2 text-center">
@@ -153,86 +153,123 @@
                             {{ $solicitud->lote ?? '' }}
                         </td>
 
-                        <td class="px-2 py-2 text-center">
-                            <x-row-actions>
-                                <a href="{{ route('admin.nutricionales.solicitudes.show', $solicitud) }}"
-                                    class="">
-                                    <i class="fa-solid fa-eye pr-1"></i> Ver
-                                </a>
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            <a href="{{ route('admin.nutricionales.solicitudes.show', $solicitud) }}"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                Ver
+                            </a>
+                        </td>
 
-                                @hasanyrole('Admin|Super Admin')
-                                    @if (in_array($estado, ['pendiente'], true))
-                                        <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
-                                            class="">
-                                            <i class="fa-solid fa-pen pr-1"></i> Aprobar
-                                        </a>
-                                    @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
-                                        <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
-                                            class="">
-                                            <i class="fa-solid fa-pen pr-1"></i> Editar
-                                        </a>
-                                    @endif
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if (in_array($estado, ['pendiente'], true))
+                                    <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
+                                        class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
+                                        Aprobar
+                                    </a>
+                                @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
+                                    <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
+                                        class="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200">
+                                        Editar
+                                    </a>
+                                @else
+                                    <button type="button" disabled
+                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                        Editar
+                                    </button>
+                                @endif
+                            @else
+                                <button type="button" disabled
+                                    class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                    Editar
+                                </button>
+                            @endhasanyrole
+                        </td>
 
-                                    @if ($estado === 'aprobada')
-                                        <form method="POST"
-                                            action="{{ route('admin.nutricionales.solicitudes.preparar', $solicitud) }}"
-                                            class="form-confirmar-preparar">
-                                            @csrf
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if ($estado === 'aprobada')
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.preparar', $solicitud) }}"
+                                        class="form-confirmar-preparar inline-block">
+                                        @csrf
 
-                                            <button type="submit">
-                                                Preparada
-                                            </button>
-                                        </form>
-                                    @endif
-
-                                    @if ($estado === 'preparada')
-                                        <button type="button"
-                                            wire:click="$dispatch('abrir-modal-inspeccion-nutricional', { solicitudId: {{ $solicitud->id }} })">
-                                            Inspeccionar
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300">
+                                            Preparada
                                         </button>
-                                    @endif
+                                    </form>
+                                @elseif ($estado === 'preparada')
+                                    <button type="button"
+                                        wire:click="$dispatch('abrir-modal-inspeccion-nutricional', { solicitudId: {{ $solicitud->id }} })"
+                                        class="inline-flex items-center justify-center rounded-full bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-200">
+                                        Inspeccionar
+                                    </button>
+                                @elseif ($estado === 'revisada')
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.entregar', $solicitud) }}"
+                                        class="form-confirmar-entregar inline-block">
+                                        @csrf
 
-                                    @if ($estado === 'revisada')
-                                        <form method="POST"
-                                            action="{{ route('admin.nutricionales.solicitudes.entregar', $solicitud) }}"
-                                            class="form-confirmar-entregar">
-                                            @csrf
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200">
+                                            Entregar
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" disabled
+                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                        Proceso
+                                    </button>
+                                @endif
+                            @else
+                                <button type="button" disabled
+                                    class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                    Proceso
+                                </button>
+                            @endhasanyrole
+                        </td>
 
-                                            <button type="submit">
-                                                Entregar
-                                            </button>
-                                        </form>
-                                    @endif
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if (in_array($estado, ['pendiente', 'aprobada', 'preparada', 'revisada'], true))
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
+                                        class="form-confirmar-cancelar inline-block">
+                                        @csrf
 
-                                    @hasanyrole('Admin|Super Admin')
-                                        @if (in_array($estado, ['pendiente', 'aprobada', 'preparada', 'revisada'], true))
-                                            <form method="POST"
-                                                action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
-                                                class="form-confirmar-cancelar">
-                                                @csrf
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-200">
+                                            No aprobar
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" disabled
+                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                        No aprobar
+                                    </button>
+                                @endif
+                            @endhasanyrole
 
-                                                <button type="submit" class="action-danger">
-                                                    No aprobar
-                                                </button>
-                                            </form>
-                                        @endif
-                                    @endhasanyrole
-                                @endhasanyrole
+                            @hasanyrole('Cliente|Institucion')
+                                @if ($estado === 'pendiente')
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
+                                        class="form-confirmar-cancelar inline-block">
+                                        @csrf
 
-                                @hasanyrole('Cliente|Institucion')
-                                    @if ($estado === 'pendiente')
-                                        <form method="POST"
-                                            action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
-                                            class="form-confirmar-cancelar">
-                                            @csrf
-
-                                            <button type="submit" class="action-danger">
-                                                Cancelar
-                                            </button>
-                                        </form>
-                                    @endif
-                                @endhasanyrole
-                            </x-row-actions>
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-200">
+                                            Cancelar
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" disabled
+                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                        Cancelar
+                                    </button>
+                                @endif
+                            @endhasanyrole
                         </td>
 
                         <td class="px-4 py-2 text-center whitespace-nowrap">
@@ -240,7 +277,7 @@
                                 target="_blank"
                                 rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Solicitud Completa
+                                Solicitud completa
                             </a>
                         </td>
 
@@ -249,7 +286,7 @@
                                 target="_blank"
                                 rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Registros de Envio
+                                Registros de envío
                             </a>
                         </td>
 
@@ -258,7 +295,7 @@
                                 target="_blank"
                                 rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Remision
+                                Remisión
                             </a>
                         </td>
                     </tr>
@@ -312,35 +349,35 @@
             }
 
             confirmacionSweet('.form-confirmar-preparar', {
-                title: 'Â¿Marcar solicitud como preparada?',
-                text: 'La solicitud pasarÃ¡ al estado PREPARADA.',
+                title: '¿Marcar solicitud como preparada?',
+                text: 'La solicitud pasará al estado PREPARADA.',
                 icon: 'question',
                 confirmButtonColor: '#16a34a',
-                confirmButtonText: 'SÃ­, preparar'
+                confirmButtonText: 'Sí, preparar'
             });
 
             confirmacionSweet('.form-confirmar-revisar', {
-                title: 'Â¿Marcar solicitud como revisada?',
-                text: 'La solicitud pasarÃ¡ al estado REVISADA.',
+                title: '¿Marcar solicitud como revisada?',
+                text: 'La solicitud pasará al estado REVISADA.',
                 icon: 'question',
                 confirmButtonColor: '#7c3aed',
-                confirmButtonText: 'SÃ­, revisar'
+                confirmButtonText: 'Sí, revisar'
             });
 
             confirmacionSweet('.form-confirmar-entregar', {
-                title: 'Â¿Marcar solicitud como entregada?',
-                text: 'La solicitud quedarÃ¡ como ENTREGADA.',
+                title: '¿Marcar solicitud como entregada?',
+                text: 'La solicitud quedará como ENTREGADA.',
                 icon: 'success',
                 confirmButtonColor: '#374151',
-                confirmButtonText: 'SÃ­, entregar'
+                confirmButtonText: 'Sí, entregar'
             });
 
             confirmacionSweet('.form-confirmar-cancelar', {
-                title: 'Â¿Cancelar solicitud?',
-                text: 'Si ya se descontÃ³ inventario, serÃ¡ devuelto automÃ¡ticamente.',
+                title: '¿Cancelar solicitud?',
+                text: 'Si ya se descontó inventario, será devuelto automáticamente.',
                 icon: 'warning',
                 confirmButtonColor: '#dc2626',
-                confirmButtonText: 'SÃ­, cancelar'
+                confirmButtonText: 'Sí, cancelar'
             });
         }
 
