@@ -12,6 +12,7 @@ class NutritionMedicinePresentation extends Model
     protected $table = 'nutrition_medicine_presentations';
 
     protected $fillable = [
+        'external_code',
         'nutrition_medicine_catalog_id',
         'denominacion_comercial',
         'fabricante',

@@ -271,7 +271,21 @@
                                 ->map(function ($p) {
                                     $marca = trim((string) ($p->marca ?? ''));
                                     $pres = trim((string) ($p->presentacion ?? ''));
-                                    $text = $marca !== '' ? "{$marca} - {$pres}" : $pres;
+                                    $contenidoValor = trim(rtrim(rtrim((string) ($p->contenido_valor ?? ''), '0'), '.'));
+                                    $contenidoUnidad = trim((string) ($p->contenido_unidad ?? ''));
+                                    $fabricante = trim((string) ($p->fabricante ?? ''));
+
+                                    $segmentos = array_values(array_filter([
+                                        $marca,
+                                        $pres,
+                                        ($contenidoValor !== '' && $contenidoUnidad !== '') ? "{$contenidoValor}{$contenidoUnidad}" : null,
+                                        $fabricante,
+                                    ], fn($value) => $value !== null && $value !== ''));
+
+                                    $text = implode(' - ', $segmentos);
+                                    if ($text === '') {
+                                        $text = $pres !== '' ? $pres : 'Presentación sin descripción';
+                                    }
 
                                     return [
                                         'id' => $p->id,

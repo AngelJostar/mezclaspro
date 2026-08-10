@@ -12,6 +12,7 @@ class Hospital extends Model
     use HasFactory;
 
     protected $fillable = [
+        'external_code',
         'name',
         'adress',
         'laboratory_id',

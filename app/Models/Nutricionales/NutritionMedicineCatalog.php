@@ -12,6 +12,7 @@ class NutritionMedicineCatalog extends Model
     protected $table = 'nutrition_medicines_catalog';
 
     protected $fillable = [
+        'external_code',
         'denominacion_generica',
         'category_id',
         'input_id',

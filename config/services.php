@@ -31,4 +31,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'dr_sam' => [
+        'webhook_url' => env('DR_SAM_WEBHOOK_URL'),
+        'webhook_secret' => env('DR_SAM_WEBHOOK_SECRET'),
+        'timeout' => (int) env('DR_SAM_WEBHOOK_TIMEOUT', 5),
+    ],
+
 ];

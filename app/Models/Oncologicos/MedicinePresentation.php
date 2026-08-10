@@ -12,6 +12,7 @@ class MedicinePresentation extends Model
     protected $table = 'medicine_presentations';
 
     protected $fillable = [
+        'external_code',
         'catalog_id',
         'presentacion',
         'contenido_valor',

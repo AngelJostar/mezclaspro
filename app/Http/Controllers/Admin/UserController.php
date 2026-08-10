@@ -15,7 +15,7 @@ class UserController extends Controller
     public function index()
     {
         $users = User::select('id', 'name', 'lastname', 'username', 'is_active', 'hospital_id')
-            ->with('roles:name')
+            ->with(['roles:name', 'hospital:id,name'])
             ->paginate(10);
 
         return view('admin.users.index', compact('users'));

@@ -25,6 +25,56 @@
         </div>
     @endif
 
+    @if (session('duplicate_stock'))
+        @php($duplicateStock = session('duplicate_stock'))
+        <div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 mb-4">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wide text-amber-800">
+                        Lote duplicado detectado
+                    </h3>
+
+                    <p class="mt-1 text-sm">
+                        Ya existe un registro con el lote
+                        <span class="font-semibold">{{ $duplicateStock['lote'] ?? $stock->lote }}</span>
+                        para esta misma presentación y laboratorio.
+                    </p>
+
+                    <div class="mt-2 text-sm text-amber-800 space-y-1">
+                        <div>
+                            Presentación existente:
+                            <span class="font-semibold">{{ $duplicateStock['presentation_name'] ?? 'Presentación' }}</span>
+                        </div>
+                        <div>
+                            Existencias actuales:
+                            <span class="font-semibold">{{ number_format((float) ($duplicateStock['target_frascos'] ?? 0), 2) }} frascos</span>
+                            /
+                            <span class="font-semibold">{{ number_format((float) ($duplicateStock['target_stock_ml'] ?? 0), 2) }} ml</span>
+                        </div>
+                        <div>
+                            Caducidad del registro existente:
+                            <span class="font-semibold">{{ $duplicateStock['target_caducidad'] ?? '—' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="POST"
+                    action="{{ route('admin.nutricionales.stocks.mergeDuplicate', $stock->id) }}"
+                    class="flex-shrink-0">
+                    @csrf
+                    <input type="hidden" name="target_stock_id" value="{{ $duplicateStock['target_stock_id'] ?? '' }}">
+                    <input type="hidden" name="notes"
+                        value="Fusión manual solicitada desde la pantalla de edición del lote {{ $stock->lote }}.">
+
+                    <button type="submit"
+                        class="inline-flex items-center rounded bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+                        Fusionar con lote existente
+                    </button>
+                </form>
+            </div>
+        </div>
+    @endif
+
     <div class="bg-white rounded-lg shadow p-6 mb-4">
         <h2 class="text-lg font-semibold text-gray-800 mb-2">
             {{ $stock->presentation->catalog->denominacion_generica ?? 'Medicamento' }}
@@ -172,16 +222,38 @@
                 class="w-full rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500">{{ old('notes') }}</textarea>
         </div>
 
-        <div class="flex justify-end gap-2">
-            <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id]) }}"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
-                Cancelar
-            </a>
+        <div class="flex flex-col gap-3 border-t pt-5 lg:flex-row lg:items-center lg:justify-between">
+            <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                <div class="font-semibold">
+                    Baja total del lote
+                </div>
+                <div class="mt-1">
+                    Si este registro ya no debe seguir disponible, puedes dejar su inventario en cero desde aquí.
+                </div>
+            </div>
 
-            <button type="submit"
-                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded">
-                Guardar cambios
-            </button>
+            <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <form method="POST" action="{{ route('admin.nutricionales.stocks.deplete', $stock->id) }}"
+                    onsubmit="return confirm('Se dará de baja total este lote y su stock quedará en cero. ¿Deseas continuar?');">
+                    @csrf
+                    <input type="hidden" name="notes" value="Baja total manual ejecutada desde edición de lote.">
+
+                    <button type="submit"
+                        class="w-full rounded bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 sm:w-auto">
+                        Dar de baja total
+                    </button>
+                </form>
+
+                <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id]) }}"
+                    class="rounded bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200 text-center">
+                    Cancelar
+                </a>
+
+                <button type="submit"
+                    class="rounded bg-green-600 px-6 py-2 font-bold text-white hover:bg-green-700">
+                    Guardar cambios
+                </button>
+            </div>
         </div>
     </form>
 

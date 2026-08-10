@@ -51,7 +51,7 @@
                                         {{ $user->username }}
                                     </td>
                                     <td class="px-6 py-4">
-                                        {{ $user->hospital['name'] }}
+                                        {{ $user->hospital?->name ?? 'Sin hospital asignado' }}
                                     </td>
                                     <td>
                                         @foreach ($user->roles as $role)
@@ -81,7 +81,7 @@
                                     {{ $user->username }}
                                 </td>
                                 <td class="px-6 py-4">
-                                    {{ $user->hospital['name'] }}
+                                    {{ $user->hospital?->name ?? 'Sin hospital asignado' }}
                                 </td>
                                 <td>
                                     @foreach ($user->roles as $role)

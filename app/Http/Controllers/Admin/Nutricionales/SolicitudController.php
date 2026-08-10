@@ -1400,6 +1400,32 @@ class SolicitudController extends Controller
                         $inputFinal->save();
                     }
                 }
+
+                $insumosPorPieza = SolicitudInput::where('solicitud_id', $solicitud->id)
+                    ->whereIn('input_id', [$bolsa_eva, 40])
+                    ->whereNotNull('nutrition_medicine_presentation_id')
+                    ->get();
+
+                foreach ($insumosPorPieza as $insumoPieza) {
+                    $presentation = \App\Models\Nutricionales\NutritionMedicinePresentation::with('catalog')
+                        ->find($insumoPieza->nutrition_medicine_presentation_id);
+
+                    if (!$presentation) {
+                        continue;
+                    }
+
+                    $stockUsado = $this->descontarStockPresentacion(
+                        $hospital,
+                        $presentation,
+                        max(1, (float) ($presentation->presentacion_ml ?? 0)),
+                        (int) $solicitud->id,
+                        1
+                    );
+
+                    $insumoPieza->lote = $stockUsado->lote;
+                    $insumoPieza->caducidad = $stockUsado->caducidad;
+                    $insumoPieza->save();
+                }
             }
 
             $registro->save();
@@ -1478,11 +1504,27 @@ class SolicitudController extends Controller
 
         return (float) $itemLista->precio_ml;
     }
+
+    private function usaInventarioPorPieza(NutritionMedicinePresentation $presentation): bool
+    {
+        $catalog = $presentation->catalog;
+        $genericName = mb_strtolower((string) ($catalog->denominacion_generica ?? ''));
+        $inputId = (int) ($catalog->input_id ?? 0);
+        $categoryId = (int) ($catalog->category_id ?? 0);
+
+        return $categoryId === 6
+            || $inputId === 40
+            || str_contains($genericName, 'bolsa eva')
+            || str_contains($genericName, 'set de infusión')
+            || str_contains($genericName, 'set de infusion');
+    }
+
     private function descontarStockPresentacion(
         ?Hospital $hospital,
         NutritionMedicinePresentation $presentation,
         float $cantidadMl,
-        int $solicitudId
+        int $solicitudId,
+        ?float $cantidadPiezas = null
     ): MedicineLaboratoryStock {
         if (!$hospital || !$hospital->laboratory_id) {
             throw new \Exception('El hospital no tiene laboratorio asignado.');
@@ -1492,14 +1534,32 @@ class SolicitudController extends Controller
             throw new \Exception('La cantidad a descontar debe ser mayor a 0.');
         }
 
-        $stock = MedicineLaboratoryStock::where('nutrition_medicine_presentation_id', $presentation->id)
+        $presentacionMl = (float) ($presentation->presentacion_ml ?? 0);
+
+        if ($presentacionMl <= 0) {
+            throw new \Exception("La presentación {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
+        }
+
+        $controlPorPieza = $this->usaInventarioPorPieza($presentation);
+        $cantidadFrascos = $controlPorPieza
+            ? max(1, (float) ($cantidadPiezas ?? 1))
+            : ($cantidadMl / $presentacionMl);
+
+        $stockQuery = MedicineLaboratoryStock::where('nutrition_medicine_presentation_id', $presentation->id)
             ->where('laboratory_id', $hospital->laboratory_id)
             ->where('is_active', 1)
-            ->where('stock_ml_actual', '>=', $cantidadMl)
             ->where(function ($q) {
                 $q->whereNull('caducidad')
                     ->orWhereDate('caducidad', '>=', now()->toDateString());
-            })
+            });
+
+        if ($controlPorPieza) {
+            $stockQuery->where('frascos_actuales', '>=', $cantidadFrascos);
+        } else {
+            $stockQuery->where('stock_ml_actual', '>=', $cantidadMl);
+        }
+
+        $stock = $stockQuery
             ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
             ->orderBy('caducidad')
             ->orderBy('id')
@@ -1507,21 +1567,16 @@ class SolicitudController extends Controller
             ->first();
 
         if (!$stock) {
-            throw new \Exception("No hay stock suficiente para la presentación {$presentation->denominacion_comercial} en el laboratorio del hospital.");
+            $unidad = $controlPorPieza ? 'pieza(s)' : 'mL';
+            $cantidad = $controlPorPieza ? $cantidadFrascos : $cantidadMl;
+
+            throw new \Exception("No hay stock suficiente para la presentación {$presentation->denominacion_comercial} en el laboratorio del hospital. Requerido: {$cantidad} {$unidad}.");
         }
-
-        $presentacionMl = (float) ($presentation->presentacion_ml ?? 0);
-
-        if ($presentacionMl <= 0) {
-            throw new \Exception("La presentación {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
-        }
-
-        $cantidadFrascos = $cantidadMl / $presentacionMl;
 
         $stockAntes = (float) $stock->stock_ml_actual;
-        $stockDespues = $stockAntes - $cantidadMl;
-
         $frascosAntes = (float) $stock->frascos_actuales;
+        $stockDescontarMl = $controlPorPieza ? ($cantidadFrascos * $presentacionMl) : $cantidadMl;
+        $stockDespues = max(0, $stockAntes - $stockDescontarMl);
         $frascosDespues = max(0, $frascosAntes - $cantidadFrascos);
 
         $stock->update([
@@ -1534,7 +1589,7 @@ class SolicitudController extends Controller
             'medicine_laboratory_stock_id' => $stock->id,
             'user_id' => auth()->id(),
             'tipo' => 'salida',
-            'cantidad_ml' => $cantidadMl,
+            'cantidad_ml' => $stockDescontarMl,
             'cantidad_frascos' => $cantidadFrascos,
             'stock_antes' => $stockAntes,
             'stock_despues' => $stockDespues,
@@ -1542,7 +1597,9 @@ class SolicitudController extends Controller
             'frascos_despues' => $frascosDespues,
             'reference_type' => 'Solicitud',
             'reference_id' => $solicitudId,
-            'notes' => 'Descuento automático por aprobación de solicitud nutricional',
+            'notes' => $controlPorPieza
+                ? 'Descuento automático por aprobación de solicitud nutricional (control por pieza)'
+                : 'Descuento automático por aprobación de solicitud nutricional',
         ]);
 
         return $stock;

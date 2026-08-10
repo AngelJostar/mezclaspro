@@ -12,6 +12,7 @@ class MedicinesCatalog extends Model
     protected $table = 'medicines_catalog';
 
     protected $fillable = [
+        'external_code',
         'denominacion',
         'presentacion',
         'requires_infusor',          // 👈 nuevo
