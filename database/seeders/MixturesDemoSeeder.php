@@ -57,10 +57,11 @@ class MixturesDemoSeeder extends Seeder
                 'password' => Hash::make('Mezclas2026!'), 'is_active' => true,
             ]
         );
-        $role = Role::query()->firstOrCreate(['name' => 'Institucion', 'guard_name' => 'web']);
+        $role = Role::query()->firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
         $operator->syncRoles([$role]);
 
         $nptItems = $this->nptCatalog($nptList, $laboratory);
+        $this->nptOperationalSupplies($nptList, $laboratory);
         $oncoItems = $this->oncologyCatalog($oncoList, $laboratory);
 
         $requests = [
@@ -133,6 +134,51 @@ class MixturesDemoSeeder extends Seeder
             $items[] = ['product_code' => $code, 'presentation_code' => $presentationCode, 'quantity' => 100 + ($index * 50), 'unit' => 'ml'];
         }
 
+        $packagingCategory = Category::query()->updateOrCreate(
+            ['id' => 6],
+            ['name' => 'Material de empaque']
+        );
+        $bagInput = Input::query()->updateOrCreate(
+            ['description' => 'Bolsa EVA 2000 ml', 'tipo_input' => 'adulto'],
+            [
+                'unidad' => 'pieza', 'orden_enum' => 90, 'category_id' => $packagingCategory->id,
+                'mult' => 1, 'div' => 1, 'is_active' => true,
+            ]
+        );
+        $bagCatalog = NutritionMedicineCatalog::query()->updateOrCreate(
+            ['external_code' => 'BOLSA-EVA-2000ML'],
+            [
+                'denominacion_generica' => 'Bolsa EVA 2000 ml', 'category_id' => $packagingCategory->id,
+                'input_id' => $bagInput->id, 'is_active' => true,
+            ]
+        );
+        $bagPresentation = NutritionMedicinePresentation::query()->updateOrCreate(
+            ['external_code' => 'BOLSA-EVA-2000ML-STD'],
+            [
+                'nutrition_medicine_catalog_id' => $bagCatalog->id,
+                'denominacion_comercial' => 'Bolsa EVA 2000 ml', 'fabricante' => 'Laboratorio Demo',
+                'presentacion' => 'Pieza', 'presentacion_ml' => 2000, 'is_available' => true,
+            ]
+        );
+        NutriMedicineListItem::query()->updateOrCreate(
+            ['nutri_medicine_list_id' => $list->id, 'nutrition_medicine_presentation_id' => $bagPresentation->id],
+            ['precio_ml' => 35]
+        );
+        MedicineLaboratoryStock::query()->updateOrCreate(
+            [
+                'nutrition_medicine_presentation_id' => $bagPresentation->id,
+                'laboratory_id' => $laboratory->id,
+                'lote' => 'EVA-DEMO-001',
+            ],
+            [
+                'frascos_iniciales' => 100, 'frascos_actuales' => 95,
+                'stock_ml_inicial' => 100, 'stock_ml_actual' => 95,
+                'caducidad' => now()->addYear()->toDateString(),
+                'fecha_ingreso' => now()->subMonth()->toDateString(),
+                'numero_factura' => 'FAC-EVA-DEMO', 'is_active' => true,
+            ]
+        );
+
         return $items;
     }
 
@@ -171,6 +217,65 @@ class MixturesDemoSeeder extends Seeder
         }
 
         return $items;
+    }
+
+    private function nptOperationalSupplies(NutriMedicineList $list, Laboratory $laboratory): void
+    {
+        $category = Category::query()->firstOrCreate(['name' => 'Material complementario']);
+
+        $definitions = [
+            [37, 'Agua inyectable', 'AGUA-INYECTABLE', 'AGUA-INYECTABLE-1000ML', 'Agua inyectable 1000 ml', 1000, 'ml', 0.05],
+            [40, 'Equipo de infusion', 'EQUIPO-INFUSION', 'EQUIPO-INFUSION-STD', 'Equipo de infusion', 1, 'pieza', 25],
+        ];
+
+        foreach ($definitions as [$id, $name, $code, $presentationCode, $commercialName, $capacity, $unit, $price]) {
+            $input = Input::query()->find($id);
+            if (! $input) {
+                $input = Input::unguarded(fn () => Input::query()->create([
+                    'id' => $id, 'description' => $name, 'tipo_input' => 'adulto',
+                    'unidad' => $unit, 'orden_enum' => $id, 'category_id' => $category->id,
+                    'mult' => 1, 'div' => 1, 'is_active' => true,
+                ]));
+            } else {
+                $input->update([
+                    'description' => $name, 'tipo_input' => 'adulto', 'unidad' => $unit,
+                    'orden_enum' => $id, 'category_id' => $category->id,
+                    'mult' => 1, 'div' => 1, 'is_active' => true,
+                ]);
+            }
+
+            $catalog = NutritionMedicineCatalog::query()->updateOrCreate(
+                ['external_code' => $code],
+                ['denominacion_generica' => $name, 'category_id' => $category->id, 'input_id' => $input->id, 'is_active' => true]
+            );
+            $presentation = NutritionMedicinePresentation::query()->updateOrCreate(
+                ['external_code' => $presentationCode],
+                [
+                    'nutrition_medicine_catalog_id' => $catalog->id, 'denominacion_comercial' => $commercialName,
+                    'fabricante' => 'Laboratorio Demo', 'presentacion' => $unit === 'ml' ? 'Frasco' : 'Pieza',
+                    'presentacion_ml' => $capacity, 'is_available' => true,
+                ]
+            );
+            NutriMedicineListItem::query()->updateOrCreate(
+                ['nutri_medicine_list_id' => $list->id, 'nutrition_medicine_presentation_id' => $presentation->id],
+                ['precio_ml' => $price]
+            );
+            MedicineLaboratoryStock::query()->updateOrCreate(
+                [
+                    'nutrition_medicine_presentation_id' => $presentation->id,
+                    'laboratory_id' => $laboratory->id,
+                    'lote' => $id === 37 ? 'AGUA-DEMO-001' : 'EQUIPO-DEMO-001',
+                ],
+                [
+                    'frascos_iniciales' => 100, 'frascos_actuales' => 95,
+                    'stock_ml_inicial' => $id === 37 ? 100000 : 100,
+                    'stock_ml_actual' => $id === 37 ? 95000 : 95,
+                    'caducidad' => now()->addYear()->toDateString(),
+                    'fecha_ingreso' => now()->subMonth()->toDateString(),
+                    'numero_factura' => 'FAC-OPERATIVOS-DEMO', 'is_active' => true,
+                ]
+            );
+        }
     }
 
     private function request(Hospital $hospital, int $sequence, string $type, string $patient, string $patientCode, array $item, string $diagnosis): ExternalMixtureRequest

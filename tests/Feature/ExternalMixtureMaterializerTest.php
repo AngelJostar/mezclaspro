@@ -59,11 +59,41 @@ class ExternalMixtureMaterializerTest extends TestCase
             'nutrition_medicine_presentation_id' => $presentation->id,
             'precio_ml' => 2.5,
         ]);
+        $packagingCategory = Category::query()->forceCreate(['id' => 6, 'name' => 'Material de empaque']);
+        $bagInput = Input::query()->create([
+            'description' => 'Bolsa EVA 2000 ml', 'tipo_input' => 'adulto', 'orden_enum' => 90,
+            'unidad' => 'pieza', 'mult' => 1, 'div' => 1, 'category_id' => $packagingCategory->id,
+        ]);
+        $bagCatalog = NutritionMedicineCatalog::query()->create([
+            'external_code' => 'BOLSA-EVA-2000ML', 'denominacion_generica' => 'Bolsa EVA 2000 ml',
+            'category_id' => $packagingCategory->id, 'input_id' => $bagInput->id, 'is_active' => true,
+        ]);
+        $bagPresentation = NutritionMedicinePresentation::query()->create([
+            'external_code' => 'BOLSA-EVA-2000ML-STD',
+            'nutrition_medicine_catalog_id' => $bagCatalog->id,
+            'denominacion_comercial' => 'Bolsa EVA 2000 ml', 'presentacion_ml' => 2000,
+            'is_available' => true,
+        ]);
+        NutriMedicineListItem::query()->create([
+            'nutri_medicine_list_id' => $list->id,
+            'nutrition_medicine_presentation_id' => $bagPresentation->id,
+            'precio_ml' => 35,
+        ]);
+        $laboratory = \App\Models\Oncologicos\Laboratory::query()->create([
+            'nombre' => 'Laboratorio NPT', 'estado' => 'Activo', 'activo' => true,
+        ]);
+        \App\Models\Nutricionales\MedicineLaboratoryStock::query()->create([
+            'nutrition_medicine_presentation_id' => $bagPresentation->id,
+            'laboratory_id' => $laboratory->id, 'stock_ml_inicial' => 10, 'stock_ml_actual' => 10,
+            'frascos_iniciales' => 10, 'frascos_actuales' => 10, 'lote' => 'EVA-TEST-1',
+            'caducidad' => '2027-08-06', 'is_active' => true,
+        ]);
         $hospital = Hospital::query()->create([
             'external_code' => 'CBTA-HOSP-NPT',
             'name' => 'Hospital NPT',
             'adress' => 'Direccion',
             'nutri_medicine_list_id' => $list->id,
+            'laboratory_id' => $laboratory->id,
             'is_active' => true,
         ]);
         $user = User::query()->create([
@@ -117,15 +147,20 @@ class ExternalMixtureMaterializerTest extends TestCase
         ]);
 
         $service = app(ExternalMixtureMaterializer::class);
-        $this->assertTrue($service->materialize($external));
+        $this->assertTrue($service->materialize($external), (string) $external->fresh()->last_error);
         $this->assertTrue($service->materialize($external->fresh()));
 
         $this->assertDatabaseCount('solicituds', 1);
-        $this->assertDatabaseCount('solicitud_inputs', 1);
+        $this->assertDatabaseCount('solicitud_inputs', 2);
         $this->assertDatabaseHas('solicitud_inputs', [
             'nutrition_medicine_presentation_id' => $presentation->id,
             'valor_ml' => 100,
             'precio_ml' => 250,
+        ]);
+        $this->assertDatabaseHas('solicitud_inputs', [
+            'input_id' => $bagInput->id,
+            'nutrition_medicine_presentation_id' => $bagPresentation->id,
+            'lote' => 'EVA-TEST-1',
         ]);
         $this->assertDatabaseHas('external_mixture_requests', [
             'id' => $external->id,
@@ -144,11 +179,6 @@ class ExternalMixtureMaterializerTest extends TestCase
         $this->assertTrue($refreshed->status_details['remission']['available']);
         $this->assertSame('REM-NPT-1001', $refreshed->status_details['remission']['number']);
 
-        $laboratory = \App\Models\Oncologicos\Laboratory::query()->create([
-            'nombre' => 'Laboratorio NPT',
-            'estado' => 'Activo',
-            'activo' => true,
-        ]);
         $stock = \App\Models\Nutricionales\MedicineLaboratoryStock::query()->create([
             'nutrition_medicine_presentation_id' => $presentation->id,
             'laboratory_id' => $laboratory->id,
