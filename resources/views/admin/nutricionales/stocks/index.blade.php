@@ -179,12 +179,17 @@
                         <tbody>
                             @forelse ($catalog->presentations as $presentation)
                                 @php
+                                    $isPieceBasedPresentation =
+                                        (int) ($catalog->category->id ?? 0) === 6 ||
+                                        str_contains(\Illuminate\Support\Str::lower((string) ($catalog->denominacion_generica ?? '')), 'bolsa eva');
+
                                     $stocks = ($presentation->stocks ?? collect())
                                         ->where('nutrition_medicine_presentation_id', $presentation->id)
                                         ->values();
 
                                     $hasStock = $stocks->contains(function ($stock) {
-                                        return (bool) $stock->is_active && (float) $stock->stock_ml_actual > 0;
+                                        return (bool) $stock->is_active &&
+                                            (((float) $stock->frascos_actuales > 0) || ((float) $stock->stock_ml_actual > 0));
                                     });
 
                                     $firstStock = $stocks->first();
@@ -196,7 +201,8 @@
                                 @endphp
 
                                 <tr class="bg-white border-b last:border-b-0 presentation-row"
-                                    data-presentation-id="{{ $presentation->id }}">
+                                    data-presentation-id="{{ $presentation->id }}"
+                                    data-piece-based="{{ $isPieceBasedPresentation ? '1' : '0' }}">
 
                                     <td class="px-4 py-3 text-center align-top">
                                         <input type="radio" form="active-form"
@@ -222,7 +228,12 @@
                                     </td>
 
                                     <td class="px-4 py-3 text-center align-top">
-                                        {{ $presentation->presentacion_ml ? number_format($presentation->presentacion_ml, 2) . ' ml' : '—' }}
+                                        @if ($presentation->presentacion_ml)
+                                            {{ number_format($presentation->presentacion_ml, 2) }}
+                                            {{ $isPieceBasedPresentation ? 'ml c/u' : 'ml' }}
+                                        @else
+                                            -
+                                        @endif
                                     </td>
 
                                     <td class="px-4 py-3 align-top min-w-[190px]">
@@ -278,7 +289,9 @@
                                                 </div>
 
                                                 <div>
-                                                    <span class="font-semibold">ML actual:</span>
+                                                    <span class="font-semibold">
+                                                        {{ $isPieceBasedPresentation ? 'Capacidad actual:' : 'ML actual:' }}
+                                                    </span>
                                                     <span class="text-green-700 font-semibold info-stock-actual">
                                                         {{ number_format((float) $firstStock->stock_ml_actual, 2) }}
                                                     </span>
@@ -297,12 +310,21 @@
 
                                     <td class="px-4 py-3 text-center align-top">
                                         @if ($firstStock)
-                                            <div class="font-semibold text-green-700 selected-stock-ml">
-                                                {{ number_format((float) $firstStock->stock_ml_actual, 2) }} ml
-                                            </div>
-                                            <div class="text-xs text-gray-500 selected-frascos">
-                                                {{ number_format((float) $firstStock->frascos_actuales, 2) }} frascos
-                                            </div>
+                                            @if ($isPieceBasedPresentation)
+                                                <div class="font-semibold text-green-700 selected-frascos">
+                                                    {{ number_format((float) $firstStock->frascos_actuales, 2) }} piezas
+                                                </div>
+                                                <div class="text-xs text-gray-500 selected-stock-ml">
+                                                    {{ number_format((float) $firstStock->stock_ml_actual, 2) }} ml de capacidad
+                                                </div>
+                                            @else
+                                                <div class="font-semibold text-green-700 selected-stock-ml">
+                                                    {{ number_format((float) $firstStock->stock_ml_actual, 2) }} ml
+                                                </div>
+                                                <div class="text-xs text-gray-500 selected-frascos">
+                                                    {{ number_format((float) $firstStock->frascos_actuales, 2) }} frascos
+                                                </div>
+                                            @endif
                                         @else
                                             <div class="text-gray-400 text-xs">
                                                 Sin stock
@@ -430,12 +452,16 @@
                         if (stockActual) stockActual.textContent = option.dataset.stockActual || '0.00';
 
                         if (selectedStockMl) {
+                            if (row.dataset.pieceBased === '1') {
+                            selectedStockMl.textContent = (option.dataset.stockActual || '0.00') + ' ml de capacidad';
+                        } else {
                             selectedStockMl.textContent = (option.dataset.stockActual || '0.00') + ' ml';
+                        }
                         }
 
                         if (selectedFrascos) {
                             selectedFrascos.textContent = (option.dataset.frascosActuales || '0.00') +
-                                ' frascos';
+                                (row.dataset.pieceBased === '1' ? ' piezas' : ' frascos');
                         }
 
                         if (actionEdit) actionEdit.href = option.dataset.editUrl;

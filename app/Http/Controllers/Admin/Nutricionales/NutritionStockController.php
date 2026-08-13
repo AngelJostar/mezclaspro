@@ -10,6 +10,7 @@ use App\Models\Nutricionales\NutritionLaboratoryActivePresentation;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\Laboratory;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -298,6 +299,24 @@ class NutritionStockController extends Controller
         }
     }
 
+    private function buscarLoteDuplicadoEnMismaPresentacion(
+        int $laboratoryId,
+        string $lote,
+        int $presentationId,
+        ?int $stockIdIgnorar = null
+    ): ?MedicineLaboratoryStock {
+        $query = MedicineLaboratoryStock::with(['presentation.catalog', 'laboratory'])
+            ->where('laboratory_id', $laboratoryId)
+            ->where('nutrition_medicine_presentation_id', $presentationId)
+            ->where('lote', trim($lote));
+
+        if ($stockIdIgnorar) {
+            $query->where('id', '!=', $stockIdIgnorar);
+        }
+
+        return $query->first();
+    }
+
     public function registrarIngreso(Request $request)
     {
         $request->validate([
@@ -449,6 +468,7 @@ class NutritionStockController extends Controller
 
         try {
             $stock->load('presentation');
+            $lote = trim((string) $request->lote);
 
             $presentacionMl = (float) ($stock->presentation->presentacion_ml ?? 0);
 
@@ -470,16 +490,42 @@ class NutritionStockController extends Controller
             $stockMlInicial = $frascosIniciales * $presentacionMl;
             $stockMlActual = $frascosActuales * $presentacionMl;
 
+            $stockDuplicado = $this->buscarLoteDuplicadoEnMismaPresentacion(
+                (int) $stock->laboratory_id,
+                $lote,
+                (int) $stock->nutrition_medicine_presentation_id,
+                (int) $stock->id
+            );
+
+            if ($stockDuplicado) {
+                DB::rollBack();
+
+                return redirect()->back()
+                    ->withErrors([
+                        'error' => 'Ya existe otro registro con ese mismo lote para esta presentación y laboratorio. Puedes fusionar ambos registros o dar de baja total este lote.',
+                    ])
+                    ->withInput()
+                    ->with('duplicate_stock', [
+                        'current_stock_id' => (int) $stock->id,
+                        'target_stock_id' => (int) $stockDuplicado->id,
+                        'lote' => $lote,
+                        'presentation_name' => $stockDuplicado->presentation?->denominacion_comercial ?? $stockDuplicado->presentation?->presentacion ?? 'Presentación',
+                        'target_frascos' => (float) $stockDuplicado->frascos_actuales,
+                        'target_stock_ml' => (float) $stockDuplicado->stock_ml_actual,
+                        'target_caducidad' => optional($stockDuplicado->caducidad)->format('d/m/Y'),
+                    ]);
+            }
+
             $this->validarLoteNoUsadoEnOtraPresentacion(
                 (int) $stock->laboratory_id,
-                trim($request->lote),
+                $lote,
                 (int) $stock->nutrition_medicine_presentation_id,
                 (int) $stock->id
             );
 
             // 🔥 actualizar stock
             $stock->update([
-                'lote' => trim($request->lote),
+                'lote' => $lote,
                 'caducidad' => $request->caducidad,
                 'fecha_ingreso' => $request->fecha_ingreso,
                 'numero_factura' => $request->numero_factura,
@@ -516,6 +562,164 @@ class NutritionStockController extends Controller
             session()->flash('swal', [
                 'title' => 'Actualizado',
                 'text' => 'El lote se actualizó correctamente.',
+                'icon' => 'success',
+            ]);
+
+            return redirect()->route('admin.nutricionales.stocks.index', [
+                'laboratory_id' => $stock->laboratory_id,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return redirect()->back()
+                ->withErrors(['error' => $e->getMessage()])
+                ->withInput();
+        }
+    }
+
+    public function mergeDuplicate(Request $request, MedicineLaboratoryStock $stock)
+    {
+        if (!auth()->user()->hasRole('Super Admin')) {
+            abort(403, 'No tienes permiso para fusionar lotes.');
+        }
+
+        $request->validate([
+            'target_stock_id' => 'required|integer|exists:medicine_laboratory_stocks,id',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $stock->load(['presentation.catalog', 'laboratory']);
+
+            $target = MedicineLaboratoryStock::with(['presentation.catalog', 'laboratory'])
+                ->lockForUpdate()
+                ->findOrFail((int) $request->target_stock_id);
+
+            if ((int) $target->id === (int) $stock->id) {
+                throw new \Exception('No puedes fusionar un lote consigo mismo.');
+            }
+
+            if (
+                (int) $target->laboratory_id !== (int) $stock->laboratory_id ||
+                (int) $target->nutrition_medicine_presentation_id !== (int) $stock->nutrition_medicine_presentation_id ||
+                trim((string) $target->lote) !== trim((string) $stock->lote)
+            ) {
+                throw new \Exception('El registro destino ya no coincide con el mismo lote, presentación y laboratorio.');
+            }
+
+            $stockAntes = (float) $target->stock_ml_actual;
+            $frascosAntes = (float) $target->frascos_actuales;
+
+            $target->update([
+                'frascos_iniciales' => (float) $target->frascos_iniciales + (float) $stock->frascos_iniciales,
+                'frascos_actuales' => (float) $target->frascos_actuales + (float) $stock->frascos_actuales,
+                'stock_ml_inicial' => (float) $target->stock_ml_inicial + (float) $stock->stock_ml_inicial,
+                'stock_ml_actual' => (float) $target->stock_ml_actual + (float) $stock->stock_ml_actual,
+                'fecha_ingreso' => $target->fecha_ingreso ?? $stock->fecha_ingreso,
+                'numero_factura' => $target->numero_factura ?: $stock->numero_factura,
+                'is_active' => ((float) $target->stock_ml_actual + (float) $stock->stock_ml_actual) > 0,
+            ]);
+
+            MedicineStockMovement::where('medicine_laboratory_stock_id', $stock->id)
+                ->update([
+                    'medicine_laboratory_stock_id' => $target->id,
+                ]);
+
+            $targetRefrescado = $target->fresh();
+
+            MedicineStockMovement::create([
+                'medicine_laboratory_stock_id' => $targetRefrescado->id,
+                'user_id' => auth()->id(),
+                'tipo' => 'ajuste',
+                'cantidad_ml' => (float) $stock->stock_ml_actual,
+                'cantidad_frascos' => (float) $stock->frascos_actuales,
+                'stock_antes' => $stockAntes,
+                'stock_despues' => (float) $targetRefrescado->stock_ml_actual,
+                'frascos_antes' => $frascosAntes,
+                'frascos_despues' => (float) $targetRefrescado->frascos_actuales,
+                'reference_type' => 'FusionLoteDuplicado',
+                'reference_id' => $targetRefrescado->id,
+                'notes' => $request->input('notes') ?: "Fusión del lote duplicado proveniente del registro #{$stock->id}.",
+            ]);
+
+            $stock->delete();
+
+            DB::commit();
+
+            session()->flash('swal', [
+                'title' => 'Lotes fusionados',
+                'text' => 'Se fusionó el lote duplicado con el registro existente.',
+                'icon' => 'success',
+            ]);
+
+            return redirect()->route('admin.nutricionales.stocks.index', [
+                'laboratory_id' => $targetRefrescado->laboratory_id,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return redirect()->back()
+                ->withErrors(['error' => $e->getMessage()])
+                ->withInput();
+        }
+    }
+
+    public function deplete(Request $request, MedicineLaboratoryStock $stock)
+    {
+        $request->validate([
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $stock->refresh();
+
+            $stockAntes = (float) $stock->stock_ml_actual;
+            $frascosAntes = (float) $stock->frascos_actuales;
+
+            if ($stockAntes <= 0 && $frascosAntes <= 0) {
+                session()->flash('swal', [
+                    'title' => 'Lote ya agotado',
+                    'text' => 'Este lote ya se encontraba en cero.',
+                    'icon' => 'info',
+                ]);
+
+                return redirect()->route('admin.nutricionales.stocks.index', [
+                    'laboratory_id' => $stock->laboratory_id,
+                ]);
+            }
+
+            $notes = trim((string) $request->input('notes', '')) ?: 'Baja total manual desde edicion de lote.';
+
+            $stock->update([
+                'stock_ml_actual' => 0,
+                'frascos_actuales' => 0,
+                'is_active' => false,
+            ]);
+
+            MedicineStockMovement::create([
+                'medicine_laboratory_stock_id' => $stock->id,
+                'user_id' => auth()->id(),
+                'tipo' => 'merma',
+                'cantidad_ml' => $stockAntes,
+                'cantidad_frascos' => $frascosAntes,
+                'stock_antes' => $stockAntes,
+                'stock_despues' => 0,
+                'frascos_antes' => $frascosAntes,
+                'frascos_despues' => 0,
+                'reference_type' => 'BajaTotalManual',
+                'reference_id' => $stock->id,
+                'notes' => $notes,
+            ]);
+
+            DB::commit();
+
+            session()->flash('swal', [
+                'title' => 'Lote dado de baja',
+                'text' => 'El lote quedo en cero correctamente.',
                 'icon' => 'success',
             ]);
 
@@ -843,3 +1047,4 @@ class NutritionStockController extends Controller
         );
     }
 }
+

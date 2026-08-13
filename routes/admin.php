@@ -151,6 +151,12 @@ Route::get('nutricionales/stocks/{stock}/edit', [NutritionStockController::class
 Route::put('nutricionales/stocks/{stock}', [NutritionStockController::class, 'update'])
     ->name('nutricionales.stocks.update');
 
+Route::post('nutricionales/stocks/{stock}/merge-duplicate', [NutritionStockController::class, 'mergeDuplicate'])
+    ->name('nutricionales.stocks.mergeDuplicate');
+
+Route::post('nutricionales/stocks/{stock}/deplete', [NutritionStockController::class, 'deplete'])
+    ->name('nutricionales.stocks.deplete');
+
 
 Route::get('nutricionales/stocks/{stock}/merma', [NutritionStockController::class, 'mermaForm'])
     ->name('nutricionales.stocks.merma');
