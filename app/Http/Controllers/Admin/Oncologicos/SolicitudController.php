@@ -650,11 +650,13 @@ class SolicitudController extends Controller
             'mezclas',
             'mezclas.medicamentos',
             'mezclas.medicamentos.medicamentoOnco.catalog',
+            'mezclas.billing',
             'mezclas.medicamentos.presentacionesUsadas.batch.presentation',
             'mezclas.medicamentos.diluyente',
             'mezclas.medicamentos.viaAdministracion',
             'mezclas.diluentPresentation.diluent',
             'mezclas.infusor',
+            'mezclas.billing',
         ])->findOrFail($id);
 
         $esAdmin = $user->hasAnyRole(['Admin', 'Super Admin']);
@@ -1381,8 +1383,34 @@ class SolicitudController extends Controller
         }
 
         $totalRemision = 0.0;
+        $totalServicioMezclado = 0.0;
+        $cantidadServiciosMezclado = 0;
+
+        $parseMoney = function ($value): float {
+            if ($value === null || $value === '') {
+                return 0.0;
+            }
+
+            if (is_numeric($value)) {
+                return round((float) $value, 2);
+            }
+
+            $normalized = preg_replace('/[^0-9,.\-]/', '', (string) $value);
+            if (!$normalized) {
+                return 0.0;
+            }
+
+            if (str_contains($normalized, ',') && str_contains($normalized, '.')) {
+                $normalized = str_replace(',', '', $normalized);
+            } elseif (str_contains($normalized, ',')) {
+                $normalized = str_replace(',', '.', $normalized);
+            }
+
+            return round((float) $normalized, 2);
+        };
 
         foreach ($solicitud_onco->mezclas as $mezcla) {
+            $totalMezclaSinServicio = 0.0;
 
             // =========================================================
             // 1) CALCULO MEDICAMENTOS (snapshot primero)
@@ -1471,6 +1499,7 @@ class SolicitudController extends Controller
                 $med->setAttribute('subtotal_calculado', $subtotal);
 
                 $totalRemision += $subtotal;
+                $totalMezclaSinServicio += $subtotal;
             }
 
             // =========================================================
@@ -1500,18 +1529,41 @@ class SolicitudController extends Controller
                 $mezcla->setAttribute('infusor_subtotal', round($precioInfusor, 2));
 
                 $totalRemision += round($precioInfusor, 2);
+                $totalMezclaSinServicio += round($precioInfusor, 2);
             } else {
                 $mezcla->setAttribute('infusor_aplica', false);
                 $mezcla->setAttribute('infusor_precio', 0);
                 $mezcla->setAttribute('infusor_subtotal', 0);
             }
+
+            $billingTotal = $parseMoney(optional($mezcla->billing)->precio_total);
+            $servicioMezclado = $billingTotal > 0 ? max(round($billingTotal - $totalMezclaSinServicio, 2), 0) : 0.0;
+
+            $mezcla->setAttribute('servicio_mezclado_subtotal', $servicioMezclado);
+
+            if ($servicioMezclado > 0) {
+                $cantidadServiciosMezclado++;
+                $totalServicioMezclado += $servicioMezclado;
+                $totalRemision += $servicioMezclado;
+            }
         }
+
+        if ($cantidadServiciosMezclado === 0) {
+            $cantidadServiciosMezclado = $solicitud_onco->mezclas->count();
+        }
+
+        $precioUnitarioServicioMezclado = $cantidadServiciosMezclado > 0
+            ? round($totalServicioMezclado / $cantidadServiciosMezclado, 2)
+            : 0.0;
 
         $pdf = Pdf::loadView('pdfs.oncologicos.remision', [
             'solicitud'     => $solicitud_onco,
             'mezclas'       => $solicitud_onco->mezclas,
             'fechaEmision'  => now(),
             'totalRemision' => round($totalRemision, 2),
+            'totalServicioMezclado' => round($totalServicioMezclado, 2),
+            'cantidadServiciosMezclado' => $cantidadServiciosMezclado,
+            'precioUnitarioServicioMezclado' => $precioUnitarioServicioMezclado,
             'distributor'   => $distributor, // ✅ ahora viene por lista del hospital
         ])->setPaper('letter', 'portrait');
 

@@ -422,6 +422,21 @@
                     </tr>
                 @endif
             @endforeach
+
+            @if ((float) ($totalServicioMezclado ?? 0) > 0)
+                <tr>
+                    <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                    <td class="border-1 px-1 text-center">Servicio de Mezclado</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">Servicio</td>
+                    <td class="border-1 px-1 text-center">{{ $cantidadServiciosMezclado ?? 1 }}</td>
+                    <td class="border-1 px-1 text-center">{{ $money($precioUnitarioServicioMezclado ?? 0) }}</td>
+                    <td class="border-1 border-r-0 px-1 text-center">{{ $money($totalServicioMezclado ?? 0) }}</td>
+                </tr>
+            @endif
         </table>
 
         <table>
@@ -687,6 +702,21 @@
                         </tr>
                     @endif
                 @endforeach
+
+                @if ((float) ($totalServicioMezclado ?? 0) > 0)
+                    <tr>
+                        <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                        <td class="border-1 px-1 text-center">Servicio de Mezclado</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">Servicio</td>
+                        <td class="border-1 px-1 text-center">{{ $cantidadServiciosMezclado ?? 1 }}</td>
+                        <td class="border-1 px-1 text-center">{{ $money($precioUnitarioServicioMezclado ?? 0) }}</td>
+                        <td class="border-1 border-r-0 px-1 text-center">{{ $money($totalServicioMezclado ?? 0) }}</td>
+                    </tr>
+                @endif
             </table>
 
             <table>

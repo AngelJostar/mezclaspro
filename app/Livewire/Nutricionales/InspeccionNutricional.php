@@ -13,6 +13,7 @@ class InspeccionNutricional extends Component
     public $mostrarModalInspeccion = false;
 
     public $solicitudId;
+    public $lote_mezcla = '';
 
     public $es_limpia = 0;
     public $es_libre = 0;
@@ -73,6 +74,7 @@ class InspeccionNutricional extends Component
 
         $this->solicitudId = (int) $solicitudId;
         $this->mostrarModalInspeccion = true;
+        $this->lote_mezcla = (string) (Solicitud::find($this->solicitudId)?->lote ?? '');
 
         $ins = NutricionalesInspeccionNutricional::where('solicitud_id', $this->solicitudId)->first();
 

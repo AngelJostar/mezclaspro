@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
@@ -287,7 +287,7 @@
 
         <table>
             <tr>
-                <td class="row" style="width: 52%;">
+                <td class="row" style="width: 52%; white-space: nowrap;">
                     Fecha y hora de preparación: {{ $prep ? $prep->format('d/m/Y H:i') : $dash }}
                 </td>
                 <td class="admin-cell" style="width: 48%;">
@@ -295,14 +295,14 @@
                 </td>
             </tr>
             <tr>
-                <td></td>
+                <td class="row" style="white-space: nowrap;">
+                    Fecha límite de uso: {{ isset($fechaLimiteUso) && $fechaLimiteUso ? $fechaLimiteUso->format('d/m/Y H:i') : $dash }}
+                </td>
                 <td class="row secondary-text right">
                     Vel. infusión: {{ $velInf !== null ? $fmtNum($velInf, 3, ' mL/min') : $dash }}
                 </td>
             </tr>
         </table>
-
-        <div class="spacer-md"></div>
 
         <table>
             <tr>

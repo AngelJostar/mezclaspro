@@ -50,7 +50,9 @@ class MezclaController extends Controller
     {
         $solicitud = SolicitudOnco::with([
             'hospital',
-            'mezclas' => fn($q) => $q->orderBy('id'),
+            'mezclas' => fn($q) => $q
+                ->with(['medicamentos.medicamentoOnco.catalog'])
+                ->orderBy('id'),
         ])->findOrFail($id);
 
         return view('admin.oncologicos.mezclas.index', compact('solicitud'));
@@ -1493,7 +1495,9 @@ class MezclaController extends Controller
                     ]
                 );
 
-                $inspeccion->aprobo_nombre = $aproboNombre;
+                $inspeccion->valido_nombre = $aproboNombre;
+                $inspeccion->fecha_validacion = Carbon::today()->toDateString();
+                $inspeccion->hora_validacion = Carbon::now()->format('H:i:s');
                 $inspeccion->save();
             }
 
@@ -1567,6 +1571,7 @@ class MezclaController extends Controller
         }
 
         // ===== NOMBRES INSPECCIÓN =====
+        $validoNombre  = $this->nombreUsuarioParaPdf(optional($mezcla->inspeccion)->valido_nombre);
         $aproboNombre  = $this->nombreUsuarioParaPdf(optional($mezcla->inspeccion)->aprobo_nombre);
         $revisoNombre  = $this->nombreUsuarioParaPdf(optional($mezcla->inspeccion)->reviso_nombre);
         $preparoNombre = $this->nombreUsuarioParaPdf(optional($mezcla->inspeccion)->preparo_nombre);
@@ -1796,6 +1801,7 @@ class MezclaController extends Controller
             'fecha_limite_uso'     => $fechaLimiteUso,
             'hospital'             => $hospital,
 
+            'valido_nombre'        => $validoNombre,
             'aprobo_nombre'        => $aproboNombre,
             'reviso_nombre'        => $revisoNombre,
             'preparo_nombre'       => $preparoNombre,

@@ -53,8 +53,8 @@
             <thead class="text-xs uppercase bg-gray-100 text-gray-700">
                 <tr>
                     <th class="px-6 py-3">No. Mezcla</th>
-                    <th class="px-6 py-3">Hospital</th>
-                    <th class="px-6 py-3">Paciente</th>
+                    <th class="px-6 py-3">Medicamento</th>
+                    <th class="px-6 py-3">Dosis y volumen de la mezcla</th>
                     <th class="px-6 py-3">Fecha y hora de solicitud</th>
                     <th class="px-6 py-3">Fecha y hora de entrega</th>
                     <th class="px-6 py-3">Estado</th>
@@ -65,6 +65,32 @@
             </thead>
             <tbody>
                 @forelse($solicitud->mezclas as $mezcla)
+                    @php
+                        $medicamentosTexto = $mezcla->medicamentos
+                            ->map(function ($medicamento) {
+                                return $medicamento->medicamentoOnco->catalog->denominacion
+                                    ?? $medicamento->nombre_medicamento
+                                    ?? '—';
+                            })
+                            ->filter()
+                            ->implode(', ');
+
+                        $dosisYVolumenTexto = $mezcla->medicamentos
+                            ->map(function ($medicamento) use ($mezcla) {
+                                if (!is_numeric($medicamento->dosis ?? null)) {
+                                    return null;
+                                }
+
+                                $dosis = rtrim(rtrim(number_format((float) $medicamento->dosis, 2, '.', ''), '0'), '.');
+                                $volumen = is_numeric($mezcla->volumen_dilucion ?? null)
+                                    ? rtrim(rtrim(number_format((float) $mezcla->volumen_dilucion, 2, '.', ''), '0'), '.') . ' mL'
+                                    : '—';
+
+                                return $dosis . ' mg / ' . $volumen;
+                            })
+                            ->filter()
+                            ->implode(', ');
+                    @endphp
                     <tr @class([
                         'border-b dark:bg-gray-800 dark:border-gray-700',
                         'bg-gray-200 text-black' => $mezcla->estado === 'pendiente',
@@ -83,8 +109,8 @@
                         ]),
                     ])>
                         <td class="px-6 py-4">{{ $mezcla->id }}</td>
-                        <td class="px-6 py-4">{{ $solicitud->hospital->name ?? 'N/A' }}</td>
-                        <td class="px-6 py-4">{{ $solicitud->nombre_paciente }}</td>
+                        <td class="px-6 py-4">{{ $medicamentosTexto !== '' ? $medicamentosTexto : '—' }}</td>
+                        <td class="px-6 py-4">{{ $dosisYVolumenTexto !== '' ? $dosisYVolumenTexto : '—' }}</td>
                         <td class="px-6 py-4">
                             {{ optional($solicitud->created_at)->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? '—' }}
                         </td>
@@ -99,10 +125,14 @@
                                 {{ match ($mezcla->estado) {
                                     'pendiente' => 'bg-yellow-100 text-yellow-800',
                                     'aprobada' => 'bg-green-100 text-green-800',
+                                    'revisada' => 'bg-indigo-100 text-indigo-800',
                                     'cancelada' => 'bg-red-100 text-red-800',
                                     default => 'bg-gray-100 text-gray-800',
                                 } }}">
-                                {{ ucfirst($mezcla->estado) }}
+                                {{ match ($mezcla->estado) {
+                                    'revisada' => 'Inspeccionada',
+                                    default => ucfirst($mezcla->estado),
+                                } }}
                             </span>
                         </td>
                         <td class="px-6 py-4">

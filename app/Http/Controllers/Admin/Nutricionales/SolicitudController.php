@@ -87,7 +87,7 @@ class SolicitudController extends Controller
         $edad = '';
 
         if ($edadAnios > 0) {
-            $edad .= $edadAnios . ' a�o(s) ';
+            $edad .= $edadAnios . ' anio(s) ';
         }
 
         if ($edadMeses > 0) {
@@ -95,7 +95,7 @@ class SolicitudController extends Controller
         }
 
         if ($edadDias > 0) {
-            $edad .= $edadDias . ' d�a(s)';
+            $edad .= $edadDias . ' dia(s)';
         }
 
         return $edad;
@@ -219,7 +219,7 @@ class SolicitudController extends Controller
                 'frascos_despues' => $frascosDespues,
                 'reference_type' => 'SolicitudCancelada',
                 'reference_id' => $solicitud->id,
-                'notes' => 'Devoluci�n autom�tica de inventario por cancelaci�n de solicitud nutricional',
+                'notes' => 'DevoluciÃƒÆ’Ã‚Â³n automÃƒÆ’Ã‚Â¡tica de inventario por cancelaciÃƒÆ’Ã‚Â³n de solicitud nutricional',
             ]);
         }
     }
@@ -517,7 +517,7 @@ class SolicitudController extends Controller
 
             if ($fechaHoraEntrega->lt($horaMinima)) {
                 return redirect()->back()->withErrors([
-                    'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos despu�s de la hora actual.'
+                    'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos despuÃƒÆ’Ã‚Â©s de la hora actual.'
                 ])->withInput();
             }
 
@@ -840,8 +840,8 @@ class SolicitudController extends Controller
             session()->flash(
                 'swal',
                 [
-                    'title' => "�Bien hecho!",
-                    'text' => "La solicitud se ha creado con �xito.",
+                    'title' => "Ãƒâ€šÃ‚Â¡Bien hecho!",
+                    'text' => "La solicitud se ha creado con ÃƒÆ’Ã‚Â©xito.",
                     'icon' => "success"
                 ]
             );
@@ -1060,7 +1060,7 @@ class SolicitudController extends Controller
 
                 session()->flash('swal', [
                     'title' => 'Solicitud cancelada',
-                    'text' => 'La solicitud se ha cancelado y el inventario fue devuelto si ya hab�a sido descontado.',
+                    'text' => 'La solicitud se ha cancelado y el inventario fue devuelto si ya habÃƒÆ’Ã‚Â­a sido descontado.',
                     'icon' => 'warning',
                 ]);
 
@@ -1448,13 +1448,13 @@ class SolicitudController extends Controller
             if ($accion === 'aprobar') {
                 session()->flash('swal', [
                     'title' => 'Solicitud Aprobada',
-                    'text' => 'La solicitud se ha aprobado con �xito.',
+                    'text' => 'La solicitud se ha aprobado con ÃƒÆ’Ã‚Â©xito.',
                     'icon' => 'success',
                 ]);
             } else {
                 session()->flash('swal', [
                     'title' => 'Solicitud Actualizada',
-                    'text' => 'La solicitud se ha editado con �xito.',
+                    'text' => 'La solicitud se ha editado con ÃƒÆ’Ã‚Â©xito.',
                     'icon' => 'success',
                 ]);
             }
@@ -1499,7 +1499,7 @@ class SolicitudController extends Controller
             ->first();
 
         if (!$itemLista) {
-            throw new \Exception("La presentaci�n {$presentation->denominacion_comercial} no existe en la lista nutricional del hospital.");
+            throw new \Exception("La presentaciÃƒÆ’Ã‚Â³n {$presentation->denominacion_comercial} no existe en la lista nutricional del hospital.");
         }
 
         return (float) $itemLista->precio_ml;
@@ -1515,7 +1515,7 @@ class SolicitudController extends Controller
         return $categoryId === 6
             || $inputId === 40
             || str_contains($genericName, 'bolsa eva')
-            || str_contains($genericName, 'set de infusi�n')
+            || str_contains($genericName, 'set de infusiÃƒÆ’Ã‚Â³n')
             || str_contains($genericName, 'set de infusion');
     }
 
@@ -1537,7 +1537,7 @@ class SolicitudController extends Controller
         $presentacionMl = (float) ($presentation->presentacion_ml ?? 0);
 
         if ($presentacionMl <= 0) {
-            throw new \Exception("La presentaci�n {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
+            throw new \Exception("La presentaciÃƒÆ’Ã‚Â³n {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
         }
 
         $controlPorPieza = $this->usaInventarioPorPieza($presentation);
@@ -1567,10 +1567,10 @@ class SolicitudController extends Controller
             ->first();
 
         if (!$stock) {
-            $unidad = $controlPorPieza ? 'pieza(s)' : 'mL';
+            $unidad = $controlPorPieza ? 'piezas' : 'mL';
             $cantidad = $controlPorPieza ? $cantidadFrascos : $cantidadMl;
 
-            throw new \Exception("No hay stock suficiente para la presentaci�n {$presentation->denominacion_comercial} en el laboratorio del hospital. Requerido: {$cantidad} {$unidad}.");
+            throw new \Exception("No hay stock suficiente para la presentacion {$presentation->denominacion_comercial} en el laboratorio del hospital. Requerido: {$cantidad} {$unidad}.");
         }
 
         $stockAntes = (float) $stock->stock_ml_actual;
@@ -1598,8 +1598,8 @@ class SolicitudController extends Controller
             'reference_type' => 'Solicitud',
             'reference_id' => $solicitudId,
             'notes' => $controlPorPieza
-                ? 'Descuento autom�tico por aprobaci�n de solicitud nutricional (control por pieza)'
-                : 'Descuento autom�tico por aprobaci�n de solicitud nutricional',
+                ? 'Descuento automÃƒÆ’Ã‚Â¡tico por aprobaciÃƒÆ’Ã‚Â³n de solicitud nutricional (control por pieza)'
+                : 'Descuento automÃƒÆ’Ã‚Â¡tico por aprobaciÃƒÆ’Ã‚Â³n de solicitud nutricional',
         ]);
 
         return $stock;
@@ -1611,7 +1611,7 @@ class SolicitudController extends Controller
         $role = $user->roles[0]->name;
 
         if (!in_array($role, ['Admin', 'Super Admin']) && $solicitud->user_id != $user->id) {
-            abort(Response::HTTP_NOT_FOUND, 'P�gina no encontrada');
+            abort(Response::HTTP_NOT_FOUND, 'PÃƒÆ’Ã‚Â¡gina no encontrada');
         }
 
         $solicitud_detalles = Solicitud::with(
