@@ -426,11 +426,11 @@ Route::get('instituciones/{institucion}/hospitals', [InstitucionController::clas
     ->name('instituciones.hospitals')
     ->middleware(['role:Super Admin']);
 
-Route::post('instituciones/{institucion}/hospitals', [InstitucionController::class, 'storeHospital'])
 Route::get('instituciones/{institucion}/hospitals/create', [HospitalController::class, 'createForInstitution'])
     ->name('instituciones.hospitals.create')
     ->middleware(['role:Super Admin']);
 
+Route::post('instituciones/{institucion}/hospitals', [InstitucionController::class, 'storeHospital'])
     ->name('instituciones.hospitals.store')
     ->middleware(['role:Super Admin']);
 

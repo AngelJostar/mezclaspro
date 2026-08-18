@@ -20,6 +20,10 @@ class SolicitudesTable extends Component
 
     protected $paginationTheme = 'tailwind';
 
+    protected $listeners = [
+        'mezcla-inspeccionada' => '$refresh',
+    ];
+
     public function mount(string $requestType = 'oncologicos'): void
     {
         $this->requestType = $requestType === 'antibioticos' ? 'antibioticos' : 'oncologicos';
