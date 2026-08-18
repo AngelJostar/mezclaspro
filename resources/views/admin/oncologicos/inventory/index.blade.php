@@ -1,8 +1,15 @@
 <x-admin-layout>
+    @php
+        $inventoryTitle = match ($category ?? '') {
+            'oncologicos' => 'Inventario oncológico',
+            'antibioticos' => 'Inventario de antibióticos',
+            default => 'Inventario de medicamentos',
+        };
+    @endphp
     <div class="mt-2 mb-4 flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-medium text-gray-800">
-                Inventario (Lotes, caducidades y stock)
+                {{ $inventoryTitle }} (lotes, caducidades y stock)
             </h1>
 
             <div class="text-sm text-gray-600 mt-1">
@@ -17,15 +24,16 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('admin.oncologicos.inventory.selectLaboratory') }}"
+            <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $laboratoryId]) }}"
                 class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
-                Cambiar laboratorio
+                Volver al almacén
             </a>
 
             <a href="{{ route('admin.oncologicos.inventory.exportar', [
                 'laboratory_id' => $laboratoryId,
                 'q' => $q,
                 'stock' => $stock,
+                'category' => $category ?? '',
             ]) }}"
                 class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
                 <i class="fa-solid fa-file-excel mr-1"></i>
@@ -40,6 +48,7 @@
             class="grid grid-cols-1 md:grid-cols-4 gap-3">
 
             <input type="hidden" name="laboratory_id" value="{{ $laboratoryId }}">
+            <input type="hidden" name="category" value="{{ $category ?? '' }}">
 
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
@@ -62,7 +71,7 @@
                     Buscar
                 </button>
 
-                <a href="{{ route('admin.oncologicos.inventory.index', ['laboratory_id' => $laboratoryId]) }}"
+                <a href="{{ route('admin.oncologicos.inventory.index', ['laboratory_id' => $laboratoryId, 'category' => $category ?? '']) }}"
                     class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
                     Limpiar
                 </a>
@@ -121,7 +130,7 @@
                                 <th class="px-4 py-3">Detalle del lote</th>
                                 <th class="px-4 py-3 text-center">Stock lote seleccionado</th>
                                 <th class="px-4 py-3 text-center">Estado</th>
-                                <th class="px-4 py-3 text-right">Acciones</th>
+                                <th class="px-4 py-3 text-center">Ingresar lote</th>
                             </tr>
                         </thead>
 
@@ -234,16 +243,15 @@
                                         @endif
                                     </td>
 
-                                    <td class="px-4 py-3 text-right align-top">
-                                        <x-row-actions>
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                         <a href="{{ route('admin.oncologicos.inventory.ingresoForm', [
                                             'laboratory_id' => $laboratoryId,
                                             'presentation_id' => $presentation['presentation_id'],
+                                            'category' => $category ?? '',
                                         ]) }}"
-                                            class="">
+                                            class="inline-flex items-center justify-center whitespace-nowrap rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
                                             Ingresar lote
                                         </a>
-                                        </x-row-actions>
                                     </td>
                                 </tr>
                             @empty

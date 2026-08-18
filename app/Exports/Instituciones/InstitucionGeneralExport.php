@@ -5,6 +5,7 @@ namespace App\Exports\Instituciones;
 use App\Models\Institucion;
 use App\Models\Nutricionales\Solicitud as NutricionalSolicitud;
 use App\Models\Oncologicos\Mezcla;
+use App\Services\InstitutionReportTemplateService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromArray;
@@ -15,6 +16,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSize, WithStyles
 {
+    private ?array $templateContext = null;
+
     public function __construct(private int $institucionId) {}
 
     public function array(): array
@@ -26,7 +29,7 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
             return [];
         }
 
-        return collect()
+        $rows = collect()
             ->concat($this->buildOncoRows($institucion, $hospitalIds))
             ->concat($this->buildNutriRows($institucion, $hospitalIds))
             ->sortBy([
@@ -49,7 +52,6 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
                     $row['pv_unitario'],
                     $row['pv_total'],
                     $row['empresa'],
-                    $row['precio_total'],
                     $row['conciliable'],
                     $row['folio_factura_uuid'],
                     $row['folio_factura_interno'],
@@ -59,56 +61,44 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
                 ];
             })
             ->all();
+
+        return app(InstitutionReportTemplateService::class)->projectRows(
+            InstitutionReportTemplateService::GENERAL,
+            $rows
+        );
     }
 
     public function headings(): array
     {
-        return [
-            'INSTITUCION',
-            'Unidad',
-            'Nombre del Medico',
-            'Nombre del Paciente',
-            'No. de remision',
-            'Fecha de remision',
-            'Cantidad',
-            'Descripcion',
-            'P.V. unitario IVA Incluido',
-            'P.V. total IVA Incluido',
-            'Empresa',
-            'Precio Total',
-            'Coinciliable',
-            'Folio Factura UUID',
-            'Folio Factura Interno',
-            'Fecha Facturacion',
-            'Numero Carta Factura',
-            'Fecha Carta Factura',
-        ];
+        return app(InstitutionReportTemplateService::class)->headingRows(
+            InstitutionReportTemplateService::GENERAL,
+            $this->context()
+        );
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $highestColumn = $sheet->getHighestColumn();
-
-        $sheet->getStyle("A1:{$highestColumn}1")->applyFromArray([
-            'font' => [
-                'bold' => true,
-                'color' => ['rgb' => '1F3B64'],
-                'size' => 11,
-            ],
-            'fill' => [
-                'fillType' => 'solid',
-                'startColor' => ['rgb' => 'D9E5F3'],
-            ],
-            'alignment' => [
-                'horizontal' => 'center',
-                'vertical' => 'center',
-                'wrapText' => true,
-            ],
-        ]);
-
-        $sheet->freezePane('A2');
+        app(InstitutionReportTemplateService::class)->styleWorksheet(
+            $sheet,
+            InstitutionReportTemplateService::GENERAL,
+            $this->context()
+        );
 
         return [];
+    }
+
+    private function context(): array
+    {
+        if ($this->templateContext !== null) {
+            return $this->templateContext;
+        }
+
+        $institucion = Institucion::findOrFail($this->institucionId);
+
+        return $this->templateContext = [
+            'institucion' => $institucion->nombre,
+            'fecha_generacion' => now()->format('d/m/Y H:i'),
+        ];
     }
 
     private function buildOncoRows(Institucion $institucion, array $hospitalIds): Collection
@@ -176,7 +166,7 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
             }
 
             $billingTotal = $this->parseMoney($billing?->precio_total);
-            $serviceTotal = $billingTotal > 0 ? max($billingTotal - $medicationTotal, 0) : 0.0;
+            $serviceTotal = $this->resolveOncoMixingServiceTotal($lista, $billingTotal, $medicationTotal);
 
             $rows->push($this->baseRow(
                 institucion: $institucion,
@@ -364,6 +354,15 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
         $subtotal = $cantidad * $precioUnit;
 
         return [round($cantidad, 2), round($precioUnit, 4), round($subtotal, 2)];
+    }
+
+    private function resolveOncoMixingServiceTotal($lista, float $billingTotal, float $medicationTotal): float
+    {
+        if ($lista && (bool) ($lista->has_mixing_service ?? false)) {
+            return round((float) ($lista->mixing_service_price ?? 0), 2);
+        }
+
+        return $billingTotal > 0 ? max($billingTotal - $medicationTotal, 0) : 0.0;
     }
 
     private function baseRow(

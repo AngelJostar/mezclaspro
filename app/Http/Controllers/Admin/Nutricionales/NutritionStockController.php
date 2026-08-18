@@ -668,12 +668,71 @@ class NutritionStockController extends Controller
 
     public function deplete(Request $request, MedicineLaboratoryStock $stock)
     {
-        $request->merge([
-            'cantidad_ml' => (float) $stock->stock_ml_actual,
-            'notes' => trim((string) $request->input('notes', '')) ?: 'Baja total manual desde edición de lote.',
+        $request->validate([
+            'notes' => 'nullable|string|max:500',
         ]);
 
-        return $this->registrarMerma($request, $stock);
+        DB::beginTransaction();
+
+        try {
+            $stock->refresh();
+
+            $stockAntes = (float) $stock->stock_ml_actual;
+            $frascosAntes = (float) $stock->frascos_actuales;
+
+            if ($stockAntes <= 0 && $frascosAntes <= 0) {
+                session()->flash('swal', [
+                    'title' => 'Lote ya agotado',
+                    'text' => 'Este lote ya se encontraba en cero.',
+                    'icon' => 'info',
+                ]);
+
+                return redirect()->route('admin.nutricionales.stocks.index', [
+                    'laboratory_id' => $stock->laboratory_id,
+                ]);
+            }
+
+            $notes = trim((string) $request->input('notes', '')) ?: 'Baja total manual desde edicion de lote.';
+
+            $stock->update([
+                'stock_ml_actual' => 0,
+                'frascos_actuales' => 0,
+                'is_active' => false,
+            ]);
+
+            MedicineStockMovement::create([
+                'medicine_laboratory_stock_id' => $stock->id,
+                'user_id' => auth()->id(),
+                'tipo' => 'merma',
+                'cantidad_ml' => $stockAntes,
+                'cantidad_frascos' => $frascosAntes,
+                'stock_antes' => $stockAntes,
+                'stock_despues' => 0,
+                'frascos_antes' => $frascosAntes,
+                'frascos_despues' => 0,
+                'reference_type' => 'BajaTotalManual',
+                'reference_id' => $stock->id,
+                'notes' => $notes,
+            ]);
+
+            DB::commit();
+
+            session()->flash('swal', [
+                'title' => 'Lote dado de baja',
+                'text' => 'El lote quedo en cero correctamente.',
+                'icon' => 'success',
+            ]);
+
+            return redirect()->route('admin.nutricionales.stocks.index', [
+                'laboratory_id' => $stock->laboratory_id,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return redirect()->back()
+                ->withErrors(['error' => $e->getMessage()])
+                ->withInput();
+        }
     }
 
     public function bulkUpdate(Request $request)
@@ -988,3 +1047,4 @@ class NutritionStockController extends Controller
         );
     }
 }
+

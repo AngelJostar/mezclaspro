@@ -89,6 +89,37 @@
                 </label>
             </div>
 
+            <div class="border rounded-lg p-4 bg-gray-50 space-y-4">
+                <div class="flex items-center">
+                    <input type="hidden" name="has_mixing_service" value="0">
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="has_mixing_service" id="has_mixing_service" value="1"
+                            class="sr-only peer" {{ old('has_mixing_service', false) ? 'checked' : '' }}>
+                        <div
+                            class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 relative
+                                   after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                   after:bg-white after:border-gray-300 after:border after:rounded-full
+                                   after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full">
+                        </div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">
+                            Activar servicio de mezclado
+                        </span>
+                    </label>
+                </div>
+
+                <div id="mixing_service_price_wrap"
+                    class="{{ old('has_mixing_service', false) ? '' : 'hidden' }}">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Precio del servicio de mezclado</label>
+                    <input type="number" step="0.0001" min="0" name="mixing_service_price"
+                        value="{{ old('mixing_service_price', 0) }}"
+                        class="w-full md:w-72 px-4 py-2 border border-gray-300 rounded-lg focus:ring focus:ring-blue-200 text-right"
+                        placeholder="0.0000">
+                    <p class="mt-1 text-xs text-gray-500">
+                        Este importe se cobrará por mezcla en remisiones y facturación oncológica.
+                    </p>
+                </div>
+            </div>
+
             {{-- ================= DISTRIBUTOR (opcional) ================= --}}
             <div class="border rounded-lg p-4 bg-gray-50">
                 <div class="flex items-center justify-between">
@@ -407,6 +438,19 @@
                 if (chargeSwitch && chargeByHidden && chargeLabel) {
                     chargeSwitch.addEventListener('change', syncChargeGlobalLabel);
                     syncChargeGlobalLabel();
+                }
+
+                const mixingServiceToggle = document.getElementById('has_mixing_service');
+                const mixingServiceWrap = document.getElementById('mixing_service_price_wrap');
+
+                function syncMixingServiceVisibility() {
+                    if (!mixingServiceToggle || !mixingServiceWrap) return;
+                    mixingServiceWrap.classList.toggle('hidden', !mixingServiceToggle.checked);
+                }
+
+                if (mixingServiceToggle && mixingServiceWrap) {
+                    mixingServiceToggle.addEventListener('change', syncMixingServiceVisibility);
+                    syncMixingServiceVisibility();
                 }
 
                 // ===== Catálogo master de genéricos

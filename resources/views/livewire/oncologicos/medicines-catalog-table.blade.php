@@ -33,9 +33,9 @@
                         Estado
                     </th>
 
-                    <th class="px-6 py-3">
-                        Acciones
-                    </th>
+                    <th class="px-6 py-3 text-center">Editar</th>
+                    <th class="px-6 py-3 text-center">Presentaciones</th>
+                    <th class="px-6 py-3 text-center">Deshabilitar</th>
                 </tr>
             </thead>
 
@@ -102,34 +102,33 @@
                             @endif
                         </td>
 
-                        <td class="px-6 py-4 align-top">
-                            <x-row-actions>
-                                <a href="{{ route('admin.oncologicos.medicines.catalog.presentations.index', ['catalog' => $med->id]) }}"
-                                    class="">
-                                    <i class="fas fa-edit mr-1"></i> Presentaciones
-                                </a>
+                        <td class="px-6 py-4 text-center align-top whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.oncologicos.medicines.catalog.edit', $med->id) }}" icon="fa-solid fa-pen">
+                                Editar
+                            </x-table-action-link>
+                        </td>
 
-                                <a href="{{ route('admin.oncologicos.medicines.catalog.edit', $med->id) }}"
-                                    class="">
-                                    <i class="fas fa-edit mr-1"></i> Editar
-                                </a>
+                        <td class="px-6 py-4 text-center align-top whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.oncologicos.medicines.catalog.presentations.index', ['catalog' => $med->id]) }}" icon="fa-solid fa-layer-group">
+                                Presentaciones
+                            </x-table-action-link>
+                        </td>
 
-                                <form action="{{ route('admin.oncologicos.medicines.catalog.destroy', $med->id) }}"
-                                    method="POST" class="inline-block form-eliminar">
-                                    @csrf
-                                    @method('DELETE')
+                        <td class="px-6 py-4 text-center align-top whitespace-nowrap">
+                            <form action="{{ route('admin.oncologicos.medicines.catalog.destroy', $med->id) }}"
+                                method="POST" class="inline-block form-eliminar">
+                                @csrf
+                                @method('DELETE')
 
-                                    <button type="submit"
-                                        class="eliminar-btn action-danger">
-                                        <i class="fas fa-trash-alt mr-1"></i> Deshabilitar
-                                    </button>
-                                </form>
-                            </x-row-actions>
+                                <x-table-action-button type="submit" variant="red" icon="fas fa-trash-alt" class="eliminar-btn">
+                                    Deshabilitar
+                                </x-table-action-button>
+                            </form>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">
                             No hay medicamentos registrados.
                         </td>
                     </tr>

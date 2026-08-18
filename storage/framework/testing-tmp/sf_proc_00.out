@@ -1,0 +1,60 @@
+
+   PASS  Tests\Unit\CatalogoListasFormattingTest
+  ✓ measurements hide trailing decimals without losing real fractions                                            0.02s  
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that true is true                                                                                            0.01s  
+
+   PASS  Tests\Unit\InstitutionBillingDueDateServiceTest
+  ✓ it does not mark a delivery from the current month                                                           0.02s  
+  ✓ it starts the yellow count on the first day of the next month
+  ✓ it turns red in the second calendar month without resetting the days
+  ✓ it does not mark completed billing as expired
+
+   PASS  Tests\Unit\InstitutionBillingExpandedExportTest
+  ✓ it exports one row per billing concept with expanded columns                                                 0.01s  
+  ✓ it builds separate rows for medicine supply and mixing service                                               0.01s  
+
+   PASS  Tests\Unit\InstitutionBillingPendingSummaryServiceTest
+  ✓ it counts yellow and red pending billings
+
+   PASS  Tests\Unit\InstitutionBillingPricingServiceTest
+  ✓ it splits an iva included price
+  ✓ it parses formatted money values
+  ✓ it calculates iva from a base price only when selected
+  ✓ it uses recorded bottles and calculates a fallback from the dose                                             0.01s  
+  ✓ standard billing export includes the bottle quantity column
+
+   PASS  Tests\Unit\InstitutionDailyNutritionPatientReportServiceTest
+  ✓ it uses the current calendar month when no range is provided                                                 0.01s  
+  ✓ it groups delivered requests by day and excludes non reconcilable requests
+
+   PASS  Tests\Unit\InstitutionMonthlyNutritionSupplyReportServiceTest
+  ✓ it sums monthly volumes and counts piece concepts                                                            0.01s  
+  ✓ it creates one excel sheet per hospital                                                                      0.01s  
+  ✓ it creates sheets only for the selected hospitals
+
+   PASS  Tests\Unit\MedicinePresentationTest
+  ✓ it reads milligrams from structured content                                                                  0.02s  
+  ✓ it converts grams to milligrams
+  ✓ it can read micrograms from the presentation text
+  ✓ presentation text takes priority when structured content disagrees
+
+   PASS  Tests\Unit\SolicitudOperativeStatusServiceTest
+  ✓ it resolves the request status from all its mixes with data set "without mixes"
+  ✓ it resolves the request status from all its mixes with data set "all pending"
+  ✓ it resolves the request status from all its mixes with data set "waits for every approval"
+  ✓ it resolves the request status from all its mixes with data set "all approved"
+  ✓ it resolves the request status from all its mixes with data set "waits for every preparation"
+  ✓ it resolves the request status from all its mixes with data set "all prepared"
+  ✓ it resolves the request status from all its mixes with data set "waits for every inspection"
+  ✓ it resolves the request status from all its mixes with data set "all inspected"
+  ✓ it resolves the request status from all its mixes with data set "waits for every delivery"
+  ✓ it resolves the request status from all its mixes with data set "all delivered"
+  ✓ it resolves the request status from all its mixes with data set "ignores a cancelled mix when active mixes remain"
+  ✓ it resolves the request status from all its mixes with data set "all cancelled"
+  ✓ it resolves the request status from all its mixes with data set "normalizes legacy states"
+
+  Tests:    36 passed (67 assertions)
+  Duration: 0.37s
+

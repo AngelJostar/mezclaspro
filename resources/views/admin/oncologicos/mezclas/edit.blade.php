@@ -697,6 +697,7 @@
                     <tr>
                         <th class="border px-2 py-1 text-xs">MEDICAMENTO</th>
                         <th class="border px-2 py-1 text-xs">DOSIS</th>
+                        <th class="min-w-20 border px-2 py-1 text-xs">UNIDAD</th>
                         <th class="border px-2 py-1 text-xs">DILUYENTE</th>
                         <th class="border px-2 py-1 text-xs">VÍA DE ADMINISTRACIÓN</th>
                     </tr>
@@ -838,6 +839,10 @@
                     <input type="hidden"
                         data-name="precio_mg"
                         value="${String(chargeBy).toLowerCase() === 'mg' ? formatPrice(precioMgValue) : ''}">
+                </td>
+
+                <td class="min-w-20 whitespace-nowrap border px-3 py-2 align-top text-xs font-semibold text-gray-700">
+                    MG
                 </td>
 
                 <td class="border align-top">
@@ -998,6 +1003,10 @@
                         Dosis aportada: 0 mg
                     </div>
                     <input type="hidden" data-name="precio_mg" value="">
+                </td>
+
+                <td class="min-w-20 whitespace-nowrap border px-3 py-2 align-top text-xs font-semibold text-gray-700">
+                    MG
                 </td>
 
                 <td class="border align-top">

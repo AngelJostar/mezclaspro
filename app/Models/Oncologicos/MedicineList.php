@@ -12,16 +12,30 @@ class MedicineList extends Model
         'user_id',
         'name',
         'description',
+        'catalog_category',
         'active_brands',
         'charge_by',
         'show_label_lot_expiry',
+        'has_contract',
+        'contract_number',
+        'contract_information',
+        'has_mixing_service',
+        'mixing_service_price',
     ];
 
     protected $casts = [
         'active_brands' => 'boolean',
         'charge_by' => 'string',
         'show_label_lot_expiry' => 'boolean',
+        'has_contract' => 'boolean',
+        'has_mixing_service' => 'boolean',
+        'mixing_service_price' => 'decimal:4',
     ];
+
+    public function scopeForCategory($query, string $category)
+    {
+        return $query->where('catalog_category', $category);
+    }
 
     public function medicines()
     {
@@ -64,6 +78,8 @@ class MedicineList extends Model
             'charge_by',
             'precio',
             'precio_mg_override',
+            'iva_desglosado',
+            'descripcion_remision',
         ])->withTimestamps();
     }
 

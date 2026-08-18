@@ -20,7 +20,7 @@
         </div>
     @endif
 
-    <div class="relative overflow-x-auto bg-white rounded-lg shadow">
+    <div id="inputs-table-scroll" class="relative overflow-x-auto bg-white rounded-lg shadow">
         <table class="w-full text-sm text-left text-gray-500">
             <thead class="text-xs text-gray-700 uppercase bg-gray-50">
                 <tr>
@@ -32,7 +32,8 @@
                     <th class="px-4 py-3">Mult</th>
                     <th class="px-4 py-3">Div</th>
                     <th class="px-4 py-3 text-center">Estado</th>
-                    <th class="px-4 py-3 text-center">Acciones</th>
+                    <th class="px-4 py-3 text-center">Editar</th>
+                    <th class="px-4 py-3 text-center">Eliminar</th>
                 </tr>
             </thead>
             <tbody>
@@ -52,26 +53,27 @@
                                 <span class="inline-flex items-center px-2 py-0.5 rounded bg-red-100 text-red-800">Inactivo</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-center">
-                            <x-row-actions>
-                                <a href="{{ route('admin.nutricionales.inputs.edit', $input) }}">
-                                    Editar
-                                </a>
-                                <form action="{{ route('admin.nutricionales.inputs.destroy', $input) }}"
-                                    method="POST"
-                                    onsubmit="return confirm('Seguro que deseas eliminar este input?');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="action-danger">
-                                        Eliminar
-                                    </button>
-                                </form>
-                            </x-row-actions>
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.nutricionales.inputs.edit', $input) }}" icon="fa-solid fa-pen">
+                                Editar
+                            </x-table-action-link>
+                        </td>
+
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <form action="{{ route('admin.nutricionales.inputs.destroy', $input) }}"
+                                method="POST"
+                                onsubmit="return confirm('Seguro que deseas eliminar este input?');">
+                                @csrf
+                                @method('DELETE')
+                                <x-table-action-button type="submit" variant="red" icon="fa-solid fa-trash">
+                                    Eliminar
+                                </x-table-action-button>
+                            </form>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="9" class="px-4 py-6 text-center text-gray-500">
+                        <td colspan="10" class="px-4 py-6 text-center text-gray-500">
                             No hay inputs registrados.
                         </td>
                     </tr>
@@ -80,7 +82,62 @@
         </table>
     </div>
 
-    <div class="mt-4">
+    <div id="inputs-fixed-scrollbar"
+        class="hidden fixed bottom-0 left-0 right-0 z-50 border-t border-gray-300 bg-white/95 px-3 py-1 shadow-[0_-4px_12px_rgba(15,23,42,0.15)] sm:left-44">
+        <div class="js-inputs-fixed-scrollbar overflow-x-auto">
+            <div id="inputs-fixed-scrollbar-spacer" class="h-1"></div>
+        </div>
+    </div>
+
+    <div class="mt-4 mb-8">
         {{ $inputs->links() }}
     </div>
+
+    @push('js')
+        <script>
+            function initInputsFixedScrollbar() {
+                const tableScroll = document.getElementById('inputs-table-scroll');
+                const fixedWrapper = document.getElementById('inputs-fixed-scrollbar');
+                const fixedScroll = fixedWrapper?.querySelector('.js-inputs-fixed-scrollbar');
+                const spacer = document.getElementById('inputs-fixed-scrollbar-spacer');
+
+                if (!tableScroll || !fixedWrapper || !fixedScroll || !spacer) {
+                    return;
+                }
+
+                let syncing = false;
+
+                function updateFixedScrollbar() {
+                    const hasHorizontalScroll = tableScroll.scrollWidth > tableScroll.clientWidth + 1;
+
+                    fixedWrapper.classList.toggle('hidden', !hasHorizontalScroll);
+                    spacer.style.width = `${tableScroll.scrollWidth}px`;
+                    fixedScroll.scrollLeft = tableScroll.scrollLeft;
+                }
+
+                tableScroll.addEventListener('scroll', () => {
+                    if (syncing) return;
+
+                    syncing = true;
+                    fixedScroll.scrollLeft = tableScroll.scrollLeft;
+                    syncing = false;
+                });
+
+                fixedScroll.addEventListener('scroll', () => {
+                    if (syncing) return;
+
+                    syncing = true;
+                    tableScroll.scrollLeft = fixedScroll.scrollLeft;
+                    syncing = false;
+                });
+
+                window.addEventListener('resize', updateFixedScrollbar);
+                updateFixedScrollbar();
+                window.requestAnimationFrame(updateFixedScrollbar);
+            }
+
+            document.addEventListener('DOMContentLoaded', initInputsFixedScrollbar);
+            document.addEventListener('livewire:navigated', initInputsFixedScrollbar);
+        </script>
+    @endpush
 </x-admin-layout>

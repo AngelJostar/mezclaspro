@@ -13,6 +13,7 @@ class InspeccionMezcla extends Component
     public $mostrarModalInspeccion = false;
 
     public $mezclaId;
+    public $lote_mezcla = '';
 
     // checks
     public $es_limpia = 0;
@@ -75,6 +76,7 @@ class InspeccionMezcla extends Component
 
         $this->mezclaId = (int) $mezclaId;
         $this->mostrarModalInspeccion = true;
+        $this->lote_mezcla = (string) (Mezcla::find($this->mezclaId)?->lote ?? '');
 
         // Hidratar con la inspección existente (creada en "Aprobar")
         $ins = OncologicosInspeccionMezcla::where('mezcla_id', $mezclaId)->first();
@@ -110,7 +112,7 @@ class InspeccionMezcla extends Component
 
             // No pisar si ya existen en BD
             $this->reviso_nombre = $ins->reviso_nombre ?: ($this->reviso_nombre ?: $this->nombreUsuarioActual());
-            $this->aprobo_nombre = $ins->aprobo_nombre ?: ($this->aprobo_nombre ?: $this->nombreUsuarioActual());
+            $this->aprobo_nombre = $ins->aprobo_nombre ?: $this->nombreUsuarioActual();
         } else {
             // Defaults si por alguna razón aún no existe
             if (blank($this->reviso_nombre)) {
@@ -129,9 +131,7 @@ class InspeccionMezcla extends Component
         $this->aprobo_nombre = $this->aprobo_nombre ?: $this->nombreUsuarioActual();
 
         $this->validate([
-            'es_limpia' => 'required|boolean',
-            'es_libre' => 'required|boolean',
-            'tipo_contenedor' => 'nullable|string|in:Frasco,Bolsa,Jeringa,Otro',
+            'tipo_contenedor' => 'nullable|string|in:Frasco,Bolsa,Jeringa,Infusor,Otro',
             'esta_rotulado' => 'required|boolean',
             'numero_lote' => 'required|boolean',
             'medicamento' => 'required|boolean',
@@ -164,10 +164,10 @@ class InspeccionMezcla extends Component
             'peso_mezcla.gt' => 'El campo peso de la mezcla debe ser mayor a 0.',
         ]);
 
-        // Cargar existente o crear en memoria; SIEMPRE refrescamos fecha/hora
+        // Cargar existente o crear en memoria.
         $ins = OncologicosInspeccionMezcla::firstOrNew(['mezcla_id' => $this->mezclaId]);
 
-        // ⬅️ siempre actualizar fecha/hora al momento de guardar
+        // La inspección solo queda fechada cuando realmente se guarda desde este modal.
         $ins->fecha_inspeccion = now()->toDateString();
         $ins->hora_inspeccion  = now()->format('H:i:s');
 
@@ -201,14 +201,22 @@ class InspeccionMezcla extends Component
         $ins->mezcla_aprobada = (bool) $this->mezcla_aprobada;
         $ins->observaciones = $this->observaciones;
 
-        // Firmas del modal (NO tocar preparo/libero que vienen del paso "aprobar")
+        // Firmas del modal
         $ins->reviso_nombre = $this->reviso_nombre;
-        $ins->aprobo_nombre = $this->aprobo_nombre;
+        if ((bool) $this->mezcla_aprobada) {
+            $ins->aprobo_nombre = $this->aprobo_nombre;
+            $ins->fecha_aprobacion = now()->toDateString();
+            $ins->hora_aprobacion = now()->format('H:i:s');
+        } else {
+            $ins->aprobo_nombre = '';
+            $ins->fecha_aprobacion = null;
+            $ins->hora_aprobacion = null;
+        }
 
         $ins->save();
 
-        // Estado de la mezcla tras guardar inspección
-        Mezcla::where('id', $this->mezclaId)->update(['estado' => 'revisada']);
+        // Guardar mediante el modelo mantiene sincronizado el estado de la solicitud.
+        Mezcla::findOrFail($this->mezclaId)->update(['estado' => 'revisada']);
 
         $this->mostrarModalInspeccion = false;
         $this->dispatch('mezcla-inspeccionada');

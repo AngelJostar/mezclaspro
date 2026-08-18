@@ -3,6 +3,7 @@
 namespace App\Models\Oncologicos;
 
 use App\Models\Hospital;
+use App\Models\Warehouse;
 use App\Models\Oncologicos\MedicineBatch;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -25,8 +26,18 @@ class Laboratory extends Model
         return $this->hasMany(MedicineBatch::class);
     }
 
-    public function hospitals()
-{
-    return $this->hasMany(Hospital::class);
-}
+    public function hospitals(): HasMany
+    {
+        return $this->hasMany(Hospital::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(LaboratoryPurchaseOrder::class);
+    }
+
+    public function warehouses(): HasMany
+    {
+        return $this->hasMany(Warehouse::class);
+    }
 }

@@ -1,58 +1,28 @@
 <x-admin-layout>
     <style>
-        .billing-page-shell {
-            height: calc(100vh - 225px);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
+        #billing-table-scroll {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
 
-        .billing-table-shell {
-            position: relative;
-            flex: 1 1 auto;
-            min-height: 0;
-        }
-
-        .billing-table-scroll {
-            overflow-x: auto;
-            overflow-y: auto;
-            height: 100%;
-            border-radius: 1rem;
-            border: 1px solid rgb(241 245 249);
-            background: #fff;
-        }
-
-        .billing-table-legacy-filters {
+        #billing-table-scroll::-webkit-scrollbar {
             display: none;
-        }
-
-        .billing-sticky-patient {
-            position: sticky;
-            left: 0;
-            z-index: 20;
-            background: #fff;
-            box-shadow: 8px 0 12px -10px rgba(15, 23, 42, 0.18);
-        }
-
-        .billing-sticky-remision {
-            position: sticky;
-            left: 240px;
-            z-index: 20;
-            background: #fff;
-            box-shadow: 8px 0 12px -10px rgba(15, 23, 42, 0.18);
-        }
-
-        thead .billing-sticky-patient,
-        thead .billing-sticky-remision {
-            z-index: 30;
-            background: rgb(248 250 252);
         }
     </style>
 
+    @php
+        $isHistory = $billingSection === 'history';
+        $billingListRoute = $isHistory
+            ? route('admin.instituciones.billing.history')
+            : route('admin.instituciones.billing.index');
+    @endphp
+
     <div class="mt-2 mb-4">
-        <h1 class="text-2xl font-medium text-gray-800">Facturacion / Solicitudes</h1>
+        <h1 class="text-2xl font-medium text-gray-800">Facturacion / {{ $isHistory ? 'Historial' : 'Pendientes' }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-            Administra datos de facturacion por institucion y hospital para mezclas oncologicas y solicitudes nutricionales en un solo listado.
+            {{ $isHistory
+                ? 'Consulta las solicitudes cuya facturacion ya fue concluida.'
+                : 'Administra las solicitudes pendientes de concluir su facturacion.' }}
         </p>
     </div>
 
@@ -68,49 +38,27 @@
         </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 billing-page-shell"
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5"
+        data-billing-section="{{ $billingSection }}"
         x-data="billingModule(@js($instituciones->mapWithKeys(fn($institucion) => [
             $institucion->id => $institucion->hospitals->map(fn($hospital) => [
                 'id' => $hospital->id,
                 'name' => $hospital->name,
             ])->values(),
         ])), @js($institucionId), @js($hospitalId))">
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
-            <div class="rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total registros</p>
-                <p class="mt-2 text-3xl font-semibold text-slate-800">{{ $summary['total'] }}</p>
+        <div class="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div class="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Pendientes en amarillo</p>
+                <p class="text-xl font-semibold leading-none text-amber-800">{{ $billingDueCounts['yellow'] }}</p>
             </div>
 
-            <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Con facturacion</p>
-                <p class="mt-2 text-3xl font-semibold text-emerald-700">{{ $summary['with_billing'] }}</p>
-            </div>
-
-            <div class="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-amber-600">Sin facturacion</p>
-                <p class="mt-2 text-3xl font-semibold text-amber-700">{{ $summary['without_billing'] }}</p>
-            </div>
-
-            <div class="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-blue-600">Conciliables</p>
-                <p class="mt-2 text-3xl font-semibold text-blue-700">{{ $summary['conciliables'] }}</p>
-            </div>
-
-            <div class="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-rose-600">Pendientes</p>
-                <p class="mt-2 text-3xl font-semibold text-rose-700">{{ $summary['pendientes'] }}</p>
+            <div class="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-red-700">Pendientes en rojo</p>
+                <p class="text-xl font-semibold leading-none text-red-700">{{ $billingDueCounts['red'] }}</p>
             </div>
         </div>
 
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end mb-5">
-            <a href="{{ route('admin.instituciones.billing.export', array_filter(['institucion_id' => $institucionId, 'hospital_id' => $hospitalId, 'search' => $search, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'billing_status' => $billingStatus, 'facturacion_status' => $facturacionStatus, 'conciliable_filter' => $conciliableFilter, 'sort_by' => $sortBy, 'sort_dir' => $sortDir])) }}"
-                class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
-                <i class="fa-solid fa-file-excel mr-2"></i>
-                Exportar a Excel
-            </a>
-        </div>
-
-        <form id="billing-filters-form" method="GET" action="{{ route('admin.instituciones.billing.index') }}"
+        <form method="GET" action="{{ $billingListRoute }}"
             class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-9 gap-4 mb-5">
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Institucion</label>
@@ -166,16 +114,19 @@
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Estatus facturacion</label>
                 <select name="facturacion_status" class="w-full rounded-lg border-slate-200">
-                    <option value="">Todos</option>
-                    <option value="Pendiente" @selected($facturacionStatus === 'Pendiente')>Pendiente</option>
-                    <option value="Por facturar" @selected($facturacionStatus === 'Por facturar')>Por facturar</option>
-                    <option value="En revisión" @selected($facturacionStatus === 'En revisión')>En revisión</option>
-                    <option value="Facturado" @selected($facturacionStatus === 'Facturado')>Facturado</option>
-                    <option value="Pagado" @selected($facturacionStatus === 'Pagado')>Pagado</option>
-                    <option value="Completado" @selected($facturacionStatus === 'Completado')>Completado</option>
-                    <option value="Cancelado" @selected($facturacionStatus === 'Cancelado')>Cancelado</option>
-                    <option value="Rechazado" @selected($facturacionStatus === 'Rechazado')>Rechazado</option>
-                    <option value="No conciliado" @selected($facturacionStatus === 'No conciliado')>No conciliado</option>
+                    @if ($isHistory)
+                        <option value="">Concluidas</option>
+                    @else
+                        <option value="">Todos</option>
+                        <option value="Pendiente" @selected($facturacionStatus === 'Pendiente')>Pendiente</option>
+                        <option value="Por facturar" @selected($facturacionStatus === 'Por facturar')>Por facturar</option>
+                        <option value="En revisión" @selected($facturacionStatus === 'En revisión')>En revisión</option>
+                        <option value="Facturado" @selected($facturacionStatus === 'Facturado')>Facturado</option>
+                        <option value="Pagado" @selected($facturacionStatus === 'Pagado')>Pagado</option>
+                        <option value="Cancelado" @selected($facturacionStatus === 'Cancelado')>Cancelado</option>
+                        <option value="Rechazado" @selected($facturacionStatus === 'Rechazado')>Rechazado</option>
+                        <option value="No conciliado" @selected($facturacionStatus === 'No conciliado')>No conciliado</option>
+                    @endif
                 </select>
             </div>
 
@@ -199,151 +150,120 @@
             </div>
 
             <div class="flex items-end gap-2">
-                <a href="{{ route('admin.instituciones.billing.index') }}"
+                <a href="{{ $billingListRoute }}"
                     class="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                     <i class="fa-solid fa-rotate-left mr-2"></i>
                     Limpiar
                 </a>
             </div>
+
+            <div class="flex flex-wrap items-end justify-end gap-2 xl:col-span-7 xl:col-start-3">
+                <button id="billing-invoice-select-all" type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-800 transition hover:bg-blue-50">
+                    <i class="fa-regular fa-square-check mr-2"></i>
+                    Seleccionar todo
+                </button>
+                <button id="billing-expanded-export-button" type="submit"
+                    form="billing-expanded-export-form" disabled
+                    class="inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-slate-400 px-4 py-2.5 text-sm font-semibold text-white transition">
+                    <i class="fa-solid fa-download mr-2"></i>
+                    Descargar Excel
+                </button>
+                <a href="{{ route('admin.instituciones.billing.export', array_filter(['section' => $billingSection, 'institucion_id' => $institucionId, 'hospital_id' => $hospitalId, 'search' => $search, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'billing_status' => $billingStatus, 'facturacion_status' => $facturacionStatus, 'conciliable_filter' => $conciliableFilter])) }}"
+                    class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
+                    <i class="fa-solid fa-file-excel mr-2"></i>
+                    Exportar a Excel
+                </a>
+            </div>
         </form>
 
-        <div class="billing-table-shell">
-            <div class="billing-table-scroll js-billing-table-scroll">
-                @php
-                    $buildSortUrl = function (string $column) use ($institucionId, $hospitalId, $search, $dateFrom, $dateTo, $billingStatus, $facturacionStatus, $conciliableFilter, $sortBy, $sortDir) {
-                        $nextDir = $sortBy === $column && $sortDir === 'asc' ? 'desc' : 'asc';
+        <form id="billing-expanded-export-form" method="POST"
+            action="{{ route('admin.instituciones.billing.expanded-export') }}"
+            class="hidden">
+            @csrf
+            <input type="hidden" name="section" value="{{ $billingSection }}">
+            <input type="hidden" name="institucion_id" value="{{ $institucionId }}">
+            <input type="hidden" name="hospital_id" value="{{ $hospitalId }}">
+            <input type="hidden" name="search" value="{{ $search }}">
+            <input type="hidden" name="date_from" value="{{ $dateFrom }}">
+            <input type="hidden" name="date_to" value="{{ $dateTo }}">
+            <input type="hidden" name="billing_status" value="{{ $billingStatus }}">
+            <input type="hidden" name="facturacion_status" value="{{ $facturacionStatus }}">
+            <input type="hidden" name="conciliable_filter" value="{{ $conciliableFilter }}">
 
-                        return route('admin.instituciones.billing.index', array_filter([
-                            'institucion_id' => $institucionId,
-                            'hospital_id' => $hospitalId,
-                            'search' => $search,
-                            'date_from' => $dateFrom,
-                            'date_to' => $dateTo,
-                            'billing_status' => $billingStatus,
-                            'facturacion_status' => $facturacionStatus,
-                            'conciliable_filter' => $conciliableFilter,
-                            'sort_by' => $column,
-                            'sort_dir' => $nextDir,
-                        ]));
-                    };
+        </form>
 
-                    $sortIcon = function (string $column) use ($sortBy, $sortDir) {
-                        if ($sortBy !== $column) {
-                            return '↕';
-                        }
-
-                        return $sortDir === 'asc'
-                            ? '↑'
-                            : '↓';
-                    };
-                @endphp
-
-                <table class="min-w-[3200px] w-full text-sm text-left text-slate-600">
-                <thead class="text-xs uppercase text-slate-500 bg-slate-50">
+        <div id="billing-table-scroll" class="overflow-x-auto border border-slate-300">
+            <table id="billing-requests-table-{{ $billingSection }}"
+                class="min-w-[3010px] w-full border-collapse text-xs text-left text-slate-800">
+                <thead class="bg-slate-100 uppercase text-slate-700">
                     <tr>
-                        <th class="px-4 py-4">
-                            <a href="{{ $buildSortUrl('institucion') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
-                                <span>Institucion</span>
-                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('institucion') }}</span>
-                            </a>
+                        <x-filterable-table-header column="0" trigger-class="js-billing-column-filter" compact
+                            class="sticky left-0 z-30 min-w-[120px] border border-slate-300 bg-slate-100 shadow-[3px_0_5px_rgba(15,23,42,0.12)]">
+                            No. de remision
+                        </x-filterable-table-header>
+                        <x-filterable-table-header column="1" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Institucion</x-filterable-table-header>
+                        <x-filterable-table-header column="2" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Unidad</x-filterable-table-header>
+                        <x-filterable-table-header column="3" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Nombre del Medico</x-filterable-table-header>
+                        <x-filterable-table-header column="4" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Nombre del Paciente</x-filterable-table-header>
+                        <x-filterable-table-header column="5" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Fecha de Remision</x-filterable-table-header>
+                        <x-filterable-table-header column="6" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Cantidad</x-filterable-table-header>
+                        <x-filterable-table-header column="7" trigger-class="js-billing-column-filter" compact
+                            class="w-[110px] min-w-[110px] max-w-[110px] border border-slate-300">
+                            <span class="block leading-tight">Cantidad de</span>
+                            <span class="block leading-tight">Frascos</span>
+                        </x-filterable-table-header>
+                        <x-filterable-table-header column="8" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Descripcion</x-filterable-table-header>
+                        <x-filterable-table-header column="9" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">P.V. unitario antes de IVA</x-filterable-table-header>
+                        <x-filterable-table-header column="10" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">P.V. total IVA Incluido</x-filterable-table-header>
+                        <x-filterable-table-header column="11" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Empresa</x-filterable-table-header>
+                        <x-filterable-table-header column="12" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Precio Total</x-filterable-table-header>
+                        <x-filterable-table-header column="13" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Conciliable</x-filterable-table-header>
+                        <x-filterable-table-header column="14" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Folio Factura UUID</x-filterable-table-header>
+                        <x-filterable-table-header column="15" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Folio Factura Interno</x-filterable-table-header>
+                        <x-filterable-table-header column="16" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Fecha Facturacion</x-filterable-table-header>
+                        <x-filterable-table-header column="17" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Numero Carta Factura</x-filterable-table-header>
+                        <x-filterable-table-header column="18" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Fecha Carta Factura</x-filterable-table-header>
+                        <th class="border border-slate-300 px-2 py-1 text-center font-semibold whitespace-nowrap">Facturar</th>
+                        <x-filterable-table-header column="20" trigger-class="js-billing-column-filter" compact
+                            align="center" class="border border-slate-300">Vencimiento</x-filterable-table-header>
+                        <th class="min-w-[190px] border border-slate-300 px-2 py-1 font-semibold whitespace-nowrap">
+                            @if (! $isHistory)
+                                <div class="flex items-center justify-center gap-2 normal-case">
+                                    <input id="billing-select-all" type="checkbox"
+                                        class="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                                        title="Seleccionar todas las solicitudes disponibles"
+                                        aria-label="Seleccionar todas las solicitudes disponibles">
+                                    <button id="billing-conclude-selected" type="button" disabled
+                                        class="inline-flex h-7 items-center justify-center rounded-sm bg-slate-400 px-2 py-1 text-xs font-semibold text-white transition cursor-not-allowed"
+                                        onclick="confirmSelectedBillingConclusions()">
+                                        Concluir todas
+                                    </button>
+                                </div>
+                            @else
+                                Concluir
+                            @endif
                         </th>
-                        <th class="px-4 py-4">
-                            <a href="{{ $buildSortUrl('unidad') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
-                                <span>Unidad</span>
-                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('unidad') }}</span>
-                            </a>
-                        </th>
-                        <th class="px-4 py-4">
-                            <a href="{{ $buildSortUrl('medico') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
-                                <span>Nombre del Medico</span>
-                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('medico') }}</span>
-                            </a>
-                        </th>
-                        <th class="px-4 py-4 billing-sticky-patient min-w-[240px]">
-                            <a href="{{ $buildSortUrl('paciente') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
-                                <span>Nombre del Paciente</span>
-                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('paciente') }}</span>
-                            </a>
-                        </th>
-                        <th class="px-4 py-4 billing-sticky-remision min-w-[140px]">
-                            <a href="{{ $buildSortUrl('remision') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
-                                <span>No. de remision</span>
-                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('remision') }}</span>
-                            </a>
-                        </th>
-                        <th class="px-4 py-4">
-                            <a href="{{ $buildSortUrl('fecha') }}" class="inline-flex items-center gap-2 hover:text-slate-700">
-                                <span>Fecha de Remision</span>
-                                <span class="text-[11px] font-semibold text-slate-400">{{ $sortIcon('fecha') }}</span>
-                            </a>
-                        </th>
-                        <th class="px-4 py-4">Cantidad</th>
-                        <th class="px-4 py-4">Descripcion</th>
-                        <th class="px-4 py-4">P.V. unitario IVA Incluido</th>
-                        <th class="px-4 py-4">P.V. total IVA Incluido</th>
-                        <th class="px-4 py-4">Empresa</th>
-                        <th class="px-4 py-4">Precio Total</th>
-                        <th class="px-4 py-4">Coinciliable</th>
-                        <th class="px-4 py-4">Folio Factura UUID</th>
-                        <th class="px-4 py-4">Folio Factura Interno</th>
-                        <th class="px-4 py-4">Fecha Facturacion</th>
-                        <th class="px-4 py-4">Numero Carta Factura</th>
-                        <th class="px-4 py-4">Fecha Carta Factura</th>
-                        <th class="px-4 py-4">Guardar</th>
-                    </tr>
-                    <tr class="billing-table-legacy-filters border-t border-slate-200 bg-white normal-case">
-                        <th class="px-4 py-3 min-w-[260px]">
-                            <input type="text" name="table_institucion" form="billing-filters-form"
-                                value="{{ $tableFilters['institucion'] ?? '' }}"
-                                placeholder="Filtrar institución"
-                                class="w-full rounded-lg border-slate-200 text-sm">
-                        </th>
-                        <th class="px-4 py-3 min-w-[220px]">
-                            <input type="text" name="table_unidad" form="billing-filters-form"
-                                value="{{ $tableFilters['unidad'] ?? '' }}"
-                                placeholder="Filtrar unidad"
-                                class="w-full rounded-lg border-slate-200 text-sm">
-                        </th>
-                        <th class="px-4 py-3 min-w-[240px]">
-                            <input type="text" name="table_medico" form="billing-filters-form"
-                                value="{{ $tableFilters['medico'] ?? '' }}"
-                                placeholder="Filtrar médico"
-                                class="w-full rounded-lg border-slate-200 text-sm">
-                        </th>
-                        <th class="px-4 py-3 min-w-[240px]">
-                            <input type="text" name="table_paciente" form="billing-filters-form"
-                                value="{{ $tableFilters['paciente'] ?? '' }}"
-                                placeholder="Filtrar paciente"
-                                class="w-full rounded-lg border-slate-200 text-sm">
-                        </th>
-                        <th class="px-4 py-3 min-w-[140px]">
-                            <input type="text" name="table_remision" form="billing-filters-form"
-                                value="{{ $tableFilters['remision'] ?? '' }}"
-                                placeholder="Filtrar remisión"
-                                class="w-full rounded-lg border-slate-200 text-sm">
-                        </th>
-                        <th class="px-4 py-3 min-w-[180px]">
-                            <input type="text" name="table_fecha" form="billing-filters-form"
-                                value="{{ $tableFilters['fecha'] ?? '' }}"
-                                placeholder="Filtrar fecha"
-                                class="w-full rounded-lg border-slate-200 text-sm">
-                        </th>
-                        <th class="px-4 py-3 min-w-[120px]"></th>
-                        <th class="px-4 py-3 min-w-[280px]"></th>
-                        <th class="px-4 py-3 min-w-[180px]"></th>
-                        <th class="px-4 py-3 min-w-[180px]"></th>
-                        <th class="px-4 py-3 min-w-[240px]"></th>
-                        <th class="px-4 py-3 min-w-[160px]"></th>
-                        <th class="px-4 py-3 min-w-[210px]"></th>
-                        <th class="px-4 py-3 min-w-[240px]"></th>
-                        <th class="px-4 py-3 min-w-[200px]"></th>
-                        <th class="px-4 py-3 min-w-[200px]"></th>
-                        <th class="px-4 py-3 min-w-[220px]"></th>
-                        <th class="px-4 py-3 min-w-[200px]"></th>
-                        <th class="px-4 py-3 min-w-[140px]"></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody>
                     @forelse ($records as $item)
                         @php
                             $record = $item['record'];
@@ -354,67 +274,93 @@
                             $origenTipo = $item['origen_tipo'];
                             $billing = $item['billing'];
                             $formId = 'billing-form-' . $origenTipo . '-' . $record->id;
+                            $facturacionCompletada = mb_strtolower(trim((string) ($billing?->estatus_facturacion ?? ''))) === 'completado';
+                            $facturacionListaParaConcluir = collect([
+                                $billing?->folio_factura_uuid,
+                                $billing?->folio_interno,
+                                $billing?->fecha_facturacion,
+                                $billing?->numero_carta_factura,
+                                $billing?->fecha_carta_factura,
+                            ])->every(fn ($value) => trim((string) $value) !== '');
                         @endphp
-                        <tr class="bg-white align-top">
-                            <td class="px-4 py-4 min-w-[260px]">
-                                <div class="font-medium text-slate-800">{{ $institucionActual?->nombre ?: '—' }}</div>
-                                @if ($institucionActual?->razon_social)
-                                    <div class="text-xs text-slate-400 mt-1">{{ $institucionActual->razon_social }}</div>
-                                @endif
+                        <tr class="js-billing-filter-row group bg-white align-middle hover:bg-blue-50/40">
+                            <td class="sticky left-0 z-20 min-w-[120px] border border-slate-200 bg-white px-2 py-1 whitespace-nowrap shadow-[3px_0_5px_rgba(15,23,42,0.10)] group-hover:bg-blue-50">
+                                {{ $item['remision'] }}
                             </td>
-                            <td class="px-4 py-4 min-w-[220px]">{{ $hospital?->name ?: '—' }}</td>
-                            <td class="px-4 py-4 min-w-[240px]">{{ $item['medico'] }}</td>
-                            <td class="px-4 py-4 min-w-[240px] billing-sticky-patient">{{ $patientName }}</td>
-                            <td class="px-4 py-4 min-w-[140px] billing-sticky-remision">{{ $record->remision ?: '?' }}</td>
-                            <td class="px-4 py-4 whitespace-nowrap min-w-[180px]">{{ $fecha }}</td>
-                            <td class="px-4 py-4 min-w-[120px]">1</td>
-                            <td class="px-4 py-4 min-w-[280px]">
-                                <div class="font-medium text-slate-700">{{ $item['tipo_texto'] }}</div>
-                                <div class="mt-1 text-xs text-slate-400">
-                                    ID {{ $record->id }}@if ($record->lote) | Lote: {{ $record->lote }}@endif
+                            <td class="border border-slate-200 px-2 py-1 min-w-[260px] max-w-[260px]">
+                                <div class="truncate font-medium leading-tight text-slate-800">
+                                    {{ $institucionActual?->nombre ?: '—' }}
+                                    @if ($institucionActual?->razon_social)
+                                        <span class="font-normal text-slate-500"> | {{ $institucionActual->razon_social }}</span>
+                                    @endif
                                 </div>
-                                <div class="mt-2">
-                                    <a href="{{ $item['view_route'] }}" class="text-xs font-medium text-blue-600 hover:text-blue-700">
+                            </td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[180px] max-w-[180px] truncate">{{ $hospital?->name ?: '—' }}</td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[220px] max-w-[220px] truncate">{{ $item['medico'] }}</td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[220px] max-w-[220px] truncate">{{ $patientName }}</td>
+                            <td class="border border-slate-200 px-2 py-1 whitespace-nowrap min-w-[140px]">{{ $fecha }}</td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[100px] text-center">
+                                @foreach ($item['quantity_lines'] as $quantityLine)
+                                    <div class="whitespace-nowrap">{{ $quantityLine }}</div>
+                                @endforeach
+                            </td>
+                            <td class="w-[110px] min-w-[110px] max-w-[110px] border border-slate-200 px-2 py-1 text-center">
+                                @foreach ($item['bottle_quantity_lines'] as $bottleQuantityLine)
+                                    <div class="whitespace-nowrap">{{ $bottleQuantityLine }}</div>
+                                @endforeach
+                            </td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[300px]">
+                                <div class="space-y-0.5">
+                                    @foreach ($item['description_lines'] as $descriptionLine)
+                                        <div class="whitespace-nowrap font-medium text-slate-700">{{ $descriptionLine }}</div>
+                                    @endforeach
+                                    <a href="{{ $item['view_route'] }}" target="_blank"
+                                        class="inline-block whitespace-nowrap font-medium text-blue-700 hover:text-blue-800">
                                         {{ $item['view_label'] }}
                                     </a>
                                 </div>
                             </td>
-                            <td class="px-4 py-4 min-w-[180px]">{{ $item['precio_total_final'] ?? '?' }}</td>
-                            <td class="px-4 py-4 min-w-[180px]">{{ $item['precio_total_final'] ?? '?' }}</td>
-                            <td class="px-4 py-4 min-w-[240px]">{{ $item['empresa'] }}</td>
-                            <td class="px-4 py-3 min-w-[160px]">
-                                <div class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                                    {{ $item['precio_total_final'] ?? '?' }}
-                                </div>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[170px]">
+                                @foreach ($item['unit_price_lines'] as $unitPriceLine)
+                                    <div class="whitespace-nowrap font-medium text-slate-700">{{ $unitPriceLine }}</div>
+                                @endforeach
                             </td>
-                            <td class="px-4 py-3 min-w-[210px]">
-                                <select form="{{ $formId }}" name="conciliable" class="w-full rounded-lg border-slate-200 text-sm">
-                                    <option value="">Selecciona una opcion</option>
-                                    <option value="Si" @selected(($billing?->conciliable ?? '') === 'Si')>Si</option>
-                                    <option value="No" @selected(($billing?->conciliable ?? '') === 'No')>No</option>
-                                    <option value="Conciliado" @selected(($billing?->conciliable ?? '') === 'Conciliado')>Conciliado</option>
-                                    <option value="No conciliable" @selected(($billing?->conciliable ?? '') === 'No conciliable')>No conciliable</option>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[150px] whitespace-nowrap font-medium text-slate-800">{{ $item['pv_total'] }}</td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[220px] max-w-[220px] truncate">{{ $item['empresa'] }}</td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[130px]">
+                                <input type="text" form="{{ $formId }}" name="precio_total" value="{{ $billing?->precio_total ?? $item['computed_total_input'] }}"
+                                    class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
+                            </td>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[160px]">
+                                @php
+                                    $conciliableActual = trim((string) ($billing?->conciliable ?? ''));
+                                    $conciliableSeleccionado = in_array($conciliableActual, ['No', 'No conciliable'], true) ? 'No' : 'Si';
+                                @endphp
+
+                                <select form="{{ $formId }}" name="conciliable" class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
+                                    <option value="Si" @selected($conciliableSeleccionado === 'Si')>Si</option>
+                                    <option value="No" @selected($conciliableSeleccionado === 'No')>No</option>
                                 </select>
                             </td>
-                            <td class="px-4 py-3 min-w-[240px]">
+                            <td class="border border-slate-200 px-2 py-1 min-w-[190px]">
                                 <input type="text" form="{{ $formId }}" name="folio_factura_uuid" value="{{ $billing?->folio_factura_uuid }}"
-                                    class="w-full rounded-lg border-slate-200 text-sm">
+                                    class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
                             </td>
-                            <td class="px-4 py-3 min-w-[200px]">
+                            <td class="border border-slate-200 px-2 py-1 min-w-[160px]">
                                 <input type="text" form="{{ $formId }}" name="folio_interno" value="{{ $billing?->folio_interno }}"
-                                    class="w-full rounded-lg border-slate-200 text-sm">
+                                    class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
                             </td>
-                            <td class="px-4 py-3 min-w-[200px]">
+                            <td class="border border-slate-200 px-2 py-1 min-w-[150px]">
                                 <input type="text" form="{{ $formId }}" name="fecha_facturacion" value="{{ $billing?->fecha_facturacion }}"
-                                    class="w-full rounded-lg border-slate-200 text-sm">
+                                    class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
                             </td>
-                            <td class="px-4 py-3 min-w-[220px]">
+                            <td class="border border-slate-200 px-2 py-1 min-w-[170px]">
                                 <input type="text" form="{{ $formId }}" name="numero_carta_factura" value="{{ $billing?->numero_carta_factura }}"
-                                    class="w-full rounded-lg border-slate-200 text-sm">
+                                    class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
                             </td>
-                            <td class="px-4 py-3 min-w-[200px]">
+                            <td class="border border-slate-200 px-2 py-1 min-w-[150px]">
                                 <input type="text" form="{{ $formId }}" name="fecha_carta_factura" value="{{ $billing?->fecha_carta_factura }}"
-                                    class="w-full rounded-lg border-slate-200 text-sm">
+                                    class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
 
                                 <form id="{{ $formId }}" method="POST" action="{{ route('admin.instituciones.billing.store') }}" class="js-inline-billing-form hidden">
                                     @csrf
@@ -426,35 +372,86 @@
                                     <input type="hidden" name="billing_status_filter" value="{{ $billingStatus }}">
                                     <input type="hidden" name="facturacion_status_filter" value="{{ $facturacionStatus }}">
                                     <input type="hidden" name="conciliable_filter_value" value="{{ $conciliableFilter }}">
+                                    <input type="hidden" name="billing_section" value="{{ $billingSection }}">
                                     <input type="hidden" name="institucion_id" value="{{ $institucionActual?->id }}">
                                     <input type="hidden" name="hospital_id" value="{{ $hospital?->id }}">
                                     <input type="hidden" name="origen_tipo" value="{{ $origenTipo }}">
                                     <input type="hidden" name="origen_id" value="{{ $record->id }}">
-                                    <input type="hidden" name="precio_total" value="{{ $item['precio_total_final'] ?? '' }}">
                                     <input type="hidden" name="estatus_facturacion" value="{{ $billing?->estatus_facturacion }}">
                                 </form>
                             </td>
-                            <td class="px-4 py-4 min-w-[140px]">
-                                <button type="button"
-                                    class="inline-flex items-center rounded-lg bg-azul-prodifem px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
-                                    onclick="submitInlineBilling(document.getElementById('{{ $formId }}'), this)">
-                                    <i class="fa-solid fa-floppy-disk mr-2"></i>Guardar
-                                </button>
+                            <td class="border border-slate-200 px-2 py-1 min-w-[90px] text-center">
+                                <input type="checkbox"
+                                    form="billing-expanded-export-form"
+                                    name="selected_records[]"
+                                    value="{{ $origenTipo }}:{{ $record->id }}"
+                                    class="js-billing-invoice-select h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                    title="Incluir esta solicitud en el Excel ampliado"
+                                    aria-label="Incluir esta solicitud en el Excel ampliado">
+                            </td>
+                            <td data-billing-expiration-for="{{ $formId }}" class="border border-slate-200 px-2 py-1 min-w-[100px] text-center">
+                                @if ($item['vencimiento']['status'] === 'yellow')
+                                    <span
+                                        class="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-amber-300 bg-amber-100 px-2 font-bold text-amber-800"
+                                        title="{{ $item['vencimiento']['days'] }} dias de retraso en facturacion"
+                                        aria-label="{{ $item['vencimiento']['days'] }} dias de retraso en facturacion">
+                                        {{ $item['vencimiento']['days'] }}
+                                    </span>
+                                @elseif ($item['vencimiento']['status'] === 'red')
+                                    <span
+                                        class="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-red-300 bg-red-100 px-2 font-bold text-red-700"
+                                        title="{{ $item['vencimiento']['days'] }} dias de retraso en facturacion"
+                                        aria-label="{{ $item['vencimiento']['days'] }} dias de retraso en facturacion">
+                                        {{ $item['vencimiento']['days'] }}
+                                    </span>
+                                @else
+                                    <span class="text-slate-400">&mdash;</span>
+                                @endif
+                            </td>
+                            <td class="min-w-[190px] border border-slate-200 px-2 py-1 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    @if (! $isHistory)
+                                        <input type="checkbox"
+                                            class="js-billing-conclusion-select h-4 w-4 shrink-0 rounded border-slate-300 text-blue-700 focus:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+                                            data-billing-select-for="{{ $formId }}"
+                                            @disabled($facturacionCompletada || ! $facturacionListaParaConcluir)
+                                            title="Seleccionar esta solicitud"
+                                            aria-label="Seleccionar esta solicitud">
+                                    @endif
+                                    <button type="button"
+                                        data-billing-conclude-for="{{ $formId }}"
+                                        data-billing-completed="{{ $facturacionCompletada ? '1' : '0' }}"
+                                        @disabled($facturacionCompletada || ! $facturacionListaParaConcluir)
+                                        class="inline-flex h-7 min-w-[86px] items-center justify-center rounded-sm px-2 py-1 text-xs font-semibold text-white transition {{ $facturacionCompletada ? 'cursor-default bg-emerald-600' : ($facturacionListaParaConcluir ? 'bg-azul-prodifem hover:bg-blue-800' : 'cursor-not-allowed bg-slate-400') }}"
+                                        onclick="confirmBillingConclusion(document.getElementById('{{ $formId }}'), this)">
+                                        @if ($facturacionCompletada)
+                                            <i class="fa-solid fa-circle-check mr-1"></i>Concluida
+                                        @else
+                                            Concluir
+                                        @endif
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="19" class="px-5 py-10 text-center text-slate-400">
+                            <td colspan="22" class="border border-slate-200 px-2 py-6 text-center text-slate-400">
                                 No se encontraron registros para los filtros seleccionados.
                             </td>
                         </tr>
                     @endforelse
                 </tbody>
-                </table>
+            </table>
+        </div>
+
+        <div id="billing-fixed-scrollbar"
+            class="hidden fixed bottom-0 z-50 border-t border-slate-300 bg-white/95 py-1 shadow-[0_-4px_12px_rgba(15,23,42,0.15)]">
+            <div class="js-billing-fixed-scrollbar overflow-x-auto">
+                <div id="billing-fixed-scrollbar-spacer" class="h-1"></div>
             </div>
         </div>
 
-        <div class="mt-5 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+        <div class="mb-7 mt-3 flex flex-col gap-3 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>
                 Mostrando {{ $records->firstItem() ?? 0 }} a {{ $records->lastItem() ?? 0 }} de {{ $records->total() }} registros
             </p>
@@ -466,6 +463,24 @@
     </div>
 
     <script>
+        @include('admin.catalogo-listas.partials.column-filter-script')
+
+        function initBillingColumnFilters() {
+            const billingSection = document.querySelector('[data-billing-section]')?.dataset.billingSection || 'pending';
+
+            window.createExcelColumnFilters({
+                tableId: `billing-requests-table-${billingSection}`,
+                rowSelector: '.js-billing-filter-row',
+                triggerSelector: '.js-billing-column-filter',
+                instanceId: `billing-requests-${billingSection}`,
+                onChange() {
+                    document.querySelectorAll('.js-billing-filter-row').forEach((row) => {
+                        row.classList.toggle('hidden', row.dataset.columnFilterMatch === '0');
+                    });
+                },
+            });
+        }
+
         function billingModule(hospitalMap, initialInstitucion, initialHospital) {
             return {
                 hospitalMap: hospitalMap || {},
@@ -555,20 +570,67 @@
             }, 2600);
         }
 
-        function submitInlineBilling(form, trigger = null) {
-            if (!form || form.dataset.submitting === '1') return;
+        const billingAutosaveTimers = new WeakMap();
+        const billingFeedbackTimers = new WeakMap();
+
+        function billingFieldsFor(form) {
+            if (!form?.id) return [];
+
+            return Array.from(document.querySelectorAll(`.js-billing-autosave-field[form="${form.id}"]`));
+        }
+
+        function setBillingAutosaveState(form, state) {
+            const fields = billingFieldsFor(form);
+            const colors = {
+                idle: ['', ''],
+                pending: ['#f59e0b', '#fffbeb'],
+                saving: ['#2563eb', '#eff6ff'],
+                saved: ['#10b981', '#ecfdf5'],
+                error: ['#ef4444', '#fff1f2'],
+            };
+            const [borderColor, backgroundColor] = colors[state] || colors.idle;
+
+            fields.forEach((field) => {
+                field.style.borderColor = borderColor;
+                field.style.backgroundColor = backgroundColor;
+                field.setAttribute('aria-busy', state === 'saving' ? 'true' : 'false');
+            });
+
+            const previousTimer = billingFeedbackTimers.get(form);
+            if (previousTimer) {
+                window.clearTimeout(previousTimer);
+            }
+
+            if (state === 'saved') {
+                billingFeedbackTimers.set(form, window.setTimeout(() => {
+                    setBillingAutosaveState(form, 'idle');
+                }, 1200));
+            }
+        }
+
+        function submitInlineBilling(form) {
+            if (!form) return Promise.resolve(false);
+
+            const queuedTimer = billingAutosaveTimers.get(form);
+            if (queuedTimer) {
+                window.clearTimeout(queuedTimer);
+                billingAutosaveTimers.delete(form);
+            }
+
+            if (form.dataset.submitting === '1') {
+                form.dataset.resubmit = '1';
+                return Promise.resolve(false);
+            }
 
             const formData = new FormData(form);
             const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const submittedVersion = Number(form.dataset.autosaveVersion || 0);
 
             form.dataset.submitting = '1';
+            form.dataset.resubmit = '0';
+            setBillingAutosaveState(form, 'saving');
 
-            if (trigger) {
-                trigger.disabled = true;
-                trigger.classList.add('opacity-70', 'cursor-not-allowed');
-            }
-
-            fetch(form.action, {
+            return fetch(form.action, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': token || '',
@@ -587,31 +649,517 @@
                 })
                 .then(() => {
                     const row = form.closest('tr');
-                    if (row) {
-                        row.classList.add('bg-emerald-50');
-                        window.setTimeout(() => row.classList.remove('bg-emerald-50'), 1000);
+                    const currentVersion = Number(form.dataset.autosaveVersion || 0);
+
+                    if (currentVersion === submittedVersion) {
+                        form.dataset.dirty = '0';
+                        setBillingAutosaveState(form, 'saved');
+
+                        if (form.dataset.conclusionPending === '1' && formData.get('estatus_facturacion') === 'Completado') {
+                            completeBillingConclusionUi(form);
+                        }
                     }
 
-                    showBillingToast('success', 'Los datos de facturacion se guardaron correctamente.');
+                    if (row) {
+                        row.dataset.billingSaved = '1';
+                    }
+
+                    return true;
                 })
                 .catch((error) => {
-                    const row = form.closest('tr');
-                    if (row) {
-                        row.classList.add('bg-rose-50');
-                        window.setTimeout(() => row.classList.remove('bg-rose-50'), 1200);
+                    form.dataset.dirty = '1';
+                    setBillingAutosaveState(form, 'error');
+                    resetBillingConclusionUi(form);
+                    console.error(error);
+                    if (form.dataset.bulkConclusion !== '1') {
+                        showBillingToast('error', error.message || 'Ocurrio un error al guardar.');
                     }
 
-                    console.error(error);
-                    showBillingToast('error', error.message || 'Ocurrio un error al guardar.');
+                    return false;
                 })
                 .finally(() => {
                     form.dataset.submitting = '0';
+                    const currentVersion = Number(form.dataset.autosaveVersion || 0);
 
-                    if (trigger) {
-                        trigger.disabled = false;
-                        trigger.classList.remove('opacity-70', 'cursor-not-allowed');
+                    if (form.dataset.resubmit === '1' || currentVersion > submittedVersion) {
+                        form.dataset.resubmit = '0';
+                        submitInlineBilling(form);
                     }
                 });
         }
+
+        function billingConclusionButton(form) {
+            if (!form?.id) return null;
+
+            return document.querySelector(`[data-billing-conclude-for="${form.id}"]`);
+        }
+
+        function billingSelectionCheckbox(form) {
+            if (!form?.id) return null;
+
+            return document.querySelector(`[data-billing-select-for="${form.id}"]`);
+        }
+
+        function updateBillingBulkControls() {
+            const masterCheckbox = document.getElementById('billing-select-all');
+            const bulkButton = document.getElementById('billing-conclude-selected');
+            const availableCheckboxes = Array.from(document.querySelectorAll('.js-billing-conclusion-select'))
+                .filter((checkbox) => !checkbox.disabled);
+            const selectedCheckboxes = availableCheckboxes.filter((checkbox) => checkbox.checked);
+
+            if (masterCheckbox) {
+                masterCheckbox.disabled = availableCheckboxes.length === 0 || bulkButton?.dataset.running === '1';
+                masterCheckbox.checked = availableCheckboxes.length > 0
+                    && selectedCheckboxes.length === availableCheckboxes.length;
+                masterCheckbox.indeterminate = selectedCheckboxes.length > 0
+                    && selectedCheckboxes.length < availableCheckboxes.length;
+            }
+
+            if (!bulkButton || bulkButton.dataset.running === '1') return;
+
+            const hasSelection = selectedCheckboxes.length > 0;
+            bulkButton.disabled = !hasSelection;
+            bulkButton.className = hasSelection
+                ? 'inline-flex h-7 items-center justify-center rounded-sm bg-azul-prodifem px-2 py-1 text-xs font-semibold text-white transition hover:bg-blue-800'
+                : 'inline-flex h-7 cursor-not-allowed items-center justify-center rounded-sm bg-slate-400 px-2 py-1 text-xs font-semibold text-white transition';
+            bulkButton.textContent = 'Concluir todas';
+        }
+
+        function syncBillingSelectionCheckbox(form) {
+            const checkbox = billingSelectionCheckbox(form);
+            const button = billingConclusionButton(form);
+            if (!checkbox) return;
+
+            const completed = button?.dataset.billingCompleted === '1';
+            const pending = form?.dataset.conclusionPending === '1';
+            checkbox.disabled = completed || pending || !billingReadyToConclude(form);
+
+            if (checkbox.disabled) {
+                checkbox.checked = false;
+            }
+
+            updateBillingBulkControls();
+        }
+
+        function billingReadyToConclude(form) {
+            const requiredFields = [
+                'folio_factura_uuid',
+                'folio_interno',
+                'fecha_facturacion',
+                'numero_carta_factura',
+                'fecha_carta_factura',
+            ];
+
+            return requiredFields.every((name) => {
+                const field = billingFieldsFor(form).find((candidate) => candidate.name === name);
+                return field && String(field.value || '').trim() !== '';
+            });
+        }
+
+        function syncBillingConclusionButton(form) {
+            const button = billingConclusionButton(form);
+            if (!button) return;
+
+            if (button.dataset.billingCompleted === '1' || form?.dataset.conclusionPending === '1') {
+                syncBillingSelectionCheckbox(form);
+                return;
+            }
+
+            const ready = billingReadyToConclude(form);
+            button.disabled = !ready;
+            button.className = ready
+                ? 'inline-flex h-7 min-w-[86px] items-center justify-center rounded-sm bg-azul-prodifem px-2 py-1 text-xs font-semibold text-white transition hover:bg-blue-800'
+                : 'inline-flex h-7 min-w-[86px] cursor-not-allowed items-center justify-center rounded-sm bg-slate-400 px-2 py-1 text-xs font-semibold text-white transition';
+            button.textContent = 'Concluir';
+            syncBillingSelectionCheckbox(form);
+        }
+
+        function completeBillingConclusionUi(form) {
+            const button = billingConclusionButton(form);
+            const checkbox = billingSelectionCheckbox(form);
+            const expiration = document.querySelector(`[data-billing-expiration-for="${form.id}"]`);
+            const isBulkConclusion = form.dataset.bulkConclusion === '1';
+            form.dataset.conclusionPending = '0';
+            delete form.dataset.previousBillingStatus;
+
+            if (button) {
+                button.dataset.billingCompleted = '1';
+                button.disabled = true;
+                button.className = 'inline-flex h-7 min-w-[86px] cursor-default items-center justify-center rounded-sm bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition';
+                button.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i>Concluida';
+            }
+
+            if (expiration) {
+                expiration.innerHTML = '<span class="text-slate-400">&mdash;</span>';
+            }
+
+            if (checkbox) {
+                checkbox.checked = false;
+                checkbox.disabled = true;
+            }
+
+            updateBillingBulkControls();
+
+            if (!isBulkConclusion) {
+                showBillingToast('success', 'La fila se concluyo correctamente.');
+
+                if (document.querySelector('[data-billing-section]')?.dataset.billingSection === 'pending') {
+                    window.setTimeout(() => window.location.reload(), 700);
+                }
+            }
+        }
+
+        function resetBillingConclusionUi(form) {
+            if (form?.dataset.conclusionPending !== '1') return;
+
+            const button = billingConclusionButton(form);
+            const statusInput = form.querySelector('input[name="estatus_facturacion"]');
+
+            if (statusInput && Object.prototype.hasOwnProperty.call(form.dataset, 'previousBillingStatus')) {
+                statusInput.value = form.dataset.previousBillingStatus;
+            }
+
+            delete form.dataset.previousBillingStatus;
+            form.dataset.conclusionPending = '0';
+
+            if (button) {
+                syncBillingConclusionButton(form);
+            }
+        }
+
+        function prepareBillingConclusion(form, button, isBulkConclusion = false) {
+            const statusInput = form?.querySelector('input[name="estatus_facturacion"]');
+            if (!form || !button || !statusInput || !billingReadyToConclude(form)) return false;
+
+            form.dataset.previousBillingStatus = statusInput.value || '';
+            form.dataset.bulkConclusion = isBulkConclusion ? '1' : '0';
+            statusInput.value = 'Completado';
+            form.dataset.autosaveVersion = String(Number(form.dataset.autosaveVersion || 0) + 1);
+            form.dataset.dirty = '1';
+            form.dataset.conclusionPending = '1';
+
+            button.disabled = true;
+            button.classList.add('cursor-wait', 'opacity-70');
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Concluyendo';
+            syncBillingSelectionCheckbox(form);
+
+            return true;
+        }
+
+        function waitForBillingFormIdle(form) {
+            return new Promise((resolve) => {
+                let attempts = 0;
+                const timer = window.setInterval(() => {
+                    attempts++;
+
+                    if (form.dataset.submitting !== '1' || attempts >= 200) {
+                        window.clearInterval(timer);
+                        resolve(form.dataset.submitting !== '1');
+                    }
+                }, 50);
+            });
+        }
+
+        async function concludeSelectedBillingRow(checkbox) {
+            const form = document.getElementById(checkbox.dataset.billingSelectFor || '');
+            if (!form || checkbox.disabled || !billingReadyToConclude(form)) return false;
+
+            const isIdle = await waitForBillingFormIdle(form);
+            const button = billingConclusionButton(form);
+
+            if (!isIdle || !button || !prepareBillingConclusion(form, button, true)) return false;
+
+            const saved = await submitInlineBilling(form);
+            form.dataset.bulkConclusion = '0';
+
+            if (!saved) {
+                syncBillingConclusionButton(form);
+            }
+
+            return saved;
+        }
+
+        async function confirmSelectedBillingConclusions() {
+            const bulkButton = document.getElementById('billing-conclude-selected');
+            const selected = Array.from(document.querySelectorAll('.js-billing-conclusion-select:checked'))
+                .filter((checkbox) => !checkbox.disabled);
+
+            if (!bulkButton || bulkButton.disabled || selected.length === 0) return;
+
+            let confirmed = false;
+            const message = `Se concluiran ${selected.length} solicitudes seleccionadas.`;
+
+            if (window.Swal) {
+                const result = await Swal.fire({
+                    title: '¿Concluir todas?',
+                    text: message,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí',
+                    cancelButtonText: 'No',
+                    confirmButtonColor: '#243b7b',
+                    cancelButtonColor: '#64748b',
+                    reverseButtons: true,
+                    focusCancel: true,
+                });
+                confirmed = result.isConfirmed;
+            } else {
+                confirmed = window.confirm(`¿Concluir todas?\n${message}`);
+            }
+
+            if (!confirmed) return;
+
+            bulkButton.dataset.running = '1';
+            bulkButton.disabled = true;
+            bulkButton.className = 'inline-flex h-7 cursor-wait items-center justify-center rounded-sm bg-azul-prodifem px-2 py-1 text-xs font-semibold text-white opacity-80';
+
+            let completed = 0;
+            let failed = 0;
+
+            for (let index = 0; index < selected.length; index += 5) {
+                const batch = selected.slice(index, index + 5);
+                const results = await Promise.all(batch.map(concludeSelectedBillingRow));
+                completed += results.filter(Boolean).length;
+                failed += results.filter((result) => !result).length;
+                bulkButton.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>${completed + failed}/${selected.length}`;
+            }
+
+            bulkButton.dataset.running = '0';
+            updateBillingBulkControls();
+
+            if (failed > 0) {
+                showBillingToast('error', `${completed} solicitudes concluidas y ${failed} sin concluir.`);
+            } else {
+                showBillingToast('success', `${completed} solicitudes concluidas correctamente.`);
+            }
+
+            if (completed > 0 && document.querySelector('[data-billing-section]')?.dataset.billingSection === 'pending') {
+                window.setTimeout(() => window.location.reload(), 900);
+            }
+        }
+
+        async function confirmBillingConclusion(form, button) {
+            if (!form || !button || button.disabled) return;
+
+            if (!billingReadyToConclude(form)) {
+                syncBillingConclusionButton(form);
+                showBillingToast('error', 'Completa todos los datos de facturacion antes de concluir.');
+                return;
+            }
+
+            let confirmed = false;
+
+            if (window.Swal) {
+                const result = await Swal.fire({
+                    title: '¿Concluir?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí',
+                    cancelButtonText: 'No',
+                    confirmButtonColor: '#243b7b',
+                    cancelButtonColor: '#64748b',
+                    reverseButtons: true,
+                    focusCancel: true,
+                });
+                confirmed = result.isConfirmed;
+            } else {
+                confirmed = window.confirm('¿Concluir?');
+            }
+
+            if (!confirmed) return;
+
+            if (prepareBillingConclusion(form, button)) {
+                submitInlineBilling(form);
+            }
+        }
+
+        function queueBillingAutosave(field, delay = 650, markChanged = true) {
+            const form = field?.form;
+            if (!form) return;
+
+            syncBillingConclusionButton(form);
+
+            if (markChanged) {
+                form.dataset.autosaveVersion = String(Number(form.dataset.autosaveVersion || 0) + 1);
+                form.dataset.dirty = '1';
+                setBillingAutosaveState(form, 'pending');
+            }
+
+            const previousTimer = billingAutosaveTimers.get(form);
+            if (previousTimer) {
+                window.clearTimeout(previousTimer);
+            }
+
+            billingAutosaveTimers.set(form, window.setTimeout(() => {
+                billingAutosaveTimers.delete(form);
+                submitInlineBilling(form);
+            }, delay));
+        }
+
+        function initBillingAutosave() {
+            document.querySelectorAll('.js-billing-autosave-field').forEach((field) => {
+                if (field.dataset.autosaveBound === '1') return;
+                field.dataset.autosaveBound = '1';
+
+                if (field.matches('select')) {
+                    field.addEventListener('change', () => queueBillingAutosave(field, 0));
+                    return;
+                }
+
+                field.addEventListener('input', () => queueBillingAutosave(field));
+                field.addEventListener('blur', () => {
+                    if (field.form?.dataset.dirty === '1') {
+                        queueBillingAutosave(field, 0, false);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.js-inline-billing-form').forEach((form) => {
+                syncBillingConclusionButton(form);
+            });
+        }
+
+        function initBillingBulkConclusion() {
+            const masterCheckbox = document.getElementById('billing-select-all');
+
+            if (masterCheckbox && masterCheckbox.dataset.selectionBound !== '1') {
+                masterCheckbox.dataset.selectionBound = '1';
+                masterCheckbox.addEventListener('change', () => {
+                    document.querySelectorAll('.js-billing-conclusion-select').forEach((checkbox) => {
+                        if (!checkbox.disabled) {
+                            checkbox.checked = masterCheckbox.checked;
+                        }
+                    });
+                    updateBillingBulkControls();
+                });
+            }
+
+            document.querySelectorAll('.js-billing-conclusion-select').forEach((checkbox) => {
+                if (checkbox.dataset.selectionBound === '1') return;
+                checkbox.dataset.selectionBound = '1';
+                checkbox.addEventListener('change', updateBillingBulkControls);
+            });
+
+            updateBillingBulkControls();
+        }
+
+        function billingInvoiceExportCheckboxes() {
+            return Array.from(document.querySelectorAll('.js-billing-invoice-select'));
+        }
+
+        function updateBillingInvoiceExportControls() {
+            const checkboxes = billingInvoiceExportCheckboxes();
+            const selected = checkboxes.filter((checkbox) => checkbox.checked);
+            const selectAllButton = document.getElementById('billing-invoice-select-all');
+            const exportButton = document.getElementById('billing-expanded-export-button');
+            const allSelected = checkboxes.length > 0 && selected.length === checkboxes.length;
+
+            if (selectAllButton) {
+                selectAllButton.disabled = checkboxes.length === 0;
+                selectAllButton.className = checkboxes.length > 0
+                    ? 'inline-flex items-center justify-center rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 transition hover:bg-blue-50'
+                    : 'inline-flex cursor-not-allowed items-center justify-center rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400';
+                selectAllButton.innerHTML = allSelected
+                    ? '<i class="fa-regular fa-square-minus mr-2"></i>Quitar seleccion'
+                    : '<i class="fa-regular fa-square-check mr-2"></i>Seleccionar todo';
+            }
+
+            if (exportButton) {
+                const hasSelection = selected.length > 0;
+                exportButton.disabled = !hasSelection;
+                exportButton.className = hasSelection
+                    ? 'inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700'
+                    : 'inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-slate-400 px-4 py-2 text-sm font-semibold text-white transition';
+                exportButton.innerHTML = `<i class="fa-solid fa-download mr-2"></i>Descargar Excel${hasSelection ? ` (${selected.length})` : ''}`;
+            }
+        }
+
+        function initBillingInvoiceExport() {
+            const selectAllButton = document.getElementById('billing-invoice-select-all');
+
+            if (selectAllButton && selectAllButton.dataset.selectionBound !== '1') {
+                selectAllButton.dataset.selectionBound = '1';
+                selectAllButton.addEventListener('click', () => {
+                    const checkboxes = billingInvoiceExportCheckboxes();
+                    const shouldSelect = !checkboxes.every((checkbox) => checkbox.checked);
+
+                    checkboxes.forEach((checkbox) => {
+                        checkbox.checked = shouldSelect;
+                    });
+                    updateBillingInvoiceExportControls();
+                });
+            }
+
+            billingInvoiceExportCheckboxes().forEach((checkbox) => {
+                if (checkbox.dataset.invoiceSelectionBound === '1') return;
+                checkbox.dataset.invoiceSelectionBound = '1';
+                checkbox.addEventListener('change', updateBillingInvoiceExportControls);
+            });
+
+            updateBillingInvoiceExportControls();
+        }
+
+        function flushPendingBillingAutosaves() {
+            document.querySelectorAll('.js-inline-billing-form').forEach((form) => {
+                if (form.dataset.dirty !== '1' || form.dataset.submitting === '1') return;
+                navigator.sendBeacon(form.action, new FormData(form));
+            });
+        }
+
+        function initBillingFixedScrollbar() {
+            const tableScroll = document.getElementById('billing-table-scroll');
+            const fixedWrapper = document.getElementById('billing-fixed-scrollbar');
+            const fixedScroll = fixedWrapper?.querySelector('.js-billing-fixed-scrollbar');
+            const spacer = document.getElementById('billing-fixed-scrollbar-spacer');
+
+            if (!tableScroll || !fixedWrapper || !fixedScroll || !spacer) return;
+
+            let syncing = false;
+
+            function updateFixedScrollbar() {
+                const hasHorizontalScroll = tableScroll.scrollWidth > tableScroll.clientWidth + 1;
+                const tableRect = tableScroll.getBoundingClientRect();
+
+                fixedWrapper.style.left = `${tableRect.left + tableScroll.clientLeft}px`;
+                fixedWrapper.style.width = `${tableScroll.clientWidth}px`;
+                fixedWrapper.classList.toggle('hidden', !hasHorizontalScroll);
+                spacer.style.width = `${tableScroll.scrollWidth}px`;
+                fixedScroll.scrollLeft = tableScroll.scrollLeft;
+            }
+
+            tableScroll.addEventListener('scroll', () => {
+                if (syncing) return;
+                syncing = true;
+                fixedScroll.scrollLeft = tableScroll.scrollLeft;
+                syncing = false;
+            });
+
+            fixedScroll.addEventListener('scroll', () => {
+                if (syncing) return;
+                syncing = true;
+                tableScroll.scrollLeft = fixedScroll.scrollLeft;
+                syncing = false;
+            });
+
+            window.addEventListener('resize', updateFixedScrollbar);
+            updateFixedScrollbar();
+            window.requestAnimationFrame(updateFixedScrollbar);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initBillingFixedScrollbar();
+            initBillingColumnFilters();
+            initBillingAutosave();
+            initBillingBulkConclusion();
+            initBillingInvoiceExport();
+        });
+        document.addEventListener('livewire:navigated', () => {
+            initBillingFixedScrollbar();
+            initBillingColumnFilters();
+            initBillingAutosave();
+            initBillingBulkConclusion();
+            initBillingInvoiceExport();
+        });
+        window.addEventListener('pagehide', flushPendingBillingAutosaves);
     </script>
 </x-admin-layout>

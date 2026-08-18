@@ -1,248 +1,175 @@
 <x-admin-layout>
-    <div class="mt-2 mb-4 flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl font-medium text-gray-800">Hospitales de la institucion</h1>
-            <p class="text-sm text-gray-500 mt-1">
-                {{ $institucion->nombre }} | {{ $institucion->razon_social }}
-            </p>
+    <section class="rounded-lg bg-white p-5 shadow-lg">
+        <div class="flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h1 class="text-2xl font-semibold text-gray-900">Hospitales de la instituci&oacute;n</h1>
+                <p class="mt-1 text-sm text-blue-600">{{ $institucion->nombre }}</p>
+            </div>
+
+            <a href="{{ route('admin.instituciones.index') }}"
+                class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                &larr; Volver a instituciones
+            </a>
         </div>
 
-        <a href="{{ route('admin.instituciones.index') }}" class="text-blue-600 hover:text-blue-800 text-sm">
-            ← Volver a instituciones
-        </a>
-    </div>
+        <div class="mt-4 flex flex-col gap-4 rounded-lg border border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
+            <div class="flex min-w-0 items-center gap-3">
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-800">
+                    <span class="text-sm font-bold" aria-hidden="true">I</span>
+                </span>
+                <div class="min-w-0">
+                    <p class="truncate text-sm font-medium text-gray-900">
+                        Instituci&oacute;n: {{ $institucion->nombre }}
+                    </p>
+                    <p class="mt-1 flex items-center gap-2 text-xs text-gray-600">
+                        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                        Activa
+                    </p>
+                </div>
+            </div>
 
-    <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
-        <div class="p-6 pb-4">
-            <x-validation-errors class="mb-4" />
+            <a href="{{ route('admin.instituciones.hospitals.create', $institucion) }}"
+                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-azul-prodifem px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-200">
+                <span class="text-base leading-none" aria-hidden="true">+</span>
+                Crear hospital
+            </a>
+        </div>
 
-            <div class="border rounded-lg p-4 bg-slate-50">
-                <div class="flex items-center justify-between gap-4 mb-4">
+        <div class="mt-4 overflow-hidden rounded-lg border border-gray-200">
+            <div class="border-b border-gray-200 px-4 py-3">
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-800">Crear hospital desde esta institucion</h2>
-                        <p class="text-sm text-gray-500">
-                            El hospital se crea y queda vinculado automaticamente a
-                            {{ $institucion->nombre }}.
+                        <h2 class="text-base font-semibold text-gray-900">Hospitales relacionados</h2>
+                        <p class="text-xs text-gray-500">
+                            {{ $totalHospitals }} {{ $totalHospitals === 1 ? 'hospital' : 'hospitales' }}
                         </p>
                     </div>
                 </div>
 
-                <form action="{{ route('admin.instituciones.hospitals.store', $institucion) }}" method="POST">
-                    @csrf
+                <form method="GET" action="{{ route('admin.instituciones.hospitals', $institucion) }}"
+                    class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-12">
+                    <label class="relative md:col-span-4">
+                        <span class="sr-only">Buscar hospital</span>
+                        <input type="search" name="search" value="{{ $search }}"
+                            placeholder="Buscar por nombre, clave o municipio..."
+                            class="h-10 w-full rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </label>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        <div>
-                            <x-label class="mb-2">Laboratorio de mezclas</x-label>
-                            <select name="laboratory_id" class="w-full rounded border-gray-300">
-                                <option value="">-- Selecciona un laboratorio --</option>
-                                @foreach ($laboratories as $lab)
-                                    <option value="{{ $lab->id }}"
-                                        {{ old('laboratory_id') == $lab->id ? 'selected' : '' }}>
-                                        {{ $lab->nombre }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
+                    <label class="md:col-span-2">
+                        <span class="sr-only">Tipo de unidad</span>
+                        <select name="unit_type"
+                            class="h-10 w-full rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="all">Tipo de unidad: Todos</option>
+                            @foreach ($unitTypes as $type)
+                                <option value="{{ $type }}" @selected($unitType === $type)>{{ $type }}</option>
+                            @endforeach
+                        </select>
+                    </label>
 
-                        <div>
-                            <x-label class="mb-2">Nombre</x-label>
-                            <x-input value="{{ old('name_hp') }}" name="name_hp" class="w-full"
-                                placeholder="Escriba el nombre del hospital" />
-                        </div>
+                    <label class="md:col-span-2">
+                        <span class="sr-only">Estatus</span>
+                        <select name="status"
+                            class="h-10 w-full rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="all" @selected($status === 'all')>Estatus: Todos</option>
+                            <option value="active" @selected($status === 'active')>Activos</option>
+                            <option value="inactive" @selected($status === 'inactive')>Inactivos</option>
+                        </select>
+                    </label>
 
-                        <div class="md:col-span-2 xl:col-span-1">
-                            <x-label class="mb-2">Direccion</x-label>
-                            <x-input value="{{ old('adress') }}" name="adress" class="w-full"
-                                placeholder="Tlacotalpan 59, Col. Roma Sur, Cuauhtemoc, CDMX, 06760" />
-                        </div>
+                    <label class="md:col-span-2">
+                        <span class="sr-only">L&iacute;nea de servicio</span>
+                        <select name="service"
+                            class="h-10 w-full rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="all" @selected($service === 'all')>Servicio: Todos</option>
+                            <option value="oncology" @selected($service === 'oncology')>Oncol&oacute;gicos</option>
+                            <option value="antibiotics" @selected($service === 'antibiotics')>Antibi&oacute;ticos</option>
+                            <option value="nutrition" @selected($service === 'nutrition')>Nutricionales</option>
+                        </select>
+                    </label>
 
-                        <div>
-                            <x-label class="mb-2">Lista de medicamentos oncologica</x-label>
-                            <select name="onco_medicine_list_id" class="w-full rounded border-gray-300">
-                                <option value="">Seleccione una lista</option>
-                                @foreach ($oncoMedicineLists as $list)
-                                    <option value="{{ $list->id }}"
-                                        {{ old('onco_medicine_list_id') == $list->id ? 'selected' : '' }}>
-                                        {{ $list->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div>
-                            <x-label class="mb-2">Lista nutricional</x-label>
-                            <select name="nutri_medicine_list_id" class="w-full rounded border-gray-300">
-                                <option value="">Seleccione una lista</option>
-                                @foreach ($nutriMedicineLists as $list)
-                                    <option value="{{ $list->id }}"
-                                        {{ old('nutri_medicine_list_id') == $list->id ? 'selected' : '' }}>
-                                        {{ $list->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="mt-4 flex justify-end">
-                        <x-button type="submit">
-                            Crear hospital
-                        </x-button>
+                    <div class="flex gap-2 md:col-span-2">
+                        <button type="submit"
+                            class="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-azul-prodifem px-3 text-sm font-semibold text-white hover:bg-blue-900">
+                            Filtrar
+                        </button>
+                        <a href="{{ route('admin.instituciones.hospitals', $institucion) }}"
+                            class="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 px-3 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                            Limpiar
+                        </a>
                     </div>
                 </form>
             </div>
-        </div>
-    </div>
 
-    <form action="{{ route('admin.instituciones.hospitals.update', $institucion) }}" method="POST"
-        class="bg-white rounded-lg shadow-lg overflow-hidden"
-        x-data="hospitalesPicker(@js($hospitals), @js(old('hospitals', $selectedHospitalIds ?? [])))">
-        @csrf
-        @method('PUT')
-
-        <div class="p-6 pb-4">
-
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div class="border rounded-lg p-3 flex flex-col min-h-0">
-                    <div class="mb-3 shrink-0">
-                        <x-label class="mb-2">Hospitales disponibles</x-label>
-                        <x-input x-model="search" class="w-full" placeholder="Buscar hospital..." />
-                    </div>
-
-                    <div class="overflow-y-auto overflow-x-hidden divide-y pr-1"
-                        style="height: calc(100vh - 24rem); min-height: 24rem; max-height: 34rem;">
-                        <template x-for="hospital in filteredDisponibles()" :key="hospital.id">
-                            <div class="flex items-start justify-between py-3 gap-4">
-                                <div class="text-gray-800 min-w-0 flex-1">
-                                    <div class="font-medium break-words" x-text="hospital.name"></div>
-                                    <div class="text-sm text-gray-500 whitespace-normal break-words"
-                                        x-text="hospital.adress || 'Sin direccion'"></div>
-                                </div>
-
-                                <button type="button"
-                                    class="shrink-0 flex h-9 w-9 items-center justify-center text-white bg-azul-prodifem hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 font-semibold rounded-full text-lg leading-none"
-                                    title="Vincular hospital"
-                                    @click="add(hospital)">
-                                    <span aria-hidden="true">+</span>
-                                </button>
-                            </div>
-                        </template>
-
-                        <div x-show="filteredDisponibles().length === 0" class="py-6 text-center text-gray-500">
-                            No hay hospitales con ese filtro.
-                        </div>
-                    </div>
-                </div>
-
-                <div class="border rounded-lg p-3 flex flex-col min-h-0">
-                    <div class="flex items-center justify-between mb-3 shrink-0 gap-4">
-                        <div>
-                            <x-label class="mb-1">Hospitales vinculados</x-label>
-                            <p class="text-sm text-gray-600">
-                                Seleccionados: <span class="font-semibold" x-text="selected.length"></span>
-                            </p>
-                        </div>
-
-                        <button type="button"
-                            class="text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 font-medium rounded-full text-sm px-4 py-2"
-                            x-show="selected.length > 0"
-                            @click="clearAll()">
-                            Limpiar
-                        </button>
-                    </div>
-
-                    <div class="overflow-y-auto overflow-x-hidden divide-y pr-1"
-                        style="height: calc(100vh - 24rem); min-height: 24rem; max-height: 34rem;">
-                        <template x-for="hospital in selected" :key="hospital.id">
-                            <div class="flex items-start justify-between py-3 gap-4">
-                                <div class="text-gray-800 min-w-0 flex-1">
-                                    <div class="font-medium break-words" x-text="hospital.name"></div>
-                                    <div class="text-sm text-gray-500 whitespace-normal break-words"
-                                        x-text="hospital.adress || 'Sin direccion'"></div>
-                                </div>
-
-                                <button type="button"
-                                    class="shrink-0 flex h-9 w-9 items-center justify-center text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 font-semibold rounded-full text-lg leading-none"
-                                    title="Quitar hospital"
-                                    @click="remove(hospital)">
-                                    <span aria-hidden="true">−</span>
-                                </button>
-                            </div>
-                        </template>
-
-                        <div x-show="selected.length === 0" class="py-6 text-center text-gray-500">
-                            Aun no has vinculado hospitales a esta institucion.
-                        </div>
-                    </div>
-
-                    <template x-for="id in selectedIds()" :key="'hospital_' + id">
-                        <input type="hidden" name="hospitals[]" :value="id">
-                    </template>
-                </div>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1050px] text-left text-xs text-gray-600">
+                    <thead class="bg-gray-50 text-[11px] uppercase text-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 font-semibold">Hospital</th>
+                            <th class="px-4 py-3 font-semibold">Clave</th>
+                            <th class="px-4 py-3 font-semibold">Tipo de unidad</th>
+                            <th class="px-4 py-3 font-semibold">Municipio</th>
+                            <th class="px-4 py-3 font-semibold">L&iacute;neas de servicio</th>
+                            <th class="px-4 py-3 font-semibold">Estatus</th>
+                            <th class="px-4 py-3 text-center font-semibold">Editar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white">
+                        @forelse ($hospitals as $hospital)
+                            @php
+                                $hasOncology = $hospital->service_oncology || $hospital->onco_medicine_list_id;
+                                $hasNutrition = $hospital->service_nutrition || $hospital->nutri_medicine_list_id;
+                                $hasServices = $hasOncology || $hospital->service_antibiotics || $hasNutrition;
+                            @endphp
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 font-medium text-gray-900">{{ $hospital->name }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">{{ $hospital->internal_key ?: '-' }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">{{ $hospital->unit_type ?: '-' }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">{{ $hospital->municipality ?: '-' }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="flex flex-wrap gap-1">
+                                        @if ($hasOncology)
+                                            <span class="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700">Oncol&oacute;gicos</span>
+                                        @endif
+                                        @if ($hospital->service_antibiotics)
+                                            <span class="rounded border border-red-300 bg-red-50 px-2 py-1 text-[10px] font-medium text-red-700">Antibi&oacute;ticos</span>
+                                        @endif
+                                        @if ($hasNutrition)
+                                            <span class="rounded border border-blue-300 bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700">Nutricionales</span>
+                                        @endif
+                                        @unless ($hasServices)
+                                            <span class="text-gray-400">Sin definir</span>
+                                        @endunless
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <span class="inline-flex items-center gap-2 font-medium {{ $hospital->is_active ? 'text-emerald-700' : 'text-gray-500' }}">
+                                        <span class="h-2 w-2 rounded-full {{ $hospital->is_active ? 'bg-emerald-500' : 'bg-gray-400' }}"></span>
+                                        {{ $hospital->is_active ? 'Activo' : 'Inactivo' }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-center whitespace-nowrap">
+                                    <x-table-action-link href="{{ route('admin.hospitals.edit', $hospital) }}"
+                                        icon="fa-solid fa-pen">
+                                        Editar
+                                    </x-table-action-link>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-500">
+                                    No hay hospitales relacionados con estos filtros.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
 
-            <p class="text-sm text-gray-500 mt-3">
-                Aqui controlas que hospitales pertenecen a esta institucion. Los cambios se guardan al final.
-            </p>
+            @if ($hospitals->hasPages())
+                <div class="border-t border-gray-200 px-4 py-3">
+                    {{ $hospitals->links() }}
+                </div>
+            @endif
         </div>
-
-        <div class="sticky bottom-0 border-t bg-white px-6 py-4 flex justify-end shadow-[0_-6px_16px_rgba(15,23,42,0.08)]">
-            <x-button>
-                Guardar hospitales
-            </x-button>
-        </div>
-    </form>
-
-    <script>
-        function hospitalesPicker(hospitals, oldSelectedIds) {
-            const oldIds = (oldSelectedIds || []).map(v => Number(v));
-
-            const byId = new Map((hospitals || []).map(h => [Number(h.id), {
-                id: Number(h.id),
-                name: h.name ?? '',
-                adress: h.adress ?? ''
-            }]));
-
-            const selectedInitial = oldIds
-                .map(id => byId.get(id))
-                .filter(Boolean);
-
-            return {
-                search: '',
-                all: Array.from(byId.values()),
-                selected: selectedInitial,
-
-                selectedIds() {
-                    return this.selected.map(s => s.id);
-                },
-
-                disponibles() {
-                    const selected = new Set(this.selectedIds());
-                    return this.all.filter(h => !selected.has(h.id));
-                },
-
-                filteredDisponibles() {
-                    const q = (this.search || '').trim().toLowerCase();
-                    const list = this.disponibles();
-
-                    if (!q) return list;
-
-                    return list.filter(h => `${h.name} ${h.adress}`.toLowerCase().includes(q));
-                },
-
-                add(hospital) {
-                    if (this.selectedIds().includes(hospital.id)) return;
-                    this.selected.push(hospital);
-                    this.search = '';
-                },
-
-                remove(hospital) {
-                    this.selected = this.selected.filter(x => x.id !== hospital.id);
-                },
-
-                clearAll() {
-                    this.selected = [];
-                }
-            }
-        }
-    </script>
+    </section>
 </x-admin-layout>

@@ -39,6 +39,7 @@ class MedicineListsTable extends Component
     public function render()
     {
         $query = MedicineList::query()
+            ->forCategory('oncologicos')
             ->with(['hospital', 'presentations']); // presentations para count()
 
         if ($this->search !== '') {

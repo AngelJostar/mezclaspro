@@ -62,6 +62,48 @@ class MedicinePresentation extends Model
             ->where('is_current', true);
     }
 
+    public function contentInMilligrams(): ?float
+    {
+        return self::contentInMilligramsFrom(
+            $this->contenido_valor,
+            $this->contenido_unidad,
+            $this->cantidad_medicamento,
+            $this->presentacion
+        );
+    }
+
+    public static function contentInMilligramsFrom($content, $unit, $medicineAmount, $presentation): ?float
+    {
+        if (preg_match('/(\d+(?:[.,]\d+)?)\s*(mcg|ug|µg|mg|g)\b/iu', (string) $presentation, $matches)) {
+            $value = (float) str_replace(',', '.', $matches[1]);
+            $presentationUnit = mb_strtolower($matches[2], 'UTF-8');
+
+            return match ($presentationUnit) {
+                'g' => $value * 1000,
+                'mcg', 'ug', 'µg' => $value / 1000,
+                default => $value,
+            };
+        }
+
+        $content = (float) ($content ?: 0);
+        $unit = mb_strtolower(trim((string) $unit), 'UTF-8');
+
+        if ($content > 0 && $unit === 'mg') {
+            return $content;
+        }
+
+        if ($content > 0 && $unit === 'g') {
+            return $content * 1000;
+        }
+
+        $medicineAmount = (float) ($medicineAmount ?: 0);
+        if ($medicineAmount > 0) {
+            return $medicineAmount;
+        }
+
+        return null;
+    }
+
     public function lists()
     {
         return $this->belongsToMany(
@@ -73,6 +115,8 @@ class MedicinePresentation extends Model
             'charge_by',
             'precio',
             'precio_mg_override',
+            'iva_desglosado',
+            'descripcion_remision',
         ])->withTimestamps();
     }
 }

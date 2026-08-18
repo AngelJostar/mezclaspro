@@ -170,6 +170,11 @@
         // ===== Emisor 2: Distribuidor (opcional) =====
         $distNombre = $distributor->nombre ?? ($distributor->name ?? null);
         $distDireccion = $distributor->direccion ?? ($distributor->address ?? null);
+        $distRfc = $distributor->rfc ?? null;
+        $distContacto = $distributor->contacto ?? null;
+        $distAdditionalInformation = $distributor->informacion_adicional ?? null;
+        $contractNumber = !empty($priceList?->has_contract) ? ($priceList->contract_number ?? null) : null;
+        $contractInformation = !empty($priceList?->has_contract) ? ($priceList->contract_information ?? null) : null;
 
         $distLogoSrc = null;
         if (!empty($distributor?->logo_path)) {
@@ -189,6 +194,7 @@
     {{-- =========================================================
         HOJA 1: PRODIFEM
     ========================================================== --}}
+    @unless ($subdistributorOnly ?? false)
     <div class="contenedor border-1">
         <!-- Encabezado -->
         <div class="introduccion">
@@ -224,6 +230,15 @@
                 <td class="px-1 text-right">No. Remisión: {{ $solicitud->remision ?? '—' }}</td>
             </tr>
         </table>
+
+        @if ($contractNumber)
+            <table>
+                <tr>
+                    <td class="px-1"><strong>Contrato:</strong> {{ $contractNumber }}</td>
+                    <td class="px-1 text-right">{!! nl2br(e($contractInformation)) !!}</td>
+                </tr>
+            </table>
+        @endif
 
         <!-- Datos del paciente -->
         <table>
@@ -421,12 +436,54 @@
                         </td>
                     </tr>
                 @endif
+
+                @if ((float) ($mezcla->mixing_service_total ?? 0) > 0)
+                    <tr>
+                        <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                        <td class="border-1 px-1 text-center">Servicio de mezclado (IVA incluido)</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">Servicio</td>
+                        <td class="border-1 px-1 text-center">1</td>
+                        <td class="border-1 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
+                        <td class="border-1 border-r-0 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
+                    </tr>
+                @endif
             @endforeach
+
+            @if ((float) ($totalServicioMezclado ?? 0) > 0)
+                <tr>
+                    <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                    <td class="border-1 px-1 text-center">Servicio de Mezclado</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">—</td>
+                    <td class="border-1 px-1 text-center">Servicio</td>
+                    <td class="border-1 px-1 text-center">{{ $cantidadServiciosMezclado ?? 1 }}</td>
+                    <td class="border-1 px-1 text-center">{{ $money($precioUnitarioServicioMezclado ?? 0) }}</td>
+                    <td class="border-1 border-r-0 px-1 text-center">{{ $money($totalServicioMezclado ?? 0) }}</td>
+                </tr>
+            @endif
         </table>
 
         <table>
             <tr>
-                <td class="text-right">Total {{ $money($totalRemision) }}</td>
+                <td class="text-right">Subtotal antes de IVA {{ $money($remisionTotals['subtotal_before_vat'] ?? 0) }}</td>
+            </tr>
+            <tr>
+                <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
+            </tr>
+            <tr>
+                <td class="text-right">IVA servicio de mezclado (16%) {{ $money($remisionTotals['service_vat'] ?? 0) }}</td>
+            </tr>
+            <tr>
+                <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>
+            </tr>
+            <tr>
+                <td class="text-right"><strong>Total IVA incluido {{ $money($totalRemision) }}</strong></td>
             </tr>
         </table>
 
@@ -452,13 +509,16 @@
             </tr>
         </table>
     </div>
+    @endunless
 
     {{-- =========================================================
         HOJA 2: DISTRIBUIDOR (solo si existe)
     ========================================================== --}}
     @if (!empty($distributor))
         @php $contador = 1; @endphp
-        <div class="page-break"></div>
+        @unless ($subdistributorOnly ?? false)
+            <div class="page-break"></div>
+        @endunless
 
         <div class="contenedor border-1">
             <!-- Encabezado DISTRIBUIDOR -->
@@ -475,6 +535,10 @@
 
                         <td style="width: 60%; margin: 0 auto; text-align: center; font-size: 13px">
                             <strong>REMISIÓN <br> MEZCLAS ESTÉRILES ONCOLÓGICAS</strong>
+                            <br>{{ $distNombre ?: 'Subdistribuidor' }}
+                            @if ($distRfc)
+                                <br><span style="font-size: 9px">RFC: {{ $distRfc }}</span>
+                            @endif
                         </td>
 
                         <td style="width: 20%"></td>
@@ -496,10 +560,27 @@
                     </td>
                 </tr>
                 <tr>
-                    <td></td>
+                    <td class="px-1">{{ $distContacto ? 'Contacto: ' . $distContacto : '' }}</td>
                     <td class="px-1 text-right">{{ $distDireccion ?: '—' }}</td>
                 </tr>
             </table>
+
+            @if ($distAdditionalInformation)
+                <table>
+                    <tr>
+                        <td class="px-1">{!! nl2br(e($distAdditionalInformation)) !!}</td>
+                    </tr>
+                </table>
+            @endif
+
+            @if ($contractNumber)
+                <table>
+                    <tr>
+                        <td class="px-1"><strong>Contrato:</strong> {{ $contractNumber }}</td>
+                        <td class="px-1 text-right">{!! nl2br(e($contractInformation)) !!}</td>
+                    </tr>
+                </table>
+            @endif
 
             <table>
                 <tr>
@@ -686,12 +767,54 @@
                                 {{ $money($mezcla->infusor_subtotal ?? 0) }}</td>
                         </tr>
                     @endif
+
+                    @if ((float) ($mezcla->mixing_service_total ?? 0) > 0)
+                        <tr>
+                            <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                            <td class="border-1 px-1 text-center">Servicio de mezclado (IVA incluido)</td>
+                            <td class="border-1 px-1 text-center">—</td>
+                            <td class="border-1 px-1 text-center">—</td>
+                            <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
+                            <td class="border-1 px-1 text-center">—</td>
+                            <td class="border-1 px-1 text-center">Servicio</td>
+                            <td class="border-1 px-1 text-center">1</td>
+                            <td class="border-1 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
+                            <td class="border-1 border-r-0 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
+                        </tr>
+                    @endif
                 @endforeach
+
+                @if ((float) ($totalServicioMezclado ?? 0) > 0)
+                    <tr>
+                        <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                        <td class="border-1 px-1 text-center">Servicio de Mezclado</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">—</td>
+                        <td class="border-1 px-1 text-center">Servicio</td>
+                        <td class="border-1 px-1 text-center">{{ $cantidadServiciosMezclado ?? 1 }}</td>
+                        <td class="border-1 px-1 text-center">{{ $money($precioUnitarioServicioMezclado ?? 0) }}</td>
+                        <td class="border-1 border-r-0 px-1 text-center">{{ $money($totalServicioMezclado ?? 0) }}</td>
+                    </tr>
+                @endif
             </table>
 
             <table>
                 <tr>
-                    <td class="text-right">Total {{ $money($totalRemision) }}</td>
+                    <td class="text-right">Subtotal antes de IVA {{ $money($remisionTotals['subtotal_before_vat'] ?? 0) }}</td>
+                </tr>
+                <tr>
+                    <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
+                </tr>
+                <tr>
+                    <td class="text-right">IVA servicio de mezclado (16%) {{ $money($remisionTotals['service_vat'] ?? 0) }}</td>
+                </tr>
+                <tr>
+                    <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>
+                </tr>
+                <tr>
+                    <td class="text-right"><strong>Total IVA incluido {{ $money($totalRemision) }}</strong></td>
                 </tr>
             </table>
 

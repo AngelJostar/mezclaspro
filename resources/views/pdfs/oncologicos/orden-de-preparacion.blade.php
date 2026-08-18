@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
@@ -258,8 +258,24 @@
                 return '—';
             }
         };
+        $fmtDateTime = function ($date, $time = null) {
+            if (!$date && !$time) {
+                return null;
+            }
+            try {
+                if ($date && $time) {
+                    return Carbon::parse($date . ' ' . $time)->format('d/m/Y H:i');
+                }
+                if ($date) {
+                    return Carbon::parse($date)->format('d/m/Y H:i');
+                }
+                return Carbon::parse($time)->format('d/m/Y H:i');
+            } catch (\Exception $e) {
+                return null;
+            }
+        };
 
-        // ✅ Helpers snapshot-friendly
+        // Helpers snapshot-friendly
         $fmtNum = function ($n, $dec = 2, $suffix = '') {
             if (!is_numeric($n)) {
                 return '—';
@@ -267,6 +283,68 @@
             $v = rtrim(rtrim(number_format((float) $n, $dec, '.', ''), '0'), '.');
             return $suffix ? $v . $suffix : $v;
         };
+
+        $horaRecepcion = $mezcla->solicitud?->created_at
+            ? Carbon::parse($mezcla->solicitud->created_at)->format('H:i')
+            : null;
+        $fechaHoraValidacionTraza = $fmtDateTime(
+            optional($mezcla->inspeccion)->fecha_validacion,
+            optional($mezcla->inspeccion)->hora_validacion
+        );
+        $fechaHoraPreparacionTraza = $mezcla->solicitud?->fecha_hora_preparada
+            ? Carbon::parse($mezcla->solicitud->fecha_hora_preparada)->format('d/m/Y H:i')
+            : null;
+        $fechaHoraInspeccionTraza = filled(optional($mezcla->inspeccion)->reviso_nombre)
+            ? $fmtDateTime(optional($mezcla->inspeccion)->fecha_inspeccion, optional($mezcla->inspeccion)->hora_inspeccion)
+            : null;
+        $fechaHoraAprobacionTraza = filled(optional($mezcla->inspeccion)->aprobo_nombre)
+            ? $fmtDateTime(optional($mezcla->inspeccion)->fecha_aprobacion, optional($mezcla->inspeccion)->hora_aprobacion)
+            : null;
+
+        $detalleAgregarPdf = collect($medicamentos ?? [])
+            ->map(function ($m) use ($fmtNum) {
+                $nombre = $m->nombre_para_texto ?? ($m->denominacion ?? 'Medicamento');
+                $volumenes = collect($m->volumenes_por_frasco ?? [])->filter(fn($v) => (float) $v > 0);
+
+                if ($volumenes->isNotEmpty()) {
+                    $partes = $volumenes
+                        ->map(fn($v) => round((float) $v, 4))
+                        ->countBy()
+                        ->map(function ($conteo, $volumen) use ($fmtNum) {
+                            return $fmtNum(((float) $volumen) * $conteo, 2, ' mL');
+                        })
+                        ->values()
+                        ->implode(' + ');
+
+                    return trim($partes) !== '' ? ($partes . ' de ' . $nombre) : null;
+                }
+
+                $volumenTotal = (float) ($m->volumen_orden_preparacion ?? 0);
+
+                if ($volumenTotal <= 0) {
+                    return null;
+                }
+
+                return $fmtNum($volumenTotal, 2, ' mL') . ' de ' . $nombre;
+            })
+            ->filter()
+            ->values();
+
+        $lineasAgregarPdf = collect();
+        if ($detalleAgregarPdf->isNotEmpty()) {
+            if (!empty($ocultarExtraer)) {
+                $lineasAgregarPdf->push(
+                    $detalleAgregarPdf->implode(' + ') .
+                        ' a ' . ($volumen_diluyente_restante ?? '—') . ' mL de ' . ($diluyente_base ?? '—') .
+                        ' y transferir al infusor.'
+                );
+            } else {
+                $lineasAgregarPdf->push(
+                    $detalleAgregarPdf->implode(' + ') .
+                        ' a ' . ($volumen_diluyente_restante ?? '—') . ' mL de ' . ($diluyente_base ?? '—')
+                );
+            }
+        }
     @endphp
 
 
@@ -370,8 +448,8 @@
             <table>
                 <tr>
                     <td colspan="1">
-                        <strong>Hora de preparación:</strong>
-                        {{ $fmtTime($fecha_preparacion ?? null) }}
+                        <strong>Hora de recepci&oacute;n:</strong>
+                        {{ $horaRecepcion ?? '—' }}
                     </td>
                     <td colspan="2" class="border-b-1"></td>
                 </tr>
@@ -383,7 +461,7 @@
                 </tr>
             </table>
 
-            {{-- ✅ TABLA 1 agrupada por medicamento --}}
+            {{-- TABLA 1 agrupada por medicamento --}}
             <table>
                 <tr>
                     <td class="border-1 text-center" style="width: 1%"><strong>#</strong></td>
@@ -569,7 +647,14 @@
                 @endif
             </table>
 
-            <p><strong>Cálculos y forma de preparación:</strong></p>
+            <p>
+                <strong>Concentración calculada:</strong>
+                {{ $fmtNum($dosisTotalMg ?? null, 2) }} mg /
+                {{ $fmtNum($volumenFinalMl ?? null, 2) }} mL =
+                {{ $concentracion_final !== '—' ? $concentracion_final . ' mg/mL' : '—' }}
+            </p>
+
+            <p><strong>Forma de preparación:</strong></p>
 
             <p>
                 <strong>
@@ -586,11 +671,11 @@
             @endforeach
             @if (empty($ocultarExtraer) || !$ocultarExtraer)
                 <p>
-                    <strong>Extraer:</strong> {{ $extraer_ml }} mL de {{ $diluyente_base }}
+                    <strong>Extraer:</strong> Se retiran {{ $extraer_ml }} mL de la soluci&oacute;n
                 </p>
             @endif
 
-            @foreach ($detalle_agregar as $linea)
+            @foreach ($lineasAgregarPdf as $linea)
                 <p><strong>Agregar: </strong>{{ $linea }}</p>
             @endforeach
 
@@ -601,16 +686,16 @@
 
         <table class="mx-2">
             <tr>
-                <td>Recepción y validación: {{ $aprobo_nombre ?? '—' }}</td>
+                <td>Recepci&oacute;n y validaci&oacute;n: {{ $valido_nombre ?? '—' }}{{ $fechaHoraValidacionTraza ? ' - ' . $fechaHoraValidacionTraza : '' }}</td>
             </tr>
             <tr>
-                <td>Preparación: {{ $preparo_nombre ?? '—' }}</td>
+                <td>Preparaci&oacute;n: {{ $preparo_nombre ?? '—' }}{{ $fechaHoraPreparacionTraza ? ' - ' . $fechaHoraPreparacionTraza : '' }}</td>
             </tr>
             <tr>
-                <td>Inspección: {{ $reviso_nombre ?? '—' }}</td>
+                <td>Inspecci&oacute;n: {{ $reviso_nombre ?? '—' }}{{ $fechaHoraInspeccionTraza ? ' - ' . $fechaHoraInspeccionTraza : '' }}</td>
             </tr>
             <tr>
-                <td>Aprobación: {{ $aprobo_nombre ?? '—' }}</td>
+                <td>Aprobaci&oacute;n: {{ $aprobo_nombre ?? '—' }}{{ $fechaHoraAprobacionTraza ? ' - ' . $fechaHoraAprobacionTraza : '' }}</td>
             </tr>
         </table>
     </div>
@@ -618,3 +703,5 @@
 
 
 </html>
+
+

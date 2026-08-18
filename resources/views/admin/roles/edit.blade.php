@@ -9,8 +9,19 @@
                     Nombre del rol
                 </x-label>
                 <x-input name="name" class="w-full" aria-placeholder="Ingrese el nombre del Rol"
-                    value="{{ old('name', $role->name) }}" />
+                    value="{{ old('name', $role->name) }}"
+                    @disabled(in_array($role->name, ['Capacitacion', 'Administracion y facturacion'], true)) />
             </div>
+            @if (in_array($role->name, ['Capacitacion', 'Administracion y facturacion'], true))
+                <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                    @if ($role->name === 'Capacitacion')
+                        Acceso exclusivo al menu de capacitaciones.
+                    @else
+                        Acceso exclusivo a los menus de Administracion y Facturacion.
+                    @endif
+                    Este rol no admite permisos adicionales.
+                </div>
+            @else
             <div class="mb-4">
                 <ul>
                     @foreach ($permissions as $permission)
@@ -26,6 +37,7 @@
                     @endforeach
                 </ul>
             </div>
+            @endif
 
             <div class="flex">
                 <x-button>

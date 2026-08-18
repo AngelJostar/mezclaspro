@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -14,8 +15,16 @@ class RoleController extends Controller
      */
     public function index()
     {
-        $roles = Role::all();
-        return view('admin.roles.index', compact('roles'));
+        $roles = Role::query()->withCount('users')->orderBy('id')->get();
+        $users = auth()->user()?->hasRole('Super Admin')
+            ? User::query()
+                ->select('id', 'name', 'lastname', 'username', 'hospital_id')
+                ->with(['roles:id,name', 'hospital:id,name'])
+                ->orderBy('username')
+                ->get()
+            : collect();
+
+        return view('admin.roles.index', compact('roles', 'users'));
     }
 
     /**
@@ -65,9 +74,6 @@ class RoleController extends Controller
      */
     public function edit(Role $role)
     {
-        $permissions = $role->permissions()->pluck('id')->toArray();
-
-
         $permissions = Permission::all();
         return view('admin.roles.edit', compact('role', 'permissions'));
     }
@@ -77,6 +83,18 @@ class RoleController extends Controller
      */
     public function update(Request $request, Role $role)
     {
+        if (in_array($role->name, ['Capacitacion', 'Administracion y facturacion'], true)) {
+            $role->syncPermissions([]);
+
+            session()->flash('swal', [
+                'icon' => 'success',
+                'title' => 'Rol actualizado',
+                'text' => "El rol {$role->name} conserva sus accesos exclusivos.",
+            ]);
+
+            return redirect()->route('admin.roles.edit', $role);
+        }
+
         $request->validate([
             'name' => ['required', 'unique:roles,name,'. $role->id],
             'permissions' => 'nullable|array',

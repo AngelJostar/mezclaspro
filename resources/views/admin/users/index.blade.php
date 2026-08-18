@@ -29,8 +29,8 @@
                     <th scope="col" class="px-6 py-3">
                         Roles
                     </th>
-                    <th scope="col" class="px-6 py-3">
-
+                    <th scope="col" class="px-6 py-3 text-center">
+                        Editar
                     </th>
                 </tr>
             </thead>
@@ -58,12 +58,10 @@
                                             {{ $role->name === 'Cliente' ? 'Institucion' : $role->name }}
                                     @endforeach
                                 </td>
-                                <td class="px-6 py-4">
-                                    <x-row-actions>
-                                        <a class=""
-                                            href="{{ route('admin.users.edit', $user) }}"> <i
-                                                    class="fa-solid fa-pen pr-1"></i> Editar</a>
-                                    </x-row-actions>
+                                <td class="px-6 py-4 text-center whitespace-nowrap">
+                                    <x-table-action-link href="{{ route('admin.users.edit', $user) }}" icon="fa-solid fa-pen">
+                                        Editar
+                                    </x-table-action-link>
                                 </td>
                                 </tr>
                             @endif
@@ -88,12 +86,10 @@
                                         {{ $role->name === 'Cliente' ? 'Institucion' : $role->name }}
                                     @endforeach
                                 </td>
-                                <td class="px-6 py-4">
-                                    <x-row-actions>
-                                        <a class=""
-                                            href="{{ route('admin.users.edit', $user) }}"> <i
-                                                class="fa-solid fa-pen pr-1"></i> Editar</a>
-                                    </x-row-actions>
+                                <td class="px-6 py-4 text-center whitespace-nowrap">
+                                    <x-table-action-link href="{{ route('admin.users.edit', $user) }}" icon="fa-solid fa-pen">
+                                        Editar
+                                    </x-table-action-link>
                                 </td>
                             </tr>
                         @endhasanyrole

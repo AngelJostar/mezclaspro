@@ -9,7 +9,10 @@ class NutriDistributor extends Model
     protected $fillable = [
         'nutri_medicine_list_id',
         'nombre',
+        'rfc',
         'direccion',
+        'contacto',
+        'informacion_adicional',
         'logo_path',
     ];
 
