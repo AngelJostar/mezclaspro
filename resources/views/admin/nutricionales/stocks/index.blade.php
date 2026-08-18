@@ -20,9 +20,9 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('admin.nutricionales.stocks.selectLaboratory') }}"
+            <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $laboratoryId]) }}"
                 class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
-                Cambiar laboratorio
+                Volver a almacenes
             </a>
 
             <a href="{{ route('admin.nutricionales.stocks.ingreso', ['laboratory_id' => $laboratoryId]) }}"
@@ -172,7 +172,12 @@
                                 <th class="px-4 py-3">Detalle del lote</th>
                                 <th class="px-4 py-3 text-center">Stock lote seleccionado</th>
                                 <th class="px-4 py-3 text-center">Estado</th>
-                                <th class="px-4 py-3 text-right">Acciones</th>
+                                @role('Super Admin')
+                                    <th class="px-4 py-3 text-center">Editar</th>
+                                @endrole
+                                <th class="px-4 py-3 text-center">Merma</th>
+                                <th class="px-4 py-3 text-center">Movimientos</th>
+                                <th class="px-4 py-3 text-center">Ingresar lote</th>
                             </tr>
                         </thead>
 
@@ -329,40 +334,56 @@
                                         @endif
                                     </td>
 
-                                    <td class="px-4 py-3 text-right align-top">
-                                        <x-row-actions>
+                                    @role('Super Admin')
+                                        <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                             @if ($firstStock)
-                                                @role('Super Admin')
-                                                    <a href="{{ route('admin.nutricionales.stocks.edit', $firstStock->id) }}"
-                                                        class="action-edit">
-                                                        Editar
-                                                    </a>
-                                                @endrole
-
-                                                <a href="{{ route('admin.nutricionales.stocks.merma', $firstStock->id) }}"
-                                                    class="action-merma action-danger">
-                                                    Merma
-                                                </a>
-
-                                                <a href="{{ route('admin.nutricionales.stocks.movimientos', $firstStock->id) }}"
-                                                    class="action-movimientos">
-                                                    Movimientos
-                                                </a>
+                                                <x-table-action-link href="{{ route('admin.nutricionales.stocks.edit', $firstStock->id) }}"
+                                                    icon="fa-solid fa-pen"
+                                                    class="action-edit">
+                                                    Editar
+                                                </x-table-action-link>
+                                            @else
+                                                <span class="text-gray-400 text-xs">-</span>
                                             @endif
+                                        </td>
+                                    @endrole
 
-                                            <a href="{{ route('admin.nutricionales.stocks.ingreso', [
-                                                'laboratory_id' => $laboratoryId,
-                                                'presentation_id' => $presentation->id,
-                                            ]) }}"
-                                                class="">
-                                                Ingresar lote
-                                            </a>
-                                        </x-row-actions>
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstStock)
+                                            <x-table-action-link href="{{ route('admin.nutricionales.stocks.merma', $firstStock->id) }}"
+                                                variant="red"
+                                                class="action-merma">
+                                                Merma
+                                            </x-table-action-link>
+                                        @else
+                                            <span class="text-gray-400 text-xs">-</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstStock)
+                                            <x-table-action-link href="{{ route('admin.nutricionales.stocks.movimientos', $firstStock->id) }}"
+                                                variant="gray"
+                                                class="action-movimientos">
+                                                Movimientos
+                                            </x-table-action-link>
+                                        @else
+                                            <span class="text-gray-400 text-xs">-</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        <x-table-action-link href="{{ route('admin.nutricionales.stocks.ingreso', [
+                                            'laboratory_id' => $laboratoryId,
+                                            'presentation_id' => $presentation->id,
+                                        ]) }}">
+                                            Ingresar lote
+                                        </x-table-action-link>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="px-6 py-6 text-center text-gray-500">
+                                    <td colspan="{{ auth()->user()?->hasRole('Super Admin') ? 12 : 11 }}" class="px-6 py-6 text-center text-gray-500">
                                         Este medicamento no tiene presentaciones disponibles.
                                     </td>
                                 </tr>

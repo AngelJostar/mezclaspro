@@ -16,12 +16,20 @@ class NutritionMedicineCatalog extends Model
         'category_id',
         'input_id',
         'osmolaridad',
+        'conc_min',
+        'conc_max',
+        'diluent_ids',
+        'administration_route_ids',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'osmolaridad' => 'decimal:4',
+        'conc_min' => 'decimal:4',
+        'conc_max' => 'decimal:4',
+        'diluent_ids' => 'array',
+        'administration_route_ids' => 'array',
     ];
 
     public function category()

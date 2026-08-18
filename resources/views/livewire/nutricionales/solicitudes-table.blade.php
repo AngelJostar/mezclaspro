@@ -10,50 +10,57 @@
         </div>
     </form>
 
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm text-left text-gray-500">
-            <thead class="text-xs text-gray-700 bg-gray-50 uppercase">
+    <div id="nutrition-requests-table-scroll" class="overflow-x-auto">
+        <table id="nutrition-requests-table" class="w-full min-w-max text-xs text-left text-gray-500">
+            <thead class="whitespace-nowrap text-[11px] text-gray-700 bg-gray-50 uppercase">
                 <tr>
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('id')">
+                    <x-filterable-table-header column="0" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[64px] cursor-pointer" wire:click="sortBy('id')">
                         ID
                         <span class="{{ $sortField === 'id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
                             {!! $sortField === 'id' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
                         </span>
-                    </th>
+                    </x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('user_id')">
+                    <x-filterable-table-header column="1" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[220px] cursor-pointer" wire:click="sortBy('user_id')">
                         Hospital
                         <span class="{{ $sortField === 'user_id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
                             {!! $sortField === 'user_id' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
                         </span>
-                    </th>
+                    </x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center">Paciente</th>
+                    <x-filterable-table-header column="2" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[250px]">Paciente</x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('created_at')">
+                    <x-filterable-table-header column="3" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[185px] cursor-pointer" wire:click="sortBy('created_at')">
                         Fecha y hora de solicitud
                         <span class="{{ $sortField === 'created_at' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
                             {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
                         </span>
-                    </th>
+                    </x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center cursor-pointer"
+                    <x-filterable-table-header column="4" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[225px] cursor-pointer"
                         wire:click="sortBy('solicitud_details.fecha_hora_entrega')">
                         Fecha y hora programada de entrega
                         <span
                             class="{{ $sortField === 'solicitud_details.fecha_hora_entrega' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
                             {!! $sortField === 'solicitud_details.fecha_hora_entrega' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
                         </span>
-                    </th>
+                    </x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('estado')">
+                    <x-filterable-table-header column="5" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[150px] cursor-pointer" wire:click="sortBy('estado')">
                         Estado operativo
                         <span class="{{ $sortField === 'estado' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
                             {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
                         </span>
-                    </th>
+                    </x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('remision')">
+                    <x-filterable-table-header column="6" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[105px] cursor-pointer" wire:click="sortBy('remision')">
                         Remision
 
                         <span class="hidden {{ $sortField === 'remision' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
@@ -61,9 +68,10 @@
                             {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? 'â–²' : 'â–¼') : 'â†•' !!}
 
                         </span>
-                    </th>
+                    </x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('lote')">
+                    <x-filterable-table-header column="7" trigger-class="js-nutrition-request-column-filter"
+                        align="center" class="min-w-[150px] cursor-pointer" wire:click="sortBy('lote')">
                         Lote
 
                         <span class="{{ $sortField === 'lote' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
@@ -71,9 +79,15 @@
                             {!! $sortField === 'lote' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
 
                         </span>
-                    </th>
+                    </x-filterable-table-header>
 
-                    <th class="px-2 py-2 text-center">Acciones</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Ver</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Aprobar / Editar</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Preparada</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Inspeccionar</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Entregar</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">Cancelar</th>
+                    <th class="px-2 py-2 text-center whitespace-nowrap">No aprobar</th>
 
                     <th class="px-4 py-2 text-center whitespace-nowrap">
                         Solicitud Completa
@@ -89,37 +103,13 @@
                 </tr>
             </thead>
 
-            <tbody>
+            <tbody class="whitespace-nowrap text-xs">
                 @foreach ($solicitudes as $solicitud)
                     @php
                         $estado = $solicitud->estado ?? 'pendiente';
-
-                        $estadoClasses = [
-                            'pendiente' => 'bg-yellow-100 text-yellow-700',
-                            'aprobada' => 'bg-green-100 text-green-700',
-                            'enproceso' => 'bg-blue-100 text-blue-700',
-                            'preparada' => 'bg-blue-100 text-blue-700',
-                            'revisada' => 'bg-purple-100 text-purple-700',
-                            'finalizada' => 'bg-gray-200 text-gray-700',
-                            'entregada' => 'bg-gray-200 text-gray-700',
-                            'cancelada' => 'bg-red-100 text-red-700',
-                            'no_aprobada' => 'bg-red-200 text-red-800',
-                        ];
-
-                        $estadoLabel = [
-                            'pendiente' => 'Pendiente',
-                            'aprobada' => 'Aprobada',
-                            'enproceso' => 'Preparada',
-                            'preparada' => 'Preparada',
-                            'revisada' => 'inspeccionada',
-                            'finalizada' => 'Entregada',
-                            'entregada' => 'Entregada',
-                            'cancelada' => 'Cancelada',
-                            'no_aprobada' => 'No Aprobada',
-                        ];
                     @endphp
 
-                    <tr class="border-b">
+                    <tr class="js-nutrition-request-filter-row border-b">
                         <td class="px-2 py-2 text-center">{{ $solicitud->id }}</td>
 
                         <td class="px-2 py-2 text-center">
@@ -142,10 +132,7 @@
                         </td>
 
                         <td class="px-2 py-2 text-center">
-                            <span
-                                class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ $estadoClasses[$estado] ?? 'bg-gray-100 text-gray-700' }}">
-                                {{ $estadoLabel[$estado] ?? ucfirst($estado) }}
-                            </span>
+                            <x-operational-status-badge :status="$estado" />
                         </td>
 
                         <td class="px-2 py-2 text-center">
@@ -156,86 +143,123 @@
                             {{ $solicitud->lote ?? '' }}
                         </td>
 
-                        <td class="px-2 py-2 text-center">
-                            <x-row-actions>
-                                <a href="{{ route('admin.nutricionales.solicitudes.show', $solicitud) }}"
-                                    class="">
-                                    <i class="fa-solid fa-eye pr-1"></i> Ver
-                                </a>
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}" icon="fa-solid fa-eye">
+                                Ver
+                            </x-table-action-link>
+                        </td>
 
-                                @hasanyrole('Admin|Super Admin')
-                                    @if (in_array($estado, ['pendiente'], true))
-                                        <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
-                                            class="">
-                                            <i class="fa-solid fa-pen pr-1"></i> Aprobar
-                                        </a>
-                                    @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
-                                        <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
-                                            class="">
-                                            <i class="fa-solid fa-pen pr-1"></i> Editar
-                                        </a>
-                                    @endif
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if (in_array($estado, ['pendiente'], true))
+                                    <x-table-action-link href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}" icon="fa-solid fa-pen">
+                                        Aprobar
+                                    </x-table-action-link>
+                                @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
+                                    <x-table-action-link href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}" icon="fa-solid fa-pen">
+                                        Editar
+                                    </x-table-action-link>
+                                @else
+                                    <span class="text-gray-400 text-xs">-</span>
+                                @endif
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
+                            @endhasanyrole
+                        </td>
 
-                                    @if ($estado === 'aprobada')
-                                        <form method="POST"
-                                            action="{{ route('admin.nutricionales.solicitudes.preparar', $solicitud) }}"
-                                            class="form-confirmar-preparar">
-                                            @csrf
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if ($estado === 'aprobada')
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.preparar', $solicitud) }}"
+                                        class="form-confirmar-preparar">
+                                        @csrf
 
-                                            <button type="submit">
-                                                Preparada
-                                            </button>
-                                        </form>
-                                    @endif
+                                        <x-table-action-button type="submit" variant="green">
+                                            Preparada
+                                        </x-table-action-button>
+                                    </form>
+                                @else
+                                    <span class="text-gray-400 text-xs">-</span>
+                                @endif
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
+                            @endhasanyrole
+                        </td>
 
-                                    @if ($estado === 'preparada')
-                                        <button type="button"
-                                            wire:click="$dispatch('abrir-modal-inspeccion-nutricional', { solicitudId: {{ $solicitud->id }} })">
-                                            Inspeccionar
-                                        </button>
-                                    @endif
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if ($estado === 'preparada')
+                                    <x-table-action-button
+                                        wire:click="$dispatch('abrir-modal-inspeccion-nutricional', { solicitudId: {{ $solicitud->id }} })">
+                                        Inspeccionar
+                                    </x-table-action-button>
+                                @else
+                                    <span class="text-gray-400 text-xs">-</span>
+                                @endif
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
+                            @endhasanyrole
+                        </td>
 
-                                    @if ($estado === 'revisada')
-                                        <form method="POST"
-                                            action="{{ route('admin.nutricionales.solicitudes.entregar', $solicitud) }}"
-                                            class="form-confirmar-entregar">
-                                            @csrf
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if ($estado === 'revisada')
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.entregar', $solicitud) }}"
+                                        class="form-confirmar-entregar">
+                                        @csrf
 
-                                            <button type="submit">
-                                                Entregar
-                                            </button>
-                                        </form>
-                                    @endif
+                                        <x-table-action-button type="submit" variant="green">
+                                            Entregar
+                                        </x-table-action-button>
+                                    </form>
+                                @else
+                                    <span class="text-gray-400 text-xs">-</span>
+                                @endif
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
+                            @endhasanyrole
+                        </td>
 
-                                    {{-- ADMIN / SUPER ADMIN --}}
-                                    @hasanyrole('Admin|Super Admin')
-                                        @if (in_array($estado, ['pendiente', 'aprobada', 'preparada', 'revisada'], true))
-                                            <form method="POST"
-                                                action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
-                                                class="form-confirmar-cancelar">
-                                                @csrf
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Cliente|Institucion')
+                                @if ($estado === 'pendiente')
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
+                                        class="form-confirmar-cancelar">
+                                        @csrf
 
-                                                <button type="submit" class="action-danger">
-                                                    No aprobar
-                                                </button>
-                                            </form>
-                                        @endif
-                                    @endhasanyrole
-                                @endhasanyrole
-                                @hasanyrole('Cliente|Institucion')
-                                    @if ($estado === 'pendiente')
-                                        <form method="POST"
-                                            action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
-                                            class="form-confirmar-cancelar">
-                                            @csrf
+                                        <x-table-action-button type="submit" variant="red">
+                                            Cancelar
+                                        </x-table-action-button>
+                                    </form>
+                                @else
+                                    <span class="text-gray-400 text-xs">-</span>
+                                @endif
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
+                            @endhasanyrole
+                        </td>
 
-                                            <button type="submit" class="action-danger">
-                                                Cancelar
-                                            </button>
-                                        </form>
-                                    @endif
-                                @endhasanyrole
-                            </x-row-actions>
+                        <td class="px-2 py-2 text-center whitespace-nowrap">
+                            @hasanyrole('Admin|Super Admin')
+                                @if (in_array($estado, ['pendiente', 'aprobada', 'preparada', 'revisada'], true))
+                                    <form method="POST"
+                                        action="{{ route('admin.nutricionales.solicitudes.cancelar', $solicitud) }}"
+                                        class="form-confirmar-cancelar">
+                                        @csrf
+
+                                        <x-table-action-button type="submit" variant="red">
+                                            No aprobar
+                                        </x-table-action-button>
+                                    </form>
+                                @else
+                                    <span class="text-gray-400 text-xs">-</span>
+                                @endif
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
+                            @endhasanyrole
                         </td>
 
                         <td class="px-4 py-2 text-center whitespace-nowrap">

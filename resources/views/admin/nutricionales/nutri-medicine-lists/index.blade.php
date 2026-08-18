@@ -19,7 +19,9 @@
                     <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Presentaciones</th>
                     <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Marcas</th>
                     <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Estatus</th>
-                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Acciones</th>
+                    <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Editar</th>
+                    <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Ver</th>
+                    <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Eliminar</th>
                 </tr>
             </thead>
 
@@ -66,17 +68,19 @@
                             @endif
                         </td>
 
-                        <td class="px-4 py-3 text-right">
-                            <x-row-actions>
-                            <a href="{{ route('admin.nutricionales.nutri-medicine-lists.show', $list) }}"
-                               class="">
-                                Ver
-                            </a>
-
-                            <a href="{{ route('admin.nutricionales.nutri-medicine-lists.edit', $list) }}"
-                               class="">
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.nutricionales.nutri-medicine-lists.edit', $list) }}" icon="fa-solid fa-pen">
                                 Editar
-                            </a>
+                            </x-table-action-link>
+                        </td>
+
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.nutricionales.nutri-medicine-lists.show', $list) }}" icon="fa-solid fa-eye">
+                                Ver
+                            </x-table-action-link>
+                        </td>
+
+                        <td class="px-4 py-3 text-center whitespace-nowrap">
 
                             <form action="{{ route('admin.nutricionales.nutri-medicine-lists.destroy', $list) }}"
                                   method="POST"
@@ -84,18 +88,18 @@
                                 @csrf
                                 @method('DELETE')
 
-                                <button type="submit"
+                                <x-table-action-button type="submit"
                                         onclick="return confirm('¿Deseas eliminar esta lista?')"
-                                        class="action-danger">
+                                        variant="red"
+                                        icon="fa-solid fa-trash">
                                     Eliminar
-                                </button>
+                                </x-table-action-button>
                             </form>
-                            </x-row-actions>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-6 text-center text-gray-500">
+                        <td colspan="8" class="px-4 py-6 text-center text-gray-500">
                             No hay listas nutricionales registradas.
                         </td>
                     </tr>

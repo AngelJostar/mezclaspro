@@ -10,6 +10,7 @@ class NutriMedicineListItem extends Model
         'nutri_medicine_list_id',
         'nutrition_medicine_presentation_id',
         'precio_ml',
+        'descripcion_remision',
     ];
 
     public function list()

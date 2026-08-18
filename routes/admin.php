@@ -2,16 +2,21 @@
 
 use App\Http\Controllers\Admin\HospitalController;
 use App\Http\Controllers\Admin\InputController;
+use App\Http\Controllers\Admin\CatalogoListasController;
+use App\Http\Controllers\Admin\CatalogProductController;
 use App\Http\Controllers\Admin\Nutricionales\MedicineController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\Nutricionales\SolicitudController;
+use App\Http\Controllers\Admin\UnifiedSolicitudController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\WarehouseController;
 use App\Models\Solicitud;
 use Illuminate\Support\Facades\Route; //Importamos para generar nuestras rutas.
 use App\Exports\SolicitudesExport;
 use App\Http\Controllers\Admin\InstitucionController;
 use App\Http\Controllers\Admin\InstitucionBillingController;
+use App\Http\Controllers\Admin\InstitutionReportTemplateController;
 use App\Http\Controllers\Admin\Nutricionales\NutriMedicineListController;
 use App\Http\Controllers\Admin\Nutricionales\NutritionStockController;
 use App\Http\Controllers\Admin\Oncologicos\DiluentController;
@@ -19,6 +24,7 @@ use App\Http\Controllers\Admin\Oncologicos\DiluentPresentationController;
 use App\Http\Controllers\Admin\Oncologicos\InfusorController;
 use App\Http\Controllers\Admin\Oncologicos\InventoryController;
 use App\Http\Controllers\Admin\Oncologicos\LaboratoryController;
+use App\Http\Controllers\Admin\Oncologicos\LaboratoryPurchaseOrderController;
 use App\Http\Controllers\Admin\Oncologicos\MedicineCatalogController;
 use App\Http\Controllers\Admin\Oncologicos\MedicineController as OncologicosMedicineController;
 use App\Http\Controllers\Admin\Oncologicos\MedicinePresentationController;
@@ -36,6 +42,9 @@ Route::get('/dashboard', function () {
     // ]);
     return view('admin.dashboard');
 })->name('dashboard');
+
+Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
+    ->name('solicitudes.index');
 
 
 Route::get('nutricionales/solicitudes/exportar', [SolicitudController::class, 'exportarExcel'])
@@ -56,7 +65,11 @@ Route::resource('/permissions', PermissionController::class)
 
 
 Route::resource('/hospitals', HospitalController::class)
-    ->except(['show', 'destroy'])
+    ->only(['index', 'edit', 'update'])
+    ->middleware(['can:hospitales']);
+
+Route::patch('/hospitals/{hospital}/status', [HospitalController::class, 'toggleStatus'])
+    ->name('hospitals.toggle-status')
     ->middleware(['can:hospitales']);
 
 Route::resource('nutricionales/medicines', MedicineController::class)
@@ -68,6 +81,19 @@ Route::resource('nutricionales/inputs', InputController::class)
     ->except(['show'])
     ->middleware(['can:medicamentos_nutricionales'])
     ->names('nutricionales.inputs');
+
+Route::prefix('catalogo-listas')
+    ->name('catalogo-listas.')
+    ->group(function () {
+        Route::get('/', [CatalogoListasController::class, 'index'])->name('index');
+        Route::get('{category}/productos/nuevo', [CatalogProductController::class, 'create'])->name('products.create');
+        Route::post('{category}/productos', [CatalogProductController::class, 'store'])->name('products.store');
+        Route::get('{category}/catalogo', [CatalogoListasController::class, 'catalog'])->name('catalog');
+        Route::get('{category}/listas', [CatalogoListasController::class, 'lists'])->name('lists');
+        Route::get('{category}/listas/nueva', [CatalogoListasController::class, 'createList'])->name('lists.create');
+        Route::get('{category}/listas/{list}/editar', [CatalogoListasController::class, 'editList'])->name('lists.edit');
+        Route::get('{category}/listas/{list}', [CatalogoListasController::class, 'showList'])->name('lists.show');
+    });
 
 Route::get('hospitals/{hospital}/reporte-mezclas-onco', [HospitalController::class, 'exportarMezclasOnco'])
     ->name('hospitals.exportarMezclasOnco')
@@ -207,6 +233,11 @@ Route::put('oncologicos/solicitudes/{id}', [OncologicosSolicitudController::clas
     ->middleware(['can:oncologicos_solicitudes_update']);
 
 Route::post('/solicitudes/{solicitud}/cancelar', [OncologicosSolicitudController::class, 'cancelar'])->name('oncologicos.solicitudes.cancelar');
+
+Route::get('antibioticos/solicitudes', [OncologicosSolicitudController::class, 'index'])
+    ->defaults('request_type', 'antibioticos')
+    ->name('antibioticos.solicitudes.index')
+    ->middleware(['can:oncologicos_solicitudes_index']);
 
 //RUTAS PARA MEZCLAS ONCOLOGICAS
 
@@ -352,24 +383,49 @@ Route::resource('/instituciones', InstitucionController::class)
     ->parameters(['instituciones' => 'institucion'])
     ->middleware(['role:Super Admin']);
 
+$administrationBillingMiddleware = ['role:Super Admin|Administracion y facturacion'];
+
 Route::get('instituciones-reportes', [InstitucionController::class, 'reportes'])
     ->name('instituciones.reportes')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
+
+Route::put('instituciones-reportes/formatos/{reportTemplate}', [InstitutionReportTemplateController::class, 'update'])
+    ->name('instituciones.reportes.formatos.update')
+    ->middleware($administrationBillingMiddleware);
 
 Route::get('instituciones-facturacion', [InstitucionBillingController::class, 'index'])
     ->name('instituciones.billing.index')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
+
+Route::get('instituciones-facturacion/historial', [InstitucionBillingController::class, 'history'])
+    ->name('instituciones.billing.history')
+    ->middleware($administrationBillingMiddleware);
 
 Route::get('instituciones-facturacion/exportar', [InstitucionBillingController::class, 'exportarExcel'])
     ->name('instituciones.billing.export')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
+
+Route::post('instituciones-facturacion/exportar-ampliado', [InstitucionBillingController::class, 'exportarExcelAmpliado'])
+    ->name('instituciones.billing.expanded-export')
+    ->middleware($administrationBillingMiddleware);
 
 Route::post('instituciones-facturacion', [InstitucionBillingController::class, 'store'])
     ->name('instituciones.billing.store')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
+
+Route::view('capacitaciones', 'admin.capacitaciones.index')
+    ->name('capacitaciones.index');
 
 Route::get('instituciones/{institucion}/hospitals', [InstitucionController::class, 'hospitales'])
     ->name('instituciones.hospitals')
+    ->middleware(['role:Super Admin']);
+
+Route::get('instituciones/{institucion}/hospitals/create', [HospitalController::class, 'createForInstitution'])
+    ->name('instituciones.hospitals.create')
+    ->middleware(['role:Super Admin']);
+
+Route::post('instituciones/{institucion}/hospitals', [HospitalController::class, 'storeForInstitution'])
+    ->name('instituciones.hospitals.store')
     ->middleware(['role:Super Admin']);
 
 Route::put('instituciones/{institucion}/hospitals', [InstitucionController::class, 'actualizarHospitales'])
@@ -382,19 +438,27 @@ Route::get('clientes/{cliente}/edit', function ($cliente) {
 
 Route::get('instituciones/{institucion}/exportar-mezclas-onco', [InstitucionController::class, 'exportarMezclasOnco'])
     ->name('instituciones.exportarMezclasOnco')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-general', [InstitucionController::class, 'exportarReporteGeneral'])
     ->name('instituciones.exportarGeneral')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-hospital', [InstitucionController::class, 'exportarReporteHospital'])
     ->name('instituciones.exportarHospital')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-hospital-detalle', [InstitucionController::class, 'exportarReporteHospitalDetalle'])
     ->name('instituciones.exportarHospitalDetalle')
-    ->middleware(['role:Super Admin']);
+    ->middleware($administrationBillingMiddleware);
+
+Route::get('instituciones/{institucion}/exportar-reporte-diario-paciente', [InstitucionController::class, 'exportarReporteDiarioPaciente'])
+    ->name('instituciones.exportarReporteDiarioPaciente')
+    ->middleware($administrationBillingMiddleware);
+
+Route::get('instituciones/{institucion}/exportar-reporte-mensual-insumos', [InstitucionController::class, 'exportarReporteMensualInsumos'])
+    ->name('instituciones.exportarReporteMensualInsumos')
+    ->middleware($administrationBillingMiddleware);
 
 Route::get('clientes/{cliente}/exportar-mezclas-onco', function ($cliente) {
     return redirect()->route('admin.instituciones.exportarMezclasOnco', ['institucion' => $cliente]);
@@ -438,6 +502,30 @@ Route::get('/oncologicos/laboratory', [LaboratoryController::class, 'index'])
     ->name('oncologicos.laboratory.index')
     ->middleware(['can:oncologicos_laboratory_index']);
 
+Route::get('/almacenes', [WarehouseController::class, 'index'])
+    ->name('warehouses.index')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::get('/almacenes/crear', [WarehouseController::class, 'create'])
+    ->name('warehouses.create')
+    ->middleware(['can:oncologicos_laboratory_create']);
+
+Route::post('/almacenes', [WarehouseController::class, 'store'])
+    ->name('warehouses.store')
+    ->middleware(['can:oncologicos_laboratory_create']);
+
+Route::get('/almacenes/{warehouse}/editar', [WarehouseController::class, 'edit'])
+    ->name('warehouses.edit')
+    ->middleware(['can:oncologicos_laboratory_edit']);
+
+Route::put('/almacenes/{warehouse}', [WarehouseController::class, 'update'])
+    ->name('warehouses.update')
+    ->middleware(['can:oncologicos_laboratory_update']);
+
+Route::get('/almacenes/ordenes-de-compra', [WarehouseController::class, 'purchaseOrders'])
+    ->name('warehouses.purchase-orders.index')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
 // Crear
 Route::get('/oncologicos/laboratory/crear', [LaboratoryController::class, 'create'])
     ->name('oncologicos.laboratory.create')
@@ -446,6 +534,18 @@ Route::get('/oncologicos/laboratory/crear', [LaboratoryController::class, 'creat
 Route::post('/oncologicos/laboratory', [LaboratoryController::class, 'store'])
     ->name('oncologicos.laboratory.store')
     ->middleware(['can:oncologicos_laboratory_store']);
+
+Route::get('/oncologicos/laboratory/{laboratory}/ordenes-de-compra/nueva', [LaboratoryPurchaseOrderController::class, 'create'])
+    ->name('oncologicos.laboratory.purchase-orders.create')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::post('/oncologicos/laboratory/{laboratory}/ordenes-de-compra', [LaboratoryPurchaseOrderController::class, 'store'])
+    ->name('oncologicos.laboratory.purchase-orders.store')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::get('/oncologicos/laboratory/{laboratory}/ordenes-de-compra/{purchaseOrder}/descargar', [LaboratoryPurchaseOrderController::class, 'download'])
+    ->name('oncologicos.laboratory.purchase-orders.download')
+    ->middleware(['can:oncologicos_laboratory_index']);
 
 // Editar
 Route::get('/oncologicos/laboratory/{laboratory}/editar', [LaboratoryController::class, 'edit'])

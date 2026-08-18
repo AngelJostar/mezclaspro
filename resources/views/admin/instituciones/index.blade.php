@@ -11,12 +11,16 @@
     </div>
 
     <div class="relative overflow-x-auto">
-        <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+        <table id="institutions-table"
+            class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
             <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                 <tr>
-                    <th scope="col" class="px-6 py-3">Id</th>
-                    <th scope="col" class="px-6 py-3">Nombre</th>
-                    <th scope="col" class="px-6 py-3">Razon social</th>
+                    <x-filterable-table-header column="0" trigger-class="js-institution-column-filter"
+                        scope="col">Id</x-filterable-table-header>
+                    <x-filterable-table-header column="1" trigger-class="js-institution-column-filter"
+                        scope="col">Nombre</x-filterable-table-header>
+                    <x-filterable-table-header column="2" trigger-class="js-institution-column-filter"
+                        scope="col">Razon social</x-filterable-table-header>
                     <th scope="col" class="px-4 py-3 text-center">Editar</th>
                     <th scope="col" class="px-4 py-3 text-center">Hospitales</th>
                     <th scope="col" class="px-4 py-3 text-center">Eliminar</th>
@@ -26,7 +30,7 @@
 
             <tbody>
                 @forelse ($instituciones as $institucion)
-                    <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                    <tr class="js-institution-filter-row bg-white border-b dark:bg-gray-800 dark:border-gray-700">
                         <th scope="row"
                             class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
                             {{ $institucion->id }}
@@ -90,4 +94,24 @@
             {{ $instituciones->links() }}
         </div>
     </div>
+
+    @push('js')
+        <script>
+            @include('admin.catalogo-listas.partials.column-filter-script')
+
+            document.addEventListener('DOMContentLoaded', function() {
+                window.createExcelColumnFilters({
+                    tableId: 'institutions-table',
+                    rowSelector: '.js-institution-filter-row',
+                    triggerSelector: '.js-institution-column-filter',
+                    instanceId: 'institutions',
+                    onChange() {
+                        document.querySelectorAll('.js-institution-filter-row').forEach((row) => {
+                            row.classList.toggle('hidden', row.dataset.columnFilterMatch === '0');
+                        });
+                    },
+                });
+            });
+        </script>
+    @endpush
 </x-admin-layout>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\Instituciones\InstitutionBillingExpandedExport;
 use App\Exports\Instituciones\InstitutionBillingExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
@@ -9,6 +10,9 @@ use App\Models\Institucion;
 use App\Models\InstitutionBilling;
 use App\Models\Nutricionales\Solicitud as NutricionalSolicitud;
 use App\Models\Oncologicos\Mezcla;
+use App\Services\InstitutionBillingDueDateService;
+use App\Services\InstitutionBillingPendingSummaryService;
+use App\Services\InstitutionBillingPricingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -16,7 +20,26 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class InstitucionBillingController extends Controller
 {
+    private const NUTRITION_BILLING_DESCRIPTION = 'Medicamento de nutricion parenteral';
+
+    public function __construct(
+        private InstitutionBillingPricingService $pricing,
+        private InstitutionBillingDueDateService $dueDates,
+        private ?InstitutionBillingPendingSummaryService $pendingBilling = null
+    ) {
+    }
+
     public function index(Request $request)
+    {
+        return $this->renderIndex($request, 'pending');
+    }
+
+    public function history(Request $request)
+    {
+        return $this->renderIndex($request, 'history');
+    }
+
+    protected function renderIndex(Request $request, string $billingSection)
     {
         $institucionId = $request->query('institucion_id');
         $hospitalId = $request->query('hospital_id');
@@ -50,11 +73,12 @@ class InstitucionBillingController extends Controller
             $dateTo,
             $billingStatus,
             $facturacionStatus,
-            $conciliableFilter
+            $conciliableFilter,
+            $billingSection
         );
 
         $summary = $this->buildSummaryFromCollection($records);
-        $paginatedRecords = $this->paginateCollection($records, 15, $request);
+        $paginatedRecords = $this->paginateCollection($records, 200, $request);
 
         return view('admin.instituciones.billing.index', [
             'institucionId' => $institucionId,
@@ -68,7 +92,9 @@ class InstitucionBillingController extends Controller
             'instituciones' => $instituciones,
             'hospitals' => $hospitals,
             'summary' => $summary,
+            'billingDueCounts' => $this->pendingBilling?->counts() ?? ['yellow' => 0, 'red' => 0],
             'records' => $paginatedRecords,
+            'billingSection' => $billingSection,
         ]);
     }
 
@@ -95,7 +121,20 @@ class InstitucionBillingController extends Controller
             'billing_status_filter' => ['nullable', 'string'],
             'facturacion_status_filter' => ['nullable', 'string'],
             'conciliable_filter_value' => ['nullable', 'string'],
+            'billing_section' => ['nullable', 'string', 'in:pending,history'],
         ]);
+
+        if (mb_strtolower(trim((string) ($data['estatus_facturacion'] ?? ''))) === 'completado') {
+            $request->validate([
+                'folio_factura_uuid' => ['required', 'string', 'max:255'],
+                'folio_interno' => ['required', 'string', 'max:255'],
+                'fecha_facturacion' => ['required', 'string', 'max:255'],
+                'numero_carta_factura' => ['required', 'string', 'max:255'],
+                'fecha_carta_factura' => ['required', 'string', 'max:255'],
+            ], [
+                '*.required' => 'Completa todos los datos de facturacion antes de concluir.',
+            ]);
+        }
 
         InstitutionBilling::updateOrCreate(
             [
@@ -123,7 +162,11 @@ class InstitucionBillingController extends Controller
             ]);
         }
 
-        return redirect()->route('admin.instituciones.billing.index', [
+        $redirectRoute = ($data['billing_section'] ?? 'pending') === 'history'
+            ? 'admin.instituciones.billing.history'
+            : 'admin.instituciones.billing.index';
+
+        return redirect()->route($redirectRoute, [
             'institucion_id' => $data['institucion_filter'] ?: null,
             'hospital_id' => $data['hospital_filter'] ?: null,
             'search' => $data['search_filter'] ?: null,
@@ -145,6 +188,7 @@ class InstitucionBillingController extends Controller
         $billingStatus = $request->query('billing_status');
         $facturacionStatus = trim((string) $request->query('facturacion_status', ''));
         $conciliableFilter = trim((string) $request->query('conciliable_filter', ''));
+        $billingSection = $request->query('section') === 'history' ? 'history' : 'pending';
 
         if (!in_array($billingStatus, ['con', 'sin'], true)) {
             $billingStatus = '';
@@ -158,17 +202,62 @@ class InstitucionBillingController extends Controller
             $dateTo,
             $billingStatus,
             $facturacionStatus,
-            $conciliableFilter
+            $conciliableFilter,
+            $billingSection
         )->map(function ($item) {
             return $item['export_row'];
         })->values()->all();
 
-        $fileName = 'facturacion_instituciones_general_' . now()->format('Ymd_His') . '.xlsx';
+        $fileName = 'facturacion_' . $billingSection . '_' . now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(new InstitutionBillingExport($rows), $fileName);
     }
 
-    protected function buildMergedRecords($institucionId, $hospitalId, string $search, $dateFrom, $dateTo, string $billingStatus, string $facturacionStatus = '', string $conciliableFilter = '')
+    public function exportarExcelAmpliado(Request $request)
+    {
+        $data = $request->validate([
+            'selected_records' => ['required', 'array', 'min:1', 'max:200'],
+            'selected_records.*' => ['required', 'string', 'regex:/^(oncologica_mezcla|nutricional_solicitud):[1-9][0-9]*$/'],
+            'section' => ['nullable', 'string', 'in:pending,history'],
+            'institucion_id' => ['nullable', 'integer'],
+            'hospital_id' => ['nullable', 'integer'],
+            'search' => ['nullable', 'string'],
+            'date_from' => ['nullable', 'string'],
+            'date_to' => ['nullable', 'string'],
+            'billing_status' => ['nullable', 'string'],
+            'facturacion_status' => ['nullable', 'string'],
+            'conciliable_filter' => ['nullable', 'string'],
+        ]);
+
+        $billingStatus = in_array($data['billing_status'] ?? '', ['con', 'sin'], true)
+            ? $data['billing_status']
+            : '';
+        $billingSection = ($data['section'] ?? 'pending') === 'history' ? 'history' : 'pending';
+        $selected = array_fill_keys($data['selected_records'], true);
+
+        $records = $this->buildMergedRecords(
+            $data['institucion_id'] ?? null,
+            $data['hospital_id'] ?? null,
+            trim((string) ($data['search'] ?? '')),
+            $data['date_from'] ?? null,
+            $data['date_to'] ?? null,
+            $billingStatus,
+            trim((string) ($data['facturacion_status'] ?? '')),
+            trim((string) ($data['conciliable_filter'] ?? '')),
+            $billingSection
+        )->filter(function ($item) use ($selected) {
+            $key = $item['origen_tipo'] . ':' . $item['record']->id;
+
+            return isset($selected[$key]);
+        });
+
+        $rows = $this->buildExpandedExportRows($records);
+        $fileName = 'facturacion_ampliada_' . $billingSection . '_' . now()->format('Ymd_His') . '.xlsx';
+
+        return Excel::download(new InstitutionBillingExpandedExport($rows), $fileName);
+    }
+
+    protected function buildMergedRecords($institucionId, $hospitalId, string $search, $dateFrom, $dateTo, string $billingStatus, string $facturacionStatus = '', string $conciliableFilter = '', string $billingSection = 'pending')
     {
         $oncoRecords = $this->buildOncoQuery($institucionId, $hospitalId, $search, $dateFrom, $dateTo, $billingStatus, $facturacionStatus, $conciliableFilter)
             ->get()
@@ -184,6 +273,12 @@ class InstitucionBillingController extends Controller
 
         return $oncoRecords
             ->concat($nutriRecords)
+            ->filter(function ($item) use ($billingSection) {
+                $status = mb_strtolower(trim((string) ($item['billing']?->estatus_facturacion ?? '')));
+                $isCompleted = $status === 'completado';
+
+                return $billingSection === 'history' ? $isCompleted : ! $isCompleted;
+            })
             ->sortByDesc(function ($item) {
                 return $item['sort_date'] ?? 0;
             })
@@ -195,6 +290,10 @@ class InstitucionBillingController extends Controller
         return Mezcla::query()
             ->with([
                 'solicitud.hospital.instituciones',
+                'solicitud.hospital.oncoMedicineList',
+                'medicamentos.medicamentoOnco.catalog.presentations',
+                'medicamentos.presentacionesUsadas.batch.presentation',
+                'infusor',
                 'billing',
             ])
             ->whereHas('solicitud.hospital.instituciones', function ($query) use ($institucionId) {
@@ -252,6 +351,8 @@ class InstitucionBillingController extends Controller
                 'user.hospital.instituciones',
                 'solicitud_patient',
                 'solicitud_detail',
+                'input.input.nutritionMedicineCatalog',
+                'input.presentation',
                 'billing',
             ])
             ->whereHas('user.hospital.instituciones', function ($query) use ($institucionId) {
@@ -363,9 +464,12 @@ class InstitucionBillingController extends Controller
             $fechaModel = $record->solicitud?->fecha_entrega;
             $estado = $record->estado ?: ($record->solicitud?->estado ?? '—');
             $origenTipo = 'oncologica_mezcla';
-            $tipoTexto = 'Mezcla oncológica';
-            $viewRoute = route('admin.oncologicos.mezclas.show', $record);
+            $tipoTexto = $record->solicitud?->tipo_solicitud === 'antibioticos'
+                ? 'Mezcla antibiótica'
+                : 'Mezcla oncológica';
+            $viewRoute = route('admin.oncologicos.mezclas.remision', $record->solicitud);
             $viewLabel = 'Ver mezcla';
+            $pricing = $this->pricing->priceOncoMix($record);
         } else {
             $hospital = $record->user?->hospital;
             $institucionActual = $institucionId
@@ -379,13 +483,44 @@ class InstitucionBillingController extends Controller
             $fechaModel = $record->solicitud_detail?->fecha_hora_entrega;
             $estado = $record->estado ?: '—';
             $origenTipo = 'nutricional_solicitud';
-            $tipoTexto = 'Solicitud nutricional';
-            $viewRoute = route('admin.nutricionales.solicitudes.show', $record);
-            $viewLabel = 'Ver solicitud';
+            $tipoTexto = self::NUTRITION_BILLING_DESCRIPTION;
+            $viewRoute = route('admin.nutricionales.solicitudes.remision', $record);
+            $viewLabel = 'Ver mezcla';
+            $pricing = $this->pricing->priceNutritionRequest($record);
         }
 
         $fecha = $fechaModel ? Carbon::parse($fechaModel)->format('d/m/Y H:i') : '—';
         $billing = $record->billing;
+        $descriptionLines = $type === 'onco'
+            ? $pricing['lines']->pluck('description')->filter()->values()->all()
+            : [self::NUTRITION_BILLING_DESCRIPTION];
+        $quantityLines = $type === 'onco'
+            ? $pricing['lines']->map(function ($line) {
+                $quantity = rtrim(rtrim(number_format((float) $line['quantity'], 2, '.', ''), '0'), '.');
+
+                return $quantity . ' ' . $line['unit_label'];
+            })->all()
+            : ['1'];
+        $bottleQuantityLines = $type === 'onco'
+            ? $pricing['lines']->map(function ($line) {
+                $quantity = $line['bottle_quantity'] ?? null;
+
+                if ($quantity === null) {
+                    return '—';
+                }
+
+                return rtrim(rtrim(number_format((float) $quantity, 2, '.', ''), '0'), '.');
+            })->all()
+            : ['—'];
+        $unitPriceLines = $type === 'onco'
+            ? $pricing['lines']->map(function ($line) {
+                return $this->pricing->formatMoney((float) $line['unit_price']) . ' / ' . $line['unit_label'];
+            })->all()
+            : [$this->pricing->formatMoney((float) $pricing['subtotal_before_vat'])];
+        $totalPrice = (float) $pricing['total_iva_included'];
+        $formattedTotalPrice = $totalPrice > 0 ? $this->pricing->formatMoney($totalPrice) : '—';
+        $remision = $record->remision ?: ($type === 'onco' ? $record->solicitud?->remision : null);
+        $vencimiento = $this->dueDates->calculate($fechaModel, $billing?->estatus_facturacion);
 
         return [
             'record' => $record,
@@ -406,19 +541,29 @@ class InstitucionBillingController extends Controller
             'view_route' => $viewRoute,
             'view_label' => $viewLabel,
             'origen_label' => $tipoTexto,
+            'breakdown_lines' => $this->buildBillingBreakdownLines($record, $type, $pricing),
+            'description_lines' => $descriptionLines,
+            'quantity_lines' => $quantityLines,
+            'bottle_quantity_lines' => $bottleQuantityLines,
+            'unit_price_lines' => $unitPriceLines,
+            'pv_total' => $formattedTotalPrice,
+            'computed_total_input' => $totalPrice > 0 ? number_format($totalPrice, 2, '.', '') : '',
+            'remision' => $remision ?: '—',
+            'vencimiento' => $vencimiento,
             'export_row' => [
                 $institucionActual?->nombre ?: '—',
                 $hospital?->name ?: '—',
                 $medico,
                 $patientName,
-                $record->remision ?: '—',
+                $remision ?: '—',
                 $fecha,
-                '1',
-                $tipoTexto,
-                $billing?->precio_total ?: '—',
-                $billing?->precio_total ?: '—',
+                implode("\n", $quantityLines),
+                implode("\n", $bottleQuantityLines),
+                implode("\n", $descriptionLines),
+                implode("\n", $unitPriceLines),
+                $formattedTotalPrice,
                 $institucionActual?->razon_social ?: ($institucionActual?->nombre ?: '—'),
-                $billing?->precio_total ?: '—',
+                $billing?->precio_total ?: $formattedTotalPrice,
                 $billing?->conciliable ?: '—',
                 $billing?->folio_factura_uuid ?: '—',
                 $billing?->folio_interno ?: '—',
@@ -427,6 +572,148 @@ class InstitucionBillingController extends Controller
                 $billing?->fecha_carta_factura ?: '—',
             ],
         ];
+    }
+
+    protected function buildBillingBreakdownLines($record, string $type, array $pricing): array
+    {
+        $lines = [];
+
+        foreach ($pricing['lines'] ?? collect() as $line) {
+            $quantity = (float) ($line['quantity'] ?? 0);
+            $subtotal = (float) ($line['subtotal'] ?? 0);
+            $vat = $type === 'onco' ? (float) ($line['vat'] ?? 0) : 0.0;
+
+            $lines[] = [
+                'concept_type' => 'Medicamento',
+                'description' => (string) ($line['description'] ?? 'Medicamento'),
+                'quantity' => $quantity,
+                'unit_label' => (string) ($line['unit_label'] ?? ''),
+                'unit_price_before_vat' => (float) ($line['unit_price'] ?? 0),
+                'subtotal_before_vat' => $subtotal,
+                'vat' => $vat,
+                'total_with_vat' => $type === 'onco'
+                    ? (float) ($line['total_with_vat'] ?? ($subtotal + $vat))
+                    : $subtotal,
+            ];
+        }
+
+        if ($type === 'nutri') {
+            foreach ($pricing['supply_lines'] ?? collect() as $line) {
+                $quantity = max(1.0, (float) ($line['quantity'] ?? 1));
+                $vatParts = $this->pricing->splitIncludedVat((float) ($line['subtotal'] ?? 0));
+
+                $lines[] = [
+                    'concept_type' => 'Insumo',
+                    'description' => (string) ($line['description'] ?? 'Insumo'),
+                    'quantity' => $quantity,
+                    'unit_label' => (string) ($line['unit_label'] ?? 'pieza'),
+                    'unit_price_before_vat' => round($vatParts['base'] / $quantity, 4),
+                    'subtotal_before_vat' => $vatParts['base'],
+                    'vat' => $vatParts['vat'],
+                    'total_with_vat' => $vatParts['total'],
+                ];
+            }
+        } elseif ((float) ($pricing['supplies_total'] ?? 0) > 0) {
+            $lines[] = [
+                'concept_type' => 'Insumo',
+                'description' => (string) ($record->infusor_nombre ?? 'Insumos'),
+                'quantity' => 1.0,
+                'unit_label' => 'pieza',
+                'unit_price_before_vat' => (float) ($pricing['supplies_base'] ?? 0),
+                'subtotal_before_vat' => (float) ($pricing['supplies_base'] ?? 0),
+                'vat' => (float) ($pricing['supplies_vat'] ?? 0),
+                'total_with_vat' => (float) ($pricing['supplies_total'] ?? 0),
+            ];
+        }
+
+        if ((float) ($pricing['service_total'] ?? 0) > 0) {
+            $lines[] = [
+                'concept_type' => 'Servicio',
+                'description' => 'Servicio de mezcla',
+                'quantity' => 1.0,
+                'unit_label' => 'servicio',
+                'unit_price_before_vat' => (float) ($pricing['service_base'] ?? 0),
+                'subtotal_before_vat' => (float) ($pricing['service_base'] ?? 0),
+                'vat' => (float) ($pricing['service_vat'] ?? 0),
+                'total_with_vat' => (float) ($pricing['service_total'] ?? 0),
+            ];
+        }
+
+        if ($lines === []) {
+            $total = (float) ($pricing['total_iva_included'] ?? 0);
+            $lines[] = [
+                'concept_type' => 'Solicitud',
+                'description' => (string) ($pricing['description'] ?? 'Solicitud'),
+                'quantity' => 1.0,
+                'unit_label' => 'solicitud',
+                'unit_price_before_vat' => $total,
+                'subtotal_before_vat' => $total,
+                'vat' => 0.0,
+                'total_with_vat' => $total,
+            ];
+        }
+
+        return $lines;
+    }
+
+    protected function buildExpandedExportRows($records): array
+    {
+        return $records->flatMap(function ($item) {
+            $billing = $item['billing'];
+            $requestTotal = $this->pricing->parseMoney($item['computed_total_input'] ?? 0);
+            $capturedTotal = $this->pricing->parseMoney($billing?->precio_total);
+            $expiration = $item['vencimiento'] ?? [];
+            $expirationText = in_array($expiration['status'] ?? '', ['yellow', 'red'], true)
+                ? ucfirst((string) $expiration['status']) . ' - ' . (int) ($expiration['days'] ?? 0) . ' dias'
+                : '';
+
+            return collect($item['breakdown_lines'])->values()->map(function ($line, $index) use ($item, $billing, $requestTotal, $capturedTotal, $expirationText) {
+                return [
+                    $item['institucion']?->nombre ?: '',
+                    $item['hospital']?->name ?: '',
+                    $item['medico'] ?: '',
+                    $item['patient_name'] ?: '',
+                    $item['remision'] === '—' ? '' : $item['remision'],
+                    $item['fecha'] === '—' ? '' : $item['fecha'],
+                    $item['tipo_texto'] ?: '',
+                    $item['servicio'] === '—' ? '' : $item['servicio'],
+                    $item['registro'] === '—' ? '' : $item['registro'],
+                    $index + 1,
+                    $line['concept_type'],
+                    $line['description'],
+                    round((float) $line['quantity'], 4),
+                    $line['unit_label'],
+                    round((float) $line['unit_price_before_vat'], 4),
+                    round((float) $line['subtotal_before_vat'], 2),
+                    round((float) $line['vat'], 2),
+                    round((float) $line['total_with_vat'], 2),
+                    round($requestTotal, 2),
+                    $item['empresa'] === '—' ? '' : $item['empresa'],
+                    round($capturedTotal > 0 ? $capturedTotal : $requestTotal, 2),
+                    $billing?->conciliable ?: 'Si',
+                    $billing?->folio_factura_uuid ?: '',
+                    $billing?->folio_interno ?: '',
+                    $this->formatExpandedExportDate($billing?->fecha_facturacion),
+                    $billing?->numero_carta_factura ?: '',
+                    $this->formatExpandedExportDate($billing?->fecha_carta_factura),
+                    $billing?->estatus_facturacion ?: '',
+                    $expirationText,
+                ];
+            });
+        })->values()->all();
+    }
+
+    protected function formatExpandedExportDate($value): string
+    {
+        if (blank($value)) {
+            return '';
+        }
+
+        try {
+            return Carbon::parse($value)->format('d/m/Y');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
     }
 
     protected function paginateCollection($items, int $perPage, Request $request): LengthAwarePaginator

@@ -20,10 +20,18 @@ class LaboratoryController extends Controller
                 });
             })
             ->when($request->filled('activo'), fn($q) => $q->where('activo', (bool) $request->activo))
+            ->withCount([
+                'hospitals',
+                'warehouses as active_warehouses_count' => fn ($query) => $query->where('is_active', true),
+            ])
+            ->orderByDesc('activo')
             ->orderBy('nombre')
-            ->paginate(10);
+            ->get();
 
-        return view('admin.oncologicos.laboratory.index', compact('laboratories'));
+        $selectedLaboratory = $laboratories->firstWhere('id', $request->integer('laboratory_id'))
+            ?? $laboratories->first();
+
+        return view('admin.oncologicos.laboratory.index', compact('laboratories', 'selectedLaboratory'));
     }
 
     public function create()

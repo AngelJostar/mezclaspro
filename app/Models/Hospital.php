@@ -14,10 +14,39 @@ class Hospital extends Model
     protected $fillable = [
         'name',
         'adress',
+        'short_name',
+        'internal_key',
+        'unit_type',
+        'care_level',
+        'rfc',
+        'clues',
+        'state',
+        'municipality',
+        'postal_code',
+        'neighborhood',
+        'street_number',
+        'contact_name',
+        'contact_position',
+        'phone',
+        'email',
+        'reception_hours',
+        'operation_days',
+        'service_oncology',
+        'service_antibiotics',
+        'service_nutrition',
         'laboratory_id',
         'is_active',
         'nutri_medicine_list_id',
         'onco_medicine_list_id',
+        'antibiotic_medicine_list_id',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'operation_days' => 'array',
+        'service_oncology' => 'boolean',
+        'service_antibiotics' => 'boolean',
+        'service_nutrition' => 'boolean',
     ];
 
     public function users()
@@ -38,6 +67,11 @@ class Hospital extends Model
     public function oncoMedicineList()
     {
         return $this->belongsTo(\App\Models\Oncologicos\MedicineList::class, 'onco_medicine_list_id');
+    }
+
+    public function antibioticMedicineList()
+    {
+        return $this->belongsTo(\App\Models\Oncologicos\MedicineList::class, 'antibiotic_medicine_list_id');
     }
 
     public function laboratory()

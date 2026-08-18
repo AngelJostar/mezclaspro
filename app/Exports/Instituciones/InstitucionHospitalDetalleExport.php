@@ -5,6 +5,7 @@ namespace App\Exports\Instituciones;
 use App\Models\Institucion;
 use App\Models\Nutricionales\Solicitud as NutricionalSolicitud;
 use App\Models\Oncologicos\Mezcla;
+use App\Services\InstitutionReportTemplateService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\Exportable;
@@ -43,12 +44,12 @@ class InstitucionHospitalDetalleExport implements WithMultipleSheets
         'Estatus',
     ];
 
-    public function __construct(private int $institucionId) {}
+    public function __construct(private int $institucionId, private ?array $hospitalIds = null) {}
 
     public function sheets(): array
     {
-        $institucion = Institucion::with('hospitals')->findOrFail($this->institucionId);
-        $hospitalIds = $institucion->hospitals->pluck('id')->values()->all();
+        $institucion = Institucion::findOrFail($this->institucionId);
+        $hospitalIds = $this->hospitalIds ?? $institucion->hospitals()->pluck('hospitals.id')->all();
 
         $nutriColumns = $this->buildNutriColumns($hospitalIds);
         $oncoColumns = $this->buildOncoColumns($hospitalIds);
@@ -56,18 +57,21 @@ class InstitucionHospitalDetalleExport implements WithMultipleSheets
         return [
             new InstitucionHospitalDetalleSheet(
                 'Nutricion Parenteral',
-                array_merge(self::GENERAL_HEADERS, $nutriColumns),
-                $this->buildNutriRows($hospitalIds, $nutriColumns)
+                $nutriColumns,
+                $this->buildNutriRows($hospitalIds, $nutriColumns),
+                ['institucion' => $institucion->nombre, 'hoja' => 'Nutricion Parenteral']
             ),
             new InstitucionHospitalDetalleSheet(
                 'Oncologicos',
-                array_merge(self::GENERAL_HEADERS, $oncoColumns),
-                $this->buildOncoRows($hospitalIds, $oncoColumns, true)
+                $oncoColumns,
+                $this->buildOncoRows($hospitalIds, $oncoColumns, true),
+                ['institucion' => $institucion->nombre, 'hoja' => 'Oncologicos']
             ),
             new InstitucionHospitalDetalleSheet(
                 'Antibioticos',
-                array_merge(self::GENERAL_HEADERS, $oncoColumns),
-                $this->buildOncoRows($hospitalIds, $oncoColumns, false)
+                $oncoColumns,
+                $this->buildOncoRows($hospitalIds, $oncoColumns, false),
+                ['institucion' => $institucion->nombre, 'hoja' => 'Antibioticos']
             ),
         ];
     }
@@ -326,37 +330,49 @@ class InstitucionHospitalDetalleExport implements WithMultipleSheets
 class InstitucionHospitalDetalleSheet implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
 {
     public function __construct(
-        private string $title,
-        private array $headings,
-        private array $rows
+        private string $sheetTitle,
+        private array $dynamicHeadings,
+        private array $rows,
+        private array $context
     ) {}
 
     public function array(): array
     {
-        return $this->rows;
+        return app(InstitutionReportTemplateService::class)->projectRowsWithTrailing(
+            InstitutionReportTemplateService::HOSPITAL_DETAIL,
+            $this->rows,
+            count(InstitucionHospitalDetalleExport::GENERAL_HEADERS)
+        );
     }
 
     public function headings(): array
     {
-        return $this->headings;
+        return app(InstitutionReportTemplateService::class)->headingRows(
+            InstitutionReportTemplateService::HOSPITAL_DETAIL,
+            $this->context,
+            $this->dynamicHeadings
+        );
     }
 
     public function title(): string
     {
-        return $this->title;
+        return $this->sheetTitle;
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $generalCount = count(InstitucionHospitalDetalleExport::GENERAL_HEADERS);
+        $templates = app(InstitutionReportTemplateService::class);
+        $generalCount = count($templates->visibleColumns(InstitutionReportTemplateService::HOSPITAL_DETAIL));
+        $headerRow = $templates->styleWorksheet(
+            $sheet,
+            InstitutionReportTemplateService::HOSPITAL_DETAIL,
+            $this->context,
+            trailingColumnCount: count($this->dynamicHeadings)
+        );
         $highestColumn = $sheet->getHighestColumn();
 
-        $sheet->freezePane('A2');
-        $sheet->getStyle("A1:{$highestColumn}1")->getAlignment()->setWrapText(true);
-        $sheet->getRowDimension(1)->setRowHeight(34);
-
-        $generalEnd = $this->columnLetter($generalCount);
-        $sheet->getStyle("A1:{$generalEnd}1")->applyFromArray([
+        $generalEnd = $templates->columnLetterFromIndex($generalCount);
+        $sheet->getStyle("A{$headerRow}:{$generalEnd}{$headerRow}")->applyFromArray([
             'font' => [
                 'bold' => true,
                 'color' => ['rgb' => '163A5F'],
@@ -379,8 +395,9 @@ class InstitucionHospitalDetalleSheet implements FromArray, WithHeadings, WithTi
             ],
         ]);
 
-        if (count($this->headings) > $generalCount) {
-            $sheet->getStyle($this->columnLetter($generalCount + 1) . "1:{$highestColumn}1")->applyFromArray([
+        if (! empty($this->dynamicHeadings)) {
+            $dynamicStart = $templates->columnLetterFromIndex($generalCount + 1);
+            $sheet->getStyle("{$dynamicStart}{$headerRow}:{$highestColumn}{$headerRow}")->applyFromArray([
                 'font' => [
                     'bold' => true,
                     'color' => ['rgb' => '1F1F1F'],
@@ -405,22 +422,11 @@ class InstitucionHospitalDetalleSheet implements FromArray, WithHeadings, WithTi
         }
 
         if (!empty($this->rows)) {
-            $sheet->getStyle("A2:{$highestColumn}" . (count($this->rows) + 1))->getAlignment()->setVertical('center');
+            $dataStart = $headerRow + 1;
+            $dataEnd = $headerRow + count($this->rows);
+            $sheet->getStyle("A{$dataStart}:{$highestColumn}{$dataEnd}")->getAlignment()->setVertical('center');
         }
 
         return [];
-    }
-
-    private function columnLetter(int $index): string
-    {
-        $letter = '';
-        while ($index > 0) {
-            $mod = ($index - 1) % 26;
-            $letter = chr(65 + $mod) . $letter;
-            $index = intdiv($index - $mod, 26);
-            $index--;
-        }
-
-        return $letter;
     }
 }

@@ -35,22 +35,10 @@
                     contacto@prodifem.com.mx</p>
             </div>
             <div class="max-w-[600px] mx-auto text-center">
-                <h1 class="font-bold text-2xl mb-8 mt-8">¡Bienvenido al portal de solicitud de mezclas estériles de
-                    PRODIFEM!
-                </h1>
-                <p class="font-semibold text-xl mb-8">¿Qué tipo de mezcla necesitas?</p>
-                <p class="text-lg mb-8">Elija una opción entre mezclas de nutrición parenteral y mezclas oncológicas</p>
-                <div class="flex flex-col max-w-96 mx-auto gap-5">
-                    <a class="block text-white bg-azul-prodifem rounded-xl p-4 text-2xl hover:bg-blue-900 transition"
-                        href="{{ route('admin.nutricionales.solicitudes.create') }}">
-                        Mezclas de nutrición parenteral
-                    </a>
-
-                    <a class="block text-white bg-azul-prodifem rounded-xl p-4 text-2xl hover:bg-blue-900 transition"
-                        href="{{ route('admin.oncologicos.solicitudes.create') }}">
-                        Mezclas oncológicas
-                    </a>
-                </div>
+                <a class="inline-flex items-center justify-center text-white bg-azul-prodifem rounded-xl px-12 py-4 text-2xl font-semibold hover:bg-blue-900 transition"
+                    href="{{ auth()->check() ? route('admin.dashboard') : route('login') }}">
+                    Acceder al sistema
+                </a>
             </div>
 
             <div class="h-32 w-full bg-azul-prodifem flex justify-center">

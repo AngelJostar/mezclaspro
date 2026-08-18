@@ -31,7 +31,8 @@
                     <th class="px-6 py-3">Marca</th>
                     <th class="px-6 py-3">Presentación</th>
                     <th class="px-6 py-3">Estado</th>
-                    <th class="px-6 py-3">Acciones</th>
+                    <th class="px-6 py-3 text-center">Editar</th>
+                    <th class="px-6 py-3 text-center">Cambiar estatus</th>
                 </tr>
             </thead>
 
@@ -64,22 +65,22 @@
                             @endif
                         </td>
 
-                        <td class="px-6 py-4">
-                            <x-row-actions>
-                                <a href="{{ route('admin.oncologicos.medicines.catalog.presentations.edit', [$catalog->id, $p->id]) }}"
-                                    class="">
-                                    <i class="fas fa-edit mr-1"></i> Editar
-                                </a>
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.oncologicos.medicines.catalog.presentations.edit', [$catalog->id, $p->id]) }}" icon="fa-solid fa-pen">
+                                Editar
+                            </x-table-action-link>
+                        </td>
 
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
                                 @if ($p->is_available)
                                     <form
                                         action="{{ route('admin.oncologicos.medicines.catalog.presentations.destroy', [$catalog->id, $p->id]) }}"
                                         method="POST" class="inline-block form-deshabilitar">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="action-danger">
-                                            <i class="fas fa-trash-alt mr-1"></i> Deshabilitar
-                                        </button>
+                                        <x-table-action-button type="submit" variant="red" icon="fas fa-trash-alt">
+                                            Deshabilitar
+                                        </x-table-action-button>
                                     </form>
                                 @else
                                     <form
@@ -87,12 +88,11 @@
                                         method="POST" class="inline-block form-habilitar">
                                         @csrf
                                         @method('PATCH')
-                                        <button type="submit">
-                                            <i class="fas fa-check mr-1"></i> Habilitar
-                                        </button>
+                                        <x-table-action-button type="submit" variant="green" icon="fas fa-check">
+                                            Habilitar
+                                        </x-table-action-button>
                                     </form>
                                 @endif
-                            </x-row-actions>
                         </td>
                     </tr>
                 @empty

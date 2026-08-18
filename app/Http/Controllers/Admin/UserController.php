@@ -39,6 +39,7 @@ class UserController extends Controller
             'password'   => 'required|string|confirmed',
             'hospital_id'=> 'required|exists:hospitals,id',
             'roles'      => 'nullable|array',
+            'roles.*'    => 'integer|exists:roles,id',
         ]);
 
         $user = User::create([
@@ -50,7 +51,7 @@ class UserController extends Controller
             'is_active'  => $request->input('is_active', 1),
         ]);
 
-        $user->roles()->sync($request->roles);
+        $user->roles()->sync($this->resolvedRoleIds($request));
 
         session()->flash('swal', [
             'title' => "¡Bien hecho!",
@@ -66,11 +67,10 @@ class UserController extends Controller
         $roles = Role::all();
         $hospitals = Hospital::all();
 
-        $authenticatedUser = Auth::user();
-        $userRoleName = $authenticatedUser->roles->pluck('name')->first();
+        $canManageRoles = Auth::user()?->hasRole('Super Admin') ?? false;
 
         // ❌ ya no se manda medicineLists
-        return view('admin.users.edit', compact('user', 'hospitals', 'roles', 'userRoleName'));
+        return view('admin.users.edit', compact('user', 'hospitals', 'roles', 'canManageRoles'));
     }
 
     public function update(Request $request, User $user)
@@ -82,6 +82,7 @@ class UserController extends Controller
             'password'   => 'nullable|string|confirmed',
             'hospital_id'=> 'exists:hospitals,id',
             'roles'      => 'nullable|array',
+            'roles.*'    => 'integer|exists:roles,id',
         ]);
 
         $user->name = $request->name;
@@ -96,7 +97,9 @@ class UserController extends Controller
 
         $user->save();
 
-        $user->roles()->sync($request->roles);
+        if (Auth::user()?->hasRole('Super Admin')) {
+            $user->roles()->sync($this->resolvedRoleIds($request));
+        }
 
         session()->flash('swal', [
             'title' => "¡Bien hecho!",
@@ -110,5 +113,27 @@ class UserController extends Controller
     public function destroy(User $user)
     {
         //
+    }
+
+    private function resolvedRoleIds(Request $request): array
+    {
+        $roleIds = collect($request->input('roles', []))
+            ->map(fn ($roleId) => (int) $roleId)
+            ->filter()
+            ->unique()
+            ->values();
+        $exclusiveRoleIds = Role::query()
+            ->whereIn('name', ['Capacitacion', 'Administracion y facturacion'])
+            ->where('guard_name', 'web')
+            ->pluck('id')
+            ->map(fn ($roleId) => (int) $roleId);
+        $selectedExclusiveRoleId = $roleIds
+            ->first(fn ($roleId) => $exclusiveRoleIds->contains((int) $roleId));
+
+        if ($selectedExclusiveRoleId) {
+            return [(int) $selectedExclusiveRoleId];
+        }
+
+        return $roleIds->all();
     }
 }

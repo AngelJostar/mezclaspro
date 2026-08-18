@@ -26,6 +26,7 @@ class SolicitudOnco extends Model
     protected $fillable = [
         'user_id',
         'hospital_id',
+        'tipo_solicitud',
         'servicio',
         'nombre_paciente',
         'sexo',

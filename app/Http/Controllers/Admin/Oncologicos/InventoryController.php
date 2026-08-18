@@ -221,6 +221,9 @@ class InventoryController extends Controller
     {
         $stock = (string) $request->get('stock', '');
         $q = trim((string) $request->get('q', ''));
+        $category = in_array($request->get('category'), ['oncologicos', 'antibioticos'], true)
+            ? (string) $request->get('category')
+            : '';
         $laboratoryId = (int) $request->get('laboratory_id');
 
         if ($laboratoryId <= 0) {
@@ -244,6 +247,7 @@ class InventoryController extends Controller
                     ->where('mb.laboratory_id', '=', $laboratoryId)
                     ->where('mb.is_active', '=', 1);
             })
+            ->when($category !== '', fn($query) => $query->where('mc.catalog_category', $category))
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($w) use ($q) {
                     $w->where('mc.denominacion', 'like', "%{$q}%")
@@ -356,6 +360,7 @@ class InventoryController extends Controller
             'groupedRows' => $groupedRows,
             'q' => $q,
             'stock' => $stock,
+            'category' => $category,
             'laboratoryId' => $laboratoryId,
             'laboratory' => $lab,
         ]);

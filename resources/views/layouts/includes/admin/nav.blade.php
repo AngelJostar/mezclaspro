@@ -14,10 +14,17 @@
                         </path>
                     </svg>
                 </button>
-                <a href="/" class="flex ms-2 md:me-24">
-                    {{-- <img src="https://flowbite.com/docs/images/logo.svg" class="h-8 me-3" alt="CBTA" /> --}}
-                    {{-- <span class="self-center text-xl font-semibold sm:text-2xl whitespace-now rap dark:text-white">CBTA</span> --}}
-                    <img class="w-20 md:w-28 max-h-10 object-contain" src="{{ asset('img/Centro Biotecnologico de Terapias Avanzadas.png') }}" alt="">
+                <a href="/" class="flex min-w-0 items-center gap-3 ms-2 md:me-8">
+                    <img class="h-9 w-auto md:h-11 object-contain" src="{{ asset('img/Logo_Prodifem.png') }}"
+                        alt="PRODIFEM">
+                    <div class="hidden min-w-0 leading-tight text-white lg:block">
+                        <p class="truncate text-sm font-semibold">
+                            Central de Mezclas Estériles PRODIFEM
+                        </p>
+                        <p class="truncate text-xs text-white/85">
+                            5591862620 · contacto@prodifem.com.mx
+                        </p>
+                    </div>
                 </a>
             </div>
             <div class="flex min-w-0 items-center gap-2">

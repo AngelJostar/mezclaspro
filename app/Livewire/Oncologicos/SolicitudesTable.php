@@ -16,8 +16,14 @@ class SolicitudesTable extends Component
 
     public $sortField = 'id';
     public $sortDirection = 'desc';
+    public $requestType = 'oncologicos';
 
     protected $paginationTheme = 'tailwind';
+
+    public function mount(string $requestType = 'oncologicos'): void
+    {
+        $this->requestType = $requestType === 'antibioticos' ? 'antibioticos' : 'oncologicos';
+    }
 
     public function sortBy($field)
     {
@@ -41,13 +47,17 @@ class SolicitudesTable extends Component
     {
         $user = Auth::user();
         $role = $user->roles[0]->name ?? null;
+        $priceListRelation = $this->requestType === 'antibioticos'
+            ? 'antibioticMedicineList'
+            : 'oncoMedicineList';
 
         $query = SolicitudOnco::query()
             ->with([
-                'hospital',
+                "hospital.{$priceListRelation}.distributor",
                 'user',
                 'mezclas:id,solicitud_id,lote',
-            ]);
+            ])
+            ->where('tipo_solicitud', $this->requestType);
 
         // ✅ Igual que Nutricionales: si es Cliente, limita lo que ve
         // Ajusta este filtro si en tu sistema el Cliente se relaciona distinto.
@@ -94,6 +104,15 @@ class SolicitudesTable extends Component
         }
 
         $solicitudes = $query->paginate(50);
+
+        $solicitudes->getCollection()->each(function (SolicitudOnco $solicitud) use ($priceListRelation): void {
+            $priceList = $solicitud->hospital?->getRelationValue($priceListRelation);
+
+            $solicitud->setAttribute(
+                'has_subdistributor_remission',
+                (bool) $priceList?->distributor
+            );
+        });
 
         return view('livewire.oncologicos.solicitudes-table', compact('solicitudes'));
     }

@@ -40,6 +40,7 @@ class MedicinesCatalogTable extends Component
     public function render()
     {
         $query = MedicinesCatalog::query()
+            ->forCategory('oncologicos')
             ->with([
                 'presentations' => function ($q) {
                     $q->orderBy('marca')

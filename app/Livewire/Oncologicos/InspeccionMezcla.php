@@ -207,8 +207,8 @@ class InspeccionMezcla extends Component
 
         $ins->save();
 
-        // Estado de la mezcla tras guardar inspección
-        Mezcla::where('id', $this->mezclaId)->update(['estado' => 'revisada']);
+        // Guardar mediante el modelo mantiene sincronizado el estado de la solicitud.
+        Mezcla::findOrFail($this->mezclaId)->update(['estado' => 'revisada']);
 
         $this->mostrarModalInspeccion = false;
         $this->dispatch('mezcla-inspeccionada');
