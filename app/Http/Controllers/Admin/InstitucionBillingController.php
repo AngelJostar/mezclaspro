@@ -18,6 +18,15 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class InstitucionBillingController extends Controller
 {
+    protected function resolveConfiguredOncoMixingServiceTotal($lista, float $billingTotal, float $medicationTotal): float
+    {
+        if ($lista && (bool) ($lista->has_mixing_service ?? false)) {
+            return round((float) ($lista->mixing_service_price ?? 0), 2);
+        }
+
+        return $billingTotal > 0 ? max($billingTotal - $medicationTotal, 0) : 0.0;
+    }
+
     public function index(Request $request)
     {
         $institucionId = $request->query('institucion_id');
@@ -556,7 +565,10 @@ class InstitucionBillingController extends Controller
             $infusorTotal = (float) ($mezcla->infusor->precio ?? 0);
         }
 
-        return round($medicationTotal + $infusorTotal, 2);
+        $billingTotal = $this->parseBillingMoney($mezcla->billing?->precio_total);
+        $serviceTotal = $this->resolveConfiguredOncoMixingServiceTotal($lista, $billingTotal, $medicationTotal + $infusorTotal);
+
+        return round($medicationTotal + $infusorTotal + $serviceTotal, 2);
     }
 
     protected function resolveNutriBillingTotal(NutricionalSolicitud $solicitud): float
@@ -641,7 +653,7 @@ class InstitucionBillingController extends Controller
         }
 
         $billingTotal = $this->parseBillingMoney($billing?->precio_total);
-        $serviceTotal = $billingTotal > 0 ? max($billingTotal - $medicationTotal, 0) : 0.0;
+        $serviceTotal = $this->resolveConfiguredOncoMixingServiceTotal($lista, $billingTotal, $medicationTotal);
 
         if ($serviceTotal > 0) {
             $rows[] = $this->makeBillingExportRow(

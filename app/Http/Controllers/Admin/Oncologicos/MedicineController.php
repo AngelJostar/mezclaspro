@@ -49,6 +49,8 @@ class MedicineController extends Controller
             'active_brands' => 'nullable|boolean',
             'charge_by'     => 'required|in:mg,frasco',
             'show_label_lot_expiry' => 'nullable|boolean',
+            'has_mixing_service' => 'nullable|boolean',
+            'mixing_service_price' => 'nullable|numeric|min:0',
 
             'medicamentos'                   => 'required|array|min:1',
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
@@ -95,6 +97,10 @@ class MedicineController extends Controller
                 'active_brands' => $request->boolean('active_brands', false),
                 'charge_by'     => $chargeBy,
                 'show_label_lot_expiry' => $request->boolean('show_label_lot_expiry', false),
+                'has_mixing_service' => $request->boolean('has_mixing_service', false),
+                'mixing_service_price' => $request->boolean('has_mixing_service', false)
+                    ? (float) $request->input('mixing_service_price', 0)
+                    : 0,
             ]);
 
             $hasDistributor =
@@ -255,6 +261,8 @@ class MedicineController extends Controller
             'active_brands'  => 'nullable|boolean',
             'charge_by'      => 'required|in:mg,frasco',
             'show_label_lot_expiry' => 'nullable|boolean',
+            'has_mixing_service' => 'nullable|boolean',
+            'mixing_service_price' => 'nullable|numeric|min:0',
 
             'distributor_nombre'    => 'nullable|string|max:255',
             'distributor_direccion' => 'nullable|string|max:500',
@@ -310,6 +318,10 @@ class MedicineController extends Controller
                 'active_brands' => $request->boolean('active_brands', false),
                 'charge_by'     => $chargeByGlobal,
                 'show_label_lot_expiry' => $request->boolean('show_label_lot_expiry', false),
+                'has_mixing_service' => $request->boolean('has_mixing_service', false),
+                'mixing_service_price' => $request->boolean('has_mixing_service', false)
+                    ? (float) $request->input('mixing_service_price', 0)
+                    : 0,
             ]);
 
             if ($request->boolean('distributor_delete')) {

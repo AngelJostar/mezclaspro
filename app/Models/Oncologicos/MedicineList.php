@@ -15,12 +15,16 @@ class MedicineList extends Model
         'active_brands',
         'charge_by',
         'show_label_lot_expiry',
+        'has_mixing_service',
+        'mixing_service_price',
     ];
 
     protected $casts = [
         'active_brands' => 'boolean',
         'charge_by' => 'string',
         'show_label_lot_expiry' => 'boolean',
+        'has_mixing_service' => 'boolean',
+        'mixing_service_price' => 'decimal:4',
     ];
 
     public function medicines()

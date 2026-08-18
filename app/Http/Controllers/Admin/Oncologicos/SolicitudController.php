@@ -19,6 +19,15 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class SolicitudController extends Controller
 {
+    private function resolveOncoMixingServiceAmount($lista, float $billingTotal, float $totalMezclaSinServicio): float
+    {
+        if ($lista && (bool) ($lista->has_mixing_service ?? false)) {
+            return round((float) ($lista->mixing_service_price ?? 0), 2);
+        }
+
+        return $billingTotal > 0 ? max(round($billingTotal - $totalMezclaSinServicio, 2), 0) : 0.0;
+    }
+
     public function index()
     {
         return view('admin.oncologicos.solicitudes.index');
@@ -1537,7 +1546,7 @@ class SolicitudController extends Controller
             }
 
             $billingTotal = $parseMoney(optional($mezcla->billing)->precio_total);
-            $servicioMezclado = $billingTotal > 0 ? max(round($billingTotal - $totalMezclaSinServicio, 2), 0) : 0.0;
+            $servicioMezclado = $this->resolveOncoMixingServiceAmount($lista, $billingTotal, $totalMezclaSinServicio);
 
             $mezcla->setAttribute('servicio_mezclado_subtotal', $servicioMezclado);
 

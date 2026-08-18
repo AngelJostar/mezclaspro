@@ -172,7 +172,7 @@ class InstitucionHospitalExport implements FromArray, WithHeadings, ShouldAutoSi
             }
 
             $billingTotal = $this->parseMoney($billing?->precio_total);
-            $serviceTotal = $billingTotal > 0 ? max($billingTotal - $medicationTotal, 0) : 0.0;
+            $serviceTotal = $this->resolveOncoMixingServiceTotal($lista, $billingTotal, $medicationTotal);
 
             $rows->push($this->baseRow(
                 institucion: $institucion,
@@ -360,6 +360,15 @@ class InstitucionHospitalExport implements FromArray, WithHeadings, ShouldAutoSi
         $subtotal = $cantidad * $precioUnit;
 
         return [round($cantidad, 2), round($precioUnit, 4), round($subtotal, 2)];
+    }
+
+    private function resolveOncoMixingServiceTotal($lista, float $billingTotal, float $medicationTotal): float
+    {
+        if ($lista && (bool) ($lista->has_mixing_service ?? false)) {
+            return round((float) ($lista->mixing_service_price ?? 0), 2);
+        }
+
+        return $billingTotal > 0 ? max($billingTotal - $medicationTotal, 0) : 0.0;
     }
 
     private function baseRow(
