@@ -20,6 +20,13 @@ use Illuminate\Support\Facades\DB;
 
 class MezclaController extends Controller
 {
+    private function medicineListColumnFor(?SolicitudOnco $solicitud): string
+    {
+        return $solicitud?->tipo_solicitud === 'antibioticos'
+            ? 'antibiotic_medicine_list_id'
+            : 'onco_medicine_list_id';
+    }
+
     private function nombreUsuario($user): string
     {
         $nombreCompleto = trim(($user?->name ?? '') . ' ' . ($user?->lastname ?? ''));
@@ -441,7 +448,7 @@ class MezclaController extends Controller
         if ($hospitalSolicitudId > 0) {
             $listaId = DB::table('hospitals')
                 ->where('id', $hospitalSolicitudId)
-                ->value('onco_medicine_list_id');
+                ->value($this->medicineListColumnFor($mezcla->solicitud));
         }
 
         // En tu mezcla_medicamentos.medicamento_id guardas medicine_oncos.id
@@ -623,7 +630,7 @@ class MezclaController extends Controller
         // =========================
         $listaId = DB::table('hospitals')
             ->where('id', $hospitalSolicitudId)
-            ->value('onco_medicine_list_id');
+            ->value($this->medicineListColumnFor($solicitud));
 
         if (!$listaId) {
             abort(422, 'El hospital de la solicitud no tiene una lista de medicamentos configurada.');
@@ -1019,7 +1026,7 @@ class MezclaController extends Controller
 
         $listaId = DB::table('hospitals')
             ->where('id', $hospitalSolicitudId)
-            ->value('onco_medicine_list_id');
+            ->value($this->medicineListColumnFor($mezcla->solicitud));
 
         if (!$listaId) {
             return back()->withErrors(['error' => 'El hospital de la solicitud no tiene una lista de medicamentos configurada.']);
@@ -1068,11 +1075,6 @@ class MezclaController extends Controller
 
                 $mezcla->save();
 
-                if ($mezcla->solicitud && $mezcla->solicitud->estado === 'pendiente') {
-                    $mezcla->solicitud->estado = 'enproceso';
-                    $mezcla->solicitud->save();
-                }
-
                 $inspeccion = InspeccionMezcla::firstOrCreate(
                     ['mezcla_id' => $mezcla->id],
                     [
@@ -1114,16 +1116,6 @@ class MezclaController extends Controller
                 $inspeccion->libero_nombre = $liberoNombre;
                 $inspeccion->save();
 
-                if ($mezcla->solicitud) {
-                    $todasEntregadas = $mezcla->solicitud->mezclas()
-                        ->where('estado', '!=', 'entregada')
-                        ->doesntExist();
-
-                    if ($todasEntregadas) {
-                        $mezcla->solicitud->estado = 'finalizada';
-                        $mezcla->solicitud->save();
-                    }
-                }
             });
 
             return redirect()
@@ -1890,7 +1882,8 @@ class MezclaController extends Controller
         $observaciones = $mezcla->solicitud->observaciones ?? null;
         $showLabelLotExpiry = false;
 
-        $medicineListId = (int) (optional(optional($mezcla->solicitud)->hospital)->onco_medicine_list_id ?? 0);
+        $medicineListColumn = $this->medicineListColumnFor($mezcla->solicitud);
+        $medicineListId = (int) (optional(optional($mezcla->solicitud)->hospital)->{$medicineListColumn} ?? 0);
         if ($medicineListId > 0) {
             $showLabelLotExpiry = (bool) optional(MedicineList::find($medicineListId))->show_label_lot_expiry;
         }

@@ -10,7 +10,10 @@ class Distributor extends Model
     protected $fillable = [
         'medicine_list_id',
         'nombre',
+        'rfc',
         'direccion',
+        'contacto',
+        'informacion_adicional',
         'logo_path',
     ];
 

@@ -34,7 +34,8 @@
                         <th class="px-4 py-3 text-left">Ingreso</th>
                         <th class="px-4 py-3 text-right">Stock</th>
                         <th class="px-4 py-3 text-center">Activo</th>
-                        <th class="px-4 py-3 text-right">Acciones</th>
+                        <th class="px-4 py-3 text-center">Editar</th>
+                        <th class="px-4 py-3 text-center">Eliminar</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
@@ -61,27 +62,27 @@
                                     <span class="px-2 py-1 text-xs rounded bg-gray-200 text-gray-700">No</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-3 text-right">
-                                <x-row-actions>
-                                    <a href="{{ route('admin.oncologicos.diluent_presentations.edit', [$diluent, $p]) }}">
-                                        Editar
-                                    </a>
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
+                                <x-table-action-link href="{{ route('admin.oncologicos.diluent_presentations.edit', [$diluent, $p]) }}" icon="fa-solid fa-pen">
+                                    Editar
+                                </x-table-action-link>
+                            </td>
 
-                                    <form action="{{ route('admin.oncologicos.diluent_presentations.destroy', [$diluent, $p]) }}"
-                                          method="POST" class="inline-block"
-                                          onsubmit="return confirm('Eliminar esta presentacion?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="action-danger">
-                                            Eliminar
-                                        </button>
-                                    </form>
-                                </x-row-actions>
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
+                                <form action="{{ route('admin.oncologicos.diluent_presentations.destroy', [$diluent, $p]) }}"
+                                      method="POST" class="inline-block"
+                                      onsubmit="return confirm('Eliminar esta presentacion?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <x-table-action-button type="submit" variant="red" icon="fa-solid fa-trash">
+                                        Eliminar
+                                    </x-table-action-button>
+                                </form>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td class="px-4 py-6 text-center text-gray-500" colspan="10">
+                            <td class="px-4 py-6 text-center text-gray-500" colspan="11">
                                 No hay presentaciones registradas.
                             </td>
                         </tr>

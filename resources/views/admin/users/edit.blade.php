@@ -28,19 +28,22 @@
             <x-input value="{{ old('username', $user->username) }}" name="username" class="w-full"
                 placeholder="Escriba el nombre del usuario" />
         </div>
-        <div class="mb-4">
+        <div id="password-section" class="mb-4 scroll-mt-6 rounded-md border border-slate-200 bg-slate-50 p-4">
             <x-label class="mb-2">
-                Contraseña
+                Nueva contrase&ntilde;a
             </x-label>
             <x-input type="password" value="" name="password" class="w-full"
-                placeholder="Escriba la contraseña del usuario" />
+                placeholder="Escriba una nueva contrase&ntilde;a" autocomplete="new-password" />
+            <p class="mt-2 text-xs text-slate-500">
+                La contrase&ntilde;a actual esta protegida y no puede mostrarse. Deje este campo vacio para conservarla.
+            </p>
         </div>
         <div class="mb-4">
             <x-label class="mb-2">
-                Cofirmar Contraseña
+                Confirmar nueva contrase&ntilde;a
             </x-label>
             <x-input type="password" value="" name="password_confirmation" class="w-full"
-                placeholder="Repita la contraseña del usuario" />
+                placeholder="Repita la nueva contrase&ntilde;a" autocomplete="new-password" />
         </div>
         <div class="mb-4">
             <x-label class="mb-2">
@@ -59,7 +62,7 @@
                         <label>
                             <input type="checkbox" name="roles[]" value="{{ $role->id }}"
                                 class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                @if ($userRoleName !== 'Super Admin') disabled @endif
+                                @disabled(! $canManageRoles)
                                 @if (in_array($role->id, old('roles', $user->roles()->pluck('id')->toArray()))) checked @endif>
                             {{ $role->name }}
                         </label>

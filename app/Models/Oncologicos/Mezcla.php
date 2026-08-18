@@ -10,10 +10,24 @@ use App\Models\Oncologicos\InspeccionMezcla;
 use App\Models\Oncologicos\Infusor;
 use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\InstitutionBilling;
+use App\Services\SolicitudOperativeStatusService;
 
 class Mezcla extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $mezcla) {
+            if ($mezcla->wasRecentlyCreated || $mezcla->wasChanged('estado')) {
+                app(SolicitudOperativeStatusService::class)->sync((int) $mezcla->solicitud_id);
+            }
+        });
+
+        static::deleted(function (self $mezcla) {
+            app(SolicitudOperativeStatusService::class)->sync((int) $mezcla->solicitud_id);
+        });
+    }
 
     protected $table = 'mezclas';
 

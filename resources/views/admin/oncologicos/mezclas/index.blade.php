@@ -1,4 +1,9 @@
 <x-admin-layout>
+    @php
+        $requestListRoute = $solicitud->tipo_solicitud === 'antibioticos'
+            ? 'admin.antibioticos.solicitudes.index'
+            : 'admin.oncologicos.solicitudes.index';
+    @endphp
     <div class="mt-4 mb-6 flex justify-between items-center">
         <h1 class="text-3xl font-bold text-gray-800">Detalle de Solicitud #{{ $solicitud->id }}</h1>
         <div class="flex">
@@ -58,7 +63,11 @@
                     <th class="px-6 py-3">Fecha y hora de solicitud</th>
                     <th class="px-6 py-3">Fecha y hora de entrega</th>
                     <th class="px-6 py-3">Estado</th>
-                    <th class="px-6 py-3">Acciones</th>
+                    <th class="px-6 py-3 text-center">Ver</th>
+                    <th class="px-6 py-3 text-center">Editar</th>
+                    <th class="px-6 py-3 text-center">Preparada</th>
+                    <th class="px-6 py-3 text-center">Inspeccion</th>
+                    <th class="px-6 py-3 text-center">Entregada</th>
                     <th class="px-6 py-3">Remisión</th>
                     <th class="px-6 py-3">Lote</th>
                 </tr>
@@ -135,18 +144,19 @@
                                 } }}
                             </span>
                         </td>
-                        <td class="px-6 py-4">
-                            <x-row-actions>
-                            <a href="{{ route('admin.oncologicos.mezclas.show', $mezcla->id) }}"
-                                class="">
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.oncologicos.mezclas.show', $mezcla->id) }}" icon="fa-solid fa-eye">
                                 Ver
-                            </a>
+                            </x-table-action-link>
+                        </td>
 
-                            <a href="{{ route('admin.oncologicos.mezclas.edit', $mezcla->id) }}"
-                                class="">
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.oncologicos.mezclas.edit', $mezcla->id) }}" icon="fa-solid fa-pen">
                                 Editar
-                            </a>
+                            </x-table-action-link>
+                        </td>
 
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
                             @if ($mezcla->estado === 'aprobada')
                                 <form id="formPreparar-{{ $mezcla->id }}"
                                     action="{{ route('admin.oncologicos.mezclas.update', $mezcla->id) }}"
@@ -154,18 +164,27 @@
                                     @csrf
                                     @method('PUT')
                                     <input type="hidden" name="accion" value="preparada">
-                                    <button type="button" onclick="confirmarPreparada({{ $mezcla->id }})">
+                                    <x-table-action-button onclick="confirmarPreparada({{ $mezcla->id }})" variant="green">
                                         Preparada
-                                    </button>
+                                    </x-table-action-button>
                                 </form>
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
                             @endif
+                        </td>
+
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
                             @if ($mezcla->estado === 'preparada')
-                                <button type="button"
+                                <x-table-action-button
                                     onclick="window.dispatchEvent(new CustomEvent('abrir-modal-inspeccion', { detail: [{{ $mezcla->id }}] }))">
                                     Inspección
-                                </button>
+                                </x-table-action-button>
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
                             @endif
+                        </td>
 
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
                             @if ($mezcla->estado === 'revisada')
                                 <form id="formEntregar-{{ $mezcla->id }}"
                                     action="{{ route('admin.oncologicos.mezclas.update', $mezcla->id) }}"
@@ -173,14 +192,13 @@
                                     @csrf
                                     @method('PUT')
                                     <input type="hidden" name="accion" value="entregada">
-                                    <button type="button" onclick="confirmarEntregada({{ $mezcla->id }})">
+                                    <x-table-action-button onclick="confirmarEntregada({{ $mezcla->id }})" variant="green">
                                         Entregada
-                                    </button>
+                                    </x-table-action-button>
                                 </form>
+                            @else
+                                <span class="text-gray-400 text-xs">-</span>
                             @endif
-                            </x-row-actions>
-
-
                         </td>
                         <td class="px-6 py-4">{{ $mezcla->remision ?? '—' }}</td>
                         <td class="px-6 py-4">{{ $mezcla->lote ?? '—' }}</td>
@@ -188,7 +206,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="9" class="px-6 py-4 text-center text-gray-500">No hay mezclas registradas.</td>
+                        <td colspan="13" class="px-6 py-4 text-center text-gray-500">No hay mezclas registradas.</td>
                     </tr>
                 @endforelse
 
@@ -199,7 +217,7 @@
     </div>
 
     <div class="mt-6">
-        <a href="{{ route('admin.oncologicos.solicitudes.index') }}"
+        <a href="{{ route($requestListRoute) }}"
             class="inline-block px-4 py-2 text-sm text-blue-600 hover:underline">
             &laquo; Volver a listado
         </a>

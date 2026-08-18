@@ -95,10 +95,15 @@
 
 <x-admin-layout>
     <div class="flex flex-col items-center">
-        <div class="mt-2 mb-4">
+        <div class="mt-2 mb-4 grid w-full grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <span aria-hidden="true"></span>
             <h1 class="text-2xl font-medium text-gray-800 text-center">
                 SOLICITUD DE NUTRICIÓN PARENTERAL
             </h1>
+            <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
+                class="justify-self-end rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                Cerrar
+            </a>
         </div>
 
         @if ($errors->any())

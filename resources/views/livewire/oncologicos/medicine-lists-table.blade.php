@@ -56,9 +56,9 @@
                         </span>
                     </th>
 
-                    <th class="px-6 py-3 text-center">
-                        Acciones
-                    </th>
+                    <th class="px-6 py-3 text-center">Editar</th>
+                    <th class="px-6 py-3 text-center">Eliminar</th>
+                    <th class="px-6 py-3 text-center">Exportar</th>
                 </tr>
             </thead>
 
@@ -114,35 +114,39 @@
                             {{ $lista->hospital->name ?? '—' }}
                         </td>
 
-                        <td class="px-6 py-2 text-center">
-                            <x-row-actions>
-                            <a href="{{ route('admin.oncologicos.medicines.edit', $lista->id) }}"
-                                class="">
+                        <td class="px-6 py-2 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.oncologicos.medicines.edit', $lista->id) }}" icon="fa-solid fa-pen">
                                 Editar
-                            </a>
+                            </x-table-action-link>
+                        </td>
 
+                        <td class="px-6 py-2 text-center whitespace-nowrap">
                             <form id="delete-form-{{ $lista->id }}"
                                 action="{{ route('admin.oncologicos.medicines.destroy', $lista->id) }}"
                                 method="POST" class="inline">
                                 @csrf
                                 @method('DELETE')
-                                <button type="button"
-                                    class="btn-eliminar action-danger"
+                                <x-table-action-button
+                                    class="btn-eliminar"
+                                    variant="red"
                                     data-id="{{ $lista->id }}">
                                     Eliminar
-                                </button>
+                                </x-table-action-button>
                             </form>
+                        </td>
 
-                            <a href="{{ route('admin.oncologicos.medicines.exportar', $lista) }}" target="_blank"
-                                class="">
-                                <i class="fa-solid fa-file-excel pr-1"></i> Exportar
-                            </a>
-                            </x-row-actions>
+                        <td class="px-6 py-2 text-center whitespace-nowrap">
+                            <x-table-action-link href="{{ route('admin.oncologicos.medicines.exportar', $lista) }}"
+                                target="_blank"
+                                icon="fa-solid fa-file-excel"
+                                variant="green">
+                                Exportar
+                            </x-table-action-link>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                        <td colspan="9" class="px-6 py-4 text-center text-gray-500">
                             Tu hospital aún no tiene una lista de precios configurada.
                         </td>
                     </tr>

@@ -32,6 +32,7 @@ use App\Models\Nutricionales\MedicineLaboratoryStock;
 use App\Models\Nutricionales\MedicineStockMovement;
 use App\Models\Nutricionales\InspeccionNutricional;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
+use App\Services\InstitutionBillingPricingService;
 
 class SolicitudController extends Controller
 {
@@ -1834,12 +1835,13 @@ class SolicitudController extends Controller
         return $pdf->stream();
     }
 
-    public function remision(Solicitud $solicitud)
+    public function remision(Solicitud $solicitud, InstitutionBillingPricingService $pricing)
     {
         $solicitud->load('user.hospital.nutriMedicineList.distributor');
 
         $hospital = $solicitud->user?->hospital;
         $nutriMedicineListId = $hospital?->nutri_medicine_list_id;
+        $priceList = $hospital?->nutriMedicineList;
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
         $distributor = $hospital?->nutriMedicineList?->distributor;
 
@@ -1938,6 +1940,7 @@ class SolicitudController extends Controller
             ->first();
 
         $servicio_preparacion = Medicine::where('id', 38)->first();
+        $pricingSummary = $pricing->priceNutritionRequest($solicitud_detalles);
 
         $pdf = Pdf::loadView('pdfs.nutricionales.remision', compact(
             'solicitud_detalles',
@@ -1946,7 +1949,9 @@ class SolicitudController extends Controller
             'set_infusion',
             'servicio_preparacion',
             'imprimirMarcas',
-            'distributor'
+            'distributor',
+            'priceList',
+            'pricingSummary'
         ));
 
         return $pdf->stream();
@@ -2109,4 +2114,3 @@ class SolicitudController extends Controller
         return Excel::download(new SolicitudesExport, 'solicitudes.xlsx');
     }
 }
-

@@ -12,11 +12,15 @@ class NutriMedicineList extends Model
         'description',
         'is_active',
         'active_brands',
+        'has_contract',
+        'contract_number',
+        'contract_information',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'active_brands' => 'boolean',
+        'has_contract' => 'boolean',
     ];
 
     public function items()

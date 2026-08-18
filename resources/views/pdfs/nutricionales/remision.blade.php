@@ -28,6 +28,12 @@
 
     function nombreDocumentoNutri($item, $imprimirMarcas = false)
     {
+        $descripcionRemision = descripcionRemisionNutri($item);
+
+        if ($descripcionRemision !== '') {
+            return $descripcionRemision;
+        }
+
         $generico = nombreGenericoNutri($item);
 
         if (!$imprimirMarcas) {
@@ -41,6 +47,21 @@
         }
 
         return "{$generico} ({$comercial})";
+    }
+
+    function descripcionRemisionNutri($item)
+    {
+        $listItem = $item?->presentation?->listItems?->first();
+
+        if (!$listItem) {
+            $presentations = $item?->input?->nutritionMedicineCatalog?->presentations ?? collect();
+            $listItem = $presentations
+                ->map(fn ($presentation) => $presentation?->listItems?->first())
+                ->filter()
+                ->first();
+        }
+
+        return trim((string) ($listItem?->descripcion_remision ?? ''));
     }
 
     function presentacionNutri($item)
@@ -161,6 +182,11 @@
 
         $distNombre = $distributor->nombre ?? null;
         $distDireccion = $distributor->direccion ?? null;
+        $distRfc = $distributor->rfc ?? null;
+        $distContacto = $distributor->contacto ?? null;
+        $distAdditionalInformation = $distributor->informacion_adicional ?? null;
+        $contractNumber = !empty($priceList?->has_contract) ? ($priceList->contract_number ?? null) : null;
+        $contractInformation = !empty($priceList?->has_contract) ? ($priceList->contract_information ?? null) : null;
         $distLogoSrc = null;
 
         if (!empty($distributor?->logo_path)) {
@@ -173,6 +199,7 @@
         $mostrarDistribuidor =
             !empty(trim((string) $distNombre)) ||
             !empty(trim((string) $distDireccion)) ||
+            !empty(trim((string) $distAdditionalInformation)) ||
             !empty($distLogoSrc);
 
         $paginas = $mostrarDistribuidor ? [1, 2] : [1];
@@ -230,6 +257,32 @@
                             </td>
                         </tr>
                     </table>
+
+                    @if ($esDistribuidor && ($distRfc || $distContacto))
+                        <table>
+                            <tr>
+                                <td style="border: none"><strong>RFC:</strong> {{ $distRfc ?: '—' }}</td>
+                                <td style="border: none; text-align: right"><strong>Contacto:</strong> {{ $distContacto ?: '—' }}</td>
+                            </tr>
+                        </table>
+                    @endif
+
+                    @if ($esDistribuidor && $distAdditionalInformation)
+                        <table>
+                            <tr>
+                                <td style="border: none">{!! nl2br(e($distAdditionalInformation)) !!}</td>
+                            </tr>
+                        </table>
+                    @endif
+
+                    @if ($contractNumber)
+                        <table>
+                            <tr>
+                                <td style="border: none"><strong>Contrato:</strong> {{ $contractNumber }}</td>
+                                <td style="border: none; text-align: right">{!! nl2br(e($contractInformation)) !!}</td>
+                            </tr>
+                        </table>
+                    @endif
 
                     <table>
                         <tr>
@@ -426,6 +479,7 @@
                             <td>
                                 <strong>
                                     {{ nombreDocumentoNutri($bolsa_eva, $imprimirMarcas ?? false) }}
+                                    <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span>
                                 </strong>
                             </td>
                             <td style="text-align: center;"></td>
@@ -452,6 +506,7 @@
                                 <td>
                                     <strong>
                                         {{ nombreDocumentoNutri($set_infusion, $imprimirMarcas ?? false) }}
+                                        <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span>
                                     </strong>
                                 </td>
                                 <td style="text-align: center"></td>
@@ -478,6 +533,7 @@
                             <td>
                                 <strong>
                                     {{ $servicio_preparacion->denominacion_generica ?? 'Servicio de preparación' }}
+                                    <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span>
                                 </strong>
                             </td>
                             <td style="text-align: center"></td>
@@ -506,7 +562,28 @@
                     <table>
                         <tr>
                             <td style="text-align: right; border-top: none">
-                                <strong>Total ${{ number_format($total, 3, '.', '') }}</strong>
+                                Subtotal antes de IVA
+                                ${{ number_format((float) ($pricingSummary['subtotal_before_vat'] ?? 0), 2, '.', ',') }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; border-top: none">
+                                IVA servicio de mezclado (16%)
+                                ${{ number_format((float) ($pricingSummary['service_vat'] ?? 0), 2, '.', ',') }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; border-top: none">
+                                IVA insumos gravados (16%)
+                                ${{ number_format((float) ($pricingSummary['supplies_vat'] ?? 0), 2, '.', ',') }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; border-top: none">
+                                <strong>
+                                    Total IVA incluido
+                                    ${{ number_format((float) ($pricingSummary['total_iva_included'] ?? $total), 2, '.', ',') }}
+                                </strong>
                             </td>
                         </tr>
                     </table>
@@ -567,4 +644,3 @@
 </body>
 
 </html>
-

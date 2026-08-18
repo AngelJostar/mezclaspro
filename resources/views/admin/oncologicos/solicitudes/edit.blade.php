@@ -1,7 +1,9 @@
 <x-admin-layout>
     <div class="flex flex-col ">
         <div class="mt-2 mb-4">
-            <h1 class="text-2xl font-medium text-gray-800">Editar Solicitud</h1>
+            <h1 class="text-2xl font-medium text-gray-800">
+                Editar Solicitud {{ ($requestType ?? 'oncologicos') === 'antibioticos' ? 'de Antibioticos' : 'Oncologica' }}
+            </h1>
 
             @if ($errors->any())
                 <div class="bg-red-100 text-red-700 p-4 rounded mb-4">
@@ -298,6 +300,7 @@
                 <tr>
                     <th class="border px-4 py-2 text-xs">MEDICAMENTO</th>
                     <th class="border px-4 py-2 text-xs">DOSIS</th>
+                    <th class="min-w-20 border px-4 py-2 text-xs">UNIDAD</th>
                     <th class="border px-4 py-2 text-xs">DILUYENTE</th>
                     <th class="border px-4 py-2 text-xs">VÍA DE ADMINISTRACIÓN</th>
                 </tr>
@@ -369,6 +372,7 @@
                 <tr>
                     <th class="border px-4 py-2 text-xs">MEDICAMENTO</th>
                     <th class="border px-4 py-2 text-xs">DOSIS</th>
+                    <th class="min-w-20 border px-4 py-2 text-xs">UNIDAD</th>
                     <th class="border px-4 py-2 text-xs">DILUYENTE</th>
                     <th class="border px-4 py-2 text-xs">VÍA DE ADMINISTRACIÓN</th>
                 </tr>
@@ -438,6 +442,9 @@
             </td>
             <td class="border">
                 <input type="number" value="${med.dosis}" class="min-w-28 w-full border px-2 py-1 text-sm" disabled>
+            </td>
+            <td class="min-w-20 whitespace-nowrap border px-3 py-2 text-xs font-semibold text-gray-700">
+                MG
             </td>
             <td class="border">
                 <select data-name="diluyente" class="min-w-44 w-full border rounded px-2 py-1 text-sm" disabled>
@@ -519,6 +526,9 @@
             </td>
             <td class="border">
                 <input type="number" data-name="dosis" class="min-w-28 w-full border px-2 py-1 text-sm">
+            </td>
+            <td class="min-w-20 whitespace-nowrap border px-3 py-2 text-xs font-semibold text-gray-700">
+                MG
             </td>
             <td class="border">
                 <select data-name="diluyente" class="min-w-44 w-full border rounded px-2 py-1 text-sm">

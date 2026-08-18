@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+.automatic-column-filter-hidden {
+    display: none !important;
+}
+
 @layer base {
     html {
         -webkit-font-smoothing: antialiased;

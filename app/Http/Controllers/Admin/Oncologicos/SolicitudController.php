@@ -9,6 +9,7 @@ use App\Models\Oncologicos\MedicineOnco;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MezclaMedicamento;
 use App\Models\Oncologicos\SolicitudOnco;
+use App\Services\InstitutionBillingPricingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -28,9 +29,30 @@ class SolicitudController extends Controller
         return $billingTotal > 0 ? max(round($billingTotal - $totalMezclaSinServicio, 2), 0) : 0.0;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return view('admin.oncologicos.solicitudes.index');
+        $requestType = $this->requestType($request->route('request_type') ?? $request->query('tipo_solicitud'));
+
+        return view('admin.oncologicos.solicitudes.index', compact('requestType'));
+    }
+
+    private function requestType(?string $requestType): string
+    {
+        return $requestType === 'antibioticos' ? 'antibioticos' : 'oncologicos';
+    }
+
+    private function indexRoute(string $requestType): string
+    {
+        return $requestType === 'antibioticos'
+            ? 'admin.antibioticos.solicitudes.index'
+            : 'admin.oncologicos.solicitudes.index';
+    }
+
+    private function medicineListColumn(string $requestType): string
+    {
+        return $requestType === 'antibioticos'
+            ? 'antibiotic_medicine_list_id'
+            : 'onco_medicine_list_id';
     }
 
     private function currentHospitalId(): int
@@ -39,7 +61,7 @@ class SolicitudController extends Controller
     }
 
 
-    private function currentMedicineListId(): ?int
+    private function currentMedicineListId(string $requestType = 'oncologicos'): ?int
     {
         $user = auth()->user();
         $hospitalId = (int) ($user?->hospital_id ?? 0);
@@ -48,13 +70,15 @@ class SolicitudController extends Controller
             return null;
         }
 
-        if (!Schema::hasColumn('hospitals', 'onco_medicine_list_id')) {
+        $column = $this->medicineListColumn($requestType);
+
+        if (!Schema::hasColumn('hospitals', $column)) {
             return null;
         }
 
         $listaId = DB::table('hospitals')
             ->where('id', $hospitalId)
-            ->value('onco_medicine_list_id');
+            ->value($column);
 
         return $listaId ? (int) $listaId : null;
     }
@@ -256,13 +280,14 @@ class SolicitudController extends Controller
         return $labId ? (int) $labId : null;
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        $listaId = $this->currentMedicineListId();
+        $requestType = $this->requestType($request->query('tipo_solicitud'));
+        $listaId = $this->currentMedicineListId($requestType);
 
         if (!$listaId) {
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'Tu hospital no tiene una lista de medicamentos configurada.']);
         }
 
@@ -270,7 +295,7 @@ class SolicitudController extends Controller
         $laboratoryId = $this->currentLaboratoryId();
         if (!$laboratoryId) {
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'Tu hospital no tiene laboratorio asignado. Configúralo desde Hospitales.']);
         }
 
@@ -286,7 +311,7 @@ class SolicitudController extends Controller
 
         if ($catalogIdsPermitidos->isEmpty()) {
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'La lista de medicamentos del hospital está vacía.']);
         }
 
@@ -363,6 +388,7 @@ class SolicitudController extends Controller
             'presentacionesPorCatalogo' => $presentacionesPorCatalogo,
             'infoAdicional'             => $infoAdicional,
             'infusors'                  => $infusors,
+            'requestType'               => $requestType,
         ]);
     }
 
@@ -370,6 +396,7 @@ class SolicitudController extends Controller
     {
 
         $request->validate([
+            'tipo_solicitud'  => 'required|in:oncologicos,antibioticos',
             'paciente_nombre'  => 'required|string|max:255',
             'servicio'         => 'required|string|max:255',
             'registro'         => 'required|string|max:255',
@@ -410,7 +437,8 @@ class SolicitudController extends Controller
             return back()->withErrors(['error' => 'Tu hospital no tiene laboratorio asignado. Configúralo desde Hospitales.'])->withInput();
         }
 
-        $listaId = $this->currentMedicineListId();
+        $requestType = $this->requestType($request->input('tipo_solicitud'));
+        $listaId = $this->currentMedicineListId($requestType);
 
         if (!$listaId) {
             return back()->withErrors([
@@ -466,6 +494,7 @@ class SolicitudController extends Controller
             $solicitud = SolicitudOnco::create([
                 'user_id'           => $user->id,
                 'hospital_id'       => $hospitalId,
+                'tipo_solicitud'    => $requestType,
                 'servicio'          => $request->servicio,
                 'nombre_paciente'   => $request->paciente_nombre,
                 'sexo'              => $request->sexo,
@@ -636,7 +665,7 @@ class SolicitudController extends Controller
             DB::commit();
 
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->with('success', 'Solicitud registrada correctamente.');
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -668,6 +697,8 @@ class SolicitudController extends Controller
             'mezclas.billing',
         ])->findOrFail($id);
 
+        $requestType = $this->requestType($solicitud->tipo_solicitud);
+
         $esAdmin = $user->hasAnyRole(['Admin', 'Super Admin']);
 
         if (
@@ -685,15 +716,15 @@ class SolicitudController extends Controller
 
         if (!$hospitalSolicitud) {
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'La solicitud no tiene hospital asociado.']);
         }
 
-        $listaId = $hospitalSolicitud->onco_medicine_list_id;
+        $listaId = $hospitalSolicitud->{$this->medicineListColumn($requestType)};
 
         if (!$listaId) {
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'El hospital de esta solicitud no tiene una lista de medicamentos oncológicos configurada.']);
         }
 
@@ -701,7 +732,7 @@ class SolicitudController extends Controller
 
         if (!$laboratoryId) {
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'El hospital de esta solicitud no tiene laboratorio asignado.']);
         }
 
@@ -825,6 +856,7 @@ class SolicitudController extends Controller
             'infusors'                  => $infusors,
             'hospitalNombre'            => optional($solicitud->hospital)->name,
             'medSnapshots'              => $medSnapshots,
+            'requestType'               => $requestType,
 
             // ✅ ya no pasamos laboratories ni laboratoryId
         ]);
@@ -982,7 +1014,8 @@ class SolicitudController extends Controller
             // =====================================================
             // Crear nuevas mezclas + consumir inventario
             // =====================================================
-            $listaId = $this->currentMedicineListId();
+            $requestType = $this->requestType($solicitud->tipo_solicitud);
+            $listaId = $this->currentMedicineListId($requestType);
             if (!$listaId) {
                 throw new \Exception('Tu hospital no tiene una lista de medicamentos configurada.');
             }
@@ -1175,7 +1208,7 @@ class SolicitudController extends Controller
             DB::commit();
 
             return redirect()
-                ->route('admin.oncologicos.solicitudes.index')
+                ->route($this->indexRoute($requestType))
                 ->with('success', 'Solicitud actualizada correctamente.');
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -1197,8 +1230,8 @@ class SolicitudController extends Controller
 
                 $solicitud->estado = 'cancelada';
             } else {
-                if ($solicitud->estado === 'finalizada') {
-                    throw new \Exception('No se puede rechazar una solicitud finalizada.');
+                if ($solicitud->estado === 'entregada') {
+                    throw new \Exception('No se puede rechazar una solicitud entregada.');
                 }
 
                 $solicitud->estado = 'no_aprobada';
@@ -1216,7 +1249,7 @@ class SolicitudController extends Controller
                 'icon' => 'success',
             ]);
 
-            return redirect()->route('admin.oncologicos.solicitudes.index');
+            return redirect()->route($this->indexRoute($this->requestType($solicitud->tipo_solicitud)));
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -1325,18 +1358,23 @@ class SolicitudController extends Controller
         return $pdf->stream("envio-{$solicitud_onco->id}.pdf");
     }
 
-    public function remision(SolicitudOnco $solicitud)
+    public function remision(
+        SolicitudOnco $solicitud,
+        InstitutionBillingPricingService $pricing,
+        Request $request
+    )
     {
         $solicitud_onco = SolicitudOnco::with([
             'hospital',
             'user:id,hospital_id,name,lastname',
 
             'mezclas.infusor',
+            'mezclas.billing',
             'mezclas.medicamentos',
             'mezclas.medicamentos.presentacionesUsadas', // snapshots por renglón
 
             // fallback viejo:
-            'mezclas.medicamentos.medicamentoOnco.catalog',
+            'mezclas.medicamentos.medicamentoOnco.catalog.presentations',
             'mezclas.medicamentos.presentacionesUsadas.batch.presentation',
 
             'mezclas.medicamentos.diluyente',
@@ -1358,7 +1396,7 @@ class SolicitudController extends Controller
         if ($hospitalId > 0) {
             $listaId = DB::table('hospitals')
                 ->where('id', $hospitalId)
-                ->value('onco_medicine_list_id');
+                ->value($this->medicineListColumn($this->requestType($solicitud_onco->tipo_solicitud)));
 
             $lista = $listaId
                 ? DB::table('medicine_lists')->where('id', $listaId)->first()
@@ -1378,6 +1416,10 @@ class SolicitudController extends Controller
                 $distributor = $distributorRow; // suficiente para el PDF (nombre, direccion, logo_path)
             }
         }
+
+        $subdistributorOnly = $request->boolean('subdistribuidor');
+
+        abort_if($subdistributorOnly && !$distributor, 404);
 
         // =========================================================
         // ✅ 2) CONFIG POR PRESENTACIÓN (fallback si no hay snapshot)
@@ -1564,6 +1606,17 @@ class SolicitudController extends Controller
         $precioUnitarioServicioMezclado = $cantidadServiciosMezclado > 0
             ? round($totalServicioMezclado / $cantidadServiciosMezclado, 2)
             : 0.0;
+        $pricingSummaries = $solicitud_onco->mezclas
+            ->map(fn ($mezcla) => $pricing->priceOncoMix($mezcla));
+        $remisionTotals = [
+            'subtotal_before_vat' => round((float) $pricingSummaries->sum('subtotal_before_vat'), 2),
+            'medication_vat' => round((float) $pricingSummaries->sum('medication_vat'), 2),
+            'service_vat' => round((float) $pricingSummaries->sum('service_vat'), 2),
+            'supplies_vat' => round((float) $pricingSummaries->sum('supplies_vat'), 2),
+            'vat_total' => round((float) $pricingSummaries->sum('vat_total'), 2),
+            'total_iva_included' => round((float) $pricingSummaries->sum('total_iva_included'), 2),
+        ];
+        $totalRemision = $remisionTotals['total_iva_included'];
 
         $pdf = Pdf::loadView('pdfs.oncologicos.remision', [
             'solicitud'     => $solicitud_onco,
@@ -1573,10 +1626,20 @@ class SolicitudController extends Controller
             'totalServicioMezclado' => round($totalServicioMezclado, 2),
             'cantidadServiciosMezclado' => $cantidadServiciosMezclado,
             'precioUnitarioServicioMezclado' => $precioUnitarioServicioMezclado,
+            'remisionTotals' => $remisionTotals,
+            'priceList'     => $lista,
+            'totalServicioMezclado' => round($totalServicioMezclado, 2),
+            'cantidadServiciosMezclado' => $cantidadServiciosMezclado,
+            'precioUnitarioServicioMezclado' => $precioUnitarioServicioMezclado,
             'distributor'   => $distributor, // ✅ ahora viene por lista del hospital
+            'subdistributorOnly' => $subdistributorOnly,
         ])->setPaper('letter', 'portrait');
 
-        return $pdf->stream("remision-{$solicitud_onco->id}.pdf");
+        $filename = $subdistributorOnly
+            ? "remision-subdistribuidor-{$solicitud_onco->id}.pdf"
+            : "remision-{$solicitud_onco->id}.pdf";
+
+        return $pdf->stream($filename);
     }
 
     public function exportarExcel()

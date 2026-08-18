@@ -30,7 +30,7 @@
                     <th scope="col" class="px-6 py-3">Categoría</th>
                     <th scope="col" class="px-6 py-3">Osmolaridad</th>
                     <th scope="col" class="px-6 py-3 text-center">Activo</th>
-                    <th scope="col" class="px-6 py-3 text-center">Acciones</th>
+                    <th scope="col" class="px-6 py-3 text-center">Editar</th>
                 </tr>
             </thead>
 
@@ -108,11 +108,7 @@
                         </td>
 
                         <td class="px-6 py-4 text-center align-top">
-                            <x-row-actions>
-                                <a href="{{ route('admin.nutricionales.medicines.edit', $medicine) }}">
-                                    Editar
-                                </a>
-                            </x-row-actions>
+                            <x-catalog-edit-button href="{{ route('admin.nutricionales.medicines.edit', $medicine) }}" />
                         </td>
                     </tr>
                 @endforeach

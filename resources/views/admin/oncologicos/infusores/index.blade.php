@@ -25,7 +25,8 @@
                         <th class="px-4 py-2 text-left">Lote</th>
                         <th class="px-4 py-2 text-left">Caducidad</th>
                         <th class="px-4 py-2 text-center">Estado</th>
-                        <th class="px-4 py-2 text-center">Acciones</th>
+                        <th class="px-4 py-2 text-center">Editar</th>
+                        <th class="px-4 py-2 text-center">Eliminar</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -45,29 +46,28 @@
                                     <span class="px-2 py-1 text-xs rounded bg-red-100 text-red-700">Inactivo</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-2 text-center">
-                                <x-row-actions>
-                                {{-- Editar --}}
-                                <a href="{{ route('admin.oncologicos.infusores.edit', $infusor) }}"
-                                   class="">
+                            <td class="px-4 py-2 text-center whitespace-nowrap">
+                                <x-table-action-link href="{{ route('admin.oncologicos.infusores.edit', $infusor) }}" icon="fa-solid fa-pen">
                                     Editar
-                                </a>
+                                </x-table-action-link>
+                            </td>
+
+                            <td class="px-4 py-2 text-center whitespace-nowrap">
                                 {{-- Eliminar --}}
                                 <form action="{{ route('admin.oncologicos.infusores.destroy', $infusor) }}"
                                       method="POST" class="inline"
                                       onsubmit="return confirm('¿Seguro que deseas eliminar este infusor?');">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="action-danger">
+                                    <x-table-action-button type="submit" variant="red" icon="fa-solid fa-trash">
                                         Eliminar
-                                    </button>
+                                    </x-table-action-button>
                                 </form>
-                                </x-row-actions>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-3 text-center text-gray-500">
+                            <td colspan="8" class="px-4 py-3 text-center text-gray-500">
                                 No hay infusores registrados.
                             </td>
                         </tr>

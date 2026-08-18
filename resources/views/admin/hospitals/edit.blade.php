@@ -95,6 +95,22 @@
             </select>
         </div>
 
+        <div class="mb-4">
+            <label for="antibiotic_medicine_list_id" class="block text-sm font-medium text-gray-700">
+                Lista de antibioticos
+            </label>
+            <select name="antibiotic_medicine_list_id" id="antibiotic_medicine_list_id"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                <option value="">Seleccione una lista</option>
+                @foreach ($antibioticMedicineLists as $list)
+                    <option value="{{ $list->id }}"
+                        {{ old('antibiotic_medicine_list_id', $hospital->antibiotic_medicine_list_id) == $list->id ? 'selected' : '' }}>
+                        {{ $list->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+
         <div class="flex justify-end">
             <x-button>
                 Actualizar hospital

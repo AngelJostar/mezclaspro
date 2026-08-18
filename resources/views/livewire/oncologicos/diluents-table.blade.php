@@ -22,7 +22,9 @@
                         {!! $sortField === 'denominacion_generica' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
                     </span>
                 </th>
-                <th class="px-4 py-3 text-right">Acciones</th>
+                <th class="px-4 py-3 text-center">Editar</th>
+                <th class="px-4 py-3 text-center">Presentaciones</th>
+                <th class="px-4 py-3 text-center">Eliminar</th>
             </tr>
         </thead>
 
@@ -31,32 +33,32 @@
                 <tr>
                     <td class="px-4 py-3">{{ $d->denominacion_generica }}</td>
 
-                    <td class="px-4 py-3 text-right">
-                        <x-row-actions>
-                        <a href="{{ route('admin.oncologicos.diluent_presentations.index', $d) }}"
-                            class="">
-                            Presentaciones
-                        </a>
-
-                        <a href="{{ route('admin.oncologicos.diluents.edit', $d) }}"
-                            class="">
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        <x-table-action-link href="{{ route('admin.oncologicos.diluents.edit', $d) }}" icon="fa-solid fa-pen">
                             Editar
-                        </a>
+                        </x-table-action-link>
+                    </td>
 
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        <x-table-action-link href="{{ route('admin.oncologicos.diluent_presentations.index', $d) }}" icon="fa-solid fa-layer-group">
+                            Presentaciones
+                        </x-table-action-link>
+                    </td>
+
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
                         <form action="{{ route('admin.oncologicos.diluents.destroy', $d) }}"
                             method="POST" class="inline-block form-eliminar-diluent">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="action-danger">
+                            <x-table-action-button type="submit" variant="red" icon="fa-solid fa-trash">
                                 Eliminar
-                            </button>
+                            </x-table-action-button>
                         </form>
-                        </x-row-actions>
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td class="px-4 py-6 text-center text-gray-500" colspan="2">
+                    <td class="px-4 py-6 text-center text-gray-500" colspan="4">
                         No hay diluyentes.
                     </td>
                 </tr>

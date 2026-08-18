@@ -13,6 +13,7 @@ class MedicinesCatalog extends Model
 
     protected $fillable = [
         'denominacion',
+        'catalog_category',
         'presentacion',
         'requires_infusor',          // 👈 nuevo
         'state',
@@ -28,6 +29,11 @@ class MedicinesCatalog extends Model
         'state'            => 'boolean',
         'caducidad'        => 'date',
     ];
+
+    public function scopeForCategory($query, string $category)
+    {
+        return $query->where('catalog_category', $category);
+    }
 
     public function medicineOncos()
     {

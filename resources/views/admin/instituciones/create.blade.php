@@ -1,6 +1,12 @@
 <x-admin-layout>
-    <div class="mt-2 mb-4">
+    <div class="mb-4 mt-2 flex items-center justify-between gap-4">
         <h1 class="text-2xl font-medium text-gray-800">Agregar nueva Institucion</h1>
+
+        <a href="{{ route('admin.instituciones.index') }}"
+            class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-blue-800 px-4 text-sm font-semibold text-blue-900 transition hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+            Atr&aacute;s
+        </a>
     </div>
 
     <form action="{{ route('admin.instituciones.store') }}" method="POST" class="bg-white rounded-lg p-6 shadow-lg">
