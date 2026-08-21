@@ -11,9 +11,13 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class InstitutionReportTemplateService
 {
     public const GENERAL = 'institution_general';
+
     public const HOSPITAL = 'hospital_summary';
+
     public const HOSPITAL_DETAIL = 'hospital_detail';
+
     public const DAILY_PATIENT = 'daily_patient';
+
     public const MONTHLY_SUPPLIES = 'monthly_supplies';
 
     private array $resolved = [];
@@ -56,9 +60,16 @@ class InstitutionReportTemplateService
             }
         }
 
+        if ($key === self::DAILY_PATIENT) {
+            $dailyQuantity = $columns->firstWhere('key', 'cantidad_dia');
+            $columns = $columns
+                ->reject(fn (array $column) => $column['key'] === 'cantidad_dia')
+                ->prepend($dailyQuantity);
+        }
+
         return $this->resolved[$key] = [
             'key' => $key,
-            'name' => $definition['name'],
+            'name' => $stored?->name ?: $definition['name'],
             'title' => $stored?->title ?: $definition['title'],
             'subtitle' => $stored?->subtitle ?? $definition['subtitle'],
             'columns' => $columns->values()->all(),
@@ -93,6 +104,22 @@ class InstitutionReportTemplateService
                 'free_fields' => $this->normalizeFields($data['free_fields'] ?? []),
             ]
         );
+
+        unset($this->resolved[$key]);
+
+        return $this->get($key);
+    }
+
+    public function rename(string $key, string $name): array
+    {
+        $this->assertKnownKey($key);
+        $current = $this->get($key);
+
+        $this->save($key, $current);
+
+        InstitutionReportTemplate::query()
+            ->where('report_key', $key)
+            ->update(['name' => trim($name)]);
 
         unset($this->resolved[$key]);
 
@@ -304,13 +331,14 @@ class InstitutionReportTemplateService
             $this->column('fecha_facturacion', 'FECHA FACTURACIÓN', '12/08/2026'),
             $this->column('numero_carta', 'NÚMERO CARTA FACTURA', 'CF-001'),
             $this->column('fecha_carta', 'FECHA CARTA FACTURA', '12/08/2026'),
+            $this->column('fecha_compensacion', 'FECHA DE COMPENSACIÓN', '15/08/2026'),
         ];
         $generalBillingColumns = array_values(array_filter(
             $billingColumns,
             fn (array $column) => $column['key'] !== 'precio_total'
         ));
         $hospitalBillingColumns = array_values(array_filter(
-            array_slice($billingColumns, 0, 15),
+            $billingColumns,
             fn (array $column) => $column['key'] !== 'precio_total'
         ));
 
@@ -370,8 +398,9 @@ class InstitutionReportTemplateService
             self::DAILY_PATIENT => [
                 'name' => 'Reporte diario por paciente',
                 'title' => 'Reporte diario por paciente',
-                'subtitle' => 'Nutriciones conciliables entregadas, agrupadas por día.',
+                'subtitle' => 'Mezclas nutricionales conciliables entregadas, agrupadas por día.',
                 'columns' => [
+                    $this->column('cantidad_dia', 'CANTIDAD POR DÍA', '1'),
                     $this->column('fecha', 'FECHA', '11/08/2026'),
                     $this->column('lote', 'LOTE', 'L110826001'),
                     $this->column('paciente', 'PACIENTE', 'Paciente de ejemplo'),

@@ -10,7 +10,7 @@
                 </p>
             </div>
 
-            <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id]) }}"
+            <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id, 'warehouse_id' => $stock->warehouse_id]) }}"
                 class="inline-flex items-center justify-center rounded bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200">
                 Volver al inventario
             </a>
@@ -20,7 +20,7 @@
             <div class="rounded-lg bg-white p-5 shadow">
                 <div class="space-y-2 text-sm text-gray-600">
                     <div>
-                        Laboratorio:
+                        Central de mezclas:
                         <span class="font-semibold text-gray-800">
                             {{ $stock->laboratory->nombre ?? '-' }}
                         </span>

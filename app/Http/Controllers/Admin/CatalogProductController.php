@@ -9,6 +9,7 @@ use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\AdministrationRoute;
 use App\Models\Oncologicos\Diluent;
+use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\Oncologicos\MedicinesCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,19 +33,21 @@ class CatalogProductController extends Controller
             'routes' => AdministrationRoute::query()
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'concentrationUnit' => $category === 'nutricionales' ? 'ml' : 'mg',
+            'concentrationUnit' => in_array($category, ['nutricionales', 'insumos'], true) ? 'ml' : 'mg',
         ]);
     }
 
     public function store(Request $request, string $category): RedirectResponse
     {
         $category = $this->normalizeCategory($category);
+        $isSupplies = $category === 'insumos';
 
         $data = $request->validate([
             'generic_description' => ['required', 'string', 'max:255'],
             'concentration' => ['required', 'numeric', 'gt:0'],
             'presentation' => ['required', 'string', 'max:255'],
             'commercial_name' => ['required', 'string', 'max:255'],
+            'manufacturer' => ['nullable', 'string', 'max:255'],
             'diluents' => ['nullable', 'array'],
             'diluents.*' => ['integer', 'exists:diluents,id'],
             'routes' => ['nullable', 'array'],
@@ -52,16 +55,24 @@ class CatalogProductController extends Controller
             'conc_min' => ['nullable', 'numeric', 'min:0'],
             'conc_max' => ['nullable', 'numeric', 'min:0'],
         ], [
-            'generic_description.required' => 'Captura la descripcion generica.',
-            'concentration.required' => 'Captura la concentracion.',
-            'concentration.gt' => 'La concentracion debe ser mayor que cero.',
+            'generic_description.required' => $isSupplies
+                ? 'Captura el nombre generico del insumo.'
+                : 'Captura la descripcion generica.',
+            'concentration.required' => $isSupplies
+                ? 'Captura el volumen.'
+                : 'Captura la concentracion.',
+            'concentration.gt' => $isSupplies
+                ? 'El volumen debe ser mayor que cero.'
+                : 'La concentracion debe ser mayor que cero.',
             'presentation.required' => 'Captura la presentacion.',
-            'commercial_name.required' => 'Captura la descripcion distintiva o marca.',
+            'commercial_name.required' => $isSupplies
+                ? 'Captura el nombre comercial.'
+                : 'Captura la descripcion distintiva o marca.',
         ]);
 
         if (
-            $data['conc_min'] !== null
-            && $data['conc_max'] !== null
+            ($data['conc_min'] ?? null) !== null
+            && ($data['conc_max'] ?? null) !== null
             && (float) $data['conc_max'] < (float) $data['conc_min']
         ) {
             throw ValidationException::withMessages([
@@ -70,6 +81,12 @@ class CatalogProductController extends Controller
         }
 
         DB::transaction(function () use ($category, $data) {
+            if ($category === 'insumos') {
+                $this->storeSupplyProduct($data);
+
+                return;
+            }
+
             if ($category === 'nutricionales') {
                 $this->storeNutritionProduct($data);
 
@@ -79,11 +96,14 @@ class CatalogProductController extends Controller
             $this->storeMedicineProduct($category, $data);
         });
 
-        $label = CatalogoListasController::CATEGORIES[$category]['label'];
+        $message = $isSupplies
+            ? 'Insumo agregado correctamente al catalogo.'
+            : 'Producto agregado correctamente al catalogo de '
+                . CatalogoListasController::CATEGORIES[$category]['label'] . '.';
 
         return redirect()
             ->route('admin.catalogo-listas.catalog', ['category' => $category])
-            ->with('success', "Producto agregado correctamente al catalogo de {$label}.");
+            ->with('success', $message);
     }
 
     private function storeMedicineProduct(string $category, array $data): void
@@ -194,6 +214,40 @@ class CatalogProductController extends Controller
             'presentacion' => trim($data['presentation']),
             'presentacion_ml' => $data['concentration'],
             'is_available' => true,
+        ]);
+    }
+
+    private function storeSupplyProduct(array $data): void
+    {
+        $genericDescription = trim($data['generic_description']);
+        $commercialName = trim($data['commercial_name']);
+        $presentationName = trim($data['presentation']);
+
+        $diluent = Diluent::query()->firstOrCreate([
+            'denominacion_generica' => $genericDescription,
+        ]);
+
+        $presentationExists = $diluent->presentations()
+            ->where('presentacion', $presentationName)
+            ->where('denominacion_comercial', $commercialName)
+            ->exists();
+
+        if ($presentationExists) {
+            throw ValidationException::withMessages([
+                'presentation' => 'Ya existe esta presentacion con el mismo nombre comercial.',
+            ]);
+        }
+
+        DiluentPresentation::create([
+            'diluent_id' => $diluent->id,
+            'presentacion' => $presentationName,
+            'volume_ml' => $data['concentration'],
+            'denominacion_comercial' => $commercialName,
+            'fabricante' => trim((string) ($data['manufacturer'] ?? '')) ?: null,
+            'stock_inicial' => 0,
+            'stock_actual' => 0,
+            'stock_reservado' => 0,
+            'is_active' => true,
         ]);
     }
 

@@ -45,6 +45,32 @@
         </div>
 
         <div class="mb-4">
+            <x-label for="free_text" class="mb-2">
+                Texto libre
+            </x-label>
+            <textarea id="free_text" name="free_text" rows="3" maxlength="10000"
+                placeholder="Agrega cualquier informacion adicional sobre el hospital."
+                class="w-full resize-y rounded border-gray-300">{{ old('free_text', $hospital->free_text) }}</textarea>
+        </div>
+
+        <div class="mb-4">
+            <x-label for="google_maps_url" class="mb-2">
+                Link de ubicaci&oacute;n de Google Maps
+            </x-label>
+            <x-input id="google_maps_url" type="url" name="google_maps_url" class="w-full"
+                placeholder="https://maps.google.com/..."
+                value="{{ old('google_maps_url', $hospital->google_maps_url) }}" />
+        </div>
+
+        <div class="mb-4">
+            <x-label for="country" class="mb-2">
+                Pa&iacute;s
+            </x-label>
+            <x-input id="country" name="country" class="w-full" required
+                value="{{ old('country', $hospital->country ?: 'México') }}" />
+        </div>
+
+        <div class="mb-4">
             <x-label class="mb-2">
                 Estado
             </x-label>

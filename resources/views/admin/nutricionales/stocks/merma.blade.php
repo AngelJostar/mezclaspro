@@ -2,7 +2,8 @@
     <h1 class="text-2xl font-semibold text-gray-800 mb-6">Registrar merma</h1>
 
     <div class="bg-white shadow rounded-lg p-6 mb-6 space-y-1">
-        <p><strong>Laboratorio:</strong> {{ $stock->laboratory->nombre }}</p>
+        <p><strong>Central de mezclas:</strong> {{ $stock->laboratory->nombre }}</p>
+        <p><strong>Almacén:</strong> {{ $stock->warehouse?->name ?: 'Sin almacén asignado' }}</p>
         <p><strong>Medicamento genérico:</strong> {{ $stock->presentation->catalog->denominacion_generica ?? '—' }}</p>
         <p><strong>Presentación comercial:</strong> {{ $stock->presentation->denominacion_comercial ?? '—' }}</p>
         <p><strong>Presentación:</strong> {{ $stock->presentation->presentacion ?? '—' }}</p>

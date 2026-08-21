@@ -101,6 +101,7 @@ class MezclaController extends Controller
         DB::table('medicine_batch_movements')->insert([
             'medicine_batch_id'      => $medicineBatchId,
             'laboratory_id'          => $laboratoryId,
+            'warehouse_id'           => $batch->warehouse_id,
             'user_id'                => $userId,
             'movement_type'          => 'cancelacion_salida',
             'quantity'               => $unidades,
@@ -173,6 +174,7 @@ class MezclaController extends Controller
         DB::table('diluent_stock_movements')->insert([
             'diluent_presentation_id' => $presentation->id,
             'laboratory_id' => $laboratoryId,
+            'warehouse_id' => $presentation->warehouse_id,
             'user_id' => $userId,
             'movement_type' => 'salida',
             'quantity' => 1,
@@ -260,6 +262,7 @@ class MezclaController extends Controller
             ->lockForUpdate()
             ->select(
                 'mb.id',
+                'mb.warehouse_id',
                 'mb.lote',
                 'mb.caducidad',
                 'mb.stock_actual',
@@ -302,6 +305,7 @@ class MezclaController extends Controller
         DB::table('medicine_batch_movements')->insert([
             'medicine_batch_id'      => $batch->id,
             'laboratory_id'          => $laboratoryId,
+            'warehouse_id'           => $batch->warehouse_id,
             'user_id'                => $userId,
             'movement_type'          => 'salida',
             'quantity'               => $unidades,

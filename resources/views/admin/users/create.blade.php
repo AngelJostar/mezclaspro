@@ -48,7 +48,7 @@
             </x-label>
             <x-select class="w-full" name="hospital_id">
                 @foreach ($hospitals as $hospital)
-                    <option @selected(old('hospital_id') == $hospital->id) value="{{ $hospital->id }}">{{ $hospital->name }}</option>
+                    <option @selected(old('hospital_id', $selectedHospitalId ?? null) == $hospital->id) value="{{ $hospital->id }}">{{ $hospital->name }}</option>
                 @endforeach
             </x-select>
         </div>
@@ -60,7 +60,7 @@
                             <li>
                                 <label for="">
                                     <x-checkbox type="checkbox" name="roles[]" value="{{ $role->id }}"
-                                        :checked="in_array($role->id, old('roles', []))" />
+                                        :checked="in_array($role->id, old('roles', $selectedRoleIds ?? []))" />
                                     {{ $role->name }}
                                 </label>
                             </li>
@@ -69,7 +69,7 @@
                     @hasanyrole('Super Admin')
                         <li>
                             <label for="">
-                                <x-checkbox type="checkbox" name="roles[]" value="{{ $role->id }}" :checked="in_array($role->id, old('roles', []))" />
+                                <x-checkbox type="checkbox" name="roles[]" value="{{ $role->id }}" :checked="in_array($role->id, old('roles', $selectedRoleIds ?? []))" />
                                 {{ $role->name }}
                             </label>
                         </li>

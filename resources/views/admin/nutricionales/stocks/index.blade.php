@@ -2,11 +2,11 @@
     <div class="mt-2 mb-4 flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-medium text-gray-800">
-                Inventario nutricional
+                Subalmacén nutricional
             </h1>
 
             <div class="text-sm text-gray-600 mt-1">
-                Laboratorio:
+                Central de mezclas:
                 <span class="font-semibold text-gray-800">
                     {{ $laboratory->nombre ?? '—' }}
                 </span>
@@ -14,29 +14,27 @@
                 @if (!empty($laboratory->estado))
                     <span class="text-gray-500">· {{ $laboratory->estado }}</span>
                 @endif
+                <span class="mx-1 text-gray-300">|</span>
+                Almacén: <span class="font-semibold text-gray-800">{{ $warehouse->name }}</span>
             </div>
 
 
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $laboratoryId]) }}"
+            <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $laboratoryId, 'warehouse_id' => $warehouseId]) }}"
                 class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
                 Volver a almacenes
             </a>
 
-            <a href="{{ route('admin.nutricionales.stocks.ingreso', ['laboratory_id' => $laboratoryId]) }}"
+            <a href="{{ route('admin.nutricionales.stocks.ingreso', ['laboratory_id' => $laboratoryId, 'warehouse_id' => $warehouseId]) }}"
                 class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
-                Ingresar lote
+                Ingresar producto
             </a>
-
-            <button type="button" id="btn-guardar-activos"
-                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                Guardar selección del día
-            </button>
 
             <a href="{{ route('admin.nutricionales.stocks.exportar', [
                 'laboratory_id' => $laboratoryId,
+                'warehouse_id' => $warehouseId,
                 'q' => $q ?? request('q'),
                 'stock' => $stockFilter ?? request('stock'),
             ]) }}"
@@ -58,6 +56,7 @@
             class="grid grid-cols-1 md:grid-cols-4 gap-3">
 
             <input type="hidden" name="laboratory_id" value="{{ $laboratoryId }}">
+            <input type="hidden" name="warehouse_id" value="{{ $warehouseId }}">
 
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
@@ -81,7 +80,7 @@
                     Buscar
                 </button>
 
-                <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $laboratoryId]) }}"
+                <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $laboratoryId, 'warehouse_id' => $warehouseId]) }}"
                     class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
                     Limpiar
                 </a>
@@ -92,6 +91,7 @@
     <form id="active-form" method="POST" action="{{ route('admin.nutricionales.stocks.saveActivePresentations') }}">
         @csrf
         <input type="hidden" name="laboratory_id" value="{{ $laboratoryId }}">
+        <input type="hidden" name="warehouse_id" value="{{ $warehouseId }}">
     </form>
 
     <div class="space-y-6">
@@ -397,6 +397,7 @@
                                     <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                         <x-table-action-link href="{{ route('admin.nutricionales.stocks.ingreso', [
                                             'laboratory_id' => $laboratoryId,
+                                            'warehouse_id' => $warehouseId,
                                             'presentation_id' => $presentation->id,
                                         ]) }}">
                                             Ingresar lote
@@ -424,24 +425,6 @@
     @push('js')
         <script>
             (function() {
-                const activeForm = document.getElementById('active-form');
-                const btnGuardarActivos = document.getElementById('btn-guardar-activos');
-
-                btnGuardarActivos?.addEventListener('click', () => {
-                    Swal.fire({
-                        title: '¿Guardar selección del día?',
-                        text: 'Se actualizarán las presentaciones activas por medicamento genérico.',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonText: 'Sí, guardar',
-                        cancelButtonText: 'Cancelar'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            activeForm.submit();
-                        }
-                    });
-                });
-
                 document.querySelectorAll('.lote-select').forEach(select => {
                     select.addEventListener('change', function() {
                         const row = this.closest('.presentation-row');

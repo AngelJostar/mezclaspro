@@ -10,12 +10,14 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 class NutritionInventoryExport implements FromArray, WithHeadings, ShouldAutoSize
 {
     protected int $laboratoryId;
+    protected int $warehouseId;
     protected string $q;
     protected string $stock;
 
-    public function __construct(int $laboratoryId, string $q = '', string $stock = '')
+    public function __construct(int $laboratoryId, int $warehouseId, string $q = '', string $stock = '')
     {
         $this->laboratoryId = $laboratoryId;
+        $this->warehouseId = $warehouseId;
         $this->q = trim($q);
         $this->stock = $stock;
     }
@@ -30,9 +32,11 @@ class NutritionInventoryExport implements FromArray, WithHeadings, ShouldAutoSiz
             ->leftJoin('categories as c', 'c.id', '=', 'nmc.category_id')
             ->leftJoin('medicine_laboratory_stocks as mls', function ($join) {
                 $join->on('mls.nutrition_medicine_presentation_id', '=', 'nmp.id')
-                    ->where('mls.laboratory_id', '=', $this->laboratoryId);
+                    ->where('mls.laboratory_id', '=', $this->laboratoryId)
+                    ->where('mls.warehouse_id', '=', $this->warehouseId);
             })
             ->leftJoin('laboratories as l', 'l.id', '=', DB::raw($this->laboratoryId))
+            ->leftJoin('warehouses as w', 'w.id', '=', DB::raw($this->warehouseId))
             ->when($this->q !== '', function ($query) {
                 $query->where(function ($w) {
                     $w->where('nmc.denominacion_generica', 'like', "%{$this->q}%")
@@ -57,6 +61,7 @@ class NutritionInventoryExport implements FromArray, WithHeadings, ShouldAutoSiz
             ->select([
                 'l.nombre as laboratorio',
                 'l.estado as laboratorio_estado',
+                'w.name as almacen',
 
                 'nmc.id as catalog_id',
                 'nmc.denominacion_generica',
@@ -96,6 +101,7 @@ class NutritionInventoryExport implements FromArray, WithHeadings, ShouldAutoSiz
             $rows[] = [
                 $item->laboratorio,
                 $item->laboratorio_estado,
+                $item->almacen,
 
                 $item->catalog_id,
                 $item->denominacion_generica,
@@ -132,6 +138,7 @@ class NutritionInventoryExport implements FromArray, WithHeadings, ShouldAutoSiz
         return [
             'Laboratorio',
             'Estado laboratorio',
+            'Almacén',
 
             'ID catalogo',
             'Denominacion generica',

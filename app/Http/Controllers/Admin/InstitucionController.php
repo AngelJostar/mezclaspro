@@ -30,7 +30,10 @@ class InstitucionController extends Controller
 {
     public function index()
     {
-        $instituciones = Institucion::orderBy('id', 'desc')->paginate(10);
+        $instituciones = Institucion::query()
+            ->withCount('hospitals')
+            ->orderBy('id', 'desc')
+            ->paginate(10);
 
         return view('admin.instituciones.index', compact('instituciones'));
     }
@@ -342,11 +345,23 @@ class InstitucionController extends Controller
         $service = (string) $request->query('service', 'all');
 
         $hospitals = $institucion->hospitals()
+            ->with([
+                'users' => fn ($query) => $query
+                    ->select('id', 'hospital_id', 'username', 'credential_password', 'is_active')
+                    ->whereHas('roles', fn ($roleQuery) => $roleQuery
+                        ->whereIn('name', ['Cliente', 'Institucion']))
+                    ->orderByDesc('is_active')
+                    ->orderBy('username'),
+            ])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($subquery) use ($search) {
                     $subquery->where('hospitals.name', 'like', '%'.$search.'%')
                         ->orWhere('hospitals.internal_key', 'like', '%'.$search.'%')
-                        ->orWhere('hospitals.municipality', 'like', '%'.$search.'%');
+                        ->orWhere('hospitals.municipality', 'like', '%'.$search.'%')
+                        ->orWhereHas('users', fn ($userQuery) => $userQuery
+                            ->where('username', 'like', '%'.$search.'%')
+                            ->whereHas('roles', fn ($roleQuery) => $roleQuery
+                                ->whereIn('name', ['Cliente', 'Institucion'])));
                 });
             })
             ->when($status === 'active', fn ($query) => $query->where('hospitals.is_active', true))

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Oncologicos\Diluent;
 use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\Oncologicos\Laboratory;
+use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ class DiluentPresentationController extends Controller
     public function index(Diluent $diluent)
     {
         $presentations = $diluent->presentations()
-            ->with('laboratory')
+            ->with(['laboratory', 'warehouse'])
             ->orderBy('presentacion')
             ->orderBy('caducidad')
             ->paginate(15);
@@ -23,12 +24,21 @@ class DiluentPresentationController extends Controller
         return view('admin.oncologicos.diluents.presentations.index', compact('diluent', 'presentations'));
     }
 
-    public function create(Diluent $diluent)
+    public function create(Request $request, Diluent $diluent)
     {
         $laboratories = $this->activeLaboratories();
         $existingLots = $this->existingLotsForForm($diluent);
+        $selectedLaboratoryId = $request->integer('laboratory_id') ?: $laboratories->first()?->id;
+        $selectedWarehouseId = $request->integer('warehouse_id')
+            ?: $laboratories->firstWhere('id', $selectedLaboratoryId)?->warehouses->first()?->id;
 
-        return view('admin.oncologicos.diluents.presentations.create', compact('diluent', 'laboratories', 'existingLots'));
+        return view('admin.oncologicos.diluents.presentations.create', compact(
+            'diluent',
+            'laboratories',
+            'existingLots',
+            'selectedLaboratoryId',
+            'selectedWarehouseId'
+        ));
     }
 
     public function store(Request $request, Diluent $diluent)
@@ -155,6 +165,9 @@ class DiluentPresentationController extends Controller
     private function activeLaboratories()
     {
         return Laboratory::query()
+            ->with(['warehouses' => fn ($query) => $query
+                ->orderByDesc('is_active')
+                ->orderBy('name')])
             ->where('activo', true)
             ->orderBy('nombre')
             ->get(['id', 'nombre', 'estado']);
@@ -163,7 +176,8 @@ class DiluentPresentationController extends Controller
     private function validatedData(Request $request): array
     {
         $data = $request->validate([
-            'laboratory_id'           => 'nullable|integer|exists:laboratories,id',
+            'laboratory_id'           => 'required|integer|exists:laboratories,id',
+            'warehouse_id'            => 'required|integer|exists:warehouses,id',
             'presentacion'           => 'required|string|max:255',
             'volume_ml'              => 'required|numeric|min:0.01',
             'denominacion_comercial' => 'nullable|string|max:255',
@@ -178,6 +192,17 @@ class DiluentPresentationController extends Controller
         $data['is_active'] = $request->boolean('is_active', true);
         $data['stock_actual'] = (float) ($data['stock_actual'] ?? 0);
 
+        $warehouseBelongsToLaboratory = Warehouse::query()
+            ->whereKey($data['warehouse_id'])
+            ->where('laboratory_id', $data['laboratory_id'])
+            ->exists();
+
+        if (! $warehouseBelongsToLaboratory) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'warehouse_id' => 'El almacén seleccionado no pertenece a la central de mezclas.',
+            ]);
+        }
+
         return $data;
     }
 
@@ -191,11 +216,8 @@ class DiluentPresentationController extends Controller
 
         return DiluentPresentation::query()
             ->where('diluent_id', $diluent->id)
-            ->when(
-                empty($data['laboratory_id']),
-                fn($query) => $query->whereNull('laboratory_id'),
-                fn($query) => $query->where('laboratory_id', (int) $data['laboratory_id'])
-            )
+            ->where('laboratory_id', (int) $data['laboratory_id'])
+            ->where('warehouse_id', (int) $data['warehouse_id'])
             ->whereRaw('LOWER(TRIM(lote)) = ?', [mb_strtolower($lote)])
             ->lockForUpdate()
             ->first();
@@ -204,15 +226,18 @@ class DiluentPresentationController extends Controller
     private function existingLotsForForm(Diluent $diluent)
     {
         return $diluent->presentations()
-            ->with('laboratory:id,nombre,estado')
+            ->with(['laboratory:id,nombre,estado', 'warehouse:id,laboratory_id,name'])
             ->whereNotNull('lote')
             ->orderBy('lote')
             ->get()
             ->map(fn(DiluentPresentation $presentation) => [
                 'id' => $presentation->id,
                 'laboratory_id' => $presentation->laboratory_id,
-                'laboratory_key' => $presentation->laboratory_id ? (string) $presentation->laboratory_id : '',
-                'laboratory_name' => $presentation->laboratory?->nombre ?? 'General / sin laboratorio',
+                'warehouse_id' => $presentation->warehouse_id,
+                'laboratory_key' => (string) $presentation->laboratory_id,
+                'warehouse_key' => (string) $presentation->warehouse_id,
+                'laboratory_name' => $presentation->laboratory?->nombre ?? 'Sin central',
+                'warehouse_name' => $presentation->warehouse?->name ?? 'Sin almacén',
                 'lote' => $presentation->lote,
                 'lote_key' => mb_strtolower(trim((string) $presentation->lote)),
                 'presentacion' => $presentation->presentacion,
@@ -237,6 +262,7 @@ class DiluentPresentationController extends Controller
         DB::table('diluent_stock_movements')->insert([
             'diluent_presentation_id' => $presentation->id,
             'laboratory_id' => $presentation->laboratory_id,
+            'warehouse_id' => $presentation->warehouse_id,
             'user_id' => Auth::id(),
             'movement_type' => $type,
             'quantity' => $quantity,

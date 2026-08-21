@@ -26,7 +26,8 @@
                 <thead class="bg-gray-100 text-gray-600">
                     <tr>
                         <th class="px-4 py-3 text-left">Presentacion</th>
-                        <th class="px-4 py-3 text-left">Laboratorio</th>
+                        <th class="px-4 py-3 text-left">Central de mezclas</th>
+                        <th class="px-4 py-3 text-left">Almacén</th>
                         <th class="px-4 py-3 text-left">Volumen (mL)</th>
                         <th class="px-4 py-3 text-left">Nombre comercial</th>
                         <th class="px-4 py-3 text-left">Lote</th>
@@ -43,6 +44,7 @@
                         <tr>
                             <td class="px-4 py-3">{{ $p->presentacion ?? '-' }}</td>
                             <td class="px-4 py-3">{{ $p->laboratory->nombre ?? 'General' }}</td>
+                            <td class="px-4 py-3">{{ $p->warehouse->name ?? 'Sin asignar' }}</td>
                             <td class="px-4 py-3">{{ number_format((float) $p->volume_ml, 2) }}</td>
                             <td class="px-4 py-3">{{ $p->denominacion_comercial ?? '-' }}</td>
                             <td class="px-4 py-3">{{ $p->lote ?? '-' }}</td>
@@ -82,7 +84,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td class="px-4 py-6 text-center text-gray-500" colspan="11">
+                            <td class="px-4 py-6 text-center text-gray-500" colspan="12">
                                 No hay presentaciones registradas.
                             </td>
                         </tr>

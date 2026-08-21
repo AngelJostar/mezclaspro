@@ -3,6 +3,7 @@
 namespace App\Models\Oncologicos;
 
 use App\Models\Hospital;
+use App\Models\PersonnelProfile;
 use App\Models\Warehouse;
 use App\Models\Oncologicos\MedicineBatch;
 use Illuminate\Database\Eloquent\Model;
@@ -39,5 +40,10 @@ class Laboratory extends Model
     public function warehouses(): HasMany
     {
         return $this->hasMany(Warehouse::class);
+    }
+
+    public function personnelProfiles(): HasMany
+    {
+        return $this->hasMany(PersonnelProfile::class);
     }
 }

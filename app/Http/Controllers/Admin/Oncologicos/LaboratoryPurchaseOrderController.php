@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin\Oncologicos;
 
 use App\Http\Controllers\Controller;
+use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\LaboratoryPurchaseOrder;
@@ -22,17 +23,33 @@ class LaboratoryPurchaseOrderController extends Controller
             ->with(['warehouses' => fn ($query) => $query
                 ->where('is_active', true)
                 ->orderBy('name')])
-        ->where(function ($query) use ($laboratory) {
-            $query->where('activo', true)
-                ->orWhere('id', $laboratory->getKey());
-        })
+            ->where('activo', true)
+            ->whereHas('warehouses', fn ($query) => $query->where('is_active', true))
             ->orderBy('nombre')
             ->get();
+
+        $supplierOptions = Supplier::query()
+            ->availableForPurchases()
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Supplier $supplier): array => [
+                'name' => $supplier->name,
+                'rfc' => $supplier->rfc,
+                'contact_name' => $supplier->contact_name,
+                'phone' => $supplier->phone,
+                'email' => $supplier->email,
+                'fax' => $supplier->fax,
+                'category' => $supplier->category,
+                'address' => $supplier->address,
+                'bank_details' => $supplier->bank_details,
+            ])
+            ->values();
 
         return view('admin.oncologicos.laboratory.purchase-orders.create', compact(
             'laboratory',
             'deliveryLaboratories',
-        ));
+            'supplierOptions',
+        ))->with('inventoryDestinations', LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS);
     }
 
     public function store(Request $request, Laboratory $laboratory): RedirectResponse
@@ -56,7 +73,11 @@ class LaboratoryPurchaseOrderController extends Controller
             'invoice_address' => ['required', 'string', 'max:2000'],
             'invoice_rfc' => ['required', 'string', 'max:20'],
             'invoice_emails' => ['nullable', 'string', 'max:1000'],
-            'delivery_laboratory_id' => ['required', 'integer', 'exists:laboratories,id'],
+            'delivery_laboratory_id' => [
+                'required',
+                'integer',
+                Rule::exists('laboratories', 'id')->where('activo', true),
+            ],
             'warehouse_id' => [
                 'required',
                 'integer',
@@ -65,6 +86,11 @@ class LaboratoryPurchaseOrderController extends Controller
                         ->where('laboratory_id', $request->integer('delivery_laboratory_id'))
                         ->where('is_active', true)
                 ),
+            ],
+            'inventory_destination' => [
+                'required',
+                'string',
+                Rule::in(array_keys(LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS)),
             ],
             'delivery_attention' => ['nullable', 'string', 'max:255'],
             'delivery_address' => ['required', 'string', 'max:2000'],
@@ -132,6 +158,8 @@ class LaboratoryPurchaseOrderController extends Controller
                 'folio' => 'OC' . str_pad((string) $order->id, 3, '0', STR_PAD_LEFT),
             ]);
 
+            $this->syncSupplierCatalog($validated);
+
             return $order;
         });
 
@@ -150,5 +178,40 @@ class LaboratoryPurchaseOrderController extends Controller
         ])
             ->setPaper('letter', 'portrait')
             ->download($purchaseOrder->folio . '.pdf');
+    }
+
+    private function syncSupplierCatalog(array $orderData): void
+    {
+        $name = trim((string) $orderData['supplier']);
+        $rfc = filled($orderData['supplier_rfc'] ?? null)
+            ? Str::upper(trim((string) $orderData['supplier_rfc']))
+            : null;
+
+        $supplier = Supplier::query()
+            ->when(
+                $rfc,
+                fn ($query) => $query->where('rfc', $rfc),
+                fn ($query) => $query->whereRaw('LOWER(name) = ?', [Str::lower($name)])
+            )
+            ->first() ?? new Supplier();
+
+        $supplier->fill([
+            'name' => $name,
+            'rfc' => $rfc,
+            'contact_name' => $orderData['supplier_contact'] ?? null,
+            'phone' => $orderData['supplier_phone'] ?? null,
+            'email' => $orderData['supplier_email'] ?? null,
+            'fax' => $orderData['supplier_fax'] ?? null,
+            'category' => $orderData['order_type'] ?? null,
+            'address' => $orderData['supplier_address'] ?? null,
+            'bank_details' => $orderData['supplier_bank_details'] ?? null,
+        ]);
+
+        if (! $supplier->exists) {
+            $supplier->status = Supplier::STATUS_ACTIVE;
+            $supplier->created_by = auth()->id();
+        }
+
+        $supplier->save();
     }
 }

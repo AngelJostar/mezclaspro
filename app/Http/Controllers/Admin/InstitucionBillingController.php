@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Hospital;
 use App\Models\Institucion;
 use App\Models\InstitutionBilling;
+use App\Models\InstitutionBillingMovement;
 use App\Models\Nutricionales\Solicitud as NutricionalSolicitud;
 use App\Models\Oncologicos\Mezcla;
 use App\Services\InstitutionBillingDueDateService;
@@ -16,6 +17,8 @@ use App\Services\InstitutionBillingPricingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 
 class InstitucionBillingController extends Controller
@@ -34,13 +37,67 @@ class InstitucionBillingController extends Controller
         return $this->renderIndex($request, 'pending');
     }
 
+    public function receivable(Request $request)
+    {
+        return $this->renderIndex($request, 'receivable');
+    }
+
     public function history(Request $request)
     {
         return $this->renderIndex($request, 'history');
     }
 
+    public function movementLog(Request $request)
+    {
+        $search = trim((string) $request->query('search', ''));
+        $fromStage = trim((string) $request->query('from_stage', ''));
+        $toStage = trim((string) $request->query('to_stage', ''));
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+        $stages = [
+            InstitutionBilling::STAGE_PENDING,
+            InstitutionBilling::STAGE_RECEIVABLE,
+            InstitutionBilling::STAGE_HISTORY,
+        ];
+
+        if (! in_array($fromStage, $stages, true)) {
+            $fromStage = '';
+        }
+
+        if (! in_array($toStage, $stages, true)) {
+            $toStage = '';
+        }
+
+        $movements = InstitutionBillingMovement::query()
+            ->with(['user:id,name,lastname,username'])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($subquery) use ($search) {
+                    $subquery->where('remision', 'like', '%' . $search . '%')
+                        ->orWhere('user_name', 'like', '%' . $search . '%')
+                        ->orWhere('origen_id', 'like', '%' . $search . '%');
+                });
+            })
+            ->when($fromStage !== '', fn ($query) => $query->where('from_stage', $fromStage))
+            ->when($toStage !== '', fn ($query) => $query->where('to_stage', $toStage))
+            ->when($dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $dateFrom))
+            ->when($dateTo, fn ($query) => $query->whereDate('created_at', '<=', $dateTo))
+            ->latest('id')
+            ->paginate(50)
+            ->withQueryString();
+
+        return view('admin.instituciones.billing.movements', compact(
+            'movements',
+            'search',
+            'fromStage',
+            'toStage',
+            'dateFrom',
+            'dateTo'
+        ));
+    }
+
     protected function renderIndex(Request $request, string $billingSection)
     {
+        $billingSection = $this->normalizeBillingSection($billingSection);
         $institucionId = $request->query('institucion_id');
         $hospitalId = $request->query('hospital_id');
         $search = trim((string) $request->query('search', ''));
@@ -98,6 +155,22 @@ class InstitucionBillingController extends Controller
         ]);
     }
 
+    private function normalizeBillingSection(?string $billingSection): string
+    {
+        return in_array($billingSection, ['pending', 'receivable', 'history'], true)
+            ? $billingSection
+            : 'pending';
+    }
+
+    private function routeNameForBillingSection(?string $billingSection): string
+    {
+        return match ($this->normalizeBillingSection($billingSection)) {
+            'history' => 'admin.instituciones.billing.history',
+            'receivable' => 'admin.instituciones.billing.receivable',
+            default => 'admin.instituciones.billing.index',
+        };
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -113,6 +186,8 @@ class InstitucionBillingController extends Controller
             'estatus_facturacion' => ['nullable', 'string', 'max:255'],
             'numero_carta_factura' => ['nullable', 'string', 'max:255'],
             'fecha_carta_factura' => ['nullable', 'string', 'max:255'],
+            'fecha_compensacion' => ['nullable', 'date_format:Y-m-d'],
+            'observaciones' => ['nullable', 'string', 'max:5000'],
             'institucion_filter' => ['nullable', 'integer'],
             'hospital_filter' => ['nullable', 'integer'],
             'search_filter' => ['nullable', 'string'],
@@ -121,12 +196,11 @@ class InstitucionBillingController extends Controller
             'billing_status_filter' => ['nullable', 'string'],
             'facturacion_status_filter' => ['nullable', 'string'],
             'conciliable_filter_value' => ['nullable', 'string'],
-            'billing_section' => ['nullable', 'string', 'in:pending,history'],
+            'billing_section' => ['nullable', 'string', 'in:pending,receivable,history'],
         ]);
 
         if (mb_strtolower(trim((string) ($data['estatus_facturacion'] ?? ''))) === 'completado') {
             $request->validate([
-                'folio_factura_uuid' => ['required', 'string', 'max:255'],
                 'folio_interno' => ['required', 'string', 'max:255'],
                 'fecha_facturacion' => ['required', 'string', 'max:255'],
                 'numero_carta_factura' => ['required', 'string', 'max:255'],
@@ -136,24 +210,44 @@ class InstitucionBillingController extends Controller
             ]);
         }
 
-        InstitutionBilling::updateOrCreate(
-            [
+        $billingAttributes = [
+            'institucion_id' => $data['institucion_id'],
+            'hospital_id' => $data['hospital_id'] ?: null,
+            'precio_total' => $data['precio_total'] ?? null,
+            'conciliable' => $data['conciliable'] ?? null,
+            'folio_factura_uuid' => $data['folio_factura_uuid'] ?? null,
+            'folio_interno' => $data['folio_interno'] ?? null,
+            'fecha_facturacion' => $data['fecha_facturacion'] ?? null,
+            'estatus_facturacion' => $data['estatus_facturacion'] ?? null,
+            'numero_carta_factura' => $data['numero_carta_factura'] ?? null,
+            'fecha_carta_factura' => $data['fecha_carta_factura'] ?? null,
+        ];
+
+        if (array_key_exists('fecha_compensacion', $data)) {
+            $billingAttributes['fecha_compensacion'] = $data['fecha_compensacion'] ?: null;
+        }
+
+        if (array_key_exists('observaciones', $data)) {
+            $observaciones = trim((string) ($data['observaciones'] ?? ''));
+            $billingAttributes['observaciones'] = $observaciones !== '' ? $observaciones : null;
+        }
+
+        DB::transaction(function () use ($data, $billingAttributes) {
+            $billing = InstitutionBilling::firstOrNew([
                 'origen_tipo' => $data['origen_tipo'],
                 'origen_id' => $data['origen_id'],
-            ],
-            [
-                'institucion_id' => $data['institucion_id'],
-                'hospital_id' => $data['hospital_id'] ?: null,
-                'precio_total' => $data['precio_total'] ?? null,
-                'conciliable' => $data['conciliable'] ?? null,
-                'folio_factura_uuid' => $data['folio_factura_uuid'] ?? null,
-                'folio_interno' => $data['folio_interno'] ?? null,
-                'fecha_facturacion' => $data['fecha_facturacion'] ?? null,
-                'estatus_facturacion' => $data['estatus_facturacion'] ?? null,
-                'numero_carta_factura' => $data['numero_carta_factura'] ?? null,
-                'fecha_carta_factura' => $data['fecha_carta_factura'] ?? null,
-            ]
-        );
+            ]);
+            $fromStage = $billing->exists
+                ? $billing->workflowStage()
+                : InstitutionBilling::STAGE_PENDING;
+
+            $billing->fill($billingAttributes);
+            $billing->save();
+
+            $this->recordBillingMovement($billing, $fromStage, $billing->workflowStage(), [
+                'source' => 'billing_update',
+            ]);
+        });
 
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json([
@@ -162,9 +256,7 @@ class InstitucionBillingController extends Controller
             ]);
         }
 
-        $redirectRoute = ($data['billing_section'] ?? 'pending') === 'history'
-            ? 'admin.instituciones.billing.history'
-            : 'admin.instituciones.billing.index';
+        $redirectRoute = $this->routeNameForBillingSection($data['billing_section'] ?? 'pending');
 
         return redirect()->route($redirectRoute, [
             'institucion_id' => $data['institucion_filter'] ?: null,
@@ -178,6 +270,75 @@ class InstitucionBillingController extends Controller
         ]);
     }
 
+    public function moveFromHistory(Request $request, InstitutionBilling $billing)
+    {
+        $data = $request->validate([
+            'destination' => ['required', 'string', 'in:pending,receivable'],
+        ]);
+        $destination = $data['destination'];
+
+        DB::transaction(function () use ($billing, $destination) {
+            $billing = InstitutionBilling::query()->lockForUpdate()->findOrFail($billing->id);
+            $fromStage = $billing->workflowStage();
+
+            if ($fromStage !== InstitutionBilling::STAGE_HISTORY) {
+                throw ValidationException::withMessages([
+                    'destination' => 'La remisión ya no se encuentra en Historial.',
+                ]);
+            }
+
+            if ($destination === InstitutionBilling::STAGE_RECEIVABLE && ! $billing->hasReceivableInvoiceData()) {
+                throw ValidationException::withMessages([
+                    'destination' => 'La remisión no tiene todos los datos necesarios para volver a Por Cobrar.',
+                ]);
+            }
+
+            $clearedFields = ['fecha_compensacion'];
+            $billing->estatus_facturacion = 'Pendiente';
+            $billing->fecha_compensacion = null;
+
+            if ($destination === InstitutionBilling::STAGE_PENDING) {
+                $invoiceFields = [
+                    'folio_factura_uuid',
+                    'folio_interno',
+                    'fecha_facturacion',
+                    'numero_carta_factura',
+                    'fecha_carta_factura',
+                ];
+
+                foreach ($invoiceFields as $field) {
+                    $billing->{$field} = null;
+                }
+
+                $clearedFields = array_merge($invoiceFields, $clearedFields);
+            }
+
+            $billing->save();
+            $toStage = $billing->workflowStage();
+
+            if ($toStage !== $destination) {
+                throw ValidationException::withMessages([
+                    'destination' => 'No fue posible mover la remisión al panel seleccionado.',
+                ]);
+            }
+
+            $this->recordBillingMovement($billing, $fromStage, $toStage, [
+                'source' => 'history_reversal',
+                'cleared_fields' => $clearedFields,
+            ]);
+        });
+
+        $destinationLabel = $destination === InstitutionBilling::STAGE_PENDING
+            ? 'Pendiente'
+            : 'Por Cobrar';
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'La remisión se movió a ' . $destinationLabel . '.',
+            'redirect_url' => route($this->routeNameForBillingSection($destination)),
+        ]);
+    }
+
     public function exportarExcel(Request $request)
     {
         $institucionId = $request->query('institucion_id');
@@ -188,7 +349,7 @@ class InstitucionBillingController extends Controller
         $billingStatus = $request->query('billing_status');
         $facturacionStatus = trim((string) $request->query('facturacion_status', ''));
         $conciliableFilter = trim((string) $request->query('conciliable_filter', ''));
-        $billingSection = $request->query('section') === 'history' ? 'history' : 'pending';
+        $billingSection = $this->normalizeBillingSection($request->query('section'));
 
         if (!in_array($billingStatus, ['con', 'sin'], true)) {
             $billingStatus = '';
@@ -218,7 +379,7 @@ class InstitucionBillingController extends Controller
         $data = $request->validate([
             'selected_records' => ['required', 'array', 'min:1', 'max:200'],
             'selected_records.*' => ['required', 'string', 'regex:/^(oncologica_mezcla|nutricional_solicitud):[1-9][0-9]*$/'],
-            'section' => ['nullable', 'string', 'in:pending,history'],
+            'section' => ['nullable', 'string', 'in:pending,receivable,history'],
             'institucion_id' => ['nullable', 'integer'],
             'hospital_id' => ['nullable', 'integer'],
             'search' => ['nullable', 'string'],
@@ -232,7 +393,7 @@ class InstitucionBillingController extends Controller
         $billingStatus = in_array($data['billing_status'] ?? '', ['con', 'sin'], true)
             ? $data['billing_status']
             : '';
-        $billingSection = ($data['section'] ?? 'pending') === 'history' ? 'history' : 'pending';
+        $billingSection = $this->normalizeBillingSection($data['section'] ?? 'pending');
         $selected = array_fill_keys($data['selected_records'], true);
 
         $records = $this->buildMergedRecords(
@@ -274,10 +435,9 @@ class InstitucionBillingController extends Controller
         return $oncoRecords
             ->concat($nutriRecords)
             ->filter(function ($item) use ($billingSection) {
-                $status = mb_strtolower(trim((string) ($item['billing']?->estatus_facturacion ?? '')));
-                $isCompleted = $status === 'completado';
+                $stage = $item['billing']?->workflowStage() ?? InstitutionBilling::STAGE_PENDING;
 
-                return $billingSection === 'history' ? $isCompleted : ! $isCompleted;
+                return $stage === $billingSection;
             })
             ->sortByDesc(function ($item) {
                 return $item['sort_date'] ?? 0;
@@ -701,6 +861,48 @@ class InstitucionBillingController extends Controller
                 ];
             });
         })->values()->all();
+    }
+
+    private function recordBillingMovement(
+        InstitutionBilling $billing,
+        string $fromStage,
+        string $toStage,
+        array $details = []
+    ): void {
+        if ($fromStage === $toStage) {
+            return;
+        }
+
+        $user = auth()->user();
+        $userName = trim((string) ($user?->name ?? '') . ' ' . (string) ($user?->lastname ?? ''));
+        $userName = $userName !== '' ? $userName : ($user?->username ?? 'Sistema');
+
+        InstitutionBillingMovement::create([
+            'institution_billing_id' => $billing->id,
+            'user_id' => $user?->id,
+            'user_name' => $userName,
+            'origen_tipo' => $billing->origen_tipo,
+            'origen_id' => $billing->origen_id,
+            'remision' => $this->resolveBillingRemision($billing),
+            'from_stage' => $fromStage,
+            'to_stage' => $toStage,
+            'details' => $details,
+        ]);
+    }
+
+    private function resolveBillingRemision(InstitutionBilling $billing): ?string
+    {
+        if ($billing->origen_tipo === 'oncologica_mezcla') {
+            $record = Mezcla::with('solicitud:id,remision')->find($billing->origen_id);
+
+            return $record?->remision ?: $record?->solicitud?->remision;
+        }
+
+        if ($billing->origen_tipo === 'nutricional_solicitud') {
+            return NutricionalSolicitud::query()->find($billing->origen_id)?->remision;
+        }
+
+        return null;
     }
 
     protected function formatExpandedExportDate($value): string

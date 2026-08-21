@@ -2,6 +2,7 @@
 // app/Models/Oncologicos/DiluentPresentation.php
 namespace App\Models\Oncologicos;
 
+use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
 
 class DiluentPresentation extends Model
@@ -9,6 +10,7 @@ class DiluentPresentation extends Model
     protected $fillable = [
         'diluent_id',
         'laboratory_id',
+        'warehouse_id',
         'presentacion',             // ej. "Bolsa 500 mL"
         'volume_ml',                // ej. 500.00
         'denominacion_comercial',   // ej. "NaCl 0.9% B. Braun"
@@ -41,5 +43,10 @@ class DiluentPresentation extends Model
     public function laboratory()
     {
         return $this->belongsTo(Laboratory::class);
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 }

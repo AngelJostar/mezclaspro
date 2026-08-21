@@ -21,6 +21,10 @@
         $selectedWarehouse = $selectedDeliveryLaboratory?->warehouses->firstWhere('id', $selectedWarehouseId)
             ?? $selectedDeliveryLaboratory?->warehouses->first();
         $selectedWarehouseId = (int) ($selectedWarehouse?->id ?? 0);
+        $selectedInventoryDestination = old('inventory_destination', 'oncologicos');
+        if (! array_key_exists($selectedInventoryDestination, $inventoryDestinations)) {
+            $selectedInventoryDestination = array_key_first($inventoryDestinations);
+        }
         $initialDeliveryAttention = old(
             'delivery_attention',
             $selectedWarehouse
@@ -110,9 +114,14 @@
             width: 100%;
             height: 100%;
             padding: 0.12cqw 0.28cqw;
-            background: #fff;
+            background-color: #fff;
             color: #000;
             font: inherit;
+        }
+
+        .po-request-destination-row > select {
+            appearance: auto;
+            padding-right: 0.55cqw;
         }
 
         .po-field:focus,
@@ -140,8 +149,50 @@
             border-top: 1px solid #c7c7c7;
         }
 
-        .po-destination-row select + select {
+        .po-request-destination-row {
+            position: absolute;
+            z-index: 3;
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr 1.05fr 1.25fr;
+            overflow: hidden;
+            background: #fff;
+            color: #000;
+            font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
+            font-size: clamp(8px, 1.05cqw, 11px);
+            line-height: 1.05;
+        }
+
+        .po-request-destination-row > * {
+            width: 100%;
+            min-width: 0;
+            height: 100%;
+            border: 0;
+            border-radius: 0;
+            outline: none;
+            background-color: #fff;
+            padding: 0.08cqw 0.2cqw;
+            color: #000;
+            font: inherit;
+        }
+
+        .po-request-destination-row > * + * {
             border-left: 1px solid #c7c7c7;
+        }
+
+        .po-request-destination-row > *:focus {
+            outline: max(1px, 0.14cqw) solid #2563eb;
+            outline-offset: -1px;
+        }
+
+        .po-destination-summary {
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            padding: 0.12cqw 0.28cqw;
+            background: #fff;
+            font-weight: 700;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .po-center {
@@ -273,10 +324,10 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-                <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $laboratory->id]) }}"
+                <a href="{{ route('admin.warehouses.purchase-orders.index', ['section' => 'mine', 'laboratory_id' => $laboratory->id]) }}"
                     class="inline-flex items-center gap-2 border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                     <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                    Volver al almac&eacute;n
+                    Volver a Mis &Oacute;rdenes de Compra
                 </a>
                 <button form="purchase-order-form" type="submit"
                     class="inline-flex items-center gap-2 bg-green-600 px-5 py-2 text-sm font-semibold text-white hover:bg-green-700">
@@ -305,14 +356,54 @@
                         class="po-field po-center" style="{{ $position(460.4, 129.8, 124.1, 11.8) }}"
                         aria-label="Fecha de elaboraci&oacute;n">
 
-                    <input id="department" name="department" type="text" required
-                        value="{{ old('department', 'UNIDAD DE CALIDAD') }}"
-                        class="po-field" style="{{ $position(86.7, 148.6, 254.9, 11.9) }}"
-                        aria-label="Departamento solicitante">
+                    <div class="po-request-destination-row" style="{{ $position(86.7, 148.6, 497.7, 11.9) }}">
+                        <input id="department" name="department" type="text" required
+                            value="{{ old('department', 'UNIDAD DE CALIDAD') }}"
+                            aria-label="Departamento solicitante" title="Departamento solicitante">
+                        <select id="delivery_laboratory_id" name="delivery_laboratory_id" required
+                            aria-label="Central receptora" title="Central receptora">
+                            @foreach ($deliveryLaboratories as $destinationLaboratory)
+                                <option value="{{ $destinationLaboratory->id }}"
+                                    data-name="{{ $destinationLaboratory->nombre }}"
+                                    @selected($destinationLaboratory->id === $selectedDeliveryLaboratoryId)
+                                    @disabled($destinationLaboratory->warehouses->isEmpty())>
+                                    Central: {{ $destinationLaboratory->nombre }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <select id="warehouse_id" name="warehouse_id" required
+                            aria-label="Almac&eacute;n receptor" title="Almac&eacute;n receptor">
+                            @forelse ($selectedDeliveryLaboratory?->warehouses ?? collect() as $warehouse)
+                                <option value="{{ $warehouse->id }}" data-name="{{ $warehouse->name }}"
+                                    @selected($warehouse->id === $selectedWarehouseId)>
+                                    Almac&eacute;n: {{ $warehouse->name }}
+                                </option>
+                            @empty
+                                <option value="" disabled selected>Almac&eacute;n: Sin almacenes</option>
+                            @endforelse
+                        </select>
+                        <select id="inventory_destination" name="inventory_destination" required
+                            aria-label="Subalmac&eacute;n receptor" title="Inventario receptor">
+                            @foreach ($inventoryDestinations as $value => $label)
+                                <option value="{{ $value }}" data-label="{{ $label }}"
+                                    @selected($value === $selectedInventoryDestination)>
+                                    Subalmac&eacute;n: {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
                     <div class="po-field-group" style="{{ $position(86.7, 167.2, 254, 31.3) }}">
                         <input id="supplier" name="supplier" type="text" value="{{ old('supplier') }}" required
+                            list="supplier-catalog-options" autocomplete="off"
                             aria-label="Proveedor" placeholder="Proveedor">
+                        <datalist id="supplier-catalog-options">
+                            @foreach ($supplierOptions as $supplierOption)
+                                <option value="{{ $supplierOption['name'] }}">
+                                    {{ $supplierOption['rfc'] ?: $supplierOption['category'] }}
+                                </option>
+                            @endforeach
+                        </datalist>
                         <input id="supplier_rfc" name="supplier_rfc" type="text" value="{{ old('supplier_rfc') }}"
                             aria-label="RFC del proveedor" placeholder="RFC">
                     </div>
@@ -381,27 +472,10 @@
                     <input id="delivery_attention" name="delivery_attention" type="hidden"
                         value="{{ $initialDeliveryAttention }}">
                     <div class="po-field-group" style="{{ $position(86.7, 349.5, 497.7, 22.7) }}">
-                        <div class="po-destination-row flex min-h-0 flex-1">
-                            <select id="delivery_laboratory_id" name="delivery_laboratory_id" required
-                                class="min-w-0 flex-1 po-bold" aria-label="Laboratorio de entrega">
-                                @foreach ($deliveryLaboratories as $destinationLaboratory)
-                                    <option value="{{ $destinationLaboratory->id }}"
-                                        @selected($destinationLaboratory->id === $selectedDeliveryLaboratoryId)
-                                        @disabled($destinationLaboratory->warehouses->isEmpty())>
-                                        {{ $destinationLaboratory->nombre }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <select id="warehouse_id" name="warehouse_id" required
-                                class="min-w-0 flex-1 po-bold" aria-label="Almac&eacute;n de entrega">
-                                @forelse ($selectedDeliveryLaboratory?->warehouses ?? collect() as $warehouse)
-                                    <option value="{{ $warehouse->id }}" @selected($warehouse->id === $selectedWarehouseId)>
-                                        {{ $warehouse->name }}
-                                    </option>
-                                @empty
-                                    <option value="" disabled selected>Sin almacenes registrados</option>
-                                @endforelse
-                            </select>
+                        <div id="delivery_destination_summary" class="po-destination-summary min-h-0 flex-1"
+                            title="Destino de la compra">
+                            {{ $selectedDeliveryLaboratory?->nombre }} / {{ $selectedWarehouse?->name }} /
+                            {{ $inventoryDestinations[$selectedInventoryDestination] }}
                         </div>
                         <div class="flex min-h-0 flex-1 border-t border-gray-300">
                             <input id="delivery_address" name="delivery_address" type="text" required
@@ -505,9 +579,13 @@
                 const taxRateInput = document.getElementById('tax_rate');
                 const deliveryLaboratorySelect = document.getElementById('delivery_laboratory_id');
                 const warehouseSelect = document.getElementById('warehouse_id');
+                const inventoryDestinationSelect = document.getElementById('inventory_destination');
                 const deliveryAttentionInput = document.getElementById('delivery_attention');
                 const deliveryAddressInput = document.getElementById('delivery_address');
+                const deliveryDestinationSummary = document.getElementById('delivery_destination_summary');
                 const deliveryDestinations = @json($deliveryDestinationOptions);
+                const supplierCatalog = @json($supplierOptions);
+                const supplierInput = document.getElementById('supplier');
                 const slots = [0, 1].map((slot) => ({
                     slot,
                     part: document.querySelector(`[data-item-part][data-item-slot="${slot}"]`),
@@ -538,6 +616,30 @@
                     return Number.isFinite(parsed) ? parsed : 0;
                 }
 
+                function applyCatalogSupplier() {
+                    const selectedName = supplierInput.value.trim().toLocaleLowerCase('es-MX');
+                    const supplier = supplierCatalog.find((item) =>
+                        String(item.name ?? '').trim().toLocaleLowerCase('es-MX') === selectedName
+                    );
+
+                    if (!supplier) return;
+
+                    const values = {
+                        supplier_rfc: supplier.rfc,
+                        supplier_contact: supplier.contact_name,
+                        supplier_phone: supplier.phone,
+                        supplier_email: supplier.email,
+                        supplier_fax: supplier.fax || 'N/A',
+                        order_type: supplier.category,
+                        supplier_address: supplier.address,
+                        supplier_bank_details: supplier.bank_details,
+                    };
+
+                    Object.entries(values).forEach(([id, value]) => {
+                        document.getElementById(id).value = value ?? '';
+                    });
+                }
+
                 function pageCount() {
                     return Math.max(1, Math.ceil(items.length / 2));
                 }
@@ -554,10 +656,15 @@
                 function syncDeliveryFields() {
                     const destination = selectedDeliveryLaboratory();
                     const warehouse = selectedWarehouse();
+                    const inventoryLabel = inventoryDestinationSelect.selectedOptions[0]?.dataset.label ?? '';
 
                     deliveryAttentionInput.value = warehouse
                         ? `${warehouse.name} - ${destination.name}`
                         : (destination?.name ?? '');
+                    deliveryDestinationSummary.textContent = [destination?.name, warehouse?.name, inventoryLabel]
+                        .filter(Boolean)
+                        .join(' / ');
+                    deliveryDestinationSummary.title = deliveryDestinationSummary.textContent;
                 }
 
                 function renderWarehouses() {
@@ -579,7 +686,8 @@
                     destination.warehouses.forEach((warehouse) => {
                         const option = document.createElement('option');
                         option.value = warehouse.id;
-                        option.textContent = warehouse.name;
+                        option.dataset.name = warehouse.name;
+                        option.textContent = `Almac\u00e9n: ${warehouse.name}`;
                         warehouseSelect.appendChild(option);
                     });
 
@@ -730,8 +838,10 @@
                 });
 
                 discountInput.addEventListener('input', updateTotals);
+                supplierInput.addEventListener('change', applyCatalogSupplier);
                 deliveryLaboratorySelect.addEventListener('change', renderWarehouses);
                 warehouseSelect.addEventListener('change', updateDeliveryAddress);
+                inventoryDestinationSelect.addEventListener('change', syncDeliveryFields);
 
                 form.addEventListener('submit', function (event) {
                     syncDeliveryFields();

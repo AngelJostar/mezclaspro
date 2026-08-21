@@ -38,10 +38,10 @@ class InstitutionDailyNutritionPatientReportServiceTest extends TestCase
         }
 
         $this->assertSame(2, $result['detail_count']);
-        $this->assertContains('Dentro Inicio', array_column($result['rows'], 2));
-        $this->assertContains('Dentro Fin', array_column($result['rows'], 2));
-        $this->assertNotContains('Fuera Antes', array_column($result['rows'], 2));
-        $this->assertNotContains('Fuera Despues', array_column($result['rows'], 2));
+        $this->assertContains('Dentro Inicio', array_column($result['rows'], 3));
+        $this->assertContains('Dentro Fin', array_column($result['rows'], 3));
+        $this->assertNotContains('Fuera Antes', array_column($result['rows'], 3));
+        $this->assertNotContains('Fuera Despues', array_column($result['rows'], 3));
     }
 
     public function test_it_groups_delivered_requests_by_day_and_excludes_non_reconcilable_requests(): void
@@ -68,14 +68,15 @@ class InstitutionDailyNutritionPatientReportServiceTest extends TestCase
 
         $this->assertSame(3, $result['detail_count']);
         $this->assertSame([2, 5], $result['summary_rows']);
-        $this->assertSame('2 nutriciones entregadas', $result['rows'][0][2]);
-        $this->assertSame(300.75, $result['rows'][0][5]);
-        $this->assertSame('L0101', $result['rows'][1][1]);
-        $this->assertSame('Ana Perez', $result['rows'][1][2]);
-        $this->assertSame('1 nutricion entregada', $result['rows'][3][2]);
-        $this->assertSame(50.0, $result['rows'][3][5]);
-        $this->assertNotContains('Carmen Ruiz', array_column($result['rows'], 2));
-        $this->assertNotContains('Elena Diaz', array_column($result['rows'], 2));
+        $this->assertSame(['Total del dia: 2 mezclas', '01-07-2025', null, null, null, null, 300.75], $result['rows'][0]);
+        $this->assertSame(1, $result['rows'][1][0]);
+        $this->assertSame(2, $result['rows'][2][0]);
+        $this->assertSame('L0101', $result['rows'][1][2]);
+        $this->assertSame('Ana Perez', $result['rows'][1][3]);
+        $this->assertSame(['Total del dia: 1 mezcla', '02-07-2025', null, null, null, null, 50.0], $result['rows'][3]);
+        $this->assertSame(1, $result['rows'][4][0]);
+        $this->assertNotContains('Carmen Ruiz', array_column($result['rows'], 3));
+        $this->assertNotContains('Elena Diaz', array_column($result['rows'], 3));
     }
 
     private function request(

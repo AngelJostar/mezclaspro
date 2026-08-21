@@ -20,6 +20,9 @@ class Hospital extends Model
         'care_level',
         'rfc',
         'clues',
+        'free_text',
+        'google_maps_url',
+        'country',
         'state',
         'municipality',
         'postal_code',
@@ -36,6 +39,7 @@ class Hospital extends Model
         'service_nutrition',
         'laboratory_id',
         'is_active',
+        'access_is_active',
         'nutri_medicine_list_id',
         'onco_medicine_list_id',
         'antibiotic_medicine_list_id',
@@ -43,6 +47,7 @@ class Hospital extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'access_is_active' => 'boolean',
         'operation_days' => 'array',
         'service_oncology' => 'boolean',
         'service_antibiotics' => 'boolean',

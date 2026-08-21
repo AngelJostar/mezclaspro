@@ -1,0 +1,196 @@
+
+   FAIL  Tests\Feature\InlineUserCredentialUpdateTest
+  ⨯ authorized user can update a username from the table
+  ⨯ software username is saved in lowercase
+  ⨯ inline username update rejects duplicates
+  ⨯ software username cannot duplicate a training username
+  ⨯ authorized user can update a password from the table
+  ⨯ authorized user can update training credentials independently
+  ⨯ training username is saved in lowercase
+  ⨯ training username cannot duplicate a software username
+  ⨯ authorized user can block and reactivate another user
+  ⨯ manager cannot block their own access
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > authorized user can update a username from…  QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > software username is saved in lowercase      QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > inline username update rejects duplicates    QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > software username cannot duplicate a train…  QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > authorized user can update a password from…  QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > authorized user can update training creden…  QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > training username is saved in lowercase      QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > training username cannot duplicate a softw…  QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > authorized user can block and reactivate a…  QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > manager cannot block their own access        QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+
+  Tests:    10 failed (0 assertions)
+  Duration: 0.61s
+

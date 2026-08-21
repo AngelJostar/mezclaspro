@@ -10,6 +10,7 @@ use App\Models\Nutricionales\NutritionLaboratoryActivePresentation;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\Laboratory;
+use App\Models\Warehouse;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,8 @@ class NutritionStockController extends Controller
         }
 
         $laboratory = Laboratory::where('activo', 1)->findOrFail($laboratoryId);
+        $warehouse = $this->resolveWarehouse($laboratoryId, $request->integer('warehouse_id'));
+        $warehouseId = (int) $warehouse->id;
 
         $q = trim((string) $request->get('q', ''));
         $stockFilter = $request->get('stock');
@@ -42,11 +45,12 @@ class NutritionStockController extends Controller
 
         $catalogsQuery = NutritionMedicineCatalog::query()
             ->with([
-                'presentations' => function ($query) use ($laboratoryId, $stockFilter) {
+                'presentations' => function ($query) use ($laboratoryId, $warehouseId, $stockFilter) {
                     $query->where('is_available', 1)
                         ->with([
-                            'stocks' => function ($stockQuery) use ($laboratoryId, $stockFilter) {
-                                $stockQuery->where('laboratory_id', $laboratoryId);
+                            'stocks' => function ($stockQuery) use ($laboratoryId, $warehouseId, $stockFilter) {
+                                $stockQuery->where('laboratory_id', $laboratoryId)
+                                    ->where('warehouse_id', $warehouseId);
 
                                 if ($stockFilter === '1') {
                                     $stockQuery->where('stock_ml_actual', '>', 0);
@@ -67,7 +71,7 @@ class NutritionStockController extends Controller
             ->orderBy('denominacion_generica');
 
         if ($q !== '') {
-            $catalogsQuery->where(function ($sub) use ($q, $laboratoryId) {
+            $catalogsQuery->where(function ($sub) use ($q, $laboratoryId, $warehouseId) {
                 $sub->where('denominacion_generica', 'like', "%{$q}%")
                     ->orWhereHas('input', function ($inputQuery) use ($q) {
                         $inputQuery->where('description', 'like', "%{$q}%");
@@ -81,8 +85,9 @@ class NutritionStockController extends Controller
                                     ->orWhere('fabricante', 'like', "%{$q}%");
                             });
                     })
-                    ->orWhereHas('presentations.stocks', function ($stockQuery) use ($q, $laboratoryId) {
+                    ->orWhereHas('presentations.stocks', function ($stockQuery) use ($q, $laboratoryId, $warehouseId) {
                         $stockQuery->where('laboratory_id', $laboratoryId)
+                            ->where('warehouse_id', $warehouseId)
                             ->where('lote', 'like', "%{$q}%");
                     });
             });
@@ -114,6 +119,7 @@ class NutritionStockController extends Controller
                     DB::raw('SUM(frascos_actuales) as frascos_total')
                 )
                 ->where('laboratory_id', $laboratoryId)
+                ->where('warehouse_id', $warehouseId)
                 ->whereIn('nutrition_medicine_presentation_id', $presentationIds)
                 ->groupBy('nutrition_medicine_presentation_id')
                 ->get()
@@ -157,6 +163,8 @@ class NutritionStockController extends Controller
             'catalogs',
             'laboratory',
             'laboratoryId',
+            'warehouse',
+            'warehouseId',
             'activeSelections',
             'q',
             'stockFilter'
@@ -167,10 +175,13 @@ class NutritionStockController extends Controller
     {
         $request->validate([
             'laboratory_id' => 'required|exists:laboratories,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
             'active_presentations' => 'nullable|array',
         ]);
 
         $laboratoryId = (int) $request->laboratory_id;
+        $warehouseId = (int) $request->warehouse_id;
+        $this->assertWarehouseBelongsToLaboratory($warehouseId, $laboratoryId);
         $today = now()->toDateString();
         $activePresentations = $request->input('active_presentations', []);
 
@@ -199,6 +210,7 @@ class NutritionStockController extends Controller
                 }
 
                 $hasStock = MedicineLaboratoryStock::where('laboratory_id', $laboratoryId)
+                    ->where('warehouse_id', $warehouseId)
                     ->where('nutrition_medicine_presentation_id', $presentationId)
                     ->where('is_active', 1)
                     ->where('stock_ml_actual', '>', 0)
@@ -226,6 +238,7 @@ class NutritionStockController extends Controller
 
             return redirect()->route('admin.nutricionales.stocks.index', [
                 'laboratory_id' => $laboratoryId,
+                'warehouse_id' => $warehouseId,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -245,13 +258,16 @@ class NutritionStockController extends Controller
         }
 
         $laboratory = Laboratory::where('activo', 1)->findOrFail($laboratoryId);
+        $warehouse = $this->resolveWarehouse($laboratoryId, $request->integer('warehouse_id'));
+        $warehouseId = (int) $warehouse->id;
 
         $catalogs = NutritionMedicineCatalog::with([
-            'presentations' => function ($query) use ($laboratoryId) {
+            'presentations' => function ($query) use ($laboratoryId, $warehouseId) {
                 $query->where('is_available', 1)
                     ->with([
-                        'stocks' => function ($stockQuery) use ($laboratoryId) {
+                        'stocks' => function ($stockQuery) use ($laboratoryId, $warehouseId) {
                             $stockQuery->where('laboratory_id', $laboratoryId)
+                                ->where('warehouse_id', $warehouseId)
                                 ->orderBy('caducidad')
                                 ->orderBy('lote');
                         },
@@ -268,18 +284,22 @@ class NutritionStockController extends Controller
         return view('admin.nutricionales.stocks.ingreso', compact(
             'laboratory',
             'laboratoryId',
+            'warehouse',
+            'warehouseId',
             'catalogs'
         ));
     }
 
     private function validarLoteNoUsadoEnOtraPresentacion(
         int $laboratoryId,
+        int $warehouseId,
         string $lote,
         int $presentationId,
         ?int $stockIdIgnorar = null
     ): void {
         $query = MedicineLaboratoryStock::with('presentation.catalog')
             ->where('laboratory_id', $laboratoryId)
+            ->where('warehouse_id', $warehouseId)
             ->where('lote', trim($lote))
             ->where('nutrition_medicine_presentation_id', '!=', $presentationId);
 
@@ -301,12 +321,14 @@ class NutritionStockController extends Controller
 
     private function buscarLoteDuplicadoEnMismaPresentacion(
         int $laboratoryId,
+        int $warehouseId,
         string $lote,
         int $presentationId,
         ?int $stockIdIgnorar = null
     ): ?MedicineLaboratoryStock {
         $query = MedicineLaboratoryStock::with(['presentation.catalog', 'laboratory'])
             ->where('laboratory_id', $laboratoryId)
+            ->where('warehouse_id', $warehouseId)
             ->where('nutrition_medicine_presentation_id', $presentationId)
             ->where('lote', trim($lote));
 
@@ -321,6 +343,7 @@ class NutritionStockController extends Controller
     {
         $request->validate([
             'laboratory_id' => 'required|exists:laboratories,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
             'nutrition_medicine_presentation_id' => 'required|exists:nutrition_medicine_presentations,id',
             'lote' => 'required|string|max:255',
             'caducidad' => 'required|date',
@@ -334,6 +357,8 @@ class NutritionStockController extends Controller
 
         try {
             $laboratoryId = (int) $request->laboratory_id;
+            $warehouseId = (int) $request->warehouse_id;
+            $this->assertWarehouseBelongsToLaboratory($warehouseId, $laboratoryId);
             $frascosIngresados = (float) $request->frascos_ingresados;
             $fechaIngreso = $request->fecha_ingreso ?: now()->toDateString();
             $lote = trim($request->lote);
@@ -348,11 +373,13 @@ class NutritionStockController extends Controller
 
             $this->validarLoteNoUsadoEnOtraPresentacion(
                 $laboratoryId,
+                $warehouseId,
                 $lote,
                 (int) $presentation->id
             );
 
             $stock = MedicineLaboratoryStock::where('laboratory_id', $laboratoryId)
+                ->where('warehouse_id', $warehouseId)
                 ->where('nutrition_medicine_presentation_id', $presentation->id)
                 ->where('lote', $lote)
                 ->lockForUpdate()
@@ -381,6 +408,7 @@ class NutritionStockController extends Controller
 
                 $stock = MedicineLaboratoryStock::create([
                     'laboratory_id' => $laboratoryId,
+                    'warehouse_id' => $warehouseId,
                     'nutrition_medicine_presentation_id' => $presentation->id,
                     'frascos_iniciales' => $frascosIngresados,
                     'frascos_actuales' => $frascosIngresados,
@@ -396,6 +424,7 @@ class NutritionStockController extends Controller
 
             MedicineStockMovement::create([
                 'medicine_laboratory_stock_id' => $stock->id,
+                'warehouse_id' => $warehouseId,
                 'user_id' => auth()->id(),
                 'tipo' => 'entrada',
                 'cantidad_ml' => $mlIngresados,
@@ -421,6 +450,7 @@ class NutritionStockController extends Controller
 
             return redirect()->route('admin.nutricionales.stocks.index', [
                 'laboratory_id' => $laboratoryId,
+                'warehouse_id' => $warehouseId,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -442,6 +472,7 @@ class NutritionStockController extends Controller
         $stock->load([
             'presentation.catalog',
             'laboratory',
+            'warehouse',
         ]);
 
         return view('admin.nutricionales.stocks.edit', compact('stock'));
@@ -492,6 +523,7 @@ class NutritionStockController extends Controller
 
             $stockDuplicado = $this->buscarLoteDuplicadoEnMismaPresentacion(
                 (int) $stock->laboratory_id,
+                (int) $stock->warehouse_id,
                 $lote,
                 (int) $stock->nutrition_medicine_presentation_id,
                 (int) $stock->id
@@ -518,6 +550,7 @@ class NutritionStockController extends Controller
 
             $this->validarLoteNoUsadoEnOtraPresentacion(
                 (int) $stock->laboratory_id,
+                (int) $stock->warehouse_id,
                 $lote,
                 (int) $stock->nutrition_medicine_presentation_id,
                 (int) $stock->id
@@ -543,6 +576,7 @@ class NutritionStockController extends Controller
 
                 MedicineStockMovement::create([
                     'medicine_laboratory_stock_id' => $stock->id,
+                    'warehouse_id' => $stock->warehouse_id,
                     'user_id' => auth()->id(),
                     'tipo' => $tipo,
                     'cantidad_ml' => abs($stockMlActual - $stockAntes),
@@ -567,6 +601,7 @@ class NutritionStockController extends Controller
 
             return redirect()->route('admin.nutricionales.stocks.index', [
                 'laboratory_id' => $stock->laboratory_id,
+                'warehouse_id' => $stock->warehouse_id,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -591,7 +626,7 @@ class NutritionStockController extends Controller
         DB::beginTransaction();
 
         try {
-            $stock->load(['presentation.catalog', 'laboratory']);
+            $stock->load(['presentation.catalog', 'laboratory', 'warehouse']);
 
             $target = MedicineLaboratoryStock::with(['presentation.catalog', 'laboratory'])
                 ->lockForUpdate()
@@ -603,6 +638,7 @@ class NutritionStockController extends Controller
 
             if (
                 (int) $target->laboratory_id !== (int) $stock->laboratory_id ||
+                (int) $target->warehouse_id !== (int) $stock->warehouse_id ||
                 (int) $target->nutrition_medicine_presentation_id !== (int) $stock->nutrition_medicine_presentation_id ||
                 trim((string) $target->lote) !== trim((string) $stock->lote)
             ) {
@@ -631,6 +667,7 @@ class NutritionStockController extends Controller
 
             MedicineStockMovement::create([
                 'medicine_laboratory_stock_id' => $targetRefrescado->id,
+                'warehouse_id' => $targetRefrescado->warehouse_id,
                 'user_id' => auth()->id(),
                 'tipo' => 'ajuste',
                 'cantidad_ml' => (float) $stock->stock_ml_actual,
@@ -656,6 +693,7 @@ class NutritionStockController extends Controller
 
             return redirect()->route('admin.nutricionales.stocks.index', [
                 'laboratory_id' => $targetRefrescado->laboratory_id,
+                'warehouse_id' => $targetRefrescado->warehouse_id,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -689,6 +727,7 @@ class NutritionStockController extends Controller
 
                 return redirect()->route('admin.nutricionales.stocks.index', [
                     'laboratory_id' => $stock->laboratory_id,
+                    'warehouse_id' => $stock->warehouse_id,
                 ]);
             }
 
@@ -702,6 +741,7 @@ class NutritionStockController extends Controller
 
             MedicineStockMovement::create([
                 'medicine_laboratory_stock_id' => $stock->id,
+                'warehouse_id' => $stock->warehouse_id,
                 'user_id' => auth()->id(),
                 'tipo' => 'merma',
                 'cantidad_ml' => $stockAntes,
@@ -725,6 +765,7 @@ class NutritionStockController extends Controller
 
             return redirect()->route('admin.nutricionales.stocks.index', [
                 'laboratory_id' => $stock->laboratory_id,
+                'warehouse_id' => $stock->warehouse_id,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -743,10 +784,13 @@ class NutritionStockController extends Controller
 
         $request->validate([
             'laboratory_id' => 'required|exists:laboratories,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
             'items' => 'required|string',
         ]);
 
         $laboratoryId = (int) $request->laboratory_id;
+        $warehouseId = (int) $request->warehouse_id;
+        $this->assertWarehouseBelongsToLaboratory($warehouseId, $laboratoryId);
         $items = json_decode($request->items, true);
 
         if (!is_array($items)) {
@@ -815,6 +859,7 @@ class NutritionStockController extends Controller
 
                 $this->validarLoteNoUsadoEnOtraPresentacion(
                     $laboratoryId,
+                    $warehouseId,
                     $lote,
                     $presentationId,
                     $stockId
@@ -828,12 +873,14 @@ class NutritionStockController extends Controller
                 if ($stockId) {
                     $stock = MedicineLaboratoryStock::where('id', $stockId)
                         ->where('laboratory_id', $laboratoryId)
+                        ->where('warehouse_id', $warehouseId)
                         ->lockForUpdate()
                         ->first();
                 }
 
                 if (!$stock) {
                     $stock = MedicineLaboratoryStock::where('laboratory_id', $laboratoryId)
+                        ->where('warehouse_id', $warehouseId)
                         ->where('nutrition_medicine_presentation_id', $presentationId)
                         ->where('lote', $lote)
                         ->lockForUpdate()
@@ -843,6 +890,7 @@ class NutritionStockController extends Controller
                 if (!$stock) {
                     $stock = MedicineLaboratoryStock::create([
                         'laboratory_id' => $laboratoryId,
+                        'warehouse_id' => $warehouseId,
                         'nutrition_medicine_presentation_id' => $presentationId,
                         'frascos_iniciales' => $frascosIniciales,
                         'frascos_actuales' => $frascosActuales,
@@ -857,6 +905,7 @@ class NutritionStockController extends Controller
 
                     MedicineStockMovement::create([
                         'medicine_laboratory_stock_id' => $stock->id,
+                        'warehouse_id' => $warehouseId,
                         'user_id' => auth()->id(),
                         'tipo' => 'entrada',
                         'cantidad_ml' => $stockMlActual,
@@ -893,6 +942,7 @@ class NutritionStockController extends Controller
 
                     MedicineStockMovement::create([
                         'medicine_laboratory_stock_id' => $stock->id,
+                        'warehouse_id' => $warehouseId,
                         'user_id' => auth()->id(),
                         'tipo' => $tipo,
                         'cantidad_ml' => abs($stockMlActual - $stockAntes),
@@ -918,6 +968,7 @@ class NutritionStockController extends Controller
 
             return redirect()->route('admin.nutricionales.stocks.index', [
                 'laboratory_id' => $laboratoryId,
+                'warehouse_id' => $warehouseId,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -930,7 +981,7 @@ class NutritionStockController extends Controller
 
     public function mermaForm(MedicineLaboratoryStock $stock)
     {
-        $stock->load(['presentation.catalog', 'laboratory']);
+        $stock->load(['presentation.catalog', 'laboratory', 'warehouse']);
 
         return view('admin.nutricionales.stocks.merma', compact('stock'));
     }
@@ -974,6 +1025,7 @@ class NutritionStockController extends Controller
 
             MedicineStockMovement::create([
                 'medicine_laboratory_stock_id' => $stock->id,
+                'warehouse_id' => $stock->warehouse_id,
                 'user_id' => auth()->id(),
                 'tipo' => 'merma',
                 'cantidad_ml' => $cantidadMl,
@@ -997,6 +1049,7 @@ class NutritionStockController extends Controller
 
             return redirect()->route('admin.nutricionales.stocks.index', [
                 'laboratory_id' => $stock->laboratory_id,
+                'warehouse_id' => $stock->warehouse_id,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -1009,7 +1062,7 @@ class NutritionStockController extends Controller
 
     public function movimientos(MedicineLaboratoryStock $stock)
     {
-        $stock->load(['presentation.catalog', 'laboratory']);
+        $stock->load(['presentation.catalog', 'laboratory', 'warehouse']);
 
         $movements = MedicineStockMovement::where('medicine_laboratory_stock_id', $stock->id)
             ->with('user')
@@ -1035,16 +1088,44 @@ class NutritionStockController extends Controller
             return back()->withErrors(['error' => 'Laboratorio invalido.']);
         }
 
-        $fileName = 'inventario_nutricional_' . str_replace(' ', '_', strtolower($laboratory->nombre)) . '.xlsx';
+        $warehouse = $this->resolveWarehouse($laboratoryId, $request->integer('warehouse_id'));
+
+        $fileName = 'inventario_nutricional_' . str_replace(' ', '_', strtolower($warehouse->name)) . '.xlsx';
 
         return Excel::download(
             new NutritionInventoryExport(
                 $laboratoryId,
+                (int) $warehouse->id,
                 (string) $request->get('q', ''),
                 (string) $request->get('stock', '')
             ),
             $fileName
         );
     }
-}
 
+    private function resolveWarehouse(int $laboratoryId, int $warehouseId = 0): Warehouse
+    {
+        $query = Warehouse::query()->where('laboratory_id', $laboratoryId);
+
+        if ($warehouseId > 0) {
+            return $query->whereKey($warehouseId)->firstOrFail();
+        }
+
+        return $query
+            ->orderByDesc('is_active')
+            ->orderBy('id')
+            ->firstOrFail();
+    }
+
+    private function assertWarehouseBelongsToLaboratory(int $warehouseId, int $laboratoryId): void
+    {
+        $exists = Warehouse::query()
+            ->whereKey($warehouseId)
+            ->where('laboratory_id', $laboratoryId)
+            ->exists();
+
+        if (! $exists) {
+            throw new \InvalidArgumentException('El almacén seleccionado no pertenece a la central de mezclas.');
+        }
+    }
+}

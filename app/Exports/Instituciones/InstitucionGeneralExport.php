@@ -58,6 +58,7 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
                     $row['fecha_facturacion'],
                     $row['numero_carta_factura'],
                     $row['fecha_carta_factura'],
+                    $row['fecha_compensacion'],
                 ];
             })
             ->all();
@@ -406,6 +407,7 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
             'fecha_facturacion' => $billing?->fecha_facturacion ?: '—',
             'numero_carta_factura' => $billing?->numero_carta_factura ?: '—',
             'fecha_carta_factura' => $billing?->fecha_carta_factura ?: '—',
+            'fecha_compensacion' => $billing?->fecha_compensacion ?: '—',
             'hospital_nombre' => $hospitalNombre ?: '',
             'fecha_orden' => $fechaOrden ? strtotime((string) $fechaOrden) : 0,
             'orden' => $rowOrder,

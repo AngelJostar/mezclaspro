@@ -4,6 +4,7 @@ const modal = document.getElementById('report-template-modal');
 if (dataElement && modal) {
     const templates = JSON.parse(dataElement.textContent || '{}');
     const updateUrlTemplate = modal.dataset.updateUrl;
+    const renameUrlTemplate = modal.dataset.renameUrl;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
     const actions = document.getElementById('report-format-actions');
     const selectedName = document.getElementById('report-format-selected-name');
@@ -16,6 +17,7 @@ if (dataElement && modal) {
     let selectedKey = Object.keys(templates)[0] ?? null;
     let mode = 'preview';
     let working = null;
+    let activeNameEditor = null;
 
     const clone = (value) => JSON.parse(JSON.stringify(value));
     const escapeHtml = (value) => String(value ?? '')
@@ -31,6 +33,138 @@ if (dataElement && modal) {
         .replaceAll('{{fecha_generacion}}', new Intl.DateTimeFormat('es-MX').format(new Date()))
         .replaceAll('{{periodo}}', 'Agosto 2026')
         .replaceAll('{{hoja}}', 'Nutrición parenteral');
+
+    function reportNameEditor(key) {
+        return document.querySelector(`[data-report-template-name-editor="${key}"]`);
+    }
+
+    function renderReportName(key) {
+        const editor = reportNameEditor(key);
+        const template = templates[key];
+
+        if (!editor || !template) return;
+
+        editor.className = 'flex items-center gap-1 normal-case';
+        editor.replaceChildren();
+
+        const label = document.createElement('span');
+        label.dataset.reportTemplateNameText = '';
+        label.className = 'min-w-0 flex-1 uppercase leading-tight';
+        label.textContent = template.name;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.reportTemplateRename = key;
+        button.className = 'inline-flex size-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-blue-700 hover:border-blue-400 hover:bg-blue-50';
+        button.title = 'Editar nombre del reporte';
+        button.setAttribute('aria-label', `Editar nombre de ${template.name}`);
+        button.innerHTML = '<i class="fa-solid fa-pen text-[10px]"></i>';
+
+        editor.append(label, button);
+    }
+
+    function startReportNameEdit(key) {
+        if (!templates[key]) return;
+
+        if (activeNameEditor && activeNameEditor !== key) {
+            renderReportName(activeNameEditor);
+        }
+
+        const editor = reportNameEditor(key);
+        if (!editor) return;
+
+        activeNameEditor = key;
+        editor.className = 'flex min-w-0 items-center gap-1 normal-case';
+        editor.replaceChildren();
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = templates[key].name;
+        input.maxLength = 120;
+        input.dataset.reportTemplateNameInput = '';
+        input.className = 'h-8 w-0 min-w-0 flex-1 rounded border-slate-300 px-1.5 text-xs font-medium normal-case text-slate-800 focus:border-blue-500 focus:ring-blue-500';
+
+        const save = document.createElement('button');
+        save.type = 'button';
+        save.dataset.reportTemplateNameSave = key;
+        save.className = 'inline-flex size-6 shrink-0 items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60';
+        save.title = 'Guardar nombre';
+        save.setAttribute('aria-label', 'Guardar nombre');
+        save.innerHTML = '<i class="fa-solid fa-check text-[11px]"></i>';
+
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.dataset.reportTemplateNameCancel = key;
+        cancel.className = 'inline-flex size-6 shrink-0 items-center justify-center rounded bg-red-600 text-white hover:bg-red-700';
+        cancel.title = 'Cancelar';
+        cancel.setAttribute('aria-label', 'Cancelar edición');
+        cancel.innerHTML = '<i class="fa-solid fa-xmark text-[12px]"></i>';
+
+        editor.append(input, save, cancel);
+        input.focus();
+        input.select();
+    }
+
+    async function saveReportName(key) {
+        const editor = reportNameEditor(key);
+        const input = editor?.querySelector('[data-report-template-name-input]');
+        const save = editor?.querySelector('[data-report-template-name-save]');
+        const name = input?.value.trim();
+
+        if (!editor || !input || !save) return;
+
+        if (!name) {
+            input.setCustomValidity('Escribe el nombre del reporte.');
+            input.reportValidity();
+            return;
+        }
+
+        input.setCustomValidity('');
+        input.disabled = true;
+        save.disabled = true;
+
+        try {
+            const response = await fetch(renameUrlTemplate.replace('__REPORT__', key), {
+                method: 'PATCH',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({ name }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.message || 'No fue posible guardar el nombre.');
+
+            templates[key] = payload.template;
+            activeNameEditor = null;
+            renderReportName(key);
+
+            if (selectedKey === key) {
+                selectedName.textContent = payload.template.name;
+                if (!modal.classList.contains('hidden')) {
+                    modalTitle.textContent = payload.template.name;
+                }
+                if (working) working.name = payload.template.name;
+            }
+
+            window.Swal?.fire({
+                icon: 'success',
+                title: 'Nombre guardado',
+                text: payload.message,
+                confirmButtonText: 'Aceptar',
+            });
+        } catch (error) {
+            input.disabled = false;
+            save.disabled = false;
+            window.Swal?.fire({
+                icon: 'error',
+                title: 'No se pudo guardar',
+                text: error.message,
+                confirmButtonText: 'Aceptar',
+            });
+        }
+    }
 
     function chooseTemplate(key) {
         if (!templates[key]) return;
@@ -255,7 +389,43 @@ if (dataElement && modal) {
     modal.addEventListener('click', (event) => {
         if (event.target === modal) closeModal();
     });
+
+    document.addEventListener('click', (event) => {
+        const rename = event.target.closest?.('[data-report-template-rename]');
+        if (rename) {
+            startReportNameEdit(rename.dataset.reportTemplateRename);
+            return;
+        }
+
+        const save = event.target.closest?.('[data-report-template-name-save]');
+        if (save) {
+            saveReportName(save.dataset.reportTemplateNameSave);
+            return;
+        }
+
+        const cancel = event.target.closest?.('[data-report-template-name-cancel]');
+        if (cancel) {
+            activeNameEditor = null;
+            renderReportName(cancel.dataset.reportTemplateNameCancel);
+        }
+    });
     document.addEventListener('keydown', (event) => {
+        const input = event.target.closest?.('[data-report-template-name-input]');
+
+        if (input) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveReportName(activeNameEditor);
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                const key = activeNameEditor;
+                activeNameEditor = null;
+                if (key) renderReportName(key);
+            }
+
+            return;
+        }
+
         if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
 
