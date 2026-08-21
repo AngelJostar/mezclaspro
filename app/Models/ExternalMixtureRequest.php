@@ -43,4 +43,9 @@ class ExternalMixtureRequest extends Model
     {
         return $this->hasMany(ExternalMixtureDocument::class);
     }
+
+    public function webhookDeliveries(): HasMany
+    {
+        return $this->hasMany(ExternalMixtureWebhookDelivery::class);
+    }
 }

@@ -178,6 +178,14 @@ class ExternalMixtureMaterializerTest extends TestCase
         $this->assertFalse($refreshed->status_details['inventory']['consumed']);
         $this->assertTrue($refreshed->status_details['remission']['available']);
         $this->assertSame('REM-NPT-1001', $refreshed->status_details['remission']['number']);
+        $this->assertSame('MXN', $refreshed->status_details['remission']['currency']);
+        $this->assertCount(2, $refreshed->status_details['remission']['items']);
+        $pricedItem = collect($refreshed->status_details['remission']['items'])
+            ->firstWhere('product_code', 'GLUCOSE-50');
+        $this->assertEquals(100.0, $pricedItem['quantity']);
+        $this->assertEquals(2.5, $pricedItem['unit_price']);
+        $this->assertEquals(250.0, $pricedItem['amount']);
+        $this->assertEquals(285.0, $refreshed->status_details['remission']['total']);
 
         $stock = \App\Models\Nutricionales\MedicineLaboratoryStock::query()->create([
             'nutrition_medicine_presentation_id' => $presentation->id,

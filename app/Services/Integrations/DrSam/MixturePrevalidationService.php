@@ -4,6 +4,7 @@ namespace App\Services\Integrations\DrSam;
 
 use App\Models\Hospital;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
+use App\Models\Nutricionales\NutriMedicineListItem;
 use App\Models\Oncologicos\MedicinePresentation;
 use Illuminate\Support\Collection;
 
@@ -25,6 +26,10 @@ class MixturePrevalidationService
                 : $this->validateOncologyItem($hospital, $item, $index, $errors);
         })->values();
 
+        if ($type === 'npt') {
+            $this->validateNptAuxiliarySupplies($hospital, $errors);
+        }
+
         return [
             'valid' => $errors->isEmpty(),
             'medical_unit' => [
@@ -36,6 +41,30 @@ class MixturePrevalidationService
             'items' => $items,
             'errors' => $errors->values(),
         ];
+    }
+
+    private function validateNptAuxiliarySupplies(Hospital $hospital, Collection $errors): void
+    {
+        $bag = NutriMedicineListItem::query()
+            ->with(['presentation.catalog.input', 'presentation.stocks' => function ($query) use ($hospital): void {
+                $query->where('laboratory_id', $hospital->laboratory_id)
+                    ->where('is_active', true)
+                    ->where('frascos_actuales', '>', 0)
+                    ->whereDate('caducidad', '>=', today());
+            }])
+            ->where('nutri_medicine_list_id', $hospital->nutri_medicine_list_id)
+            ->get()
+            ->first(fn ($item) => (int) ($item->presentation?->catalog?->input?->category_id) === 6);
+
+        if (! $bag?->presentation) {
+            $errors->push($this->error('auxiliary_supply_not_configured', 'npt.eva_bag', 'La lista nutricional de la unidad no tiene una Bolsa EVA operativa configurada.'));
+
+            return;
+        }
+
+        if ($bag->presentation->stocks->sum('frascos_actuales') < 1) {
+            $errors->push($this->error('insufficient_auxiliary_stock', 'npt.eva_bag', 'No hay existencia disponible de Bolsa EVA para preparar la solicitud.'));
+        }
     }
 
     private function validateNptItem(Hospital $hospital, array $item, int $index, Collection $errors): array

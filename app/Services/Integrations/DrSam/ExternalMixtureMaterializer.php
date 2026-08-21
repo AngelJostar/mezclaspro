@@ -21,6 +21,10 @@ use Throwable;
 
 class ExternalMixtureMaterializer
 {
+    public function __construct(private ExternalMixtureNotificationService $notifications)
+    {
+    }
+
     public function materialize(ExternalMixtureRequest $external): bool
     {
         if ($external->materialized_id) {
@@ -33,6 +37,7 @@ class ExternalMixtureMaterializer
                         $this->attachInfusionSet($external, $request);
                     } catch (Throwable $exception) {
                         $external->update(['last_error' => mb_substr($exception->getMessage(), 0, 4000)]);
+                        $this->notifications->notify($external->fresh());
 
                         return false;
                     }
@@ -70,6 +75,7 @@ class ExternalMixtureMaterializer
                 'status' => 'materialization_failed',
                 'last_error' => mb_substr($exception->getMessage(), 0, 4000),
             ]);
+            $this->notifications->notify($external->fresh());
 
             return false;
         }
@@ -203,7 +209,8 @@ class ExternalMixtureMaterializer
             ->with(['presentation.catalog.input', 'presentation.stocks' => function ($query) use ($external): void {
                 $query->where('laboratory_id', $external->hospital->laboratory_id)
                     ->where('is_active', true)
-                    ->where('stock_ml_actual', '>', 0)
+                    ->where('frascos_actuales', '>', 0)
+                    ->whereDate('caducidad', '>=', today())
                     ->orderBy('caducidad')
                     ->orderBy('id');
             }])

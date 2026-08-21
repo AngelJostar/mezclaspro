@@ -172,7 +172,7 @@ class MixturesDemoSeeder extends Seeder
             ],
             [
                 'frascos_iniciales' => 100, 'frascos_actuales' => 95,
-                'stock_ml_inicial' => 100, 'stock_ml_actual' => 95,
+                'stock_ml_inicial' => 200000, 'stock_ml_actual' => 190000,
                 'caducidad' => now()->addYear()->toDateString(),
                 'fecha_ingreso' => now()->subMonth()->toDateString(),
                 'numero_factura' => 'FAC-EVA-DEMO', 'is_active' => true,

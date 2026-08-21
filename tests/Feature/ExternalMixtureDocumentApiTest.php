@@ -16,6 +16,31 @@ class ExternalMixtureDocumentApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_status_endpoint_exposes_an_actionable_materialization_error(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Dr. Sam', 'lastname' => 'Integracion', 'username' => 'drsam.status.error',
+            'password' => bcrypt('secret'), 'is_active' => true,
+        ]);
+        Sanctum::actingAs($user, ['requests:read']);
+        $hospital = Hospital::query()->create([
+            'external_code' => 'HOSP-STATUS-1', 'name' => 'Hospital Estado',
+            'adress' => 'Direccion', 'is_active' => true,
+        ]);
+        $external = ExternalMixtureRequest::query()->create([
+            'remote_request_id' => (string) Str::uuid(), 'local_external_id' => (string) Str::uuid(),
+            'hospital_id' => $hospital->id, 'catalog_type' => 'npt', 'status' => 'materialization_failed',
+            'payload_hash' => str_repeat('e', 64), 'payload' => [], 'received_at' => now(),
+            'last_error' => 'La Bolsa EVA configurada no tiene existencia disponible.',
+        ]);
+
+        $this->getJson('/api/internal/v1/mixture-requests/'.$external->remote_request_id)
+            ->assertOk()
+            ->assertJsonPath('data.integration_stage', 'materialization')
+            ->assertJsonPath('data.has_error', true)
+            ->assertJsonPath('data.status_message', 'La Bolsa EVA configurada no tiene existencia disponible.');
+    }
+
     public function test_it_stores_a_private_document_idempotently(): void
     {
         Storage::fake('local');

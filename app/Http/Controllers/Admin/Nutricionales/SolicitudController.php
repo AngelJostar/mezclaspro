@@ -2109,4 +2109,3 @@ class SolicitudController extends Controller
         return Excel::download(new SolicitudesExport, 'solicitudes.xlsx');
     }
 }
-

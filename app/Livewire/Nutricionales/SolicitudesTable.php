@@ -19,6 +19,10 @@ class SolicitudesTable extends Component
 
     protected $paginationTheme = 'tailwind';
 
+    protected $listeners = [
+        'nutricional-inspeccionada' => '$refresh',
+    ];
+
     public function sortBy($field)
     {
         if ($this->sortField === $field) {

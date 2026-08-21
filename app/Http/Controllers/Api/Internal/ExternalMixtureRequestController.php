@@ -64,6 +64,9 @@ class ExternalMixtureRequestController extends Controller
             'request_id' => $record->remote_request_id,
             'local_external_id' => $record->local_external_id,
             'status' => $record->status,
+            'integration_stage' => $this->integrationStage($record),
+            'status_message' => $this->statusMessage($record),
+            'has_error' => in_array($record->status, ['materialization_failed', 'rejected', 'cancelled'], true),
             'status_details' => $record->status_details,
             'status_checked_at' => $record->status_checked_at?->toIso8601String(),
             'remission' => data_get($record->status_details, 'remission'),
@@ -84,5 +87,41 @@ class ExternalMixtureRequestController extends Controller
             'materialized_at' => $record->materialized_at?->toIso8601String(),
             'last_error' => $record->last_error,
         ];
+    }
+
+    private function integrationStage(ExternalMixtureRequest $record): string
+    {
+        return match ($record->status) {
+            'received' => 'received',
+            'materialization_failed', 'materialized', 'pending' => 'materialization',
+            'authorized', 'preparing', 'ready' => 'operation',
+            'delivered' => 'delivery',
+            'rejected', 'cancelled' => 'closed',
+            default => 'synchronization',
+        };
+    }
+
+    private function statusMessage(ExternalMixtureRequest $record): string
+    {
+        if (filled($record->last_error)) {
+            return mb_substr($record->last_error, 0, 500);
+        }
+
+        $reason = data_get($record->status_details, 'reason');
+        if (filled($reason)) {
+            return mb_substr((string) $reason, 0, 500);
+        }
+
+        return match ($record->status) {
+            'received' => 'Solicitud recibida desde Dr. Sam; pendiente de materialización.',
+            'materialized', 'pending' => 'Solicitud creada en Mezclas y pendiente de operación.',
+            'authorized' => 'Solicitud autorizada para preparación.',
+            'preparing' => 'La mezcla se encuentra en preparación.',
+            'ready' => 'La mezcla está lista para entrega.',
+            'delivered' => 'La mezcla fue entregada y conciliada.',
+            'rejected' => 'La solicitud fue rechazada en Mezclas.',
+            'cancelled' => 'La solicitud fue cancelada.',
+            default => 'Estado de integración actualizado.',
+        };
     }
 }

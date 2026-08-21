@@ -15,6 +15,9 @@ class Kernel extends ConsoleKernel
         $schedule->command('integration:materialize-mixtures --limit=50')
             ->everyMinute()
             ->withoutOverlapping();
+        $schedule->command('integration:retry-webhooks --limit=50')
+            ->everyMinute()
+            ->withoutOverlapping();
     }
 
     /**

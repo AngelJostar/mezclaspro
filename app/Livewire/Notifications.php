@@ -14,23 +14,27 @@ class Notifications extends Component
         ];
     }
     public function getNotificationsProperty(){
-        return auth()->user()->notifications->take($this->count);
+        return auth()->user()->notifications()->latest()->limit($this->count)->get();
+    }
+
+    public function getUnreadCountProperty(): int
+    {
+        return auth()->user()->unreadNotifications()->count();
     }
 
     public function readNotification($id){
-        auth()->user()->notifications->find($id)->markAsRead();
+        auth()->user()->notifications()->findOrFail($id)->markAsRead();
     }
 
     public function resetNotification(){
-        auth()->user()->notification = 0;
-        auth()->user()->save();
+        auth()->user()->unreadNotifications->markAsRead();
     }
     public function incrementCount(){
         $this->count +=3;
     }
     public function render()
     {
-        $notifications = auth()->user()->notifications;
+        $notifications = auth()->user()->notifications()->latest()->get();
         return view('livewire.notifications', compact('notifications'));
     }
 }

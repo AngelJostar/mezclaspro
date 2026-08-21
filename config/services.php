@@ -35,6 +35,8 @@ return [
         'webhook_url' => env('DR_SAM_WEBHOOK_URL'),
         'webhook_secret' => env('DR_SAM_WEBHOOK_SECRET'),
         'timeout' => (int) env('DR_SAM_WEBHOOK_TIMEOUT', 5),
+        'connect_timeout' => (int) env('DR_SAM_WEBHOOK_CONNECT_TIMEOUT', 3),
+        'webhook_max_attempts' => (int) env('DR_SAM_WEBHOOK_MAX_ATTEMPTS', 8),
     ],
 
 ];
