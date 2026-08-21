@@ -117,6 +117,7 @@ class SolicitudController extends Controller
             ->lockForUpdate()
             ->select(
                 'mb.id',
+                'mb.warehouse_id',
                 'mb.lote',
                 'mb.caducidad',
                 'mb.stock_actual',
@@ -159,6 +160,7 @@ class SolicitudController extends Controller
         DB::table('medicine_batch_movements')->insert([
             'medicine_batch_id'         => $batch->id,
             'laboratory_id'             => $laboratoryId,
+            'warehouse_id'              => $batch->warehouse_id,
             'user_id'                   => $userId,
             'movement_type'             => 'salida',
             'quantity'                  => $unidades,

@@ -21,6 +21,10 @@ if (typeof window.createExcelColumnFilters !== 'function') {
             const cell = row.cells[columnIndex];
             if (!cell) return '';
 
+            if (Object.prototype.hasOwnProperty.call(cell.dataset, 'filterValue')) {
+                return String(cell.dataset.filterValue || '').trim();
+            }
+
             const controls = Array.from(cell.querySelectorAll('input:not([type="hidden"]), select, textarea'));
             if (controls.length > 0) {
                 return controls.map((control) => {
@@ -46,6 +50,11 @@ if (typeof window.createExcelColumnFilters !== 'function') {
             .replace(/[\u0300-\u036f]/g, '')
             .trim();
         const valuesForColumn = (columnIndex) => {
+            const configuredValues = config.valuesByColumn?.[columnIndex];
+            if (Array.isArray(configuredValues)) {
+                return configuredValues;
+            }
+
             const values = rows
                 .map((row) => cellValue(row, columnIndex))
                 .filter((value) => value !== '');
@@ -110,13 +119,17 @@ if (typeof window.createExcelColumnFilters !== 'function') {
             values.forEach((value) => {
                 const label = document.createElement('label');
                 const checkbox = document.createElement('input');
+                const swatch = document.createElement('span');
                 const text = document.createElement('span');
+                const swatchClasses = config.swatchesByColumn?.[activeColumn]?.[value];
 
                 label.className = 'js-column-filter-option flex cursor-pointer items-start gap-2 rounded px-1 py-1 hover:bg-slate-100';
                 label.dataset.searchValue = searchableValue(value);
                 checkbox.type = 'checkbox';
                 checkbox.className = 'mt-0.5 rounded border-slate-300 text-blue-700 focus:ring-blue-500';
                 checkbox.checked = draftValues.has(value);
+                swatch.className = `mt-1 h-3 w-3 shrink-0 rounded-full border ${swatchClasses || 'hidden'}`;
+                swatch.setAttribute('aria-hidden', 'true');
                 text.className = 'min-w-0 break-words text-xs leading-5';
                 text.textContent = value;
 
@@ -129,7 +142,7 @@ if (typeof window.createExcelColumnFilters !== 'function') {
                     updateAllCheckbox();
                 });
 
-                label.append(checkbox, text);
+                label.append(checkbox, swatch, text);
                 optionsContainer.appendChild(label);
             });
 

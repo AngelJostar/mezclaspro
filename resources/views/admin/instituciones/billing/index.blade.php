@@ -12,17 +12,28 @@
 
     @php
         $isHistory = $billingSection === 'history';
-        $billingListRoute = $isHistory
-            ? route('admin.instituciones.billing.history')
-            : route('admin.instituciones.billing.index');
+        $isReceivable = $billingSection === 'receivable';
+        $billingListRoute = match ($billingSection) {
+            'history' => route('admin.instituciones.billing.history'),
+            'receivable' => route('admin.instituciones.billing.receivable'),
+            default => route('admin.instituciones.billing.index'),
+        };
+        $billingSectionLabel = match ($billingSection) {
+            'history' => 'Historial',
+            'receivable' => 'Por Cobrar',
+            default => 'Pendiente',
+        };
+        $billingSectionDescription = match ($billingSection) {
+            'history' => 'Consulta las solicitudes cuya facturacion ya fue concluida.',
+            'receivable' => 'Consulta las remisiones facturadas que estan listas para cobrar.',
+            default => 'Administra las solicitudes pendientes de concluir su facturacion.',
+        };
     @endphp
 
     <div class="mt-2 mb-4">
-        <h1 class="text-2xl font-medium text-gray-800">Facturacion / {{ $isHistory ? 'Historial' : 'Pendientes' }}</h1>
+        <h1 class="text-2xl font-medium text-gray-800">Facturacion / {{ $billingSectionLabel }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-            {{ $isHistory
-                ? 'Consulta las solicitudes cuya facturacion ya fue concluida.'
-                : 'Administra las solicitudes pendientes de concluir su facturacion.' }}
+            {{ $billingSectionDescription }}
         </p>
     </div>
 
@@ -38,6 +49,44 @@
         </div>
     </div>
 
+    @if ($isReceivable)
+        <div id="billing-observations-modal" class="fixed inset-0 z-[110] hidden items-center justify-center p-4"
+            role="dialog" aria-modal="true" aria-labelledby="billing-observations-title" aria-hidden="true">
+            <button type="button" class="absolute inset-0 bg-slate-900/50" onclick="closeBillingObservations()"
+                aria-label="Cerrar observaciones"></button>
+
+            <div class="relative z-10 w-full max-w-xl rounded-lg border border-slate-200 bg-white shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                    <div>
+                        <h2 id="billing-observations-title" class="text-base font-semibold text-slate-900">Observaciones</h2>
+                        <p id="billing-observations-remision" class="mt-0.5 text-xs text-slate-500"></p>
+                    </div>
+                    <button type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        onclick="closeBillingObservations()" title="Cerrar" aria-label="Cerrar">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="p-4">
+                    <textarea id="billing-observations-editor" rows="7" maxlength="5000"
+                        class="w-full resize-y rounded-md border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="Escribe una observación sobre esta remisión..."></textarea>
+                    <p id="billing-observations-counter" class="mt-1 text-right text-xs text-slate-400">0 / 5000</p>
+                </div>
+
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">
+                    <button type="button"
+                        class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        onclick="closeBillingObservations()">Cancelar</button>
+                    <button id="billing-observations-save" type="button"
+                        class="rounded-md bg-azul-prodifem px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                        onclick="saveBillingObservations()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5"
         data-billing-section="{{ $billingSection }}"
         x-data="billingModule(@js($instituciones->mapWithKeys(fn($institucion) => [
@@ -46,15 +95,25 @@
                 'name' => $hospital->name,
             ])->values(),
         ])), @js($institucionId), @js($hospitalId))">
-        <div class="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div class="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
-                <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Pendientes en amarillo</p>
-                <p class="text-xl font-semibold leading-none text-amber-800">{{ $billingDueCounts['yellow'] }}</p>
+        <div class="mb-3 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
+            <div class="flex min-h-[58px] items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Pendientes en amarillo</p>
+                    <p class="mt-1 text-xs leading-4 text-amber-800">
+                        Pendiente de facturar que ya pasó al próximo mes calendario.
+                    </p>
+                </div>
+                <p class="text-lg font-semibold leading-none text-amber-800">{{ $billingDueCounts['yellow'] }}</p>
             </div>
 
-            <div class="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2">
-                <p class="text-[11px] font-semibold uppercase tracking-wide text-red-700">Pendientes en rojo</p>
-                <p class="text-xl font-semibold leading-none text-red-700">{{ $billingDueCounts['red'] }}</p>
+            <div class="flex min-h-[58px] items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-1.5">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-red-700">Pendientes en rojo</p>
+                    <p class="mt-1 text-xs leading-4 text-red-800">
+                        Pendiente de facturar en donde ya vencieron los 15 días del siguiente mes calendario.
+                    </p>
+                </div>
+                <p class="text-lg font-semibold leading-none text-red-700">{{ $billingDueCounts['red'] }}</p>
             </div>
         </div>
 
@@ -195,7 +254,7 @@
 
         <div id="billing-table-scroll" class="overflow-x-auto border border-slate-300">
             <table id="billing-requests-table-{{ $billingSection }}"
-                class="min-w-[3010px] w-full border-collapse text-xs text-left text-slate-800">
+                class="w-full border-collapse text-xs text-left text-slate-800 {{ $isReceivable ? 'min-w-[3300px]' : 'min-w-[3010px]' }}">
                 <thead class="bg-slate-100 uppercase text-slate-700">
                     <tr>
                         <x-filterable-table-header column="0" trigger-class="js-billing-column-filter" compact
@@ -244,6 +303,14 @@
                         <th class="border border-slate-300 px-2 py-1 text-center font-semibold whitespace-nowrap">Facturar</th>
                         <x-filterable-table-header column="20" trigger-class="js-billing-column-filter" compact
                             align="center" class="border border-slate-300">Vencimiento</x-filterable-table-header>
+                        @if ($isReceivable)
+                            <th class="min-w-[165px] border border-slate-300 px-2 py-1 text-center font-semibold whitespace-nowrap">
+                                Fecha de compensación
+                            </th>
+                            <th class="min-w-[110px] border border-slate-300 px-2 py-1 text-center font-semibold whitespace-nowrap">
+                                Observaciones
+                            </th>
+                        @endif
                         <th class="min-w-[190px] border border-slate-300 px-2 py-1 font-semibold whitespace-nowrap">
                             @if (! $isHistory)
                                 <div class="flex items-center justify-center gap-2 normal-case">
@@ -254,7 +321,7 @@
                                     <button id="billing-conclude-selected" type="button" disabled
                                         class="inline-flex h-7 items-center justify-center rounded-sm bg-slate-400 px-2 py-1 text-xs font-semibold text-white transition cursor-not-allowed"
                                         onclick="confirmSelectedBillingConclusions()">
-                                        Concluir todas
+                                        Concluir selección
                                     </button>
                                 </div>
                             @else
@@ -275,13 +342,12 @@
                             $billing = $item['billing'];
                             $formId = 'billing-form-' . $origenTipo . '-' . $record->id;
                             $facturacionCompletada = mb_strtolower(trim((string) ($billing?->estatus_facturacion ?? ''))) === 'completado';
-                            $facturacionListaParaConcluir = collect([
-                                $billing?->folio_factura_uuid,
-                                $billing?->folio_interno,
-                                $billing?->fecha_facturacion,
-                                $billing?->numero_carta_factura,
-                                $billing?->fecha_carta_factura,
-                            ])->every(fn ($value) => trim((string) $value) !== '');
+                            $facturacionListaParaConcluir = $billing?->hasReceivableInvoiceData() ?? false;
+                            $vencimientoFiltro = match ($item['vencimiento']['status']) {
+                                'red' => 'Rojo',
+                                'yellow' => 'Amarillo',
+                                default => 'Sin Color',
+                            };
                         @endphp
                         <tr class="js-billing-filter-row group bg-white align-middle hover:bg-blue-50/40">
                             <td class="sticky left-0 z-20 min-w-[120px] border border-slate-200 bg-white px-2 py-1 whitespace-nowrap shadow-[3px_0_5px_rgba(15,23,42,0.10)] group-hover:bg-blue-50">
@@ -389,7 +455,8 @@
                                     title="Incluir esta solicitud en el Excel ampliado"
                                     aria-label="Incluir esta solicitud en el Excel ampliado">
                             </td>
-                            <td data-billing-expiration-for="{{ $formId }}" class="border border-slate-200 px-2 py-1 min-w-[100px] text-center">
+                            <td data-billing-expiration-for="{{ $formId }}" data-filter-value="{{ $vencimientoFiltro }}"
+                                class="border border-slate-200 px-2 py-1 min-w-[100px] text-center">
                                 @if ($item['vencimiento']['status'] === 'yellow')
                                     <span
                                         class="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-amber-300 bg-amber-100 px-2 font-bold text-amber-800"
@@ -408,34 +475,60 @@
                                     <span class="text-slate-400">&mdash;</span>
                                 @endif
                             </td>
+                            @if ($isReceivable)
+                                <td class="min-w-[165px] border border-slate-200 px-2 py-1 text-center">
+                                    <input type="date" form="{{ $formId }}" name="fecha_compensacion"
+                                        value="{{ $billing?->fecha_compensacion }}"
+                                        class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
+                                </td>
+                                <td class="min-w-[110px] border border-slate-200 px-2 py-1 text-center">
+                                    <textarea id="{{ $formId }}-observaciones" form="{{ $formId }}" name="observaciones"
+                                        data-billing-observations-field-for="{{ $formId }}" class="hidden">{{ $billing?->observaciones }}</textarea>
+                                    <button type="button" data-billing-observations-for="{{ $formId }}"
+                                        data-billing-remision="{{ $item['remision'] }}"
+                                        class="js-billing-observations-button inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-lg transition hover:bg-slate-50 {{ filled(trim((string) $billing?->observaciones)) ? 'text-amber-500' : 'text-slate-400' }}"
+                                        onclick="openBillingObservations(this)"
+                                        title="{{ filled(trim((string) $billing?->observaciones)) ? 'Editar observaciones' : 'Agregar observaciones' }}"
+                                        aria-label="{{ filled(trim((string) $billing?->observaciones)) ? 'Editar observaciones' : 'Agregar observaciones' }}">
+                                        <span class="text-base font-black leading-none" aria-hidden="true">&#9998;</span>
+                                    </button>
+                                </td>
+                            @endif
                             <td class="min-w-[190px] border border-slate-200 px-2 py-1 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    @if (! $isHistory)
+                                    @if ($isHistory)
+                                        <button type="button"
+                                            data-billing-history-actions
+                                            data-billing-move-url="{{ route('admin.instituciones.billing.move', $billing) }}"
+                                            data-billing-remision="{{ $item['remision'] }}"
+                                            class="inline-flex h-7 min-w-[96px] items-center justify-center gap-2 rounded-sm bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                                            onclick="openBillingHistoryActions(this)"
+                                            aria-haspopup="menu" aria-expanded="false">
+                                            <span>Concluida</span>
+                                            <span aria-hidden="true">&#9662;</span>
+                                        </button>
+                                    @else
                                         <input type="checkbox"
                                             class="js-billing-conclusion-select h-4 w-4 shrink-0 rounded border-slate-300 text-blue-700 focus:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
                                             data-billing-select-for="{{ $formId }}"
                                             @disabled($facturacionCompletada || ! $facturacionListaParaConcluir)
                                             title="Seleccionar esta solicitud"
                                             aria-label="Seleccionar esta solicitud">
-                                    @endif
-                                    <button type="button"
-                                        data-billing-conclude-for="{{ $formId }}"
-                                        data-billing-completed="{{ $facturacionCompletada ? '1' : '0' }}"
-                                        @disabled($facturacionCompletada || ! $facturacionListaParaConcluir)
-                                        class="inline-flex h-7 min-w-[86px] items-center justify-center rounded-sm px-2 py-1 text-xs font-semibold text-white transition {{ $facturacionCompletada ? 'cursor-default bg-emerald-600' : ($facturacionListaParaConcluir ? 'bg-azul-prodifem hover:bg-blue-800' : 'cursor-not-allowed bg-slate-400') }}"
-                                        onclick="confirmBillingConclusion(document.getElementById('{{ $formId }}'), this)">
-                                        @if ($facturacionCompletada)
-                                            <i class="fa-solid fa-circle-check mr-1"></i>Concluida
-                                        @else
+                                        <button type="button"
+                                            data-billing-conclude-for="{{ $formId }}"
+                                            data-billing-completed="{{ $facturacionCompletada ? '1' : '0' }}"
+                                            @disabled($facturacionCompletada || ! $facturacionListaParaConcluir)
+                                            class="inline-flex h-7 min-w-[86px] items-center justify-center rounded-sm px-2 py-1 text-xs font-semibold text-white transition {{ $facturacionCompletada ? 'cursor-default bg-emerald-600' : ($facturacionListaParaConcluir ? 'bg-azul-prodifem hover:bg-blue-800' : 'cursor-not-allowed bg-slate-400') }}"
+                                            onclick="confirmBillingConclusion(document.getElementById('{{ $formId }}'), this)">
                                             Concluir
-                                        @endif
-                                    </button>
+                                        </button>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="22" class="border border-slate-200 px-2 py-6 text-center text-slate-400">
+                            <td colspan="{{ $isReceivable ? 24 : 22 }}" class="border border-slate-200 px-2 py-6 text-center text-slate-400">
                                 No se encontraron registros para los filtros seleccionados.
                             </td>
                         </tr>
@@ -462,6 +555,23 @@
         </div>
     </div>
 
+    @if ($isHistory)
+        <div id="billing-history-actions-menu"
+            class="fixed z-[120] hidden w-56 overflow-hidden rounded-md border border-slate-300 bg-white p-1 text-sm shadow-xl"
+            role="menu" aria-hidden="true">
+            <button type="button" role="menuitem" data-history-destination="receivable"
+                class="flex w-full items-center rounded px-3 py-2 text-left font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-800"
+                onclick="confirmBillingHistoryMove('receivable')">
+                Cambiar a Por Cobrar
+            </button>
+            <button type="button" role="menuitem" data-history-destination="pending"
+                class="flex w-full items-center rounded px-3 py-2 text-left font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-800"
+                onclick="confirmBillingHistoryMove('pending')">
+                Cambiar a Pendientes
+            </button>
+        </div>
+    @endif
+
     <script>
         @include('admin.catalogo-listas.partials.column-filter-script')
 
@@ -473,6 +583,16 @@
                 rowSelector: '.js-billing-filter-row',
                 triggerSelector: '.js-billing-column-filter',
                 instanceId: `billing-requests-${billingSection}`,
+                valuesByColumn: {
+                    20: ['Sin Color', 'Rojo', 'Amarillo'],
+                },
+                swatchesByColumn: {
+                    20: {
+                        'Sin Color': 'border-slate-300 bg-white',
+                        'Rojo': 'border-red-300 bg-red-100',
+                        'Amarillo': 'border-amber-300 bg-amber-100',
+                    },
+                },
                 onChange() {
                     document.querySelectorAll('.js-billing-filter-row').forEach((row) => {
                         row.classList.toggle('hidden', row.dataset.columnFilterMatch === '0');
@@ -518,6 +638,236 @@
         }
 
         let billingToastTimer = null;
+        let activeBillingObservationsButton = null;
+        let activeBillingObservationsField = null;
+        let billingObservationsSaving = false;
+        let activeBillingHistoryActionButton = null;
+        let billingHistoryMoveSaving = false;
+
+        function closeBillingHistoryActions() {
+            if (billingHistoryMoveSaving) return;
+
+            const menu = document.getElementById('billing-history-actions-menu');
+            if (!menu) return;
+
+            menu.classList.add('hidden');
+            menu.setAttribute('aria-hidden', 'true');
+            activeBillingHistoryActionButton?.setAttribute('aria-expanded', 'false');
+            activeBillingHistoryActionButton = null;
+        }
+
+        function openBillingHistoryActions(button) {
+            const menu = document.getElementById('billing-history-actions-menu');
+            if (!menu || !button || billingHistoryMoveSaving) return;
+
+            if (activeBillingHistoryActionButton === button && !menu.classList.contains('hidden')) {
+                closeBillingHistoryActions();
+                return;
+            }
+
+            activeBillingHistoryActionButton?.setAttribute('aria-expanded', 'false');
+            activeBillingHistoryActionButton = button;
+            button.setAttribute('aria-expanded', 'true');
+            menu.classList.remove('hidden');
+            menu.setAttribute('aria-hidden', 'false');
+
+            const rect = button.getBoundingClientRect();
+            const menuWidth = 224;
+            const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8);
+            const top = Math.min(rect.bottom + 6, window.innerHeight - menu.offsetHeight - 8);
+            menu.style.left = `${left}px`;
+            menu.style.top = `${Math.max(8, top)}px`;
+        }
+
+        async function confirmBillingHistoryMove(destination) {
+            const button = activeBillingHistoryActionButton;
+            const menu = document.getElementById('billing-history-actions-menu');
+            if (!button || !menu || billingHistoryMoveSaving) return;
+
+            const destinationLabel = destination === 'pending' ? 'Pendientes' : 'Por Cobrar';
+            const cleanupMessage = destination === 'pending'
+                ? 'Se eliminarán los datos de factura y la fecha de compensación.'
+                : 'Se conservarán los datos de factura y se eliminará la fecha de compensación.';
+            const confirmationMessage = `La remisión ${button.dataset.billingRemision || '—'} cambiará a ${destinationLabel}. ${cleanupMessage}`;
+            let confirmed = false;
+
+            if (window.Swal) {
+                const result = await Swal.fire({
+                    title: '¿Estás seguro?',
+                    text: confirmationMessage,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí',
+                    cancelButtonText: 'No',
+                    confirmButtonColor: '#243b7b',
+                    cancelButtonColor: '#64748b',
+                    reverseButtons: true,
+                    focusCancel: true,
+                });
+                confirmed = result.isConfirmed;
+            } else {
+                confirmed = window.confirm(`¿Estás seguro?\n${confirmationMessage}`);
+            }
+
+            if (!confirmed) return;
+
+            billingHistoryMoveSaving = true;
+            menu.querySelectorAll('button').forEach((option) => {
+                option.disabled = true;
+                option.classList.add('cursor-wait', 'opacity-60');
+            });
+            button.disabled = true;
+            button.classList.add('cursor-wait', 'opacity-70');
+
+            const formData = new FormData();
+            formData.append('destination', destination);
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+            try {
+                const response = await fetch(button.dataset.billingMoveUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': token || '',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                    throw new Error(validationMessage || payload.message || 'No se pudo mover la remisión.');
+                }
+
+                showBillingToast('success', payload.message || `La remisión se movió a ${destinationLabel}.`);
+                window.setTimeout(() => window.location.reload(), 700);
+            } catch (error) {
+                billingHistoryMoveSaving = false;
+                button.disabled = false;
+                button.classList.remove('cursor-wait', 'opacity-70');
+                menu.querySelectorAll('button').forEach((option) => {
+                    option.disabled = false;
+                    option.classList.remove('cursor-wait', 'opacity-60');
+                });
+                showBillingToast('error', error.message || 'No se pudo mover la remisión.');
+            }
+        }
+
+        function initBillingHistoryActions() {
+            const menu = document.getElementById('billing-history-actions-menu');
+            if (!menu || menu.dataset.actionsBound === '1') return;
+
+            menu.dataset.actionsBound = '1';
+            document.addEventListener('click', (event) => {
+                if (!menu.contains(event.target) && !event.target.closest('[data-billing-history-actions]')) {
+                    closeBillingHistoryActions();
+                }
+            });
+            window.addEventListener('resize', closeBillingHistoryActions);
+            document.getElementById('billing-table-scroll')?.addEventListener('scroll', closeBillingHistoryActions);
+        }
+
+        function updateBillingObservationsCounter() {
+            const editor = document.getElementById('billing-observations-editor');
+            const counter = document.getElementById('billing-observations-counter');
+            if (!editor || !counter) return;
+
+            counter.textContent = `${editor.value.length} / 5000`;
+        }
+
+        function syncBillingObservationsButton(button, value) {
+            if (!button) return;
+
+            const hasObservations = String(value || '').trim() !== '';
+            button.classList.toggle('text-amber-500', hasObservations);
+            button.classList.toggle('text-slate-400', !hasObservations);
+            button.title = hasObservations ? 'Editar observaciones' : 'Agregar observaciones';
+            button.setAttribute('aria-label', button.title);
+        }
+
+        function openBillingObservations(button) {
+            const modal = document.getElementById('billing-observations-modal');
+            const editor = document.getElementById('billing-observations-editor');
+            const remision = document.getElementById('billing-observations-remision');
+            const formId = button?.dataset.billingObservationsFor;
+            const field = formId ? document.getElementById(`${formId}-observaciones`) : null;
+            if (!modal || !editor || !field || billingObservationsSaving) return;
+
+            activeBillingObservationsButton = button;
+            activeBillingObservationsField = field;
+            editor.value = field.value || '';
+            remision.textContent = `Remisión ${button.dataset.billingRemision || '—'}`;
+            updateBillingObservationsCounter();
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('overflow-hidden');
+            window.setTimeout(() => editor.focus(), 0);
+        }
+
+        function closeBillingObservations() {
+            if (billingObservationsSaving) return;
+
+            const modal = document.getElementById('billing-observations-modal');
+            if (!modal) return;
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('overflow-hidden');
+            activeBillingObservationsButton?.focus();
+            activeBillingObservationsButton = null;
+            activeBillingObservationsField = null;
+        }
+
+        async function saveBillingObservations() {
+            const editor = document.getElementById('billing-observations-editor');
+            const saveButton = document.getElementById('billing-observations-save');
+            const field = activeBillingObservationsField;
+            const form = field?.form;
+            if (!editor || !saveButton || !field || !form || billingObservationsSaving) return;
+
+            billingObservationsSaving = true;
+            saveButton.disabled = true;
+            saveButton.classList.add('cursor-wait', 'opacity-70');
+            saveButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Guardando';
+
+            field.value = editor.value.trim();
+            form.dataset.autosaveVersion = String(Number(form.dataset.autosaveVersion || 0) + 1);
+            form.dataset.dirty = '1';
+            setBillingAutosaveState(form, 'pending');
+
+            const idle = await waitForBillingFormIdle(form);
+            const saved = idle && (form.dataset.dirty === '0' || await submitInlineBilling(form));
+
+            billingObservationsSaving = false;
+            saveButton.disabled = false;
+            saveButton.classList.remove('cursor-wait', 'opacity-70');
+            saveButton.textContent = 'Guardar';
+
+            if (!saved) return;
+
+            syncBillingObservationsButton(activeBillingObservationsButton, field.value);
+            showBillingToast('success', 'Las observaciones se guardaron correctamente.');
+            closeBillingObservations();
+        }
+
+        function initBillingObservations() {
+            const editor = document.getElementById('billing-observations-editor');
+            if (editor && editor.dataset.observationsBound !== '1') {
+                editor.dataset.observationsBound = '1';
+                editor.addEventListener('input', updateBillingObservationsCounter);
+            }
+
+            if (document.documentElement.dataset.billingObservationsEscapeBound !== '1') {
+                document.documentElement.dataset.billingObservationsEscapeBound = '1';
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') closeBillingObservations();
+                });
+            }
+        }
 
         function showBillingToast(type, message) {
             const toast = document.getElementById('billing-toast');
@@ -657,6 +1007,12 @@
 
                         if (form.dataset.conclusionPending === '1' && formData.get('estatus_facturacion') === 'Completado') {
                             completeBillingConclusionUi(form);
+                        } else if (document.querySelector('[data-billing-section]')?.dataset.billingSection === 'pending' && billingReadyToConclude(form)) {
+                            showBillingToast('success', 'La remision paso a Por Cobrar.');
+                            window.setTimeout(() => window.location.reload(), 700);
+                        } else if (document.querySelector('[data-billing-section]')?.dataset.billingSection === 'receivable' && !billingReadyToConclude(form)) {
+                            showBillingToast('success', 'La remision regreso a Pendiente.');
+                            window.setTimeout(() => window.location.reload(), 700);
                         }
                     }
 
@@ -722,7 +1078,7 @@
             bulkButton.className = hasSelection
                 ? 'inline-flex h-7 items-center justify-center rounded-sm bg-azul-prodifem px-2 py-1 text-xs font-semibold text-white transition hover:bg-blue-800'
                 : 'inline-flex h-7 cursor-not-allowed items-center justify-center rounded-sm bg-slate-400 px-2 py-1 text-xs font-semibold text-white transition';
-            bulkButton.textContent = 'Concluir todas';
+            bulkButton.textContent = 'Concluir selección';
         }
 
         function syncBillingSelectionCheckbox(form) {
@@ -743,7 +1099,6 @@
 
         function billingReadyToConclude(form) {
             const requiredFields = [
-                'folio_factura_uuid',
                 'folio_interno',
                 'fecha_facturacion',
                 'numero_carta_factura',
@@ -791,6 +1146,10 @@
 
             if (expiration) {
                 expiration.innerHTML = '<span class="text-slate-400">&mdash;</span>';
+                expiration.dataset.filterValue = 'Sin Color';
+
+                const billingSection = document.querySelector('[data-billing-section]')?.dataset.billingSection || 'pending';
+                window.__excelColumnFilterInstances?.[`billing-requests-${billingSection}`]?.apply?.();
             }
 
             if (checkbox) {
@@ -803,7 +1162,8 @@
             if (!isBulkConclusion) {
                 showBillingToast('success', 'La fila se concluyo correctamente.');
 
-                if (document.querySelector('[data-billing-section]')?.dataset.billingSection === 'pending') {
+                const billingSection = document.querySelector('[data-billing-section]')?.dataset.billingSection;
+                if (billingSection === 'pending' || billingSection === 'receivable') {
                     window.setTimeout(() => window.location.reload(), 700);
                 }
             }
@@ -887,11 +1247,11 @@
             if (!bulkButton || bulkButton.disabled || selected.length === 0) return;
 
             let confirmed = false;
-            const message = `Se concluiran ${selected.length} solicitudes seleccionadas.`;
+            const message = `Se concluirán ${selected.length} remisiones seleccionadas y se enviarán al Historial.`;
 
             if (window.Swal) {
                 const result = await Swal.fire({
-                    title: '¿Concluir todas?',
+                    title: '¿Concluir selección?',
                     text: message,
                     icon: 'question',
                     showCancelButton: true,
@@ -904,7 +1264,7 @@
                 });
                 confirmed = result.isConfirmed;
             } else {
-                confirmed = window.confirm(`¿Concluir todas?\n${message}`);
+                confirmed = window.confirm(`¿Concluir selección?\n${message}`);
             }
 
             if (!confirmed) return;
@@ -928,12 +1288,13 @@
             updateBillingBulkControls();
 
             if (failed > 0) {
-                showBillingToast('error', `${completed} solicitudes concluidas y ${failed} sin concluir.`);
+                showBillingToast('error', `${completed} remisiones enviadas al Historial y ${failed} sin concluir.`);
             } else {
-                showBillingToast('success', `${completed} solicitudes concluidas correctamente.`);
+                showBillingToast('success', `${completed} remisiones enviadas al Historial.`);
             }
 
-            if (completed > 0 && document.querySelector('[data-billing-section]')?.dataset.billingSection === 'pending') {
+            const billingSection = document.querySelector('[data-billing-section]')?.dataset.billingSection;
+            if (completed > 0 && (billingSection === 'pending' || billingSection === 'receivable')) {
                 window.setTimeout(() => window.location.reload(), 900);
             }
         }
@@ -1152,6 +1513,8 @@
             initBillingAutosave();
             initBillingBulkConclusion();
             initBillingInvoiceExport();
+            initBillingObservations();
+            initBillingHistoryActions();
         });
         document.addEventListener('livewire:navigated', () => {
             initBillingFixedScrollbar();
@@ -1159,6 +1522,8 @@
             initBillingAutosave();
             initBillingBulkConclusion();
             initBillingInvoiceExport();
+            initBillingObservations();
+            initBillingHistoryActions();
         });
         window.addEventListener('pagehide', flushPendingBillingAutosaves);
     </script>

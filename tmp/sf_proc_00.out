@@ -1,0 +1,25 @@
+
+   FAIL  Tests\Feature\InlineUserCredentialUpdateTest
+  ⨯ authorized user can block and reactivate another user
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\InlineUserCredentialUpdateTest > authorized user can block and reactivate a…  QueryException   
+  could not find driver (Connection: sqlite, SQL: PRAGMA foreign_keys = ON;)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+     61▕      * @return \PDO
+     62▕      */
+     63▕     protected function createPdoConnection($dsn, $username, $password, $options)
+     64▕     {
+  ➜  65▕         return new PDO($dsn, $username, $password, $options);
+     66▕     }
+     67▕ 
+     68▕     /**
+     69▕      * Handle an exception that occurred during connect execution.
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:65
+  2   vendor\laravel\framework\src\Illuminate\Database\Connectors\Connector.php:44
+
+
+  Tests:    1 failed (0 assertions)
+  Duration: 0.41s
+

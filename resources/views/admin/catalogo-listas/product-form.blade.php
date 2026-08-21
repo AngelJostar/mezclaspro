@@ -1,4 +1,6 @@
 <x-admin-layout>
+    @php($isSupplies = $category === 'insumos')
+
     <div class="rounded-xl bg-white p-5 shadow-sm">
         @include('admin.catalogo-listas.partials.section-nav', [
             'categories' => $categories,
@@ -9,10 +11,12 @@
         <div class="mb-5 flex flex-col gap-3 border-b border-gray-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h2 class="text-xl font-bold text-gray-900">
-                    Nuevo producto - {{ $categories[$category]['label'] }}
+                    {{ $isSupplies ? 'Nuevo insumo' : 'Nuevo producto - ' . $categories[$category]['label'] }}
                 </h2>
                 <p class="mt-1 text-sm text-gray-500">
-                    Registra el producto y su presentacion comercial en la categoria seleccionada.
+                    {{ $isSupplies
+                        ? 'Registra el insumo y su presentacion comercial en el catalogo.'
+                        : 'Registra el producto y su presentacion comercial en la categoria seleccionada.' }}
                 </p>
             </div>
 
@@ -44,7 +48,7 @@
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
                         <label for="generic_description" class="mb-1 block text-sm font-semibold text-gray-700">
-                            Descripci&oacute;n gen&eacute;rica <span class="text-red-600">*</span>
+                            {{ $isSupplies ? 'Nombre generico del insumo' : 'Descripcion generica' }} <span class="text-red-600">*</span>
                         </label>
                         <input type="text" id="generic_description" name="generic_description"
                             value="{{ old('generic_description') }}" required maxlength="255"
@@ -53,7 +57,7 @@
 
                     <div>
                         <label for="commercial_name" class="mb-1 block text-sm font-semibold text-gray-700">
-                            Descripci&oacute;n distintiva (Marca) <span class="text-red-600">*</span>
+                            {{ $isSupplies ? 'Nombre comercial' : 'Descripcion distintiva (Marca)' }} <span class="text-red-600">*</span>
                         </label>
                         <input type="text" id="commercial_name" name="commercial_name"
                             value="{{ old('commercial_name') }}" required maxlength="255"
@@ -62,7 +66,7 @@
 
                     <div>
                         <label for="concentration" class="mb-1 block text-sm font-semibold text-gray-700">
-                            Concentraci&oacute;n <span class="text-red-600">*</span>
+                            {{ $isSupplies ? 'Volumen' : 'Concentracion' }} <span class="text-red-600">*</span>
                         </label>
                         <div class="flex rounded-md shadow-sm">
                             <input type="number" id="concentration" name="concentration"
@@ -80,67 +84,80 @@
                             Presentaci&oacute;n <span class="text-red-600">*</span>
                         </label>
                         <input type="text" id="presentation" name="presentation" value="{{ old('presentation') }}"
-                            required maxlength="255" placeholder="Ej. Frasco ampula 50 mg"
+                            required maxlength="255" placeholder="{{ $isSupplies ? 'Ej. Bolsa 500 mL' : 'Ej. Frasco ampula 50 mg' }}"
                             class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
 
-                    <div>
-                        <label for="conc_min" class="mb-1 block text-sm font-semibold text-gray-700">
-                            Concentraci&oacute;n m&iacute;nima
-                        </label>
-                        <input type="number" id="conc_min" name="conc_min" value="{{ old('conc_min') }}"
-                            min="0" step="0.0001"
-                            class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
+                    @if ($isSupplies)
+                        <div>
+                            <label for="manufacturer" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Fabricante
+                            </label>
+                            <input type="text" id="manufacturer" name="manufacturer" value="{{ old('manufacturer') }}"
+                                maxlength="255"
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    @else
+                        <div>
+                            <label for="conc_min" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Concentraci&oacute;n m&iacute;nima
+                            </label>
+                            <input type="number" id="conc_min" name="conc_min" value="{{ old('conc_min') }}"
+                                min="0" step="0.0001"
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
 
-                    <div>
-                        <label for="conc_max" class="mb-1 block text-sm font-semibold text-gray-700">
-                            Concentraci&oacute;n m&aacute;xima
-                        </label>
-                        <input type="number" id="conc_max" name="conc_max" value="{{ old('conc_max') }}"
-                            min="0" step="0.0001"
-                            class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
+                        <div>
+                            <label for="conc_max" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Concentraci&oacute;n m&aacute;xima
+                            </label>
+                            <input type="number" id="conc_max" name="conc_max" value="{{ old('conc_max') }}"
+                                min="0" step="0.0001"
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    @endif
                 </div>
             </section>
 
-            <section class="grid gap-5 border-t border-gray-200 pt-5 lg:grid-cols-2">
-                <div>
-                    <h3 class="text-sm font-bold text-gray-900">Diluyentes</h3>
-                    <p class="mb-3 mt-1 text-xs text-gray-500">Selecciona uno o varios diluyentes permitidos.</p>
+            @unless ($isSupplies)
+                <section class="grid gap-5 border-t border-gray-200 pt-5 lg:grid-cols-2">
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Diluyentes</h3>
+                        <p class="mb-3 mt-1 text-xs text-gray-500">Selecciona uno o varios diluyentes permitidos.</p>
 
-                    <div class="max-h-52 overflow-y-auto rounded-md border border-gray-200">
-                        @forelse ($diluents as $diluent)
-                            <label class="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 hover:bg-gray-50">
-                                <input type="checkbox" name="diluents[]" value="{{ $diluent->id }}"
-                                    @checked(in_array($diluent->id, old('diluents', [])))
-                                    class="rounded border-gray-300 text-blue-700 focus:ring-blue-500">
-                                <span>{{ $diluent->denominacion_generica }}</span>
-                            </label>
-                        @empty
-                            <p class="px-3 py-4 text-sm text-gray-500">No hay diluyentes registrados.</p>
-                        @endforelse
+                        <div class="max-h-52 overflow-y-auto rounded-md border border-gray-200">
+                            @forelse ($diluents as $diluent)
+                                <label class="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 hover:bg-gray-50">
+                                    <input type="checkbox" name="diluents[]" value="{{ $diluent->id }}"
+                                        @checked(in_array($diluent->id, old('diluents', [])))
+                                        class="rounded border-gray-300 text-blue-700 focus:ring-blue-500">
+                                    <span>{{ $diluent->denominacion_generica }}</span>
+                                </label>
+                            @empty
+                                <p class="px-3 py-4 text-sm text-gray-500">No hay diluyentes registrados.</p>
+                            @endforelse
+                        </div>
                     </div>
-                </div>
 
-                <div>
-                    <h3 class="text-sm font-bold text-gray-900">V&iacute;a de administraci&oacute;n</h3>
-                    <p class="mb-3 mt-1 text-xs text-gray-500">Selecciona una o varias vias permitidas.</p>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">V&iacute;a de administraci&oacute;n</h3>
+                        <p class="mb-3 mt-1 text-xs text-gray-500">Selecciona una o varias vias permitidas.</p>
 
-                    <div class="max-h-52 overflow-y-auto rounded-md border border-gray-200">
-                        @forelse ($routes as $route)
-                            <label class="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 hover:bg-gray-50">
-                                <input type="checkbox" name="routes[]" value="{{ $route->id }}"
-                                    @checked(in_array($route->id, old('routes', [])))
-                                    class="rounded border-gray-300 text-blue-700 focus:ring-blue-500">
-                                <span>{{ $route->name }}</span>
-                            </label>
-                        @empty
-                            <p class="px-3 py-4 text-sm text-gray-500">No hay vias registradas.</p>
-                        @endforelse
+                        <div class="max-h-52 overflow-y-auto rounded-md border border-gray-200">
+                            @forelse ($routes as $route)
+                                <label class="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 hover:bg-gray-50">
+                                    <input type="checkbox" name="routes[]" value="{{ $route->id }}"
+                                        @checked(in_array($route->id, old('routes', [])))
+                                        class="rounded border-gray-300 text-blue-700 focus:ring-blue-500">
+                                    <span>{{ $route->name }}</span>
+                                </label>
+                            @empty
+                                <p class="px-3 py-4 text-sm text-gray-500">No hay vias registradas.</p>
+                            @endforelse
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            @endunless
 
             <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:justify-end">
                 <a href="{{ route('admin.catalogo-listas.catalog', ['category' => $category]) }}"
@@ -150,7 +167,7 @@
                 <button type="submit"
                     class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-900 px-5 text-sm font-bold text-white hover:bg-blue-950">
                     <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
-                    Guardar producto
+                    {{ $isSupplies ? 'Guardar insumo' : 'Guardar producto' }}
                 </button>
             </div>
         </form>

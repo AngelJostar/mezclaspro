@@ -21,7 +21,7 @@
             <x-input value="{{ old('lastname', $user->lastname) }}" name="lastname" class="w-full"
                 placeholder="Escriba los apellido del usuario" />
         </div>
-        <div class="mb-4">
+        <div id="username-section" class="mb-4 scroll-mt-6 rounded-md border border-slate-200 bg-slate-50 p-4">
             <x-label class="mb-2">
                 Nombre de usuario
             </x-label>

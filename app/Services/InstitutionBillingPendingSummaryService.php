@@ -21,33 +21,33 @@ class InstitutionBillingPendingSummaryService
             ->select(['id', 'solicitud_id'])
             ->with([
                 'solicitud:id,hospital_id,fecha_entrega',
-                'billing:id,origen_tipo,origen_id,estatus_facturacion',
+                'billing:id,origen_tipo,origen_id,estatus_facturacion,folio_interno,fecha_facturacion,numero_carta_factura,fecha_carta_factura',
             ])
             ->whereHas('solicitud.hospital.instituciones')
             ->get()
             ->map(fn ($mezcla) => [
                 'delivery_date' => $mezcla->solicitud?->fecha_entrega,
-                'billing_status' => $mezcla->billing?->estatus_facturacion,
+                'billing' => $mezcla->billing,
             ]);
 
         $nutricionales = NutricionalSolicitud::query()
             ->select(['id', 'user_id', 'solicitud_detail_id'])
             ->with([
                 'solicitud_detail:id,fecha_hora_entrega',
-                'billing:id,origen_tipo,origen_id,estatus_facturacion',
+                'billing:id,origen_tipo,origen_id,estatus_facturacion,folio_interno,fecha_facturacion,numero_carta_factura,fecha_carta_factura',
             ])
             ->whereHas('user.hospital.instituciones')
             ->get()
             ->map(fn ($solicitud) => [
                 'delivery_date' => $solicitud->solicitud_detail?->fecha_hora_entrega,
-                'billing_status' => $solicitud->billing?->estatus_facturacion,
+                'billing' => $solicitud->billing,
             ]);
 
         return $this->summarize($oncologicas->concat($nutricionales));
     }
 
     /**
-     * @param  iterable<array{delivery_date: mixed, billing_status?: string|null}>  $records
+     * @param  iterable<array{delivery_date: mixed, billing?: mixed}>  $records
      * @return array{yellow: int, red: int}
      */
     public function summarize(iterable $records): array
@@ -58,9 +58,15 @@ class InstitutionBillingPendingSummaryService
         ];
 
         foreach ($records as $record) {
+            $billing = $record['billing'] ?? null;
+
+            if ($billing?->hasReceivableInvoiceData()) {
+                continue;
+            }
+
             $expiration = $this->dueDates->calculate(
                 $record['delivery_date'] ?? null,
-                $record['billing_status'] ?? null
+                $billing?->estatus_facturacion ?? ($record['billing_status'] ?? null)
             );
 
             if (isset($counts[$expiration['status']])) {

@@ -1,12 +1,8 @@
 ﻿<x-admin-layout>
     @php
-        $reportColumns = [
-            'institution_general' => 'Reporte de institución',
-            'hospital_summary' => 'Reporte por hospital',
-            'hospital_detail' => 'Reporte por hospital con detalle',
-            'daily_patient' => 'Reporte diario por paciente',
-            'monthly_supplies' => 'Reporte mensual de insumos por hospital',
-        ];
+        $reportColumns = collect($reportTemplates)
+            ->mapWithKeys(fn (array $template, string $key) => [$key => $template['name']])
+            ->all();
     @endphp
 
     <div class="mt-2 mb-4">
@@ -120,7 +116,18 @@
                                     <i class="fa-regular fa-file-lines"></i>
                                     Formato
                                 </button>
-                                <span class="block leading-tight">{{ $reportLabel }}</span>
+                                <div data-report-template-name-editor="{{ $reportKey }}"
+                                    class="flex items-center gap-1 normal-case">
+                                    <span data-report-template-name-text class="min-w-0 flex-1 uppercase leading-tight">
+                                        {{ $reportLabel }}
+                                    </span>
+                                    <button type="button" data-report-template-rename="{{ $reportKey }}"
+                                        class="inline-flex size-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-blue-700 hover:border-blue-400 hover:bg-blue-50"
+                                        title="Editar nombre del reporte"
+                                        aria-label="Editar nombre de {{ $reportLabel }}">
+                                        <i class="fa-solid fa-pen text-[10px]"></i>
+                                    </button>
+                                </div>
                             </th>
                         @endforeach
                     </tr>
@@ -255,6 +262,7 @@
 
     <div id="report-template-modal"
         data-update-url="{{ route('admin.instituciones.reportes.formatos.update', ['reportTemplate' => '__REPORT__']) }}"
+        data-rename-url="{{ route('admin.instituciones.reportes.formatos.rename', ['reportTemplate' => '__REPORT__']) }}"
         class="fixed inset-0 z-[70] hidden overflow-y-auto bg-slate-950/55 px-4 py-6"
         role="dialog" aria-modal="true" aria-labelledby="report-template-modal-title">
         <div class="mx-auto flex min-h-full max-w-6xl items-center justify-center">

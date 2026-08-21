@@ -1,11 +1,11 @@
 <x-admin-layout>
     <div class="mt-2 mb-4">
         <h1 class="text-2xl font-medium text-gray-800">
-            Selecciona un laboratorio
+            Selecciona una central de mezclas
         </h1>
         <p class="text-sm text-gray-600 mt-1">
             El inventario nutricional, incluyendo presentaciones, lotes, caducidades y stock en ml,
-            se gestiona por laboratorio.
+            se gestiona por central de mezclas y almacén.
         </p>
     </div>
 
@@ -49,7 +49,7 @@
             </button>
         @empty
             <div class="bg-white rounded-lg shadow p-6 text-gray-600">
-                No hay laboratorios activos para seleccionar.
+                No hay centrales de mezclas activas para seleccionar.
             </div>
         @endforelse
     </div>

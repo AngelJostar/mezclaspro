@@ -205,8 +205,11 @@
         <div class="cover" style="left:460.4pt; top:129.8pt; width:124.1pt; height:11.8pt"></div>
         <div class="value center" style="left:460.4pt; top:130.1pt; width:124.1pt; height:11.4pt">{{ $shortDate($order->requested_at) }}</div>
 
-        <div class="cover" style="left:86.7pt; top:148.6pt; width:254.9pt; height:11.9pt"></div>
-        <div class="value" style="left:87.2pt; top:149.1pt; width:254pt; height:11.2pt">{{ $order->department ?: '-' }}</div>
+        <div class="cover" style="left:86.7pt; top:148.6pt; width:497.7pt; height:11.9pt"></div>
+        <div class="value small" style="left:87.2pt; top:149.1pt; width:113pt; height:11.2pt">{{ $order->department ?: '-' }}</div>
+        <div class="value small" style="left:201pt; top:149.1pt; width:112pt; height:11.2pt"><span class="bold">Central:</span> {{ $order->deliveryLaboratory?->nombre ?: $order->laboratory->nombre }}</div>
+        <div class="value small" style="left:314pt; top:149.1pt; width:126pt; height:11.2pt"><span class="bold">Almac&eacute;n:</span> {{ $order->warehouse?->name ?: '-' }}</div>
+        <div class="value small" style="left:441pt; top:149.1pt; width:143pt; height:11.2pt"><span class="bold">Subalmac&eacute;n:</span> {{ $order->inventoryDestinationLabel() }}</div>
 
         {{-- Proveedor --}}
         <div class="cover" style="left:86.7pt; top:167.2pt; width:254pt; height:31.3pt"></div>
@@ -256,7 +259,7 @@
 
         <div class="cover" style="left:86.7pt; top:349.5pt; width:497.7pt; height:22.7pt"></div>
         <div class="value small" style="left:87.2pt; top:349.3pt; width:496.4pt; height:22.5pt">
-            <span class="bold">{{ $order->delivery_attention ?: $order->laboratory->nombre }}</span><br>
+            <span class="bold">{{ $order->delivery_attention ?: $order->laboratory->nombre }} / {{ $order->inventoryDestinationLabel() }}</span><br>
             {{ $order->delivery_address }}@if($order->delivery_schedule) <span class="bold">Horario:</span> {{ $order->delivery_schedule }}@endif
         </div>
 

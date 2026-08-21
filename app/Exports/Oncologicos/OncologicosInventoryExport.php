@@ -10,12 +10,14 @@ use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 class OncologicosInventoryExport implements FromArray, WithHeadings, ShouldAutoSize
 {
     protected int $laboratoryId;
+    protected int $warehouseId;
     protected string $q;
     protected string $stock;
 
-    public function __construct(int $laboratoryId, string $q = '', string $stock = '')
+    public function __construct(int $laboratoryId, int $warehouseId, string $q = '', string $stock = '')
     {
         $this->laboratoryId = $laboratoryId;
+        $this->warehouseId = $warehouseId;
         $this->q = trim($q);
         $this->stock = $stock;
     }
@@ -28,9 +30,11 @@ class OncologicosInventoryExport implements FromArray, WithHeadings, ShouldAutoS
             ->join('medicine_presentations as mp', 'mp.catalog_id', '=', 'mc.id')
             ->leftJoin('medicine_batches as mb', function ($join) {
                 $join->on('mb.medicine_presentation_id', '=', 'mp.id')
-                    ->where('mb.laboratory_id', '=', $this->laboratoryId);
+                    ->where('mb.laboratory_id', '=', $this->laboratoryId)
+                    ->where('mb.warehouse_id', '=', $this->warehouseId);
             })
             ->leftJoin('laboratories as l', 'l.id', '=', DB::raw($this->laboratoryId))
+            ->leftJoin('warehouses as w', 'w.id', '=', DB::raw($this->warehouseId))
             ->when($this->q !== '', function ($query) {
                 $query->where(function ($w) {
                     $w->where('mc.denominacion', 'like', "%{$this->q}%")
@@ -53,6 +57,7 @@ class OncologicosInventoryExport implements FromArray, WithHeadings, ShouldAutoS
             ->select([
                 'l.nombre as laboratorio',
                 'l.estado as laboratorio_estado',
+                'w.name as almacen',
 
                 'mc.id as catalog_id',
                 'mc.denominacion',
@@ -95,6 +100,7 @@ class OncologicosInventoryExport implements FromArray, WithHeadings, ShouldAutoS
             $rows[] = [
                 $item->laboratorio,
                 $item->laboratorio_estado,
+                $item->almacen,
 
                 $item->catalog_id,
                 $item->denominacion,
@@ -136,6 +142,7 @@ class OncologicosInventoryExport implements FromArray, WithHeadings, ShouldAutoS
         return [
             'Laboratorio',
             'Estado laboratorio',
+            'Almacén',
 
             'ID catálogo',
             'Denominación',

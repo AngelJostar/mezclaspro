@@ -98,7 +98,8 @@
             function ensureStickyHorizontalScroll(root = document) {
                 const selectors = [
                     '.admin-content .overflow-x-auto',
-                    '.admin-content .billing-table-scroll'
+                    '.admin-content .billing-table-scroll',
+                    '.admin-content [data-sticky-x-mode]'
                 ];
 
                 root.querySelectorAll(selectors.join(', ')).forEach((source) => {
@@ -112,11 +113,19 @@
                     const parent = source.parentElement;
                     if (!parent) return;
 
+                    const fixedToViewport = source.dataset.stickyXMode === 'fixed';
+
                     const proxy = document.createElement('div');
-                    proxy.className = 'sticky-x-proxy is-hidden';
+                    proxy.className = `sticky-x-proxy is-hidden${fixedToViewport ? ' is-fixed' : ''}`;
+                    proxy.setAttribute('role', 'region');
+                    proxy.setAttribute('aria-label', 'Desplazamiento horizontal de la tabla');
                     proxy.innerHTML = '<div class="sticky-x-proxy-track"></div>';
 
-                    parent.insertBefore(proxy, source.nextSibling);
+                    if (fixedToViewport) {
+                        document.body.appendChild(proxy);
+                    } else {
+                        parent.insertBefore(proxy, source.nextSibling);
+                    }
 
                     const track = proxy.firstElementChild;
                     source.dataset.stickyXReady = '1';
@@ -127,11 +136,23 @@
 
                     const refresh = () => {
                         const needsScroll = source.scrollWidth > source.clientWidth + 2;
+                        let shouldShow = needsScroll;
 
-                        proxy.classList.toggle('is-hidden', !needsScroll);
+                        if (fixedToViewport) {
+                            const bounds = source.getBoundingClientRect();
+                            const visibleLeft = Math.max(0, bounds.left);
+                            const visibleRight = Math.min(window.innerWidth, bounds.right);
+                            const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+
+                            proxy.style.left = `${visibleLeft}px`;
+                            proxy.style.width = `${visibleWidth}px`;
+                            shouldShow = needsScroll && visibleWidth > 40 && bounds.top < window.innerHeight && bounds.bottom > 0;
+                        }
+
+                        proxy.classList.toggle('is-hidden', !shouldShow);
                         track.style.width = `${source.scrollWidth}px`;
 
-                        if (needsScroll) {
+                        if (shouldShow) {
                             proxy.scrollLeft = source.scrollLeft;
                         }
                     };
@@ -163,6 +184,13 @@
                     }
 
                     source._stickyXRefresh = refresh;
+
+                    if (fixedToViewport) {
+                        window.addEventListener('scroll', refresh, {
+                            passive: true
+                        });
+                    }
+
                     refresh();
                 });
             }

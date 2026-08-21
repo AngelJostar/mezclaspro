@@ -3,6 +3,7 @@
 namespace App\Models\Oncologicos;
 
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +17,7 @@ class MedicineBatchMovement extends Model
     protected $fillable = [
         'medicine_batch_id',
         'laboratory_id',
+        'warehouse_id',
         'user_id',
         'movement_type',
         'quantity',
@@ -53,6 +55,11 @@ class MedicineBatchMovement extends Model
     public function laboratory(): BelongsTo
     {
         return $this->belongsTo(Laboratory::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function user(): BelongsTo

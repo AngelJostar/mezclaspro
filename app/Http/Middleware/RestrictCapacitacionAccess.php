@@ -12,7 +12,10 @@ class RestrictCapacitacionAccess
     {
         $user = $request->user();
 
-        if ($user?->hasRole('Capacitacion') && ! $request->routeIs('admin.capacitaciones.*')) {
+        $usesTrainingCredentials = $request->session()->get('access_context') === 'training';
+
+        if (($usesTrainingCredentials || $user?->hasRole('Capacitacion'))
+            && ! $request->routeIs('admin.capacitaciones.*')) {
             return redirect()->route('admin.capacitaciones.index');
         }
 

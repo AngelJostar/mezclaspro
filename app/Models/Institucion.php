@@ -13,6 +13,11 @@ class Institucion extends Model
         'razon_social',
         'rfc',
         'telefono',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
 
     public function hospitals()

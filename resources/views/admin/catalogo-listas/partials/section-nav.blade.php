@@ -5,12 +5,16 @@
 ])
 
 @php
-    $categoryRoute = function ($key) use ($mode) {
+    $categoryRoute = function ($key) use ($mode, $categories) {
         if ($mode === 'catalogo') {
             return route('admin.catalogo-listas.catalog', ['category' => $key]);
         }
 
         if ($mode === 'listas') {
+            if (! ($categories[$key]['supports_lists'] ?? true)) {
+                return route('admin.catalogo-listas.catalog', ['category' => $key]);
+            }
+
             return route('admin.catalogo-listas.lists', ['category' => $key]);
         }
 
@@ -28,7 +32,7 @@
         moveCategories(direction) {
             this.$refs.categoryCarousel.scrollBy({ left: direction * 210, behavior: 'smooth' });
         }
-    }" class="flex max-w-3xl items-center gap-2">
+    }" class="flex max-w-4xl items-center gap-2">
         <button type="button" x-on:click="moveCategories(-1)" title="Categorias anteriores"
             aria-label="Categorias anteriores"
             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-blue-900 shadow-sm transition hover:bg-gray-50">
@@ -73,16 +77,29 @@
         </button>
     </div>
 
-    <div class="mt-3 flex flex-wrap items-center gap-2">
+    <div class="mt-3 inline-flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-gray-50 p-1"
+        role="tablist" aria-label="Area de trabajo">
         <a href="{{ route('admin.catalogo-listas.catalog', ['category' => $category]) }}"
-            class="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-bold transition {{ $mode === 'catalogo' ? 'border-blue-950 bg-blue-950 text-white shadow-sm' : 'border-blue-900 bg-blue-900 text-white hover:bg-blue-950' }}">
+            role="tab" aria-selected="{{ $mode === 'catalogo' ? 'true' : 'false' }}"
+            @if ($mode === 'catalogo') aria-current="page" @endif
+            class="inline-flex h-9 items-center gap-2 rounded px-4 text-sm font-bold transition {{ $mode === 'catalogo' ? 'bg-blue-950 text-white shadow-sm ring-2 ring-blue-200' : 'border border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-900' }}">
+            @if ($mode === 'catalogo')
+                <i class="fa-solid fa-check text-xs" aria-hidden="true"></i>
+            @endif
             <span>Catalogo</span>
         </a>
 
-        <a href="{{ route('admin.catalogo-listas.lists', ['category' => $category]) }}"
-            class="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-bold transition {{ $mode === 'listas' ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700' }}">
-            <span>Listas de precios</span>
-        </a>
+        @if ($categories[$category]['supports_lists'] ?? true)
+            <a href="{{ route('admin.catalogo-listas.lists', ['category' => $category]) }}"
+                role="tab" aria-selected="{{ $mode === 'listas' ? 'true' : 'false' }}"
+                @if ($mode === 'listas') aria-current="page" @endif
+                class="inline-flex h-9 items-center gap-2 rounded px-4 text-sm font-bold transition {{ $mode === 'listas' ? 'bg-teal-700 text-white shadow-sm ring-2 ring-teal-200' : 'border border-gray-300 bg-white text-gray-700 hover:border-teal-400 hover:text-teal-800' }}">
+                @if ($mode === 'listas')
+                    <i class="fa-solid fa-check text-xs" aria-hidden="true"></i>
+                @endif
+                <span>Listas de precios</span>
+            </a>
+        @endif
     </div>
 </div>
 

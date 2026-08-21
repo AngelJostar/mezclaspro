@@ -1,10 +1,10 @@
 <x-admin-layout>
     <div class="mt-2 mb-4 flex items-center justify-between">
         <h1 class="text-2xl font-medium text-gray-800">
-            Editar Laboratorio
+            Editar Central
         </h1>
 
-        <a href="{{ route('admin.oncologicos.laboratory.index') }}"
+        <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $laboratory->id]) }}"
            class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
             Volver
         </a>
@@ -73,13 +73,13 @@
                            {{ $checked ? 'checked' : '' }}
                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                     <label class="ml-2 text-sm text-gray-700">
-                        Laboratorio activo
+                        Central activa
                     </label>
                 </div>
             </div>
 
             <div class="mt-6 flex justify-end gap-2">
-                <a href="{{ route('admin.oncologicos.laboratory.index') }}"
+                <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $laboratory->id]) }}"
                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
                     Cancelar
                 </a>

@@ -21,15 +21,24 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Laboratorio</label>
-                    <select name="laboratory_id"
-                        class="w-full px-3 py-2 border rounded focus:ring focus:ring-blue-200 focus:outline-none">
-                        <option value="">General / sin laboratorio</option>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Central de mezclas</label>
+                    <select name="laboratory_id" id="laboratory_id"
+                        class="w-full px-3 py-2 border rounded focus:ring focus:ring-blue-200 focus:outline-none" required>
+                        <option value="">Seleccionar...</option>
                         @foreach ($laboratories as $laboratory)
                             <option value="{{ $laboratory->id }}" @selected(old('laboratory_id', $presentation->laboratory_id) == $laboratory->id)>
                                 {{ $laboratory->nombre }}{{ $laboratory->estado ? ' - ' . $laboratory->estado : '' }}
                             </option>
                         @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Almacén</label>
+                    <select name="warehouse_id" id="warehouse_id"
+                        data-selected="{{ old('warehouse_id', $presentation->warehouse_id) }}"
+                        class="w-full px-3 py-2 border rounded focus:ring focus:ring-blue-200 focus:outline-none" required>
+                        <option value="">Seleccionar...</option>
                     </select>
                 </div>
 
@@ -103,4 +112,31 @@
             </div>
         </form>
     </div>
+
+    <script>
+        const warehousesByLaboratory = @json($laboratories->mapWithKeys(fn ($laboratory) => [
+            (string) $laboratory->id => $laboratory->warehouses->map(fn ($warehouse) => [
+                'id' => $warehouse->id,
+                'name' => $warehouse->name,
+            ])->values(),
+        ]));
+        const laboratorySelect = document.getElementById('laboratory_id');
+        const warehouseSelect = document.getElementById('warehouse_id');
+
+        function populateWarehouses(selectedValue = '') {
+            const options = warehousesByLaboratory[String(laboratorySelect?.value || '')] || [];
+            warehouseSelect.innerHTML = '<option value="">Seleccionar...</option>';
+
+            options.forEach(item => {
+                const option = document.createElement('option');
+                option.value = String(item.id);
+                option.textContent = item.name;
+                option.selected = String(item.id) === String(selectedValue || '');
+                warehouseSelect.appendChild(option);
+            });
+        }
+
+        laboratorySelect?.addEventListener('change', () => populateWarehouses());
+        populateWarehouses(warehouseSelect?.dataset.selected || '');
+    </script>
 </x-admin-layout>

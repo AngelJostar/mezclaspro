@@ -6,14 +6,16 @@
             </h1>
 
             <div class="text-sm text-gray-600 mt-1">
-                Laboratorio:
+                Central de mezclas:
                 <span class="font-semibold text-gray-800">
                     {{ $laboratory->nombre }}
                 </span>
+                <span class="mx-1 text-gray-300">|</span>
+                Almacén: <span class="font-semibold text-gray-800">{{ $warehouse->name }}</span>
             </div>
         </div>
 
-        <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $laboratoryId]) }}"
+        <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $laboratoryId, 'warehouse_id' => $warehouseId]) }}"
             class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
             Volver
         </a>
@@ -30,6 +32,7 @@
         @csrf
 
         <input type="hidden" name="laboratory_id" value="{{ $laboratoryId }}">
+        <input type="hidden" name="warehouse_id" value="{{ $warehouseId }}">
 
         <div class="bg-blue-50 border border-blue-200 text-blue-800 rounded p-3 text-sm">
             Si el lote ya existe para la misma presentación, se sumarán los frascos al inventario existente.

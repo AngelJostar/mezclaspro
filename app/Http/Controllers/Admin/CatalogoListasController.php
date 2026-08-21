@@ -7,6 +7,7 @@ use App\Models\Hospital;
 use App\Models\Nutricionales\NutriMedicineList;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
+use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\Oncologicos\MedicineList;
 use App\Models\Oncologicos\MedicinePresentation;
 use App\Models\Oncologicos\MedicinesCatalog;
@@ -33,6 +34,12 @@ class CatalogoListasController extends Controller
             'icon' => 'fa-solid fa-capsules',
             'theme' => 'rose',
         ],
+        'insumos' => [
+            'label' => 'Insumos',
+            'icon' => 'fa-solid fa-boxes-stacked',
+            'theme' => 'amber',
+            'supports_lists' => false,
+        ],
     ];
 
     public function index(Request $request)
@@ -41,12 +48,11 @@ class CatalogoListasController extends Controller
         $category = array_key_exists($requestedCategory, self::CATEGORIES)
             ? $requestedCategory
             : self::DEFAULT_CATEGORY;
-        $mode = null;
-
-        return view('admin.catalogo-listas.index', [
+        return view('admin.catalogo-listas.catalog', [
             'category' => $category,
-            'mode' => $mode,
+            'mode' => 'catalogo',
             'categories' => self::CATEGORIES,
+            'rows' => $this->catalogRows($category),
         ]);
     }
 
@@ -66,6 +72,10 @@ class CatalogoListasController extends Controller
     {
         $category = $this->normalizeCategory($category);
 
+        if (! $this->categorySupportsLists($category)) {
+            return redirect()->route('admin.catalogo-listas.catalog', ['category' => $category]);
+        }
+
         return view('admin.catalogo-listas.lists', [
             'category' => $category,
             'mode' => 'listas',
@@ -77,6 +87,7 @@ class CatalogoListasController extends Controller
     public function showList(string $category, int $list)
     {
         $category = $this->normalizeCategory($category);
+        abort_unless($this->categorySupportsLists($category), 404);
 
         return view('admin.catalogo-listas.show-list', [
             'category' => $category,
@@ -90,6 +101,7 @@ class CatalogoListasController extends Controller
     public function createList(string $category)
     {
         $category = $this->normalizeCategory($category);
+        abort_unless($this->categorySupportsLists($category), 404);
 
         return view('admin.catalogo-listas.editor', [
             'category' => $category,
@@ -106,6 +118,7 @@ class CatalogoListasController extends Controller
     public function editList(string $category, int $list)
     {
         $category = $this->normalizeCategory($category);
+        abort_unless($this->categorySupportsLists($category), 404);
         $priceList = $this->findPriceList($category, $list);
 
         return view('admin.catalogo-listas.editor', [
@@ -125,6 +138,11 @@ class CatalogoListasController extends Controller
         abort_unless(array_key_exists($category, self::CATEGORIES), 404);
 
         return $category;
+    }
+
+    private function categorySupportsLists(string $category): bool
+    {
+        return (bool) (self::CATEGORIES[$category]['supports_lists'] ?? true);
     }
 
     private function oncologyDoseMg(MedicinePresentation $presentation): ?float
@@ -221,6 +239,45 @@ class CatalogoListasController extends Controller
                             : '#',
                     ];
                 });
+        }
+
+        if ($category === 'insumos') {
+            return DiluentPresentation::query()
+                ->with('diluent:id,denominacion_generica')
+                ->where('is_active', true)
+                ->get()
+                ->groupBy(function (DiluentPresentation $presentation) {
+                    return mb_strtolower(implode('|', [
+                        $presentation->diluent_id,
+                        trim((string) $presentation->presentacion),
+                        trim((string) $presentation->denominacion_comercial),
+                        trim((string) $presentation->fabricante),
+                        (string) $presentation->volume_ml,
+                    ]), 'UTF-8');
+                })
+                ->map(function (Collection $presentations) {
+                    $presentation = $presentations
+                        ->sortByDesc(fn (DiluentPresentation $item) => $item->updated_at?->timestamp ?? 0)
+                        ->first();
+
+                    return (object) [
+                        'product' => $presentation->diluent?->denominacion_generica ?? '-',
+                        'dose' => $this->doseLabel($presentation->volume_ml, 'ml'),
+                        'presentation' => $presentation->presentacion ?: '-',
+                        'commercial_name' => $presentation->denominacion_comercial ?: '-',
+                        'manufacturer' => $presentation->fabricante ?: '-',
+                        'lowest_price' => null,
+                        'lowest_date' => null,
+                        'last_price' => null,
+                        'last_date' => null,
+                        'edit_url' => route('admin.oncologicos.diluent_presentations.edit', [
+                            'diluent' => $presentation->diluent_id,
+                            'presentation' => $presentation,
+                        ]),
+                    ];
+                })
+                ->sortBy(fn ($row) => mb_strtolower($row->product . ' ' . $row->presentation, 'UTF-8'))
+                ->values();
         }
 
         return collect();
