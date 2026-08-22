@@ -9,8 +9,8 @@
         @if ($laboratories->isNotEmpty())
             <section class="border-b border-gray-200 pb-4" aria-labelledby="laboratory-carousel-title">
                 <div class="mb-3">
-                    <h2 id="laboratory-carousel-title" class="text-sm font-semibold text-gray-800">Laboratorios registrados</h2>
-                    <p class="text-xs text-gray-500">{{ $laboratories->count() }} {{ $laboratories->count() === 1 ? 'laboratorio disponible' : 'laboratorios disponibles' }}</p>
+                    <h2 id="laboratory-carousel-title" class="text-sm font-semibold text-gray-800">Centrales registradas</h2>
+                    <p class="text-xs text-gray-500">{{ $laboratories->count() }} {{ $laboratories->count() === 1 ? 'central disponible' : 'centrales disponibles' }}</p>
                 </div>
 
                 <div class="flex items-center gap-2">
@@ -24,7 +24,7 @@
                         <a href="{{ route('admin.oncologicos.laboratory.create') }}"
                             class="inline-flex w-48 flex-none snap-start items-center justify-center gap-2 rounded bg-green-600 px-4 py-4 text-center text-sm font-semibold text-white transition hover:bg-green-700">
                             <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                            Nuevo laboratorio
+                            Nueva central
                         </a>
 
                         @foreach ($laboratories as $laboratory)
@@ -74,11 +74,11 @@
         @else
             <div class="mt-6 border border-dashed border-gray-300 px-6 py-12 text-center">
                 <i class="fa-solid fa-flask-vial text-3xl text-gray-300" aria-hidden="true"></i>
-                <p class="mt-3 text-sm font-medium text-gray-700">No hay laboratorios registrados.</p>
+                <p class="mt-3 text-sm font-medium text-gray-700">No hay centrales registradas.</p>
                 <a href="{{ route('admin.oncologicos.laboratory.create') }}"
                     class="mt-4 inline-flex items-center justify-center gap-2 rounded bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700">
                     <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                    Nuevo laboratorio
+                    Nueva central
                 </a>
             </div>
         @endif

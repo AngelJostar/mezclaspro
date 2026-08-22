@@ -6,14 +6,14 @@
             </h1>
 
             <div class="mt-1 text-sm text-gray-600">
-                Laboratorio:
+                Central de mezclas:
                 <span class="font-semibold text-gray-800">
                     {{ $stock->laboratory->nombre ?? '-' }}
                 </span>
             </div>
         </div>
 
-        <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id]) }}"
+        <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id, 'warehouse_id' => $stock->warehouse_id]) }}"
             class="rounded bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200">
             Volver
         </a>
@@ -37,7 +37,7 @@
                     <p class="mt-1 text-sm">
                         Ya existe un registro con el lote
                         <span class="font-semibold">{{ $duplicateStock['lote'] ?? $stock->lote }}</span>
-                        para esta misma presentación y laboratorio.
+                        para esta misma presentación y almacén.
                     </p>
 
                     <div class="mt-2 space-y-1 text-sm text-amber-800">
@@ -242,7 +242,7 @@
                     Dar de baja total
                 </button>
 
-                <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id]) }}"
+                <a href="{{ route('admin.nutricionales.stocks.index', ['laboratory_id' => $stock->laboratory_id, 'warehouse_id' => $stock->warehouse_id]) }}"
                     class="text-center rounded bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200">
                     Cancelar
                 </a>

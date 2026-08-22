@@ -10,6 +10,21 @@ use Illuminate\Validation\Rule;
 
 class InstitutionReportTemplateController extends Controller
 {
+    public function rename(
+        Request $request,
+        string $reportTemplate,
+        InstitutionReportTemplateService $templates
+    ): JsonResponse {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+        ]);
+
+        return response()->json([
+            'message' => 'El nombre del reporte se guardó correctamente.',
+            'template' => $templates->rename($reportTemplate, $validated['name']),
+        ]);
+    }
+
     public function update(
         Request $request,
         string $reportTemplate,

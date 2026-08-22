@@ -55,6 +55,10 @@ class InstitucionHospitalExport implements FromArray, WithHeadings, ShouldAutoSi
                     $row['conciliable'],
                     $row['folio_factura_uuid'],
                     $row['folio_factura_interno'],
+                    $row['fecha_facturacion'],
+                    $row['numero_carta_factura'],
+                    $row['fecha_carta_factura'],
+                    $row['fecha_compensacion'],
                 ];
             })
             ->all();
@@ -400,6 +404,10 @@ class InstitucionHospitalExport implements FromArray, WithHeadings, ShouldAutoSi
             'conciliable' => $billing?->conciliable ?: '—',
             'folio_factura_uuid' => $billing?->folio_factura_uuid ?: '—',
             'folio_factura_interno' => $billing?->folio_interno ?: '—',
+            'fecha_facturacion' => $billing?->fecha_facturacion ?: '—',
+            'numero_carta_factura' => $billing?->numero_carta_factura ?: '—',
+            'fecha_carta_factura' => $billing?->fecha_carta_factura ?: '—',
+            'fecha_compensacion' => $billing?->fecha_compensacion ?: '—',
             'hospital_nombre' => $hospitalNombre ?: '',
             'fecha_orden' => $fechaOrden ? strtotime((string) $fechaOrden) : 0,
             'orden' => $rowOrder,

@@ -23,15 +23,20 @@ class UserFactory extends Factory
         return [
             'name' => $this->faker->name(),
             'username' => $this->faker->userName(),
+            'training_username' => 'cap'.$this->faker->unique()->userName(),
             // 'email' => $this->faker->unique()->safeEmail(),
             // 'email_verified_at' => now(),
             'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
+            'credential_password' => 'password',
+            'training_password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+            'training_credential_password' => 'password',
+            'is_active' => true,
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'remember_token' => Str::random(10),
             //'profile_photo_path' => null,
             //'current_team_id' => null,
-            'hospital_id'=>rand(1,3),
+            'hospital_id' => rand(1, 3),
         ];
     }
 
@@ -50,7 +55,7 @@ class UserFactory extends Factory
     /**
      * Indicate that the user should have a personal team.
      */
-    public function withPersonalTeam(callable $callback = null): static
+    public function withPersonalTeam(?callable $callback = null): static
     {
         if (! Features::hasTeamFeatures()) {
             return $this->state([]);

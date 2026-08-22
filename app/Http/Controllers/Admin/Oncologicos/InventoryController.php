@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\Oncologicos;
 use App\Exports\Oncologicos\OncologicosInventoryExport;
 use App\Http\Controllers\Controller;
 use App\Models\Oncologicos\Laboratory;
+use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -35,11 +36,17 @@ class InventoryController extends Controller
 
         return redirect()->route('admin.oncologicos.inventory.index', [
             'laboratory_id' => $data['laboratory_id'],
+            'warehouse_id' => Warehouse::query()
+                ->where('laboratory_id', $data['laboratory_id'])
+                ->orderByDesc('is_active')
+                ->orderBy('id')
+                ->value('id'),
         ]);
     }
 
     private function validarLoteNoUsadoEnOtraPresentacion(
         int $laboratoryId,
+        int $warehouseId,
         string $lote,
         int $presentationId
     ): void {
@@ -47,6 +54,7 @@ class InventoryController extends Controller
             ->join('medicine_presentations as mp', 'mp.id', '=', 'mb.medicine_presentation_id')
             ->join('medicines_catalog as mc', 'mc.id', '=', 'mp.catalog_id')
             ->where('mb.laboratory_id', $laboratoryId)
+            ->where('mb.warehouse_id', $warehouseId)
             ->where('mb.lote', trim($lote))
             ->where('mb.medicine_presentation_id', '!=', $presentationId)
             ->select(
@@ -67,20 +75,27 @@ class InventoryController extends Controller
     public function ingresoForm(Request $request)
     {
         $laboratoryId = (int) $request->get('laboratory_id');
+        $category = in_array($request->get('category'), ['oncologicos', 'antibioticos'], true)
+            ? (string) $request->get('category')
+            : '';
 
         if ($laboratoryId <= 0) {
             return redirect()->route('admin.oncologicos.inventory.selectLaboratory');
         }
 
         $laboratory = Laboratory::where('activo', 1)->findOrFail($laboratoryId);
+        $warehouse = $this->resolveWarehouse($laboratoryId, $request->integer('warehouse_id'));
+        $warehouseId = (int) $warehouse->id;
 
         $catalogs = DB::table('medicines_catalog as mc')
             ->join('medicine_presentations as mp', 'mp.catalog_id', '=', 'mc.id')
-            ->leftJoin('medicine_batches as mb', function ($join) use ($laboratoryId) {
+            ->leftJoin('medicine_batches as mb', function ($join) use ($laboratoryId, $warehouseId) {
                 $join->on('mb.medicine_presentation_id', '=', 'mp.id')
                     ->where('mb.laboratory_id', '=', $laboratoryId)
+                    ->where('mb.warehouse_id', '=', $warehouseId)
                     ->where('mb.is_active', '=', 1);
             })
+            ->when($category !== '', fn ($query) => $query->where('mc.catalog_category', $category))
             ->select([
                 'mc.id as catalog_id',
                 'mc.denominacion',
@@ -105,38 +120,61 @@ class InventoryController extends Controller
         return view('admin.oncologicos.inventory.ingreso', compact(
             'laboratory',
             'laboratoryId',
+            'warehouse',
+            'warehouseId',
+            'category',
             'catalogs'
         ));
     }
     public function registrarIngreso(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'laboratory_id' => 'required|exists:laboratories,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
             'medicine_presentation_id' => 'required|exists:medicine_presentations,id',
+            'category' => 'nullable|in:oncologicos,antibioticos',
             'lote' => 'required|string|max:255',
             'caducidad' => 'required|date',
             'fecha_ingreso' => 'nullable|date',
             'frascos_ingresados' => 'required|numeric|min:1',
             'notes' => 'nullable|string|max:500',
         ]);
+        $category = (string) ($validated['category'] ?? '');
 
         DB::beginTransaction();
 
         try {
             $laboratoryId = (int) $request->laboratory_id;
+            $warehouseId = (int) $request->warehouse_id;
+            $this->assertWarehouseBelongsToLaboratory($warehouseId, $laboratoryId);
             $presentationId = (int) $request->medicine_presentation_id;
+
+            if ($category !== '') {
+                $presentationMatchesCategory = DB::table('medicine_presentations as mp')
+                    ->join('medicines_catalog as mc', 'mc.id', '=', 'mp.catalog_id')
+                    ->where('mp.id', $presentationId)
+                    ->where('mc.catalog_category', $category)
+                    ->exists();
+
+                if (! $presentationMatchesCategory) {
+                    throw new \InvalidArgumentException('El producto seleccionado no pertenece al inventario actual.');
+                }
+            }
+
             $lote = trim($request->lote);
             $frascosIngresados = (float) $request->frascos_ingresados;
             $fechaIngreso = $request->fecha_ingreso ?: now()->toDateString();
 
             $this->validarLoteNoUsadoEnOtraPresentacion(
                 $laboratoryId,
+                $warehouseId,
                 $lote,
                 $presentationId
             );
 
             $batch = DB::table('medicine_batches')
                 ->where('laboratory_id', $laboratoryId)
+                ->where('warehouse_id', $warehouseId)
                 ->where('medicine_presentation_id', $presentationId)
                 ->where('lote', $lote)
                 ->lockForUpdate()
@@ -165,6 +203,7 @@ class InventoryController extends Controller
 
                 $batchId = DB::table('medicine_batches')->insertGetId([
                     'laboratory_id' => $laboratoryId,
+                    'warehouse_id' => $warehouseId,
                     'medicine_presentation_id' => $presentationId,
                     'lote' => $lote,
                     'caducidad' => $request->caducidad,
@@ -185,6 +224,7 @@ class InventoryController extends Controller
             $this->insertMovement([
                 'medicine_batch_id' => $batchId,
                 'laboratory_id' => $laboratoryId,
+                'warehouse_id' => $warehouseId,
                 'user_id' => Auth::id(),
                 'movement_type' => 'entrada',
                 'quantity' => $frascosIngresados,
@@ -192,9 +232,13 @@ class InventoryController extends Controller
                 'stock_actual_after' => $stockDespues,
                 'stock_reservado_before' => 0,
                 'stock_reservado_after' => 0,
-                'reference_type' => 'IngresoInventarioOncologico',
+                'reference_type' => $category === 'antibioticos'
+                    ? 'IngresoInventarioAntibioticos'
+                    : 'IngresoInventarioOncologico',
                 'reference_id' => $batchId,
-                'notes' => $request->notes ?: 'Ingreso de inventario oncológico',
+                'notes' => $request->notes ?: ($category === 'antibioticos'
+                    ? 'Ingreso de inventario de antibióticos'
+                    : 'Ingreso de inventario oncológico'),
             ]);
 
             DB::commit();
@@ -207,6 +251,8 @@ class InventoryController extends Controller
 
             return redirect()->route('admin.oncologicos.inventory.index', [
                 'laboratory_id' => $laboratoryId,
+                'warehouse_id' => $warehouseId,
+                'category' => $category,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -240,11 +286,15 @@ class InventoryController extends Controller
                 ->withErrors(['error' => 'Laboratorio inválido.']);
         }
 
+        $warehouse = $this->resolveWarehouse($laboratoryId, $request->integer('warehouse_id'));
+        $warehouseId = (int) $warehouse->id;
+
         $rows = DB::table('medicines_catalog as mc')
             ->join('medicine_presentations as mp', 'mp.catalog_id', '=', 'mc.id')
-            ->leftJoin('medicine_batches as mb', function ($join) use ($laboratoryId) {
+            ->leftJoin('medicine_batches as mb', function ($join) use ($laboratoryId, $warehouseId) {
                 $join->on('mb.medicine_presentation_id', '=', 'mp.id')
                     ->where('mb.laboratory_id', '=', $laboratoryId)
+                    ->where('mb.warehouse_id', '=', $warehouseId)
                     ->where('mb.is_active', '=', 1);
             })
             ->when($category !== '', fn($query) => $query->where('mc.catalog_category', $category))
@@ -363,6 +413,8 @@ class InventoryController extends Controller
             'category' => $category,
             'laboratoryId' => $laboratoryId,
             'laboratory' => $lab,
+            'warehouseId' => $warehouseId,
+            'warehouse' => $warehouse,
         ]);
     }
 
@@ -370,9 +422,14 @@ class InventoryController extends Controller
     public function bulkUpdate(Request $request)
     {
         $laboratoryId = (int) $request->input('laboratory_id');
+        $warehouseId = (int) $request->input('warehouse_id');
 
         if ($laboratoryId <= 0) {
             return back()->withErrors(['error' => 'Falta laboratory_id.']);
+        }
+
+        if ($warehouseId <= 0) {
+            return back()->withErrors(['error' => 'Falta warehouse_id.']);
         }
 
         $labExists = DB::table('laboratories')
@@ -382,6 +439,8 @@ class InventoryController extends Controller
         if (!$labExists) {
             return back()->withErrors(['error' => 'Laboratorio inválido.']);
         }
+
+        $this->assertWarehouseBelongsToLaboratory($warehouseId, $laboratoryId);
 
         $raw = $request->input('items');
 
@@ -473,6 +532,7 @@ class InventoryController extends Controller
                     ->select(
                         'id',
                         'laboratory_id',
+                        'warehouse_id',
                         'medicine_presentation_id',
                         'stock_actual',
                         'stock_inicial'
@@ -489,7 +549,10 @@ class InventoryController extends Controller
                         continue;
                     }
 
-                    if ((int) $batches[$id]->laboratory_id !== $laboratoryId) {
+                    if (
+                        (int) $batches[$id]->laboratory_id !== $laboratoryId ||
+                        (int) $batches[$id]->warehouse_id !== $warehouseId
+                    ) {
                         $foraneos[] = $id;
                     }
                 }
@@ -517,6 +580,7 @@ class InventoryController extends Controller
 
                     $duplicate = DB::table('medicine_batches')
                         ->where('laboratory_id', $laboratoryId)
+                        ->where('warehouse_id', $warehouseId)
                         ->where('medicine_presentation_id', $it['presentation_id'])
                         ->where('lote', $it['lote'])
                         ->exists();
@@ -530,6 +594,7 @@ class InventoryController extends Controller
 
                     $newBatchId = DB::table('medicine_batches')->insertGetId([
                         'laboratory_id' => $laboratoryId,
+                        'warehouse_id' => $warehouseId,
                         'medicine_presentation_id' => $it['presentation_id'],
                         'lote' => $it['lote'],
                         'caducidad' => $it['caducidad'],
@@ -548,6 +613,7 @@ class InventoryController extends Controller
                         $this->insertMovement([
                             'medicine_batch_id' => $newBatchId,
                             'laboratory_id' => $laboratoryId,
+                            'warehouse_id' => $warehouseId,
                             'user_id' => $userId,
                             'movement_type' => 'entrada',
                             'quantity' => $stockActual,
@@ -591,6 +657,7 @@ class InventoryController extends Controller
                     $this->insertMovement([
                         'medicine_batch_id' => $it['batch_id'],
                         'laboratory_id' => $laboratoryId,
+                        'warehouse_id' => $warehouseId,
                         'user_id' => $userId,
                         'movement_type' => $difference > 0 ? 'ajuste_positivo' : 'ajuste_negativo',
                         'quantity' => abs($difference),
@@ -624,9 +691,14 @@ class InventoryController extends Controller
     {
         $presentationId = (int) $presentation;
         $laboratoryId = (int) $request->input('laboratory_id');
+        $warehouseId = (int) $request->input('warehouse_id');
 
         if ($laboratoryId <= 0) {
             return back()->withErrors(['error' => 'Falta laboratory_id.']);
+        }
+
+        if ($warehouseId <= 0) {
+            return back()->withErrors(['error' => 'Falta warehouse_id.']);
         }
 
         $request->validate([
@@ -651,6 +723,8 @@ class InventoryController extends Controller
                 throw new \Exception('Laboratorio inválido.');
             }
 
+            $this->assertWarehouseBelongsToLaboratory($warehouseId, $laboratoryId);
+
             $presentationExists = DB::table('medicine_presentations')
                 ->where('id', $presentationId)
                 ->exists();
@@ -666,12 +740,14 @@ class InventoryController extends Controller
 
             $this->validarLoteNoUsadoEnOtraPresentacion(
                 $laboratoryId,
+                $warehouseId,
                 $lote,
                 $presentationId
             );
 
             $batch = DB::table('medicine_batches')
                 ->where('laboratory_id', $laboratoryId)
+                ->where('warehouse_id', $warehouseId)
                 ->where('medicine_presentation_id', $presentationId)
                 ->where('lote', $lote)
                 ->lockForUpdate()
@@ -698,6 +774,7 @@ class InventoryController extends Controller
             } else {
                 $batchId = DB::table('medicine_batches')->insertGetId([
                     'laboratory_id' => $laboratoryId,
+                    'warehouse_id' => $warehouseId,
                     'medicine_presentation_id' => $presentationId,
                     'lote' => $lote,
                     'caducidad' => $caducidad,
@@ -720,6 +797,7 @@ class InventoryController extends Controller
             $this->insertMovement([
                 'medicine_batch_id' => $batchId,
                 'laboratory_id' => $laboratoryId,
+                'warehouse_id' => $warehouseId,
                 'user_id' => Auth::id(),
                 'movement_type' => 'entrada',
                 'quantity' => $cantidadIngresada,
@@ -749,6 +827,7 @@ class InventoryController extends Controller
         DB::table('medicine_batch_movements')->insert([
             'medicine_batch_id' => $data['medicine_batch_id'],
             'laboratory_id' => $data['laboratory_id'],
+            'warehouse_id' => $data['warehouse_id'] ?? null,
             'user_id' => $data['user_id'] ?? null,
             'movement_type' => $data['movement_type'],
             'quantity' => $data['quantity'],
@@ -791,15 +870,44 @@ class InventoryController extends Controller
             return back()->withErrors(['error' => 'Laboratorio inválido.']);
         }
 
-        $fileName = 'inventario_oncologico_' . str_replace(' ', '_', strtolower($laboratory->nombre)) . '.xlsx';
+        $warehouse = $this->resolveWarehouse($laboratoryId, $request->integer('warehouse_id'));
+
+        $fileName = 'inventario_oncologico_' . str_replace(' ', '_', strtolower($warehouse->name)) . '.xlsx';
 
         return Excel::download(
             new OncologicosInventoryExport(
                 $laboratoryId,
+                (int) $warehouse->id,
                 (string) $request->get('q', ''),
                 (string) $request->get('stock', '')
             ),
             $fileName
         );
+    }
+
+    private function resolveWarehouse(int $laboratoryId, int $warehouseId = 0): Warehouse
+    {
+        $query = Warehouse::query()->where('laboratory_id', $laboratoryId);
+
+        if ($warehouseId > 0) {
+            return $query->whereKey($warehouseId)->firstOrFail();
+        }
+
+        return $query
+            ->orderByDesc('is_active')
+            ->orderBy('id')
+            ->firstOrFail();
+    }
+
+    private function assertWarehouseBelongsToLaboratory(int $warehouseId, int $laboratoryId): void
+    {
+        $exists = Warehouse::query()
+            ->whereKey($warehouseId)
+            ->where('laboratory_id', $laboratoryId)
+            ->exists();
+
+        if (! $exists) {
+            throw new \InvalidArgumentException('El almacén seleccionado no pertenece a la central de mezclas.');
+        }
     }
 }

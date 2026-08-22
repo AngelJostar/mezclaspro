@@ -1,19 +1,29 @@
 <x-admin-layout>
+    @php
+        $inventoryTypeLabel = match ($category ?? '') {
+            'oncologicos' => 'oncológico',
+            'antibioticos' => 'de antibióticos',
+            default => 'de medicamentos',
+        };
+    @endphp
+
     <div class="mt-2 mb-4 flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-medium text-gray-800">
-                Ingreso de inventario oncológico
+                Agregar producto al inventario {{ $inventoryTypeLabel }}
             </h1>
 
             <div class="text-sm text-gray-600 mt-1">
-                Laboratorio:
+                Central de mezclas:
                 <span class="font-semibold text-gray-800">
                     {{ $laboratory->nombre }}
                 </span>
+                <span class="mx-1 text-gray-300">|</span>
+                Almacén: <span class="font-semibold text-gray-800">{{ $warehouse->name }}</span>
             </div>
         </div>
 
-        <a href="{{ route('admin.oncologicos.inventory.index', ['laboratory_id' => $laboratoryId]) }}"
+        <a href="{{ route('admin.oncologicos.inventory.index', ['laboratory_id' => $laboratoryId, 'warehouse_id' => $warehouseId, 'category' => $category ?? '']) }}"
             class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">
             Volver
         </a>
@@ -30,6 +40,8 @@
         @csrf
 
         <input type="hidden" name="laboratory_id" value="{{ $laboratoryId }}">
+        <input type="hidden" name="warehouse_id" value="{{ $warehouseId }}">
+        <input type="hidden" name="category" value="{{ $category ?? '' }}">
 
         <div class="bg-blue-50 border border-blue-200 text-blue-800 rounded p-3 text-sm">
             Si el lote ya existe para la misma presentación, se sumarán los frascos al inventario existente.

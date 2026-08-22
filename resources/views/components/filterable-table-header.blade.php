@@ -3,6 +3,8 @@
     'triggerClass',
     'align' => 'left',
     'compact' => false,
+    'sortClass' => null,
+    'sortType' => 'text',
 ])
 
 @php
@@ -22,5 +24,13 @@
             title="Filtrar {{ $filterLabel }}" aria-label="Filtrar {{ $filterLabel }}" aria-expanded="false">
             <span aria-hidden="true" class="text-sm font-black leading-none text-slate-800">&#9660;</span>
         </button>
+        @if ($sortClass)
+            <button type="button" data-sort-column="{{ $column }}" data-sort-type="{{ $sortType }}"
+                data-sort-label="{{ $filterLabel }}"
+                class="{{ $sortClass }} inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-200 hover:text-slate-800"
+                title="Ordenar {{ $filterLabel }}" aria-label="Ordenar {{ $filterLabel }}" aria-pressed="false">
+                <i data-sort-icon class="fa-solid fa-sort" aria-hidden="true"></i>
+            </button>
+        @endif
     </div>
 </th>

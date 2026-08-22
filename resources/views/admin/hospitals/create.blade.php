@@ -8,12 +8,12 @@
             'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatan', 'Zacatecas',
         ];
         $days = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo'];
-        $selectedDays = old('operation_days', ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes']);
-        $inputClass = 'mt-1 h-9 w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500';
+        $selectedDays = old('operation_days', old('operation_days_submitted') ? [] : $days);
+        $inputClass = 'mt-0.5 h-8 w-full rounded border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:ring-blue-500';
         $labelClass = 'block text-xs font-medium text-gray-700';
     @endphp
 
-    <section class="overflow-hidden rounded-lg bg-white shadow-lg">
+    <section class="mx-auto max-w-7xl overflow-hidden rounded-lg bg-white shadow-lg">
         <div class="border-b border-gray-200 px-5 py-4">
             <h1 class="text-2xl font-semibold text-gray-900">Alta de nuevo hospital</h1>
             <a href="{{ $cancelRoute }}" class="mt-1 inline-flex text-sm font-medium text-blue-600 hover:text-blue-800">
@@ -43,14 +43,14 @@
                 @endif
             </div>
 
-            <div class="grid grid-cols-1 gap-4 px-5 py-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+            <div class="grid grid-cols-1 gap-4 px-5 py-4 xl:grid-cols-[minmax(0,1fr)_240px]">
                 <div class="rounded-lg border border-gray-200 p-4">
                     <fieldset>
                         <legend class="text-sm font-semibold text-gray-900">Datos generales</legend>
-                        <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2">
+                        <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-3">
                             <label class="{{ $labelClass }}">
                                 Nombre oficial del hospital <span class="text-red-600">*</span>
-                                <input name="name_hp" value="{{ old('name_hp') }}" required class="{{ $inputClass }}">
+                                <input id="hospital-name" name="name_hp" value="{{ old('name_hp') }}" required class="{{ $inputClass }}">
                             </label>
 
                             <label class="{{ $labelClass }}">
@@ -103,13 +103,25 @@
                                 CLUES
                                 <input name="clues" value="{{ old('clues') }}" maxlength="30" class="{{ $inputClass }}">
                             </label>
+
+                            <label class="{{ $labelClass }} md:col-span-2 xl:col-span-3">
+                                Texto libre
+                                <textarea name="free_text" rows="2" maxlength="10000"
+                                    placeholder="Agrega cualquier informaci&oacute;n adicional sobre el hospital."
+                                    class="mt-0.5 min-h-14 w-full resize-y rounded border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:ring-blue-500">{{ old('free_text') }}</textarea>
+                            </label>
                         </div>
                     </fieldset>
 
                     <fieldset class="mt-5 border-t border-gray-200 pt-4">
                         <legend class="text-sm font-semibold text-gray-900">Ubicaci&oacute;n</legend>
-                        <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-6">
-                            <label class="{{ $labelClass }} md:col-span-2">
+                        <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-4">
+                            <label class="{{ $labelClass }}">
+                                Pa&iacute;s <span class="text-red-600">*</span>
+                                <input name="country" value="{{ old('country', 'México') }}" required class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
                                 Estado <span class="text-red-600">*</span>
                                 <select name="state" required class="{{ $inputClass }}">
                                     <option value="">Selecciona un estado</option>
@@ -119,24 +131,30 @@
                                 </select>
                             </label>
 
-                            <label class="{{ $labelClass }} md:col-span-2">
+                            <label class="{{ $labelClass }}">
                                 Municipio o alcald&iacute;a <span class="text-red-600">*</span>
                                 <input name="municipality" value="{{ old('municipality') }}" required class="{{ $inputClass }}">
                             </label>
 
-                            <label class="{{ $labelClass }} md:col-span-2">
+                            <label class="{{ $labelClass }}">
                                 C&oacute;digo postal <span class="text-red-600">*</span>
                                 <input name="postal_code" value="{{ old('postal_code') }}" required maxlength="10" class="{{ $inputClass }}">
                             </label>
 
-                            <label class="{{ $labelClass }} md:col-span-2">
+                            <label class="{{ $labelClass }}">
                                 Colonia
                                 <input name="neighborhood" value="{{ old('neighborhood') }}" class="{{ $inputClass }}">
                             </label>
 
-                            <label class="{{ $labelClass }} md:col-span-4">
+                            <label class="{{ $labelClass }} md:col-span-2">
                                 Calle y n&uacute;mero <span class="text-red-600">*</span>
                                 <input name="street_number" value="{{ old('street_number') }}" required class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
+                                Link de ubicaci&oacute;n de Google Maps
+                                <input type="url" name="google_maps_url" value="{{ old('google_maps_url') }}"
+                                    placeholder="https://maps.google.com/..." class="{{ $inputClass }}">
                             </label>
                         </div>
                     </fieldset>
@@ -166,11 +184,12 @@
 
                             <label class="{{ $labelClass }} md:col-span-2">
                                 Horario de recepci&oacute;n
-                                <input name="reception_hours" value="{{ old('reception_hours') }}" placeholder="08:00 - 18:00" class="{{ $inputClass }}">
+                                <input name="reception_hours" value="{{ old('reception_hours', '24/7') }}" placeholder="24/7" class="{{ $inputClass }}">
                             </label>
 
                             <div class="md:col-span-2">
                                 <span class="{{ $labelClass }}">D&iacute;as de operaci&oacute;n</span>
+                                <input type="hidden" name="operation_days_submitted" value="1">
                                 <div class="mt-2 flex flex-wrap gap-x-3 gap-y-2">
                                     @foreach ($days as $day)
                                         <label class="inline-flex items-center gap-1 text-xs text-gray-700">
@@ -188,21 +207,24 @@
                             <span class="{{ $labelClass }}">L&iacute;neas de servicio</span>
                             <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                                 <label class="flex h-10 cursor-pointer items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 text-sm font-medium text-emerald-800">
+                                    <input type="hidden" name="service_oncology" value="0">
                                     <input type="checkbox" name="service_oncology" value="1"
                                         class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
-                                        @checked(old('service_oncology'))>
+                                        @checked((bool) old('service_oncology', true))>
                                     Oncol&oacute;gicos
                                 </label>
                                 <label class="flex h-10 cursor-pointer items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 text-sm font-medium text-red-800">
+                                    <input type="hidden" name="service_antibiotics" value="0">
                                     <input type="checkbox" name="service_antibiotics" value="1"
                                         class="rounded border-red-400 text-red-600 focus:ring-red-500"
-                                        @checked(old('service_antibiotics'))>
+                                        @checked((bool) old('service_antibiotics', true))>
                                     Antibi&oacute;ticos
                                 </label>
                                 <label class="flex h-10 cursor-pointer items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-3 text-sm font-medium text-blue-800">
+                                    <input type="hidden" name="service_nutrition" value="0">
                                     <input type="checkbox" name="service_nutrition" value="1"
                                         class="rounded border-blue-400 text-blue-600 focus:ring-blue-500"
-                                        @checked(old('service_nutrition'))>
+                                        @checked((bool) old('service_nutrition', true))>
                                     Nutricionales
                                 </label>
                             </div>
@@ -213,7 +235,7 @@
                         <legend class="text-sm font-semibold text-gray-900">Configuraci&oacute;n operativa</legend>
                         <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
                             <label class="{{ $labelClass }}">
-                                Laboratorio de mezclas
+                                Central de mezclas
                                 <select name="laboratory_id" class="{{ $inputClass }}">
                                     <option value="">Sin asignar</option>
                                     @foreach ($laboratories as $lab)
@@ -253,6 +275,40 @@
                             </label>
                         </div>
                     </fieldset>
+
+                    <section class="mt-5 border-t border-gray-200 pt-4" aria-labelledby="hospital-access-title">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <h2 id="hospital-access-title" class="text-sm font-semibold text-gray-900">Acceso al panel de solicitudes</h2>
+                            <button type="button" id="suggest-hospital-access"
+                                class="inline-flex h-8 items-center justify-center gap-2 self-start rounded border border-blue-800 px-3 text-xs font-semibold text-blue-900 hover:bg-blue-50"
+                                title="Proponer otro usuario y contrasena">
+                                <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                                Proponer acceso
+                            </button>
+                        </div>
+
+                        <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2">
+                            <label class="{{ $labelClass }}">
+                                Usuario <span class="text-red-600">*</span>
+                                <input id="access-username" name="access_username" value="{{ old('access_username') }}"
+                                    required maxlength="255" autocomplete="off" class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
+                                Contrase&ntilde;a <span class="text-red-600">*</span>
+                                <span class="relative mt-0.5 block">
+                                    <input id="access-password" type="text" name="access_password" required
+                                        minlength="8" maxlength="20" autocomplete="new-password"
+                                        class="h-8 w-full rounded border-gray-300 py-1 pl-2 pr-9 text-xs focus:border-blue-500 focus:ring-blue-500">
+                                    <button type="button" id="toggle-access-password"
+                                        class="absolute inset-y-0 right-0 inline-flex w-8 items-center justify-center text-gray-500 hover:text-blue-800"
+                                        title="Ocultar contrasena" aria-label="Ocultar contrasena">
+                                        <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                            </label>
+                        </div>
+                    </section>
                 </div>
 
                 <aside class="rounded-lg border border-gray-200 p-4 xl:self-start">
@@ -292,11 +348,7 @@
                         class="inline-flex h-10 items-center justify-center rounded-lg border border-blue-800 px-5 text-sm font-semibold text-blue-900 hover:bg-blue-50">
                         Cancelar
                     </a>
-                    <button type="submit" name="submission" value="draft"
-                        class="h-10 rounded-lg border border-gray-300 bg-white px-5 text-sm font-semibold text-gray-700 hover:bg-gray-100">
-                        Guardar borrador
-                    </button>
-                    <button type="submit" name="submission" value="create"
+                    <button type="submit"
                         class="h-10 rounded-lg bg-azul-prodifem px-5 text-sm font-semibold text-white hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-200">
                         Crear hospital
                     </button>
@@ -304,4 +356,101 @@
             </div>
         </form>
     </section>
+
+    @push('js')
+        <script>
+            (() => {
+                const nameInput = document.getElementById('hospital-name');
+                const usernameInput = document.getElementById('access-username');
+                const passwordInput = document.getElementById('access-password');
+                const suggestButton = document.getElementById('suggest-hospital-access');
+                const toggleButton = document.getElementById('toggle-access-password');
+
+                if (!nameInput || !usernameInput || !passwordInput || !suggestButton || !toggleButton) return;
+
+                let suggestedUsername = usernameInput.value.trim();
+                let suggestedPassword = '';
+                let usernameWasEdited = suggestedUsername !== '';
+                let passwordWasEdited = false;
+                let passwordNumber = randomNumber();
+
+                function randomNumber() {
+                    if (window.crypto?.getRandomValues) {
+                        const values = new Uint16Array(1);
+                        window.crypto.getRandomValues(values);
+                        return String(1000 + (values[0] % 9000));
+                    }
+
+                    return String(Math.floor(1000 + Math.random() * 9000));
+                }
+
+                function wordsFromHospital() {
+                    return nameInput.value
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, ' ')
+                        .trim()
+                        .split(/\s+/)
+                        .filter(Boolean);
+                }
+
+                function credentials() {
+                    const words = wordsFromHospital();
+
+                    if (words.length === 0) return null;
+
+                    const username = words.join('').slice(0, 24);
+                    const passwordRoot = (words[0] + 'hosp').slice(0, 6);
+                    const password = passwordRoot.charAt(0).toUpperCase()
+                        + passwordRoot.slice(1)
+                        + passwordNumber
+                        + '!';
+
+                    return { username, password };
+                }
+
+                function applySuggestion(force = false) {
+                    const proposal = credentials();
+
+                    if (!proposal) return;
+
+                    if (force || !usernameWasEdited) {
+                        suggestedUsername = proposal.username;
+                        usernameInput.value = suggestedUsername;
+                    }
+
+                    if (force || !passwordWasEdited) {
+                        suggestedPassword = proposal.password;
+                        passwordInput.value = suggestedPassword;
+                    }
+                }
+
+                nameInput.addEventListener('input', () => applySuggestion());
+                usernameInput.addEventListener('input', () => {
+                    usernameWasEdited = usernameInput.value !== suggestedUsername;
+                });
+                passwordInput.addEventListener('input', () => {
+                    passwordWasEdited = passwordInput.value !== suggestedPassword;
+                });
+                suggestButton.addEventListener('click', () => {
+                    usernameWasEdited = false;
+                    passwordWasEdited = false;
+                    passwordNumber = randomNumber();
+                    applySuggestion(true);
+                    usernameInput.focus();
+                });
+                toggleButton.addEventListener('click', () => {
+                    const showPassword = passwordInput.type === 'password';
+                    passwordInput.type = showPassword ? 'text' : 'password';
+                    toggleButton.title = showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena';
+                    toggleButton.setAttribute('aria-label', toggleButton.title);
+                    toggleButton.querySelector('i')?.classList.toggle('fa-eye', !showPassword);
+                    toggleButton.querySelector('i')?.classList.toggle('fa-eye-slash', showPassword);
+                });
+
+                applySuggestion();
+            })();
+        </script>
+    @endpush
 </x-admin-layout>

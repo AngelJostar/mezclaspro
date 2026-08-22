@@ -2,6 +2,7 @@
 
 namespace App\Models\Nutricionales;
 
+use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
 
@@ -9,6 +10,7 @@ class MedicineStockMovement extends Model
 {
     protected $fillable = [
         'medicine_laboratory_stock_id',
+        'warehouse_id',
         'user_id',
         'tipo',
         'cantidad_ml',
@@ -39,5 +41,10 @@ class MedicineStockMovement extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 }

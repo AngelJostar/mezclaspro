@@ -9,10 +9,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LaboratoryPurchaseOrder extends Model
 {
+    public const INVENTORY_DESTINATIONS = [
+        'oncologicos' => 'Oncológico',
+        'nutricionales' => 'Nutricional',
+        'antibioticos' => 'Antibióticos',
+        'insumos' => 'Insumos',
+    ];
+
     protected $fillable = [
         'laboratory_id',
         'delivery_laboratory_id',
         'warehouse_id',
+        'inventory_destination',
         'folio',
         'department',
         'supplier',
@@ -77,5 +85,10 @@ class LaboratoryPurchaseOrder extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function inventoryDestinationLabel(): string
+    {
+        return self::INVENTORY_DESTINATIONS[$this->inventory_destination] ?? 'Sin subalmacén asignado';
     }
 }

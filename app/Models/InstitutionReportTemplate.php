@@ -8,6 +8,7 @@ class InstitutionReportTemplate extends Model
 {
     protected $fillable = [
         'report_key',
+        'name',
         'title',
         'subtitle',
         'columns',

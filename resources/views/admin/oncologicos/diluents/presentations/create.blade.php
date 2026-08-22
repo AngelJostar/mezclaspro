@@ -20,15 +20,24 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Laboratorio</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Central de mezclas</label>
                     <select name="laboratory_id" id="laboratory_id"
-                        class="w-full px-3 py-2 border rounded focus:ring focus:ring-blue-200 focus:outline-none">
-                        <option value="">General / sin laboratorio</option>
+                        class="w-full px-3 py-2 border rounded focus:ring focus:ring-blue-200 focus:outline-none" required>
+                        <option value="">Seleccionar...</option>
                         @foreach ($laboratories as $laboratory)
-                            <option value="{{ $laboratory->id }}" @selected(old('laboratory_id') == $laboratory->id)>
+                            <option value="{{ $laboratory->id }}" @selected(old('laboratory_id', $selectedLaboratoryId) == $laboratory->id)>
                                 {{ $laboratory->nombre }}{{ $laboratory->estado ? ' - ' . $laboratory->estado : '' }}
                             </option>
                         @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Almacén</label>
+                    <select name="warehouse_id" id="warehouse_id"
+                        data-selected="{{ old('warehouse_id', $selectedWarehouseId) }}"
+                        class="w-full px-3 py-2 border rounded focus:ring focus:ring-blue-200 focus:outline-none" required>
+                        <option value="">Seleccionar...</option>
                     </select>
                 </div>
 
@@ -64,7 +73,7 @@
                     <datalist id="existing_diluent_lots">
                         @foreach ($existingLots as $existingLot)
                             <option value="{{ $existingLot['lote'] }}">
-                                {{ $existingLot['laboratory_name'] }} - Stock {{ number_format((float) $existingLot['stock_actual'], 0) }}
+                                {{ $existingLot['warehouse_name'] }} - Stock {{ number_format((float) $existingLot['stock_actual'], 0) }}
                             </option>
                         @endforeach
                     </datalist>
@@ -108,9 +117,16 @@
 
     <script>
         const existingDiluentLots = @json($existingLots);
+        const warehousesByLaboratory = @json($laboratories->mapWithKeys(fn ($laboratory) => [
+            (string) $laboratory->id => $laboratory->warehouses->map(fn ($warehouse) => [
+                'id' => $warehouse->id,
+                'name' => $warehouse->name,
+            ])->values(),
+        ]));
 
         const fields = {
             laboratory: document.getElementById('laboratory_id'),
+            warehouse: document.getElementById('warehouse_id'),
             lote: document.getElementById('lote'),
             presentacion: document.getElementById('presentacion'),
             volume: document.getElementById('volume_ml'),
@@ -128,13 +144,30 @@
         function findExistingLot() {
             const lote = normalize(fields.lote?.value);
             const laboratoryKey = String(fields.laboratory?.value || '');
+            const warehouseKey = String(fields.warehouse?.value || '');
 
             if (!lote) return null;
 
             return existingDiluentLots.find(item =>
                 item.lote_key === lote &&
-                String(item.laboratory_key || '') === laboratoryKey
+                String(item.laboratory_key || '') === laboratoryKey &&
+                String(item.warehouse_key || '') === warehouseKey
             ) || existingDiluentLots.find(item => item.lote_key === lote);
+        }
+
+        function populateWarehouses(selectedValue = '') {
+            if (!fields.warehouse) return;
+
+            const options = warehousesByLaboratory[String(fields.laboratory?.value || '')] || [];
+            fields.warehouse.innerHTML = '<option value="">Seleccionar...</option>';
+
+            options.forEach(item => {
+                const option = document.createElement('option');
+                option.value = String(item.id);
+                option.textContent = item.name;
+                option.selected = String(item.id) === String(selectedValue || '');
+                fields.warehouse.appendChild(option);
+            });
         }
 
         function fillExistingLot() {
@@ -145,7 +178,8 @@
                 return;
             }
 
-            if (fields.laboratory && item.laboratory_key !== null) fields.laboratory.value = item.laboratory_key || '';
+            if (fields.laboratory) fields.laboratory.value = item.laboratory_key || '';
+            populateWarehouses(item.warehouse_key || '');
             if (fields.presentacion) fields.presentacion.value = item.presentacion || '';
             if (fields.volume) fields.volume.value = item.volume_ml || '';
             if (fields.comercial) fields.comercial.value = item.denominacion_comercial || '';
@@ -155,13 +189,18 @@
 
             if (fields.hint) {
                 fields.hint.textContent =
-                    `Lote existente en ${item.laboratory_name}. Stock actual: ${Number(item.stock_actual || 0).toFixed(0)}. Al guardar se sumara el stock capturado a este registro.`;
+                    `Lote existente en ${item.warehouse_name}. Stock actual: ${Number(item.stock_actual || 0).toFixed(0)}. Al guardar se sumará el stock capturado a este registro.`;
                 fields.hint.classList.remove('hidden');
             }
         }
 
         fields.lote?.addEventListener('change', fillExistingLot);
         fields.lote?.addEventListener('blur', fillExistingLot);
-        fields.laboratory?.addEventListener('change', fillExistingLot);
+        fields.laboratory?.addEventListener('change', () => {
+            populateWarehouses();
+            fillExistingLot();
+        });
+        fields.warehouse?.addEventListener('change', fillExistingLot);
+        populateWarehouses(fields.warehouse?.dataset.selected || '');
     </script>
 </x-admin-layout>

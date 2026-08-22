@@ -10,28 +10,9 @@ class LaboratoryController extends Controller
 {
     public function index(Request $request)
     {
-        $laboratories = Laboratory::query()
-            ->when($request->filled('q'), function ($q) use ($request) {
-                $term = $request->q;
-                $q->where(function ($qq) use ($term) {
-                    $qq->where('nombre', 'like', "%{$term}%")
-                        ->orWhere('estado', 'like', "%{$term}%")
-                        ->orWhere('direccion', 'like', "%{$term}%");
-                });
-            })
-            ->when($request->filled('activo'), fn($q) => $q->where('activo', (bool) $request->activo))
-            ->withCount([
-                'hospitals',
-                'warehouses as active_warehouses_count' => fn ($query) => $query->where('is_active', true),
-            ])
-            ->orderByDesc('activo')
-            ->orderBy('nombre')
-            ->get();
-
-        $selectedLaboratory = $laboratories->firstWhere('id', $request->integer('laboratory_id'))
-            ?? $laboratories->first();
-
-        return view('admin.oncologicos.laboratory.index', compact('laboratories', 'selectedLaboratory'));
+        return redirect()->route('admin.warehouses.index', array_filter([
+            'laboratory_id' => $request->integer('laboratory_id') ?: null,
+        ]));
     }
 
     public function create()
@@ -51,11 +32,11 @@ class LaboratoryController extends Controller
         // Si el checkbox no viene, lo forzamos a false
         $validated['activo'] = $request->has('activo');
 
-        Laboratory::create($validated);
+        $laboratory = Laboratory::create($validated);
 
         return redirect()
-            ->route('admin.oncologicos.laboratory.index')
-            ->with('success', 'Laboratorio creado correctamente.');
+            ->route('admin.warehouses.index', ['laboratory_id' => $laboratory->id])
+            ->with('success', 'Central creada correctamente.');
     }
 
     /**
@@ -87,8 +68,8 @@ class LaboratoryController extends Controller
         $laboratory->update($validated);
 
         return redirect()
-            ->route('admin.oncologicos.laboratory.index')
-            ->with('success', 'Laboratorio actualizado correctamente.');
+            ->route('admin.warehouses.index', ['laboratory_id' => $laboratory->id])
+            ->with('success', 'Central actualizada correctamente.');
     }
 
     /**

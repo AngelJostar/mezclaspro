@@ -105,7 +105,7 @@ class InstitutionDailyNutritionPatientReportService
 
         if ($details->isEmpty()) {
             return [
-                'rows' => [[null, null, 'Sin nutriciones conciliables entregadas', null, null, null]],
+                'rows' => [[null, null, null, 'Sin nutriciones conciliables entregadas', null, null, null]],
                 'summary_rows' => [2],
                 'detail_count' => 0,
             ];
@@ -119,16 +119,19 @@ class InstitutionDailyNutritionPatientReportService
             $dailyTotal = round((float) $dailyDetails->sum('cost'), 2);
             $summaryRows[] = count($rows) + 2;
             $rows[] = [
+                'Total del dia: '.$count.' '.($count === 1 ? 'mezcla' : 'mezclas'),
                 $dailyDetails->first()['date'],
                 null,
-                $count === 1 ? '1 nutricion entregada' : $count . ' nutriciones entregadas',
+                null,
                 null,
                 null,
                 $dailyTotal,
             ];
 
+            $dailySequence = 1;
             foreach ($dailyDetails as $detail) {
                 $rows[] = [
+                    $dailySequence++,
                     $detail['date'],
                     $detail['lot'],
                     $detail['patient'],

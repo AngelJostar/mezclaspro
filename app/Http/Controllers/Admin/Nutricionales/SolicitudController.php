@@ -209,6 +209,7 @@ class SolicitudController extends Controller
 
             MedicineStockMovement::create([
                 'medicine_laboratory_stock_id' => $stock->id,
+                'warehouse_id' => $stock->warehouse_id,
                 'user_id' => auth()->id(),
                 'tipo' => 'entrada',
                 'cantidad_ml' => $cantidadMl,
@@ -1587,6 +1588,7 @@ class SolicitudController extends Controller
 
         \App\Models\Nutricionales\MedicineStockMovement::create([
             'medicine_laboratory_stock_id' => $stock->id,
+            'warehouse_id' => $stock->warehouse_id,
             'user_id' => auth()->id(),
             'tipo' => 'salida',
             'cantidad_ml' => $stockDescontarMl,

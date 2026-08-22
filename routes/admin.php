@@ -11,6 +11,9 @@ use App\Http\Controllers\Admin\Nutricionales\SolicitudController;
 use App\Http\Controllers\Admin\UnifiedSolicitudController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WarehouseController;
+use App\Http\Controllers\Admin\TrainingPersonnelController;
+use App\Http\Controllers\Admin\SupplierController;
+use App\Http\Controllers\Admin\DistributionController;
 use App\Models\Solicitud;
 use Illuminate\Support\Facades\Route; //Importamos para generar nuestras rutas.
 use App\Exports\SolicitudesExport;
@@ -52,6 +55,38 @@ Route::get('nutricionales/solicitudes/exportar', [SolicitudController::class, 'e
     ->middleware(['can:nutricionales_solicitudes_index']);
 
 
+Route::patch('/users/{user}/username', [UserController::class, 'updateUsername'])
+    ->name('users.username.update')
+    ->middleware(['can:usuarios']);
+
+Route::patch('/users/{user}/password', [UserController::class, 'updatePassword'])
+    ->name('users.password.update')
+    ->middleware(['can:usuarios']);
+
+Route::patch('/users/{user}/training-username', [UserController::class, 'updateTrainingUsername'])
+    ->name('users.training-username.update')
+    ->middleware(['can:usuarios']);
+
+Route::patch('/users/{user}/training-password', [UserController::class, 'updateTrainingPassword'])
+    ->name('users.training-password.update')
+    ->middleware(['can:usuarios']);
+
+Route::patch('/users/{user}/role-access', [UserController::class, 'updateRoleAccess'])
+    ->name('users.role-access.update')
+    ->middleware(['role:Super Admin']);
+
+Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])
+    ->name('users.status.update')
+    ->middleware(['can:usuarios']);
+
+Route::patch('/users/hospitals/{hospital}/status', [UserController::class, 'updateHospitalStatus'])
+    ->name('users.hospitals.status.update')
+    ->middleware(['can:usuarios']);
+
+Route::patch('/users/institutions/{institucion}/status', [UserController::class, 'updateInstitutionStatus'])
+    ->name('users.institutions.status.update')
+    ->middleware(['can:usuarios']);
+
 Route::resource('/users', UserController::class)
     ->middleware(['can:usuarios']);
 
@@ -62,6 +97,25 @@ Route::resource('/roles', RoleController::class)
 Route::resource('/permissions', PermissionController::class)
     ->except('show')
     ->middleware(['can:permisos']);
+
+Route::resource('/suppliers', SupplierController::class)
+    ->except(['destroy'])
+    ->middleware(['role_or_permission:Super Admin|menu.proveedores|oncologicos_laboratory_index']);
+
+Route::prefix('/distribucion')
+    ->name('distribution.')
+    ->middleware(['role_or_permission:Super Admin|menu.distribucion|laboratorios'])
+    ->group(function () {
+        Route::get('/', [DistributionController::class, 'index'])->name('index');
+        Route::get('/mensajeros', [DistributionController::class, 'couriers'])->name('couriers');
+        Route::get('/nueva', [DistributionController::class, 'create'])->name('create');
+        Route::post('/', [DistributionController::class, 'store'])->name('store');
+        Route::get('/{distributionRoute}', [DistributionController::class, 'show'])->name('show');
+        Route::get('/{distributionRoute}/editar', [DistributionController::class, 'edit'])->name('edit');
+        Route::put('/{distributionRoute}', [DistributionController::class, 'update'])->name('update');
+        Route::patch('/{distributionRoute}/estatus', [DistributionController::class, 'updateStatus'])->name('status.update');
+        Route::get('/{distributionRoute}/qr', [DistributionController::class, 'qr'])->name('qr');
+    });
 
 
 Route::resource('/hospitals', HospitalController::class)
@@ -387,56 +441,88 @@ Route::redirect('/clientes/create', '/admin/instituciones/create')
 Route::resource('/instituciones', InstitucionController::class)
     ->only(['index', 'create', 'store', 'edit', 'update', 'destroy'])
     ->parameters(['instituciones' => 'institucion'])
-    ->middleware(['role:Super Admin']);
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.list']);
 
-$administrationBillingMiddleware = ['role:Super Admin|Administracion y facturacion'];
+$administrationReportsMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.administracion.reports'];
+$billingPendingMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.pending'];
+$billingReceivableMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.receivable'];
+$billingHistoryMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.history'];
+$billingMovementsMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.movements'];
 
 Route::get('instituciones-reportes', [InstitucionController::class, 'reportes'])
     ->name('instituciones.reportes')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
 
 Route::put('instituciones-reportes/formatos/{reportTemplate}', [InstitutionReportTemplateController::class, 'update'])
     ->name('instituciones.reportes.formatos.update')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
+
+Route::patch('instituciones-reportes/formatos/{reportTemplate}/nombre', [InstitutionReportTemplateController::class, 'rename'])
+    ->name('instituciones.reportes.formatos.rename')
+    ->middleware($administrationReportsMiddleware);
 
 Route::get('instituciones-facturacion', [InstitucionBillingController::class, 'index'])
     ->name('instituciones.billing.index')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($billingPendingMiddleware);
+
+Route::get('instituciones-facturacion/por-cobrar', [InstitucionBillingController::class, 'receivable'])
+    ->name('instituciones.billing.receivable')
+    ->middleware($billingReceivableMiddleware);
 
 Route::get('instituciones-facturacion/historial', [InstitucionBillingController::class, 'history'])
     ->name('instituciones.billing.history')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($billingHistoryMiddleware);
+
+Route::get('instituciones-facturacion/bitacora', [InstitucionBillingController::class, 'movementLog'])
+    ->name('instituciones.billing.movements')
+    ->middleware($billingMovementsMiddleware);
 
 Route::get('instituciones-facturacion/exportar', [InstitucionBillingController::class, 'exportarExcel'])
     ->name('instituciones.billing.export')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($billingPendingMiddleware);
 
 Route::post('instituciones-facturacion/exportar-ampliado', [InstitucionBillingController::class, 'exportarExcelAmpliado'])
     ->name('instituciones.billing.expanded-export')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($billingPendingMiddleware);
 
 Route::post('instituciones-facturacion', [InstitucionBillingController::class, 'store'])
     ->name('instituciones.billing.store')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($billingPendingMiddleware);
+
+Route::post('instituciones-facturacion/{billing}/mover', [InstitucionBillingController::class, 'moveFromHistory'])
+    ->name('instituciones.billing.move')
+    ->middleware($billingHistoryMiddleware);
 
 Route::view('capacitaciones', 'admin.capacitaciones.index')
     ->name('capacitaciones.index');
 
+Route::view('capacitaciones/programas', 'admin.capacitaciones.index')
+    ->name('capacitaciones.programas');
+
+Route::view('capacitaciones/alumnos', 'admin.capacitaciones.index')
+    ->name('capacitaciones.alumnos');
+
+Route::get('capacitaciones/personal', [TrainingPersonnelController::class, 'index'])
+    ->name('capacitaciones.personal');
+
+Route::post('capacitaciones/personal', [TrainingPersonnelController::class, 'store'])
+    ->name('capacitaciones.personal.store');
+
 Route::get('instituciones/{institucion}/hospitals', [InstitucionController::class, 'hospitales'])
     ->name('instituciones.hospitals')
-    ->middleware(['role:Super Admin']);
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
 
 Route::get('instituciones/{institucion}/hospitals/create', [HospitalController::class, 'createForInstitution'])
     ->name('instituciones.hospitals.create')
-    ->middleware(['role:Super Admin']);
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
 
-Route::post('instituciones/{institucion}/hospitals', [InstitucionController::class, 'storeHospital'])
+Route::post('instituciones/{institucion}/hospitals', [HospitalController::class, 'storeForInstitution'])
     ->name('instituciones.hospitals.store')
-    ->middleware(['role:Super Admin']);
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
 
 Route::put('instituciones/{institucion}/hospitals', [InstitucionController::class, 'actualizarHospitales'])
     ->name('instituciones.hospitals.update')
-    ->middleware(['role:Super Admin']);
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
 
 Route::get('clientes/{cliente}/edit', function ($cliente) {
     return redirect()->route('admin.instituciones.edit', ['institucion' => $cliente]);
@@ -444,27 +530,27 @@ Route::get('clientes/{cliente}/edit', function ($cliente) {
 
 Route::get('instituciones/{institucion}/exportar-mezclas-onco', [InstitucionController::class, 'exportarMezclasOnco'])
     ->name('instituciones.exportarMezclasOnco')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-general', [InstitucionController::class, 'exportarReporteGeneral'])
     ->name('instituciones.exportarGeneral')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-hospital', [InstitucionController::class, 'exportarReporteHospital'])
     ->name('instituciones.exportarHospital')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-hospital-detalle', [InstitucionController::class, 'exportarReporteHospitalDetalle'])
     ->name('instituciones.exportarHospitalDetalle')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-reporte-diario-paciente', [InstitucionController::class, 'exportarReporteDiarioPaciente'])
     ->name('instituciones.exportarReporteDiarioPaciente')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
 
 Route::get('instituciones/{institucion}/exportar-reporte-mensual-insumos', [InstitucionController::class, 'exportarReporteMensualInsumos'])
     ->name('instituciones.exportarReporteMensualInsumos')
-    ->middleware($administrationBillingMiddleware);
+    ->middleware($administrationReportsMiddleware);
 
 Route::get('clientes/{cliente}/exportar-mezclas-onco', function ($cliente) {
     return redirect()->route('admin.instituciones.exportarMezclasOnco', ['institucion' => $cliente]);
@@ -530,6 +616,14 @@ Route::put('/almacenes/{warehouse}', [WarehouseController::class, 'update'])
 
 Route::get('/almacenes/ordenes-de-compra', [WarehouseController::class, 'purchaseOrders'])
     ->name('warehouses.purchase-orders.index')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::get('/compras/nueva', [WarehouseController::class, 'newPurchaseOrder'])
+    ->name('purchases.create')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::get('/almacenes/{warehouse}/insumos', [WarehouseController::class, 'suppliesInventory'])
+    ->name('warehouses.supplies.index')
     ->middleware(['can:oncologicos_laboratory_index']);
 
 // Crear

@@ -2,6 +2,7 @@
 
 namespace App\Models\Oncologicos;
 
+use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,6 +17,7 @@ class MedicineBatch extends Model
 
     protected $fillable = [
         'laboratory_id',
+        'warehouse_id',
         'medicine_presentation_id',
         'lote',
         'caducidad',
@@ -48,6 +50,11 @@ class MedicineBatch extends Model
     public function laboratory(): BelongsTo
     {
         return $this->belongsTo(Laboratory::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function presentation(): BelongsTo
