@@ -11,12 +11,17 @@ use App\Models\Oncologicos\MedicinePresentation;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MezclaMedicamento;
 use App\Models\Oncologicos\SolicitudOnco;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class MezclaController extends Controller
 {
@@ -1892,6 +1897,11 @@ class MezclaController extends Controller
             $showLabelLotExpiry = (bool) optional(MedicineList::find($medicineListId))->show_label_lot_expiry;
         }
 
+        $qrUrl = URL::signedRoute('qr.oncologicos.mezclas.show', ['mezcla' => $mezcla->id]);
+        $qrRenderer = new ImageRenderer(new RendererStyle(76, 1), new SvgImageBackEnd());
+        $qrSvg = (new Writer($qrRenderer))->writeString($qrUrl);
+        $qrImage = 'data:image/svg+xml;base64,' . base64_encode($qrSvg);
+
         // =========================================
         // 1) Medicamentos: nombre (denominación + marca) + dosis + lote + caducidad
         // =========================================
@@ -2038,6 +2048,9 @@ class MezclaController extends Controller
 
             'fechaPreparacion'  => $fechaPreparacion,
             'fechaLimiteUso'    => $fechaLimiteUso,
+            'qrUrl'             => $qrUrl,
+            'qrSvg'             => $qrSvg,
+            'qrImage'           => $qrImage,
             'legendEtiqueta'    => $chosenLegend,
             'tempMinEtiqueta'   => $chosenTempMin,
             'tempMaxEtiqueta'   => $chosenTempMax,

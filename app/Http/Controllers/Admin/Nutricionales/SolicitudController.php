@@ -33,6 +33,11 @@ use App\Models\Nutricionales\MedicineStockMovement;
 use App\Models\Nutricionales\InspeccionNutricional;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Services\InstitutionBillingPricingService;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
+use Illuminate\Support\Facades\URL;
 
 class SolicitudController extends Controller
 {
@@ -221,7 +226,7 @@ class SolicitudController extends Controller
                 'frascos_despues' => $frascosDespues,
                 'reference_type' => 'SolicitudCancelada',
                 'reference_id' => $solicitud->id,
-                'notes' => 'Devolución automática de inventario por cancelación de solicitud nutricional',
+                'notes' => 'DevoluciÃƒÂ³n automÃƒÂ¡tica de inventario por cancelaciÃƒÂ³n de solicitud nutricional',
             ]);
         }
     }
@@ -519,7 +524,7 @@ class SolicitudController extends Controller
 
             if ($fechaHoraEntrega->lt($horaMinima)) {
                 return redirect()->back()->withErrors([
-                    'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos después de la hora actual.'
+                    'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos despuÃƒÂ©s de la hora actual.'
                 ])->withInput();
             }
 
@@ -842,8 +847,8 @@ class SolicitudController extends Controller
             session()->flash(
                 'swal',
                 [
-                    'title' => '¡Bien hecho!',
-                    'text' => 'La solicitud se ha creado con éxito.',
+                    'title' => 'Ã‚Â¡Bien hecho!',
+                    'text' => 'La solicitud se ha creado con ÃƒÂ©xito.',
                     'icon' => "success"
                 ]
             );
@@ -1062,7 +1067,7 @@ class SolicitudController extends Controller
 
                 session()->flash('swal', [
                     'title' => 'Solicitud cancelada',
-                    'text' => 'La solicitud se ha cancelado y el inventario fue devuelto si ya había sido descontado.',
+                    'text' => 'La solicitud se ha cancelado y el inventario fue devuelto si ya habÃƒÂ­a sido descontado.',
                     'icon' => 'warning',
                 ]);
 
@@ -1450,13 +1455,13 @@ class SolicitudController extends Controller
             if ($accion === 'aprobar') {
                 session()->flash('swal', [
                     'title' => 'Solicitud Aprobada',
-                    'text' => 'La solicitud se ha aprobado con éxito.',
+                    'text' => 'La solicitud se ha aprobado con ÃƒÂ©xito.',
                     'icon' => 'success',
                 ]);
             } else {
                 session()->flash('swal', [
                     'title' => 'Solicitud Actualizada',
-                    'text' => 'La solicitud se ha editado con éxito.',
+                    'text' => 'La solicitud se ha editado con ÃƒÂ©xito.',
                     'icon' => 'success',
                 ]);
             }
@@ -1501,7 +1506,7 @@ class SolicitudController extends Controller
             ->first();
 
         if (!$itemLista) {
-            throw new \Exception("La presentaci�n {$presentation->denominacion_comercial} no existe en la lista nutricional del hospital.");
+            throw new \Exception("La presentaciÃ³n {$presentation->denominacion_comercial} no existe en la lista nutricional del hospital.");
         }
 
         return (float) $itemLista->precio_ml;
@@ -1517,8 +1522,8 @@ class SolicitudController extends Controller
         return $categoryId === 6
             || $inputId === 40
             || str_contains($genericName, 'bolsa eva')
-            || str_contains($genericName, 'set de infusi�n')
-            || str_contains($genericName, 'set de infusi�n');
+            || str_contains($genericName, 'set de infusiÃ³n')
+            || str_contains($genericName, 'set de infusiÃ³n');
     }
 
     private function descontarStockPresentacion(
@@ -1539,7 +1544,7 @@ class SolicitudController extends Controller
         $presentacionMl = (float) ($presentation->presentacion_ml ?? 0);
 
         if ($presentacionMl <= 0) {
-            throw new \Exception("La presentaci�n {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
+            throw new \Exception("La presentaciÃ³n {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
         }
 
         $controlPorPieza = $this->usaInventarioPorPieza($presentation);
@@ -1601,8 +1606,8 @@ class SolicitudController extends Controller
             'reference_type' => 'Solicitud',
             'reference_id' => $solicitudId,
             'notes' => $controlPorPieza
-                ? 'Descuento autom�tico por aprobaci�n de solicitud nutricional (control por pieza)'
-                : 'Descuento autom�tico por aprobaci�n de solicitud nutricional',
+                ? 'Descuento automÃ¡tico por aprobaciÃ³n de solicitud nutricional (control por pieza)'
+                : 'Descuento automÃ¡tico por aprobaciÃ³n de solicitud nutricional',
         ]);
 
         return $stock;
@@ -1614,7 +1619,7 @@ class SolicitudController extends Controller
         $role = $user->roles[0]->name;
 
         if (!in_array($role, ['Admin', 'Super Admin']) && $solicitud->user_id != $user->id) {
-            abort(Response::HTTP_NOT_FOUND, 'P�gina no encontrada');
+            abort(Response::HTTP_NOT_FOUND, 'PÃ¡gina no encontrada');
         }
 
         $solicitud_detalles = Solicitud::with(
@@ -2100,12 +2105,20 @@ class SolicitudController extends Controller
             'solicitud_patient'
         ])->findOrFail($solicitud->id);
 
+        $qrUrl = URL::signedRoute('qr.nutricionales.solicitudes.show', ['solicitud' => $solicitud->id]);
+        $qrRenderer = new ImageRenderer(new RendererStyle(88, 1), new SvgImageBackEnd());
+        $qrSvg = (new Writer($qrRenderer))->writeString($qrUrl);
+        $qrImage = 'data:image/svg+xml;base64,' . base64_encode($qrSvg);
+
         $customPaper = [0, 0, 368.50, 255.12];
 
-        $pdf = Pdf::loadView('pdfs.nutricionales.etiqueta', compact(
-            'solicitud_detalles',
-            'inputs_solicitud'
-        ))->setPaper($customPaper, 'landscape');
+        $pdf = Pdf::loadView('pdfs.nutricionales.etiqueta', [
+            'solicitud_detalles' => $solicitud_detalles,
+            'inputs_solicitud' => $inputs_solicitud,
+            'qrUrl' => $qrUrl,
+            'qrSvg' => $qrSvg,
+            'qrImage' => $qrImage,
+        ])->setPaper($customPaper, 'landscape');
 
         return $pdf->stream();
     }
@@ -2116,4 +2129,3 @@ class SolicitudController extends Controller
         return Excel::download(new SolicitudesExport, 'solicitudes.xlsx');
     }
 }
-
