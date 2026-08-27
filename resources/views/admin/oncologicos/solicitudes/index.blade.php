@@ -3,6 +3,7 @@
     @php
         $requestType = $requestType ?? 'oncologicos';
         $isAntibiotic = $requestType === 'antibioticos';
+        $statusFilter = App\Support\SolicitudStatusFilter::normalize(request()->query('estado'));
     @endphp
 
     <div class="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -42,6 +43,8 @@
         </div>
     @endif
 
+    @include('admin.solicitudes._status-selector', ['activeStatus' => $statusFilter])
+
     {{-- MENSAJES SWEETALERT --}}
     @if (session('swal'))
         @push('js')
@@ -52,15 +55,10 @@
     @endif
 
     <div class="relative">
-        <livewire:oncologicos.solicitudes-table :request-type="$requestType" />
+        <livewire:oncologicos.solicitudes-table :request-type="$requestType" :status-filter="$statusFilter" />
     </div>
 
-    <div id="oncology-requests-fixed-scrollbar"
-        class="hidden fixed bottom-0 z-50 border-t border-gray-300 bg-white/95 py-1 shadow-[0_-4px_12px_rgba(15,23,42,0.15)]">
-        <div class="js-oncology-requests-fixed-scrollbar overflow-x-auto">
-            <div id="oncology-requests-fixed-scrollbar-spacer" class="h-1"></div>
-        </div>
-    </div>
+    <livewire:oncologicos.inspeccion-mezcla />
 
     <div class="h-8" aria-hidden="true"></div>
 
@@ -68,8 +66,6 @@
         <script>
             @include('admin.catalogo-listas.partials.column-filter-script')
 
-            let oncologyRequestsScrollbarFrame = null;
-            let oncologyRequestsScrollbarCleanup = null;
             let oncologyRequestsFilterFrame = null;
 
             function initOncologyRequestsColumnFilters() {
@@ -91,86 +87,21 @@
                 oncologyRequestsFilterFrame = window.requestAnimationFrame(initOncologyRequestsColumnFilters);
             }
 
-            function initOncologyRequestsFixedScrollbar() {
-                oncologyRequestsScrollbarCleanup?.();
-
-                const tableScroll = document.getElementById('oncology-requests-table-scroll');
-                const fixedWrapper = document.getElementById('oncology-requests-fixed-scrollbar');
-                const fixedScroll = fixedWrapper?.querySelector('.js-oncology-requests-fixed-scrollbar');
-                const spacer = document.getElementById('oncology-requests-fixed-scrollbar-spacer');
-
-                if (!tableScroll || !fixedWrapper || !fixedScroll || !spacer) {
-                    return;
-                }
-
-                const controller = new AbortController();
-                const options = { signal: controller.signal };
-                let syncing = false;
-
-                function updateFixedScrollbar() {
-                    const hasHorizontalScroll = tableScroll.scrollWidth > tableScroll.clientWidth + 1;
-                    const tableRect = tableScroll.getBoundingClientRect();
-
-                    fixedWrapper.style.left = `${tableRect.left + tableScroll.clientLeft}px`;
-                    fixedWrapper.style.width = `${tableScroll.clientWidth}px`;
-                    fixedWrapper.classList.toggle('hidden', !hasHorizontalScroll);
-                    spacer.style.width = `${tableScroll.scrollWidth}px`;
-                    fixedScroll.scrollLeft = tableScroll.scrollLeft;
-                }
-
-                tableScroll.addEventListener('scroll', () => {
-                    if (syncing) return;
-                    syncing = true;
-                    fixedScroll.scrollLeft = tableScroll.scrollLeft;
-                    syncing = false;
-                }, options);
-
-                fixedScroll.addEventListener('scroll', () => {
-                    if (syncing) return;
-                    syncing = true;
-                    tableScroll.scrollLeft = fixedScroll.scrollLeft;
-                    syncing = false;
-                }, options);
-
-                window.addEventListener('resize', updateFixedScrollbar, options);
-                window.addEventListener('scroll', updateFixedScrollbar, { ...options, passive: true });
-
-                const resizeObserver = new ResizeObserver(updateFixedScrollbar);
-                resizeObserver.observe(tableScroll);
-                resizeObserver.observe(tableScroll.firstElementChild || tableScroll);
-
-                oncologyRequestsScrollbarCleanup = () => {
-                    controller.abort();
-                    resizeObserver.disconnect();
-                };
-
-                updateFixedScrollbar();
-                window.requestAnimationFrame(updateFixedScrollbar);
-            }
-
-            function scheduleOncologyRequestsFixedScrollbar() {
-                window.cancelAnimationFrame(oncologyRequestsScrollbarFrame);
-                oncologyRequestsScrollbarFrame = window.requestAnimationFrame(initOncologyRequestsFixedScrollbar);
-            }
-
             function registerOncologyRequestsLivewireHook() {
                 if (!window.Livewire || window.__oncologyRequestsScrollbarHookRegistered) return;
 
                 window.__oncologyRequestsScrollbarHookRegistered = true;
                 window.Livewire.hook('morph.updated', () => {
-                    scheduleOncologyRequestsFixedScrollbar();
                     scheduleOncologyRequestsColumnFilters();
                 });
             }
 
             document.addEventListener('DOMContentLoaded', () => {
-                initOncologyRequestsFixedScrollbar();
                 initOncologyRequestsColumnFilters();
                 registerOncologyRequestsLivewireHook();
             });
             document.addEventListener('livewire:init', registerOncologyRequestsLivewireHook, { once: true });
             document.addEventListener('livewire:navigated', () => {
-                scheduleOncologyRequestsFixedScrollbar();
                 scheduleOncologyRequestsColumnFilters();
             });
         </script>

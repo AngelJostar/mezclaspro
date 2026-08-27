@@ -9,6 +9,7 @@ use App\Models\Institucion;
 use App\Models\Nutricionales\NutriMedicineList;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicineList;
+use App\Support\UtmCoordinates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -76,6 +77,12 @@ class HospitalController extends Controller
             ]);
         }
 
+        if ($request->filled('utm_hemisphere')) {
+            $request->merge([
+                'utm_hemisphere' => strtoupper(trim((string) $request->input('utm_hemisphere'))),
+            ]);
+        }
+
         $data = $request->validate([
             'name_hp' => ['required', 'string', 'max:255'],
             'short_name' => ['nullable', 'string', 'max:100'],
@@ -89,6 +96,29 @@ class HospitalController extends Controller
             'postal_code' => ['required', 'string', 'max:10'],
             'neighborhood' => ['nullable', 'string', 'max:150'],
             'street_number' => ['required', 'string', 'max:255'],
+            'utm_zone' => [
+                'nullable',
+                'required_with:utm_hemisphere,utm_easting,utm_northing',
+                'integer',
+                'between:1,60',
+            ],
+            'utm_hemisphere' => [
+                'nullable',
+                'required_with:utm_zone,utm_easting,utm_northing',
+                Rule::in(['N', 'S']),
+            ],
+            'utm_easting' => [
+                'nullable',
+                'required_with:utm_zone,utm_hemisphere,utm_northing',
+                'numeric',
+                'between:100000,900000',
+            ],
+            'utm_northing' => [
+                'nullable',
+                'required_with:utm_zone,utm_hemisphere,utm_easting',
+                'numeric',
+                'between:0,10000000',
+            ],
             'contact_name' => ['required', 'string', 'max:150'],
             'contact_position' => ['nullable', 'string', 'max:100'],
             'phone' => ['required', 'string', 'max:30'],
@@ -126,6 +156,19 @@ class HospitalController extends Controller
         $data['service_oncology'] = $request->boolean('service_oncology');
         $data['service_antibiotics'] = $request->boolean('service_antibiotics');
         $data['service_nutrition'] = $request->boolean('service_nutrition');
+
+        if (isset($data['utm_zone'], $data['utm_hemisphere'], $data['utm_easting'], $data['utm_northing'])) {
+            $coordinates = UtmCoordinates::toLatitudeLongitude(
+                (int) $data['utm_zone'],
+                $data['utm_hemisphere'],
+                (float) $data['utm_easting'],
+                (float) $data['utm_northing']
+            );
+
+            $data['latitude'] = $coordinates['latitude'];
+            $data['longitude'] = $coordinates['longitude'];
+        }
+
         unset($data['name_hp']);
 
         DB::transaction(function () use ($data, $institucion) {

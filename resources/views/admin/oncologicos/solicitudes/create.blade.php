@@ -88,37 +88,31 @@
             </div>
 
             <div class="flex justify-between mb-4 gap-4">
-                <div class="w-1/5">
+                <div class="w-1/4">
                     <label for="diagnostico">Diagnóstico</label>
                     <input type="text" name="diagnostico" id="diagnostico" value="{{ old('diagnostico') }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Diagnóstico">
                 </div>
-                <div class="w-1/5">
+                <div class="w-1/4">
                     <label for="alergias">Alergias</label>
                     <input type="text" name="alergias" id="alergias" value="{{ old('alergias') }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Alergias del paciente (si aplica)">
                 </div>
-                <div class="w-1/5">
+                <div class="w-1/4">
                     <label for="medico_nombre">Nombre del Médico*</label>
                     <input type="text" name="medico_nombre" id="medico_nombre"
                         value="{{ old('medico_nombre') }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Nombre del Médico">
                 </div>
-                <div class="w-1/5">
+                <div class="w-1/4">
                     <label for="medico_cedula">Cédula del Médico*</label>
                     <input type="text" name="medico_cedula" id="medico_cedula"
                         value="{{ old('medico_cedula') }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Cédula del Médico">
-                </div>
-                <div class="w-1/5">
-                    <label for="fecha_entrega">Fecha de entrega*</label>
-                    <input type="datetime-local" name="fecha_entrega" id="fecha_entrega"
-                        value="{{ old('fecha_entrega') }}"
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
                 </div>
             </div>
 
@@ -127,6 +121,31 @@
                 <input type="text" name="observaciones" id="observaciones" value="{{ old('observaciones') }}"
                     class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                     placeholder="Observaciones">
+            </div>
+
+            <div class="mb-4 max-w-sm">
+                <label for="cantidad_mezclas" class="block text-sm font-medium text-gray-700">
+                    Número de mezclas solicitadas*
+                </label>
+                <div class="mt-1 flex h-10 w-44 overflow-hidden rounded-md border border-gray-300 bg-white shadow-sm">
+                    <button type="button" onclick="ajustarCantidadMezclas(-1)" title="Quitar una mezcla"
+                        aria-label="Quitar una mezcla"
+                        class="inline-flex w-10 shrink-0 items-center justify-center border-r border-gray-300 text-gray-600 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <span class="text-lg leading-none" aria-hidden="true">&minus;</span>
+                    </button>
+                    <input type="number" name="cantidad_mezclas" id="cantidad_mezclas" min="1" max="99"
+                        value="{{ old('cantidad_mezclas', 1) }}" required
+                        onchange="establecerCantidadMezclas(this.value)"
+                        class="min-w-0 flex-1 border-0 px-2 text-center font-semibold text-gray-800 focus:ring-0">
+                    <button type="button" onclick="ajustarCantidadMezclas(1)" title="Agregar una mezcla"
+                        aria-label="Agregar una mezcla"
+                        class="inline-flex w-10 shrink-0 items-center justify-center border-l border-gray-300 text-gray-600 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <span class="text-lg leading-none" aria-hidden="true">+</span>
+                    </button>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">
+                    Cada fecha de entrega generará un ID de mezcla y una remisión independiente.
+                </p>
             </div>
 
             <!-- Mezclas -->
@@ -158,8 +177,105 @@
         const mezclasOld = @json(old('mezclas') ? json_decode(old('mezclas'), true) : []);
         const infusors = @json($infusors ?? []);
 
+        const MAX_MEZCLAS = 99;
+        const MIN_FECHA_ENTREGA = '{{ now()->startOfDay()->format('Y-m-d\TH:i') }}';
         let idInternoMezcla = 0;
         let contadorFilasGlobal = 0;
+
+        function valorSeguroFecha(value) {
+            const candidate = String(value ?? '').slice(0, 16);
+            return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(candidate) ? candidate : '';
+        }
+
+        function filaFechaEntregaMarkup(value = '', esPrincipal = false) {
+            const accion = esPrincipal
+                ? `<button type="button" onclick="agregarFechaEntrega(this)"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded bg-green-600 text-white transition hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        title="Agregar otra fecha de entrega" aria-label="Agregar otra fecha de entrega">
+                        <span class="text-xl leading-none" aria-hidden="true">+</span>
+                   </button>`
+                : `<button type="button" onclick="eliminarFechaEntrega(this)"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded bg-red-600 text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        title="Eliminar fecha de entrega" aria-label="Eliminar fecha de entrega">
+                        <span class="text-xl leading-none" aria-hidden="true">&times;</span>
+                   </button>`;
+
+            return `
+                <div data-name="fecha_entrega_row" class="flex items-center gap-2">
+                    <input type="datetime-local" data-name="fecha_entrega" required min="${MIN_FECHA_ENTREGA}"
+                        value="${valorSeguroFecha(value)}"
+                        class="block min-w-0 flex-1 rounded border-gray-300 px-2 py-1 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    ${accion}
+                </div>
+            `;
+        }
+
+        function fechasEntregaMarkup(values = ['']) {
+            const fechas = Array.isArray(values) && values.length > 0 ? values : [''];
+
+            return `
+                <div data-name="fechas_entrega_section" class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3">
+                    <div class="mb-2">
+                        <label class="font-medium text-gray-800">Fecha de entrega*</label>
+                        <p class="text-xs text-gray-600">Agrega una fecha por cada entrega programada de esta mezcla.</p>
+                    </div>
+                    <div data-name="fechas_entrega" class="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        ${fechas.map((fecha, index) => filaFechaEntregaMarkup(fecha, index === 0)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function cantidadFechasEntregaActual() {
+            return document.querySelectorAll('[data-name="fecha_entrega"]').length;
+        }
+
+        function agregarFechaEntrega(button) {
+            if (cantidadFechasEntregaActual() >= MAX_MEZCLAS) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Límite alcanzado',
+                    text: `Una solicitud puede generar hasta ${MAX_MEZCLAS} mezclas programadas.`,
+                    customClass: { confirmButton: 'swal-button-confirm' }
+                });
+                return;
+            }
+
+            const container = button.closest('[data-name="fechas_entrega_section"]')
+                ?.querySelector('[data-name="fechas_entrega"]');
+            container?.insertAdjacentHTML('beforeend', filaFechaEntregaMarkup());
+        }
+
+        function eliminarFechaEntrega(button) {
+            button.closest('[data-name="fecha_entrega_row"]')?.remove();
+        }
+
+        function cantidadMezclasActual() {
+            return document.querySelectorAll('#contenedorMezclas > .oncology-mixture').length;
+        }
+
+        function actualizarCantidadMezclasInput() {
+            const input = document.getElementById('cantidad_mezclas');
+            if (input) input.value = Math.max(1, cantidadMezclasActual());
+        }
+
+        function establecerCantidadMezclas(valor) {
+            const objetivo = Math.min(MAX_MEZCLAS, Math.max(1, Number.parseInt(valor, 10) || 1));
+
+            while (cantidadMezclasActual() < objetivo) {
+                agregarMezcla();
+            }
+
+            while (cantidadMezclasActual() > objetivo) {
+                document.querySelector('#contenedorMezclas > .oncology-mixture:last-child')?.remove();
+            }
+
+            actualizarNumeracionMezclas();
+        }
+
+        function ajustarCantidadMezclas(cambio) {
+            establecerCantidadMezclas(cantidadMezclasActual() + cambio);
+        }
 
         function agregarMezcla() {
             idInternoMezcla++;
@@ -207,6 +323,8 @@
                 <input type="number" data-name="tiempo_infusion" class="w-full border rounded px-2 py-1 text-sm">
             </div>
         </div>
+
+        ${fechasEntregaMarkup()}
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div class="flex items-center gap-2">
@@ -282,6 +400,10 @@
                 <input type="number" data-name="tiempo_infusion" value="${mezclaData.tiempo_infusion ?? ''}" class="w-full border rounded px-2 py-1 text-sm">
             </div>
         </div>
+
+        ${fechasEntregaMarkup(
+            mezclaData.fechas_entrega ?? (mezclaData.fecha_entrega ? [mezclaData.fecha_entrega] : [''])
+        )}
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div class="flex items-center gap-2">
@@ -376,7 +498,19 @@
         }
 
         function eliminarMezcla(btn) {
-            const mezcla = btn.closest(".border");
+            if (cantidadMezclasActual() <= 1) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'La solicitud requiere una mezcla',
+                    text: 'Debe permanecer al menos una mezcla en la solicitud.',
+                    customClass: {
+                        confirmButton: 'swal-button-confirm'
+                    }
+                });
+                return;
+            }
+
+            const mezcla = btn.closest('.oncology-mixture');
             const idMezcla = mezcla.dataset.idInterno;
             mezcla.remove();
             actualizarNumeracionMezclas();
@@ -393,9 +527,10 @@
         }
 
         function actualizarNumeracionMezclas() {
-            document.querySelectorAll('#contenedorMezclas > .border').forEach((mezcla, index) => {
+            document.querySelectorAll('#contenedorMezclas > .oncology-mixture').forEach((mezcla, index) => {
                 mezcla.querySelector('.mezcla-titulo').textContent = `Mezcla #${index + 1}`;
             });
+            actualizarCantidadMezclasInput();
         }
 
         function actualizarDiluentesYVias(selectElem, idMezcla, idFila) {
@@ -490,8 +625,8 @@
         }
 
         function updateInfusorDisponibilidad(idMezcla) {
-            const mezclaDiv = document.querySelector(`#contenedorMezclas > .border[data-id-interno="${idMezcla}"]`) ||
-                document.querySelector(`#contenedorMezclas > .border[data-idinterno="${idMezcla}"]`);
+            const mezclaDiv = document.querySelector(`#contenedorMezclas > .oncology-mixture[data-id-interno="${idMezcla}"]`) ||
+                document.querySelector(`#contenedorMezclas > .oncology-mixture[data-idinterno="${idMezcla}"]`);
             if (!mezclaDiv) return;
 
             const setCb = mezclaDiv.querySelector('[data-name="set_infusion"]');
@@ -524,7 +659,7 @@
         }
 
         function toggleSetInfusion(checkbox, idMezcla) {
-            const mezclaDiv = checkbox.closest('.border');
+            const mezclaDiv = checkbox.closest('.oncology-mixture');
             const selInf = mezclaDiv.querySelector('[data-name="infusor_id"]');
 
             if (checkbox.checked) {
@@ -537,7 +672,7 @@
         }
 
         function toggleInfusorSelect(select, idMezcla) {
-            const mezclaDiv = select.closest('.border');
+            const mezclaDiv = select.closest('.oncology-mixture');
             const setCb = mezclaDiv.querySelector('[data-name="set_infusion"]');
 
             if (select.value) {
@@ -553,8 +688,9 @@
             e.preventDefault();
             const mezclas = [];
             let errorMezclaInvalida = false;
+            let errorFechasEntrega = false;
 
-            document.querySelectorAll('#contenedorMezclas > .border').forEach((mezclaDiv) => {
+            document.querySelectorAll('#contenedorMezclas > .oncology-mixture').forEach((mezclaDiv) => {
                 const idInterno = mezclaDiv.dataset.idInterno;
                 const volumen = mezclaDiv.querySelector('[data-name="volumen_dilucion"]')?.value;
                 const tiempo = mezclaDiv.querySelector('[data-name="tiempo_infusion"]')?.value;
@@ -563,6 +699,17 @@
                 const selInfusor = mezclaDiv.querySelector('[data-name="infusor_id"]');
                 const set_infusion = !!(setInfusionCb && setInfusionCb.checked);
                 const infusor_id = selInfusor && selInfusor.value ? selInfusor.value : null;
+                const fechas_entrega = Array.from(
+                    mezclaDiv.querySelectorAll('[data-name="fecha_entrega"]')
+                ).map(input => input.value.trim());
+
+                if (
+                    fechas_entrega.length === 0 ||
+                    fechas_entrega.some(fecha => !fecha) ||
+                    new Set(fechas_entrega).size !== fechas_entrega.length
+                ) {
+                    errorFechasEntrega = true;
+                }
 
                 const medicamentosArr = [];
                 let diluyenteRef = null;
@@ -603,6 +750,7 @@
                     mezclas.push({
                         volumen_dilucion: volumen,
                         tiempo_infusion: tiempo,
+                        fechas_entrega: fechas_entrega,
                         set_infusion: set_infusion,
                         infusor_id: infusor_id,
                         medicamentos: medicamentosArr
@@ -618,6 +766,35 @@
                     customClass: {
                         confirmButton: 'swal-button-confirm',
                         cancelButton: 'swal-button-cancel'
+                    }
+                });
+                return;
+            }
+
+            if (errorFechasEntrega) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Revisa las fechas de entrega',
+                    text: 'Cada mezcla necesita al menos una fecha completa y no puede repetir la misma fecha.',
+                    customClass: {
+                        confirmButton: 'swal-button-confirm'
+                    }
+                });
+                return;
+            }
+
+            const cantidadSolicitada = Number.parseInt(
+                document.getElementById('cantidad_mezclas').value,
+                10
+            ) || 1;
+
+            if (cantidadMezclasActual() !== cantidadSolicitada || mezclas.length !== cantidadSolicitada) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Faltan mezclas por capturar',
+                    text: `Debes completar las ${cantidadSolicitada} mezclas indicadas en la solicitud.`,
+                    customClass: {
+                        confirmButton: 'swal-button-confirm'
                     }
                 });
                 return;
@@ -647,7 +824,7 @@
             if (mezclasOld.length > 0) {
                 mezclasOld.forEach(m => agregarMezclaDesdeOld(m));
             } else {
-                agregarMezcla();
+                establecerCantidadMezclas(document.getElementById('cantidad_mezclas').value);
             }
         });
     </script>

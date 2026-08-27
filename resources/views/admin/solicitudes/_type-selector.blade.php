@@ -3,29 +3,33 @@
     $canViewNutrition = $canViewNutrition ?? auth()->user()?->can('nutricionales_solicitudes_index');
     $canViewOncology = $canViewOncology ?? auth()->user()?->can('oncologicos_solicitudes_index');
     $selectorId = 'request-type-selector-' . $selectedType;
+    $activeStatus = App\Support\SolicitudStatusFilter::normalize(request()->query('estado'));
+    $typeQuery = $activeStatus === App\Support\SolicitudStatusFilter::ALL
+        ? []
+        : ['estado' => $activeStatus];
     $requestTypes = collect([
         [
             'key' => 'todas',
             'label' => 'Todas',
-            'route' => route('admin.solicitudes.index'),
+            'route' => route('admin.solicitudes.index', $typeQuery),
             'visible' => $canViewNutrition || $canViewOncology,
         ],
         [
             'key' => 'nutricionales',
             'label' => 'Nutricionales',
-            'route' => route('admin.nutricionales.solicitudes.index'),
+            'route' => route('admin.nutricionales.solicitudes.index', $typeQuery),
             'visible' => $canViewNutrition,
         ],
         [
             'key' => 'oncologicos',
             'label' => 'Oncologicas',
-            'route' => route('admin.oncologicos.solicitudes.index'),
+            'route' => route('admin.oncologicos.solicitudes.index', $typeQuery),
             'visible' => $canViewOncology,
         ],
         [
             'key' => 'antibioticos',
             'label' => 'Antibioticos',
-            'route' => route('admin.antibioticos.solicitudes.index'),
+            'route' => route('admin.antibioticos.solicitudes.index', $typeQuery),
             'visible' => $canViewOncology,
         ],
     ])->where('visible')->values();
@@ -49,7 +53,9 @@
         <span class="text-lg leading-none" aria-hidden="true">&lsaquo;</span>
     </button>
 
-    <div id="{{ $selectorId }}" class="flex min-w-0 gap-2 overflow-x-auto scroll-smooth pb-1">
+    <div id="{{ $selectorId }}"
+        class="request-selector-scroll flex min-w-0 gap-2 overflow-x-auto scroll-smooth pb-1"
+        data-disable-sticky-x>
         @foreach ($requestTypes as $requestType)
             @php($isSelected = $selectedType === $requestType['key'])
             <a href="{{ $requestType['route'] }}"

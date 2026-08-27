@@ -11,13 +11,16 @@ use App\Exports\Instituciones\InstitutionMonthlyNutritionSupplyExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
 use App\Models\Institucion;
+use App\Models\User;
 use App\Services\InstitutionDailyNutritionPatientReportService;
 use App\Services\InstitutionMonthlyNutritionSupplyReportService;
 use App\Services\InstitutionReportTemplateService;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Excel as ExcelWriter;
 use Maatwebsite\Excel\Facades\Excel;
@@ -342,6 +345,12 @@ class InstitucionController extends Controller
         $service = (string) $request->query('service', 'all');
 
         $hospitals = $institucion->hospitals()
+            ->with(['users' => function ($query) {
+                $query->select('users.id', 'users.hospital_id', 'users.username', 'users.is_active')
+                    ->whereHas('roles', fn ($roleQuery) => $roleQuery->whereIn('name', ['Cliente', 'Institucion']))
+                    ->orderByDesc('users.is_active')
+                    ->orderBy('users.username');
+            }])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($subquery) use ($search) {
                     $subquery->where('hospitals.name', 'like', '%'.$search.'%')
@@ -387,6 +396,36 @@ class InstitucionController extends Controller
             'unitType',
             'service'
         ));
+    }
+
+    public function resetHospitalCredential(
+        Institucion $institucion,
+        Hospital $hospital,
+        User $user
+    ): RedirectResponse {
+        abort_unless(
+            $institucion->hospitals()->whereKey($hospital->getKey())->exists(),
+            404
+        );
+        abort_unless(
+            (int) $user->hospital_id === (int) $hospital->getKey()
+                && $user->hasAnyRole(['Cliente', 'Institucion']),
+            404
+        );
+
+        $temporaryPassword = Str::password(12);
+
+        $user->forceFill([
+            'password' => Hash::make($temporaryPassword),
+            'remember_token' => Str::random(60),
+        ])->save();
+        $user->tokens()->delete();
+
+        return back()->with('hospitalTemporaryCredential', [
+            'hospital' => $hospital->name,
+            'username' => $user->username,
+            'password' => $temporaryPassword,
+        ]);
     }
 
     public function storeHospital(Request $request, Institucion $institucion)

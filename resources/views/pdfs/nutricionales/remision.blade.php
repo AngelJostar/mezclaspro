@@ -360,22 +360,22 @@
                             <th style="border-top: none; background: #D9E2F3; width: 30%; text-align: center">
                                 <strong>MEDICAMENTO</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 10%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 9%; text-align: center">
                                 <strong>DOSIS</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 10%; text-align: center">
-                                <strong>LOTE DE LA MEZCLA</strong>
+                            <th style="border-top: none; background: #D9E2F3; width: 12%; text-align: center">
+                                <strong>ALMACÉN</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 12.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 12%; text-align: center">
                                 <strong>PRESENTACIÓN</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 8.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 9%; text-align: center">
                                 <strong>CANTIDAD</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 7.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 8%; text-align: center">
                                 <strong>PRECIO (ml)</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 12.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 15%; text-align: center">
                                 <strong>SUBTOTAL</strong>
                             </th>
                         </tr>
@@ -422,14 +422,9 @@
                                     {{ ajustarUnidad($input_completo->input->unidad ?? '', $solicitud_detalles->solicitud_detail['npt']) }}
                                 </td>
 
-                                @if ($loop->first)
-                                    <td style="text-align: center; border:none"
-                                        rowspan="{{ count($inputs_solicitud) }}">
-
-                                        {{ $solicitud_detalles->lote ?? '—' }}
-
-                                    </td>
-                                @endif
+                                <td style="text-align: center">
+                                    {{ $almacenesPorSolicitudInput[$input_completo->id] ?? '—' }}
+                                </td>
 
                                 <td style="text-align: center">
                                     {{ presentacionNutri($input_completo) }}
@@ -483,7 +478,9 @@
                                 </strong>
                             </td>
                             <td style="text-align: center;"></td>
-                            <td style="text-align: center; border-top: none !important;"></td>
+                            <td style="text-align: center;">
+                                {{ $almacenesPorSolicitudInput[$bolsa_eva?->id] ?? '—' }}
+                            </td>
                             <td style="text-align: center">
                                 {{ presentacionNutri($bolsa_eva) }}
                             </td>
@@ -510,7 +507,9 @@
                                     </strong>
                                 </td>
                                 <td style="text-align: center"></td>
-                                <td style="text-align: center"></td>
+                                <td style="text-align: center">
+                                    {{ $almacenesPorSolicitudInput[$set_infusion?->id] ?? '—' }}
+                                </td>
                                 <td style="text-align: center">
                                     {{ presentacionNutri($set_infusion) }}
                                 </td>
@@ -589,6 +588,11 @@
                     </table>
 
                     <table>
+                        <tr>
+                            <td style="border: none; padding-top: 4px;">
+                                <strong>Lote de la mezcla:</strong> {{ $solicitud_detalles->lote ?? '—' }}
+                            </td>
+                        </tr>
                         <tr>
                             <td style="border: none"><strong>Observaciones:</strong></td>
                         </tr>

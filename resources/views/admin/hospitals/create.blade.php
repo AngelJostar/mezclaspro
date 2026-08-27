@@ -138,6 +138,40 @@
                                 Calle y n&uacute;mero <span class="text-red-600">*</span>
                                 <input name="street_number" value="{{ old('street_number') }}" required class="{{ $inputClass }}">
                             </label>
+
+                            <div class="md:col-span-6 mt-1 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-gray-200 pt-3 md:grid-cols-6">
+                                <p class="text-xs font-semibold text-gray-900 md:col-span-6">Coordenadas UTM</p>
+
+                                <label class="{{ $labelClass }} md:col-span-1">
+                                    Zona UTM
+                                    <input type="number" name="utm_zone" value="{{ old('utm_zone') }}"
+                                        min="1" max="60" inputmode="numeric" placeholder="14"
+                                        class="{{ $inputClass }}">
+                                </label>
+
+                                <label class="{{ $labelClass }} md:col-span-1">
+                                    Hemisferio
+                                    <select name="utm_hemisphere" class="{{ $inputClass }}">
+                                        <option value="">Selecciona</option>
+                                        <option value="N" @selected(old('utm_hemisphere') === 'N')>Norte (N)</option>
+                                        <option value="S" @selected(old('utm_hemisphere') === 'S')>Sur (S)</option>
+                                    </select>
+                                </label>
+
+                                <label class="{{ $labelClass }} md:col-span-2">
+                                    Coordenada Este (X)
+                                    <input type="number" name="utm_easting" value="{{ old('utm_easting') }}"
+                                        min="100000" max="900000" step="0.001" inputmode="decimal"
+                                        placeholder="486017.331" class="{{ $inputClass }}">
+                                </label>
+
+                                <label class="{{ $labelClass }} md:col-span-2">
+                                    Coordenada Norte (Y)
+                                    <input type="number" name="utm_northing" value="{{ old('utm_northing') }}"
+                                        min="0" max="10000000" step="0.001" inputmode="decimal"
+                                        placeholder="2148700.220" class="{{ $inputClass }}">
+                                </label>
+                            </div>
                         </div>
                     </fieldset>
 

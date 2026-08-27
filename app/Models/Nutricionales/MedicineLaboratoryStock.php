@@ -2,6 +2,7 @@
 
 namespace App\Models\Nutricionales;
 
+use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Oncologicos\Laboratory;
 
@@ -10,6 +11,7 @@ class MedicineLaboratoryStock extends Model
     protected $fillable = [
         'nutrition_medicine_presentation_id',
         'laboratory_id',
+        'warehouse_id',
         'stock_ml_inicial',
         'stock_ml_actual',
         'frascos_iniciales',
@@ -39,6 +41,11 @@ class MedicineLaboratoryStock extends Model
     public function laboratory()
     {
         return $this->belongsTo(Laboratory::class, 'laboratory_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
     public function movements()

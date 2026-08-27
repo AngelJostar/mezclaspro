@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Nutricionales;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
+use App\Models\Warehouse;
 use App\Models\Nutricionales\Input;
 use App\Models\Nutricionales\Medicine;
 use App\Models\Nutricionales\Solicitud;
@@ -175,6 +176,123 @@ class SolicitudController extends Controller
             ->max(DB::raw('CAST(remision AS UNSIGNED)'));
 
         $solicitud->remision = (string) (((int) $maxRemision) + 1);
+    }
+
+    private function almacenesPorSolicitudInput(Solicitud $solicitud, $items)
+    {
+        $items = collect($items)
+            ->filter(fn($item) => $item && $item->id)
+            ->values();
+
+        if ($items->isEmpty()) {
+            return collect();
+        }
+
+        $presentationIds = $items
+            ->pluck('nutrition_medicine_presentation_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $hospital = $solicitud->user?->hospital;
+        $laboratoryId = $hospital?->laboratory_id;
+        $defaultWarehouseName = $laboratoryId
+            ? Warehouse::where('laboratory_id', $laboratoryId)
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->value('name')
+            : null;
+
+        if ($presentationIds->isEmpty()) {
+            return $items->mapWithKeys(fn($item) => [
+                $item->id => $defaultWarehouseName ?: '—',
+            ]);
+        }
+
+        $warehouseKey = function ($presentationId, $lote): string {
+            return (int) $presentationId . '|' . mb_strtolower(trim((string) $lote));
+        };
+
+        $movements = MedicineStockMovement::with('stock.warehouse')
+            ->where('reference_type', 'Solicitud')
+            ->where('reference_id', $solicitud->id)
+            ->where('tipo', 'salida')
+            ->whereHas('stock', function ($query) use ($presentationIds) {
+                $query->whereIn('nutrition_medicine_presentation_id', $presentationIds);
+            })
+            ->orderByDesc('id')
+            ->get();
+
+        $movementsByPresentationAndLot = $movements
+            ->filter(fn($movement) => $movement->stock)
+            ->groupBy(fn($movement) => $warehouseKey(
+                $movement->stock->nutrition_medicine_presentation_id,
+                $movement->stock->lote
+            ))
+            ->map(fn($group) => $group->first());
+
+        $movementsByPresentation = $movements
+            ->filter(fn($movement) => $movement->stock)
+            ->groupBy(fn($movement) => (int) $movement->stock->nutrition_medicine_presentation_id)
+            ->map(fn($group) => $group->first());
+
+        $stocksQuery = MedicineLaboratoryStock::with('warehouse')
+            ->whereIn('nutrition_medicine_presentation_id', $presentationIds);
+
+        if ($laboratoryId) {
+            $stocksQuery->where('laboratory_id', $laboratoryId);
+        }
+
+        $stocks = $stocksQuery
+            ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('caducidad')
+            ->orderBy('id')
+            ->get();
+
+        $stocksByPresentationAndLot = $stocks
+            ->filter(fn($stock) => trim((string) $stock->lote) !== '')
+            ->groupBy(fn($stock) => $warehouseKey($stock->nutrition_medicine_presentation_id, $stock->lote))
+            ->map(fn($group) => $group->first());
+
+        $stocksByPresentation = $stocks
+            ->groupBy(fn($stock) => (int) $stock->nutrition_medicine_presentation_id)
+            ->map(fn($group) => $group->first());
+
+        return $items->mapWithKeys(function ($item) use (
+            $warehouseKey,
+            $movementsByPresentationAndLot,
+            $movementsByPresentation,
+            $stocksByPresentationAndLot,
+            $stocksByPresentation,
+            $defaultWarehouseName
+        ) {
+            $presentationId = (int) ($item->nutrition_medicine_presentation_id ?? 0);
+            $lote = trim((string) ($item->lote ?? ''));
+
+            $movement = null;
+            $stock = null;
+
+            if ($presentationId > 0 && $lote !== '') {
+                $key = $warehouseKey($presentationId, $lote);
+                $movement = $movementsByPresentationAndLot->get($key);
+                $stock = $stocksByPresentationAndLot->get($key);
+            }
+
+            if (!$movement && $presentationId > 0) {
+                $movement = $movementsByPresentation->get($presentationId);
+            }
+
+            if (!$stock && $presentationId > 0) {
+                $stock = $stocksByPresentation->get($presentationId);
+            }
+
+            $warehouseName = $movement?->stock?->warehouse?->name
+                ?? $stock?->warehouse?->name
+                ?? $defaultWarehouseName
+                ?? '—';
+
+            return [$item->id => $warehouseName];
+        });
     }
 
     private function devolverStockSolicitud(Solicitud $solicitud): void
@@ -1717,7 +1835,7 @@ class SolicitudController extends Controller
     }
 
 
-    public function ordenPreparacion(Solicitud $solicitud)
+    public function ordenPreparacion(Solicitud $solicitud, bool $soloInspeccion = false)
     {
 
         $solicitud->load('user.hospital.nutriMedicineList', 'inspeccionNutricional');
@@ -1829,10 +1947,20 @@ class SolicitudController extends Controller
             'inspeccion',
             'elaboroNombre',
             'validoNombre',
-            'preparoNombre'
+            'preparoNombre',
+            'soloInspeccion'
         ));
 
-        return $pdf->stream();
+        $fileName = $soloInspeccion
+            ? "inspeccion-{$solicitud->id}.pdf"
+            : "orden-preparacion-{$solicitud->id}.pdf";
+
+        return $pdf->stream($fileName);
+    }
+
+    public function inspeccion(Solicitud $solicitud)
+    {
+        return $this->ordenPreparacion($solicitud, true);
     }
 
     public function remision(Solicitud $solicitud, InstitutionBillingPricingService $pricing)
@@ -1941,6 +2069,12 @@ class SolicitudController extends Controller
 
         $servicio_preparacion = Medicine::where('id', 38)->first();
         $pricingSummary = $pricing->priceNutritionRequest($solicitud_detalles);
+        $almacenesPorSolicitudInput = $this->almacenesPorSolicitudInput(
+            $solicitud_detalles,
+            $inputs_solicitud
+                ->concat([$bolsa_eva, $set_infusion])
+                ->filter()
+        );
 
         $pdf = Pdf::loadView('pdfs.nutricionales.remision', compact(
             'solicitud_detalles',
@@ -1951,7 +2085,8 @@ class SolicitudController extends Controller
             'imprimirMarcas',
             'distributor',
             'priceList',
-            'pricingSummary'
+            'pricingSummary',
+            'almacenesPorSolicitudInput'
         ));
 
         return $pdf->stream();

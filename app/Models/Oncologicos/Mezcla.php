@@ -2,19 +2,20 @@
 
 namespace App\Models\Oncologicos;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use App\Models\Oncologicos\SolicitudOnco;
-use App\Models\Oncologicos\MezclaMedicamento;
-use App\Models\Oncologicos\InspeccionMezcla;
-use App\Models\Oncologicos\Infusor;
-use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\InstitutionBilling;
 use App\Services\SolicitudOperativeStatusService;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Mezcla extends Model
 {
     use HasFactory;
+
+    private const TERMINAL_REQUEST_STATUSES = [
+        'cancelada',
+        'no_aprobada',
+        'no-aprobada',
+    ];
 
     protected static function booted(): void
     {
@@ -35,6 +36,7 @@ class Mezcla extends Model
         'solicitud_id',
         'volumen_dilucion',
         'tiempo_infusion',
+        'fecha_entrega',
         'estado',
         'remision',
         'lote',
@@ -44,14 +46,28 @@ class Mezcla extends Model
     ];
 
     protected $casts = [
-        'set_infusion'            => 'boolean',
-        'volumen_dilucion'        => 'decimal:2',
+        'set_infusion' => 'boolean',
+        'volumen_dilucion' => 'decimal:2',
+        'fecha_entrega' => 'datetime',
         'diluent_presentation_id' => 'integer',
     ];
 
     public function solicitud()
     {
         return $this->belongsTo(SolicitudOnco::class, 'solicitud_id');
+    }
+
+    public function getOperationalStatusAttribute(): string
+    {
+        $requestStatus = mb_strtolower(trim((string) $this->solicitud?->estado));
+
+        if (in_array($requestStatus, self::TERMINAL_REQUEST_STATUSES, true)) {
+            return $requestStatus;
+        }
+
+        $mixtureStatus = mb_strtolower(trim((string) $this->estado));
+
+        return $mixtureStatus !== '' ? $mixtureStatus : 'pendiente';
     }
 
     public function medicamentos()

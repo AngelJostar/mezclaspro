@@ -247,9 +247,7 @@ class InstitutionBillingPricingService
         $description = trim((string) ($firstConfig?->descripcion_remision ?? ''))
             ?: $fallbackDescription;
         $configuredPricePerMg = $this->oncoPricePerMilligram($firstConfig);
-        $chargeBy = $configuredPricePerMg > 0
-            ? 'mg'
-            : ($medicamento->charge_by ?: ($firstConfig?->charge_by ?? 'frasco'));
+        $chargeBy = $this->resolveOncoChargeMethod($firstConfig, $medicamento);
         $bottleQuantity = $this->resolveBottleQuantity($medicamento, $presentationsUsed, $firstConfig);
 
         if ($chargeBy === 'mg') {
@@ -421,6 +419,19 @@ class InstitutionBillingPricingService
         return $bottlePrice > 0 && $milligrams > 0
             ? round($bottlePrice / $milligrams, 4)
             : 0.0;
+    }
+
+    private function resolveOncoChargeMethod($config, $medicamento): string
+    {
+        foreach ([$config?->charge_by, $medicamento->charge_by] as $value) {
+            $chargeBy = strtolower(trim((string) $value));
+
+            if (in_array($chargeBy, ['frasco', 'mg'], true)) {
+                return $chargeBy;
+            }
+        }
+
+        return $this->oncoPricePerMilligram($config) > 0 ? 'mg' : 'frasco';
     }
 
     private function nutritionUnitPrice($item, $listConfig): float

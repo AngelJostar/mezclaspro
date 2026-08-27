@@ -30,7 +30,6 @@ const commandHeadings = [
     'inspeccion',
     'inspeccionar',
     'movimientos',
-    'no aprobar',
     'preparada',
     'presentaciones',
     'reporte',
@@ -84,6 +83,9 @@ function valuesForColumn(table, columnIndex) {
 }
 
 function isCommandColumn(table, header, columnIndex) {
+    if (header.hasAttribute('data-command-column')) return true;
+    if (header.hasAttribute('data-force-column-filter')) return false;
+
     const heading = searchable(header.textContent);
     if (!heading) return true;
     if (commandHeadings.some((command) => heading === command || heading.startsWith(`${command} `))) {
@@ -171,9 +173,9 @@ function enhanceTable(table) {
     const headerRow = headerRows[headerRows.length - 1];
     const headers = Array.from(headerRow.cells);
     const rows = getRows(table);
-    if (!headers.length || !rows.length) return;
+    if (!headers.length) return;
     if (headers.some((header) => header.colSpan > 1 || header.rowSpan > 1)) return;
-    if (!rows.some((row) => row.cells.length >= headers.length)) return;
+    if (rows.length > 0 && !rows.some((row) => row.cells.length >= headers.length)) return;
 
     const instanceId = `automatic-table-filter-${++sequence}`;
     const triggerClass = `js-${instanceId}`;

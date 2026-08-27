@@ -17,10 +17,6 @@
                     href="{{ route('admin.oncologicos.mezclas.envio', $solicitud) }}" target="_blank">Registros de
                     Envio</a>
             </div>
-            <div class="mt-4">
-                <a class="text-white bg-azul-prodifem hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 font-medium rounded-full text-sm px-5 py-2.5 text-center me-2 mb-2 dark:bg-blue-600 dark:hover:bg-azul-prodifem dark:focus:ring-blue-800"
-                    href="{{ route('admin.oncologicos.mezclas.remision', $solicitud) }}" target="_blank">Remisión</a>
-            </div>
         </div>
     </div>
 
@@ -37,7 +33,7 @@
                 {{ optional($solicitud->created_at)->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? '—' }}
             </p>
             <p class="text-gray-700">
-                <span class="font-semibold text-gray-900">Fecha de Entrega:</span>
+                <span class="font-semibold text-gray-900">Primera fecha de entrega:</span>
                 {{ $solicitud->fecha_entrega
                     ? \Carbon\Carbon::parse($solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i')
                     : '—' }}
@@ -124,8 +120,8 @@
                             {{ optional($solicitud->created_at)->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? '—' }}
                         </td>
                         <td class="px-6 py-4">
-                            {{ $solicitud->fecha_entrega
-                                ? \Carbon\Carbon::parse($solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i')
+                            {{ ($mezcla->fecha_entrega ?? $solicitud->fecha_entrega)
+                                ? \Carbon\Carbon::parse($mezcla->fecha_entrega ?? $solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i')
                                 : '—' }}
                         </td>
                         <td class="px-6 py-4">
@@ -200,7 +196,17 @@
                                 <span class="text-gray-400 text-xs">-</span>
                             @endif
                         </td>
-                        <td class="px-6 py-4">{{ $mezcla->remision ?? '—' }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if ($mezcla->remision)
+                                <x-table-action-link
+                                    href="{{ route('admin.oncologicos.mezclas.remision', ['solicitud' => $solicitud, 'mezcla' => $mezcla]) }}"
+                                    target="_blank">
+                                    Remisión {{ $mezcla->remision }}
+                                </x-table-action-link>
+                            @else
+                                <span class="text-gray-400 text-xs">—</span>
+                            @endif
+                        </td>
                         <td class="px-6 py-4">{{ $mezcla->lote ?? '—' }}</td>
 
                     </tr>

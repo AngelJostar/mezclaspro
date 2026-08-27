@@ -53,6 +53,19 @@
             </x-select>
         </div>
         <div class="mb-4">
+            <x-label class="mb-2" for="warehouse_id">
+                Almac&eacute;n asignado
+            </x-label>
+            <x-select id="warehouse_id" class="w-full" name="warehouse_id">
+                <option value="">Sin almac&eacute;n asignado</option>
+                @foreach ($warehouses as $warehouse)
+                    <option @selected((string) old('warehouse_id') === (string) $warehouse->id) value="{{ $warehouse->id }}">
+                        {{ $warehouse->name }} · {{ $warehouse->laboratory?->nombre ?? 'Sin laboratorio' }}{{ $warehouse->is_active ? '' : ' (Inactivo)' }}
+                    </option>
+                @endforeach
+            </x-select>
+        </div>
+        <div class="mb-4">
             <ul>
                 @foreach ($roles as $role)
                     @hasanyrole('Admin')

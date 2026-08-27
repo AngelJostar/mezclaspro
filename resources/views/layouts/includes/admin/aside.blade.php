@@ -1,7 +1,7 @@
 <aside id="logo-sidebar"
     class="fixed top-0 left-0 z-40 w-64 h-screen pt-20 transition-transform duration-200 ease-in-out bg-white border-r border-gray-200 shadow-xl sm:w-44 sm:translate-x-0 sm:shadow-none dark:bg-gray-800 dark:border-gray-700"
     x-bind:class="open ? 'translate-x-0' : '-translate-x-full'"
-    x-data="{ openMenu: '{{ request()->routeIs('admin.instituciones.billing.*') ? 'facturacion' : (request()->routeIs('admin.instituciones.reportes') ? 'administracion' : '') }}' || null }" aria-label="Sidebar">
+    x-data="{ openMenu: '{{ request()->routeIs('admin.distribution.*') ? 'distribution' : (request()->routeIs('admin.instituciones.billing.*') ? 'facturacion' : (request()->routeIs('admin.instituciones.reportes') ? 'administracion' : '')) }}' || null }" aria-label="Sidebar">
 
     <div class="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
         <ul class="space-y-2 font-medium">
@@ -95,6 +95,38 @@
                 </li>
             @endif
 
+            @can('menu.distribucion')
+                <li class="rounded-lg border border-teal-200 bg-teal-50 p-1 dark:border-teal-700 dark:bg-teal-900/20">
+                    <button type="button" @click="openMenu === 'distribution' ? openMenu = null : openMenu = 'distribution'"
+                        class="flex w-full items-center rounded-lg p-2 text-gray-900 hover:bg-teal-100 dark:text-white dark:hover:bg-teal-800/50 {{ request()->routeIs('admin.distribution.*') ? 'bg-teal-100 dark:bg-teal-800/50' : '' }}"
+                        :aria-expanded="(openMenu === 'distribution').toString()">
+                        <i class="fa-solid fa-truck-fast text-teal-600 dark:text-teal-300" aria-hidden="true"></i>
+                        <span class="ms-3 min-w-0 flex-1 text-left font-bold">Distribuci&oacute;n</span>
+                        <i class="fa-solid fa-chevron-down text-xs text-teal-700 transition-transform"
+                            :class="openMenu === 'distribution' ? 'rotate-180' : ''" aria-hidden="true"></i>
+                    </button>
+
+                    <ul x-cloak x-show="openMenu === 'distribution'" class="mt-1 space-y-1 pl-4">
+                        <li>
+                            <a href="{{ route('admin.distribution.routes.index') }}"
+                                x-on:click="open = false"
+                                class="flex items-center rounded-lg p-2 text-sm leading-4 text-gray-900 hover:bg-white/80 dark:text-white dark:hover:bg-gray-700 {{ request()->routeIs('admin.distribution.routes.*') ? 'bg-white/90 text-teal-800 shadow-sm' : '' }}">
+                                <i class="fa-solid fa-route shrink-0 text-gray-500" aria-hidden="true"></i>
+                                <span class="ms-2">Cat&aacute;logo de Rutas</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('admin.distribution.deliveries.index') }}"
+                                x-on:click="open = false"
+                                class="flex items-center rounded-lg p-2 text-sm leading-4 text-gray-900 hover:bg-white/80 dark:text-white dark:hover:bg-gray-700 {{ request()->routeIs('admin.distribution.deliveries.*') ? 'bg-white/90 text-teal-800 shadow-sm' : '' }}">
+                                <i class="fa-solid fa-calendar-days shrink-0 text-gray-500" aria-hidden="true"></i>
+                                <span class="ms-2">Programaci&oacute;n de Entregas</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+            @endcan
+
             @can('laboratorios')
                 <li
                     class="rounded-lg border border-cyan-200 bg-cyan-50 p-1 dark:border-cyan-700 dark:bg-cyan-900/20">
@@ -183,7 +215,7 @@
                                     x-on:click="open = false"
                                     class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group {{ request()->routeIs('admin.users.*') ? 'bg-gray-100' : '' }}">
                                     <i class="fa-solid fa-users text-gray-500"></i>
-                                    <span class="ms-3">Usuarios</span>
+                                    <span class="ms-3">Personal</span>
                                 </a>
                             </li>
                         @endcan
@@ -289,6 +321,22 @@
                 </li>
             @endif
             @endunless
+
+            @hasanyrole('Super Admin')
+                <li
+                    class="rounded-lg border border-rose-200 bg-rose-50 p-1 dark:border-rose-700 dark:bg-rose-900/20">
+                    <a href="{{ route('admin.superadministrator.index') }}"
+                        aria-label="Superadministrador"
+                        x-on:click="open = false"
+                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-rose-100 dark:text-white dark:hover:bg-rose-800/50 {{ request()->routeIs('admin.superadministrator.*') ? 'bg-rose-100 dark:bg-rose-800/50' : '' }}">
+                        <i class="fa-solid fa-crown shrink-0 text-rose-600 dark:text-rose-300" aria-hidden="true"></i>
+                        <span class="ms-2 min-w-0 text-center text-xs font-bold leading-4" aria-hidden="true">
+                            <span class="block">Super</span>
+                            <span class="block">administrador</span>
+                        </span>
+                    </a>
+                </li>
+            @endhasanyrole
 
         </ul>
     </div>

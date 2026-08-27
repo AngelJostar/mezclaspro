@@ -17,9 +17,9 @@ class User extends Authenticatable
     use HasApiTokens;
     use HasFactory;
     use HasProfilePhoto;
+    use HasRoles;
     use Notifiable;
     use TwoFactorAuthenticatable;
-    use HasRoles;
 
     protected $fillable = [
         'name',
@@ -28,6 +28,7 @@ class User extends Authenticatable
         'username',
         'is_active',
         'hospital_id',
+        'warehouse_id',
     ];
 
     protected $hidden = [
@@ -37,10 +38,18 @@ class User extends Authenticatable
         'two_factor_secret',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
     public function hospital()
     {
         return $this->belongsTo(Hospital::class);
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     //Relacion uno a uno

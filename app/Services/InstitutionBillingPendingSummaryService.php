@@ -18,7 +18,7 @@ class InstitutionBillingPendingSummaryService
     public function counts(): array
     {
         $oncologicas = Mezcla::query()
-            ->select(['id', 'solicitud_id'])
+            ->select(['id', 'solicitud_id', 'fecha_entrega'])
             ->with([
                 'solicitud:id,hospital_id,fecha_entrega',
                 'billing:id,origen_tipo,origen_id,estatus_facturacion',
@@ -26,7 +26,7 @@ class InstitutionBillingPendingSummaryService
             ->whereHas('solicitud.hospital.instituciones')
             ->get()
             ->map(fn ($mezcla) => [
-                'delivery_date' => $mezcla->solicitud?->fecha_entrega,
+                'delivery_date' => $mezcla->fecha_entrega ?? $mezcla->solicitud?->fecha_entrega,
                 'billing_status' => $mezcla->billing?->estatus_facturacion,
             ]);
 

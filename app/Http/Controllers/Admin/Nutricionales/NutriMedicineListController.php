@@ -9,6 +9,7 @@ use App\Models\Nutricionales\NutriMedicineListItem;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Services\PriceListDocumentConfigurationService;
+use App\Services\PriceListWarehouseConfigurationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -30,7 +31,7 @@ class NutriMedicineListController extends Controller
             'presentations' => function ($query) {
                 $query->where('is_available', 1)
                     ->orderBy('denominacion_comercial');
-            }
+            },
         ])
             ->where('is_active', 1)
             ->orderBy('denominacion_generica')
@@ -39,8 +40,20 @@ class NutriMedicineListController extends Controller
         return view('admin.nutricionales.nutri-medicine-lists.create', compact('catalogs'));
     }
 
-    public function store(Request $request, PriceListDocumentConfigurationService $documentConfiguration)
-    {
+    public function store(
+        Request $request,
+        PriceListDocumentConfigurationService $documentConfiguration,
+        PriceListWarehouseConfigurationService $warehouseConfiguration
+    ) {
+        if ($request->filled('from_catalogo_listas') && $request->boolean('is_backup_list')) {
+            $request->merge([
+                'has_subdistributor' => false,
+                'has_contract' => false,
+                'contract_number' => null,
+                'contract_information' => null,
+            ]);
+        }
+
         $totalPresentations = DB::table('nutrition_medicine_presentations')
             ->where('is_available', 1)
             ->count();
@@ -63,7 +76,7 @@ class NutriMedicineListController extends Controller
             'has_contract' => 'nullable|boolean',
             'contract_number' => 'nullable|string|max:255|required_if:has_contract,1',
             'contract_information' => 'nullable|string|max:10000',
-            'items' => 'required|array|size:' . $totalPresentations,
+            'items' => 'required|array|size:'.$totalPresentations,
             'items.*.nutrition_medicine_presentation_id' => 'required|exists:nutrition_medicine_presentations,id',
             'items.*.precio_ml' => 'required|numeric|min:0',
             'items.*.selected' => 'nullable|boolean',
@@ -73,11 +86,15 @@ class NutriMedicineListController extends Controller
             'distributor_address.required_with' => 'Indica la dirección del distribuidor.',
         ]);
 
+        $warehouseAttributes = $request->filled('from_catalogo_listas')
+            ? $warehouseConfiguration->resolve($request)
+            : [];
+
         $items = collect($request->input('items', []))
             ->when(
                 $request->filled('from_catalogo_listas'),
-                fn($items) => $items->filter(
-                    fn($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                fn ($items) => $items->filter(
+                    fn ($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
                 )
             )
             ->values();
@@ -95,7 +112,7 @@ class NutriMedicineListController extends Controller
         DB::beginTransaction();
 
         try {
-            $list = NutriMedicineList::create([
+            $list = NutriMedicineList::create(array_merge([
                 'name' => $request->name,
                 'description' => $request->description,
                 'is_active' => $request->boolean('is_active', true),
@@ -103,7 +120,7 @@ class NutriMedicineListController extends Controller
                 'has_contract' => $request->boolean('has_contract'),
                 'contract_number' => $request->boolean('has_contract') ? $request->input('contract_number') : null,
                 'contract_information' => $request->boolean('has_contract') ? $request->input('contract_information') : null,
-            ]);
+            ], $warehouseAttributes));
 
             if ($request->filled('from_catalogo_listas')) {
                 $documentConfiguration->syncSubdistributor($list, $request, 'subdistributors/logos');
@@ -185,7 +202,7 @@ class NutriMedicineListController extends Controller
             'presentations' => function ($query) {
                 $query->where('is_available', 1)
                     ->orderBy('denominacion_comercial');
-            }
+            },
         ])
             ->where('is_active', 1)
             ->orderBy('denominacion_generica')
@@ -201,14 +218,27 @@ class NutriMedicineListController extends Controller
         ));
     }
 
-    public function update(Request $request, NutriMedicineList $nutriMedicineList, PriceListDocumentConfigurationService $documentConfiguration)
-    {
+    public function update(
+        Request $request,
+        NutriMedicineList $nutriMedicineList,
+        PriceListDocumentConfigurationService $documentConfiguration,
+        PriceListWarehouseConfigurationService $warehouseConfiguration
+    ) {
+        if ($request->filled('from_catalogo_listas') && $request->boolean('is_backup_list')) {
+            $request->merge([
+                'has_subdistributor' => false,
+                'has_contract' => false,
+                'contract_number' => null,
+                'contract_information' => null,
+            ]);
+        }
+
         $totalPresentations = DB::table('nutrition_medicine_presentations')
             ->where('is_available', 1)
             ->count();
 
         $request->validate([
-            'name' => 'required|string|max:255|unique:nutri_medicine_lists,name,' . $nutriMedicineList->id,
+            'name' => 'required|string|max:255|unique:nutri_medicine_lists,name,'.$nutriMedicineList->id,
             'description' => 'nullable|string',
             'is_active' => 'nullable|boolean',
             'active_brands' => 'nullable|boolean',
@@ -226,7 +256,7 @@ class NutriMedicineListController extends Controller
             'has_contract' => 'nullable|boolean',
             'contract_number' => 'nullable|string|max:255|required_if:has_contract,1',
             'contract_information' => 'nullable|string|max:10000',
-            'items' => 'required|array|size:' . $totalPresentations,
+            'items' => 'required|array|size:'.$totalPresentations,
             'items.*.nutrition_medicine_presentation_id' => 'required|exists:nutrition_medicine_presentations,id',
             'items.*.precio_ml' => 'required|numeric|min:0',
             'items.*.selected' => 'nullable|boolean',
@@ -236,11 +266,15 @@ class NutriMedicineListController extends Controller
             'distributor_direccion.required_with' => 'Indica la dirección del distribuidor.',
         ]);
 
+        $warehouseAttributes = $request->filled('from_catalogo_listas')
+            ? $warehouseConfiguration->resolve($request)
+            : [];
+
         $items = collect($request->input('items', []))
             ->when(
                 $request->filled('from_catalogo_listas'),
-                fn($items) => $items->filter(
-                    fn($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                fn ($items) => $items->filter(
+                    fn ($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
                 )
             )
             ->values();
@@ -271,6 +305,7 @@ class NutriMedicineListController extends Controller
                     'contract_number' => $request->boolean('has_contract') ? $request->input('contract_number') : null,
                     'contract_information' => $request->boolean('has_contract') ? $request->input('contract_information') : null,
                 ];
+                $listAttributes += $warehouseAttributes;
             }
 
             $nutriMedicineList->update($listAttributes);
@@ -279,7 +314,7 @@ class NutriMedicineListController extends Controller
                 $documentConfiguration->syncSubdistributor($nutriMedicineList, $request, 'subdistributors/logos');
             } elseif ($request->boolean('distributor_delete')) {
                 if ($nutriMedicineList->distributor) {
-                    if (!empty($nutriMedicineList->distributor->logo_path)) {
+                    if (! empty($nutriMedicineList->distributor->logo_path)) {
                         Storage::disk('public')->delete($nutriMedicineList->distributor->logo_path);
                     }
 
@@ -301,7 +336,7 @@ class NutriMedicineListController extends Controller
                     $distributor->direccion = $distDireccion;
 
                     if ($request->hasFile('distributor_logo')) {
-                        if (!empty($distributor->logo_path)) {
+                        if (! empty($distributor->logo_path)) {
                             Storage::disk('public')->delete($distributor->logo_path);
                         }
 
@@ -367,7 +402,7 @@ class NutriMedicineListController extends Controller
         try {
             $nutriMedicineList->load('distributor');
 
-            if (!empty($nutriMedicineList->distributor?->logo_path)) {
+            if (! empty($nutriMedicineList->distributor?->logo_path)) {
                 Storage::disk('public')->delete($nutriMedicineList->distributor->logo_path);
             }
 
@@ -382,7 +417,7 @@ class NutriMedicineListController extends Controller
             return redirect()->route('admin.nutricionales.nutri-medicine-lists.index');
         } catch (\Throwable $e) {
             return redirect()->back()->withErrors([
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }

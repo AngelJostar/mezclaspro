@@ -89,32 +89,26 @@
             </div>
 
             <div class="flex justify-between mb-4 gap-4">
-                <div class="w-1/4">
+                <div class="w-1/3">
                     <label for="diagnostico">Diagnóstico</label>
                     <input type="text" name="diagnostico" id="diagnostico"
                         value="{{ old('diagnostico', $solicitud->diagnostico) }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Diagnóstico">
                 </div>
-                <div class="w-1/4">
+                <div class="w-1/3">
                     <label for="medico_nombre">Nombre del Médico</label>
                     <input type="text" name="medico_nombre" id="medico_nombre"
                         value="{{ old('medico_nombre', $solicitud->nombre_medico) }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Nombre del Médico">
                 </div>
-                <div class="w-1/4">
+                <div class="w-1/3">
                     <label for="medico_cedula">Cédula del Médico</label>
                     <input type="text" name="medico_cedula" id="medico_cedula"
                         value="{{ old('medico_cedula', $solicitud->cedula_medico) }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Cédula del Médico">
-                </div>
-                <div class="w-1/4">
-                    <label for="fecha_entrega">Fecha de entrega*</label>
-                    <input type="datetime-local" name="fecha_entrega" id="fecha_entrega"
-                        value="{{ old('fecha_entrega', $solicitud->fecha_entrega ? \Carbon\Carbon::parse($solicitud->fecha_entrega)->format('Y-m-d\TH:i') : '') }}"
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
                 </div>
             </div>
 
@@ -152,9 +146,80 @@
         const infoAdicional = @json($infoAdicional); // diluyentes + vías por medicine_onco_id
         const mezclasCargadas = @json($solicitud->mezclas ?? []);
         const infusors = @json($infusors ?? []);
+        const fechaEntregaSolicitud = @json($solicitud->fecha_entrega?->format('Y-m-d\TH:i'));
+        const MAX_MEZCLAS_PROGRAMADAS = 99;
+        const MIN_FECHA_ENTREGA = '{{ now()->startOfDay()->format('Y-m-d\TH:i') }}';
 
         let idInternoMezcla = 0;
         let contadorFilasGlobal = 0;
+
+        function valorSeguroFecha(value) {
+            const candidate = String(value ?? '').slice(0, 16);
+            return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(candidate) ? candidate : '';
+        }
+
+        function filaFechaEntregaMarkup(value = '', esPrincipal = false) {
+            const accion = esPrincipal
+                ? `<button type="button" onclick="agregarFechaEntrega(this)"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded bg-green-600 text-white transition hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        title="Agregar otra fecha de entrega" aria-label="Agregar otra fecha de entrega">
+                        <span class="text-xl leading-none" aria-hidden="true">+</span>
+                   </button>`
+                : `<button type="button" onclick="eliminarFechaEntrega(this)"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded bg-red-600 text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        title="Eliminar fecha de entrega" aria-label="Eliminar fecha de entrega">
+                        <span class="text-xl leading-none" aria-hidden="true">&times;</span>
+                   </button>`;
+
+            return `
+                <div data-name="fecha_entrega_row" class="flex items-center gap-2">
+                    <input type="datetime-local" data-name="fecha_entrega" required min="${MIN_FECHA_ENTREGA}"
+                        value="${valorSeguroFecha(value)}"
+                        class="block min-w-0 flex-1 rounded border-gray-300 px-2 py-1 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    ${accion}
+                </div>
+            `;
+        }
+
+        function fechasEntregaMarkup(values = ['']) {
+            const fechas = Array.isArray(values) && values.length > 0 ? values : [''];
+
+            return `
+                <div data-name="fechas_entrega_section" class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3">
+                    <div class="mb-2">
+                        <label class="font-medium text-gray-800">Fecha de entrega*</label>
+                        <p class="text-xs text-gray-600">Cada fecha adicional generará un nuevo ID con esta misma mezcla.</p>
+                    </div>
+                    <div data-name="fechas_entrega" class="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        ${fechas.map((fecha, index) => filaFechaEntregaMarkup(fecha, index === 0)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function cantidadFechasEntregaActual() {
+            return document.querySelectorAll('[data-name="fecha_entrega"]').length;
+        }
+
+        function agregarFechaEntrega(button) {
+            if (cantidadFechasEntregaActual() >= MAX_MEZCLAS_PROGRAMADAS) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Límite alcanzado',
+                    text: `Una solicitud puede generar hasta ${MAX_MEZCLAS_PROGRAMADAS} mezclas programadas.`,
+                    customClass: { confirmButton: 'swal-button-confirm' }
+                });
+                return;
+            }
+
+            const container = button.closest('[data-name="fechas_entrega_section"]')
+                ?.querySelector('[data-name="fechas_entrega"]');
+            container?.insertAdjacentHTML('beforeend', filaFechaEntregaMarkup());
+        }
+
+        function eliminarFechaEntrega(button) {
+            button.closest('[data-name="fecha_entrega_row"]')?.remove();
+        }
 
         // ---------- Helpers Infusor vs Set ----------
         function requiereInfusorParaMed(medId) {
@@ -320,6 +385,8 @@
             </div>
         </div>
 
+        ${fechasEntregaMarkup()}
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div class="flex items-center gap-2">
                 <input type="checkbox" data-name="set_infusion" class="w-4 h-4"
@@ -360,6 +427,7 @@
             const mezclaDiv = document.createElement('div');
             mezclaDiv.classList.add("oncology-mixture", "border", "border-slate-300", "p-4", "relative", "mezcla-existente");
             mezclaDiv.dataset.idInterno = idInternoMezcla;
+            mezclaDiv.dataset.mezclaId = m.id;
 
             mezclaDiv.innerHTML = `
         <div class="flex justify-between items-center mb-2">
@@ -391,6 +459,8 @@
                 <input type="number" data-name="tiempo_infusion" class="w-full border rounded px-2 py-1 text-sm" value="${m.tiempo_infusion ?? ''}" disabled>
             </div>
         </div>
+
+        ${fechasEntregaMarkup([m.fecha_entrega ?? fechaEntregaSolicitud])}
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div class="flex items-center gap-2">
@@ -441,7 +511,7 @@
                 </select>
             </td>
             <td class="border">
-                <input type="number" value="${med.dosis}" class="min-w-28 w-full border px-2 py-1 text-sm" disabled>
+                <input type="number" data-name="dosis" value="${med.dosis}" class="min-w-28 w-full border px-2 py-1 text-sm" disabled>
             </td>
             <td class="min-w-20 whitespace-nowrap border px-3 py-2 text-xs font-semibold text-gray-700">
                 MG
@@ -554,6 +624,7 @@
             e.preventDefault();
             const mezclas = [];
             let errorMezclaInvalida = null;
+            let errorFechasEntrega = null;
 
             document.querySelectorAll('#contenedorMezclas > .border').forEach((mezclaDiv, idx) => {
                 const numMezcla = idx + 1;
@@ -565,6 +636,17 @@
                 const selInfusor = mezclaDiv.querySelector('[data-name="infusor_id"]');
                 const set_infusion = !!(setInfusionCb && setInfusionCb.checked);
                 const infusor_id = selInfusor && selInfusor.value ? selInfusor.value : null;
+                const fechas_entrega = Array.from(
+                    mezclaDiv.querySelectorAll('[data-name="fecha_entrega"]')
+                ).map(input => input.value.trim());
+
+                if (
+                    fechas_entrega.length === 0 ||
+                    fechas_entrega.some(fecha => !fecha) ||
+                    new Set(fechas_entrega).size !== fechas_entrega.length
+                ) {
+                    errorFechasEntrega = `Mezcla #${numMezcla}: completa las fechas de entrega y no repitas la misma fecha.`;
+                }
 
                 const medicamentosArr = [];
                 let diluyenteRef = null;
@@ -624,6 +706,7 @@
                 const mezclaObj = {
                     volumen_dilucion: volumen,
                     tiempo_infusion: tiempo,
+                    fechas_entrega: fechas_entrega,
                     set_infusion: set_infusion,
                     infusor_id: infusor_id,
                     medicamentos: medicamentosArr
@@ -631,6 +714,7 @@
 
                 if (mezclaDiv.classList.contains("mezcla-existente")) {
                     mezclaObj.existente = true;
+                    mezclaObj.id = mezclaDiv.dataset.mezclaId;
                 }
 
                 mezclas.push(mezclaObj);
@@ -645,6 +729,16 @@
                         confirmButton: 'swal-button-confirm',
                         cancelButton: 'swal-button-cancel'
                     }
+                });
+                return;
+            }
+
+            if (errorFechasEntrega) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Revisa las fechas de entrega',
+                    text: errorFechasEntrega,
+                    customClass: { confirmButton: 'swal-button-confirm' }
                 });
                 return;
             }
