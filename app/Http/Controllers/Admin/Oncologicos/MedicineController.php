@@ -65,7 +65,7 @@ class MedicineController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'active_brands' => 'nullable|boolean',
-            'charge_by' => 'required|in:mg,frasco',
+            'charge_by' => 'required|in:mg,ml,frasco',
             'show_label_lot_expiry' => 'nullable|boolean',
             'has_mixing_service' => 'nullable|boolean',
             'mixing_service_price' => 'nullable|numeric|min:0',
@@ -74,7 +74,7 @@ class MedicineController extends Controller
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
             'medicamentos.*.precio' => 'required|numeric|min:0',
             'medicamentos.*.precio_mg' => 'nullable|numeric|min:0',
-            'medicamentos.*.charge_by' => 'nullable|in:mg,frasco',
+            'medicamentos.*.charge_by' => 'nullable|in:mg,ml,frasco',
             'medicamentos.*.iva_desglosado' => 'nullable|boolean',
             'medicamentos.*.selected' => 'nullable|boolean',
             'medicamentos.*.descripcion_remision' => 'nullable|string|max:500',
@@ -200,9 +200,12 @@ class MedicineController extends Controller
                     'precio' => $fromCatalogEditor || $itemChargeBy === 'frasco'
                         ? $precioCapturado
                         : null,
-                    'precio_mg_override' => $fromCatalogEditor
-                        ? $precioMg
-                        : ($itemChargeBy === 'mg' ? $precioCapturado : null),
+                    'precio_mg_override' => $itemChargeBy === 'mg'
+                        ? ($fromCatalogEditor && $precioMg > 0 ? $precioMg : $precioCapturado)
+                        : null,
+                    'precio_ml_override' => $itemChargeBy === 'ml'
+                        ? $precioCapturado
+                        : null,
                     'iva_desglosado' => filter_var(
                         $item['iva_desglosado'] ?? false,
                         FILTER_VALIDATE_BOOLEAN
@@ -317,9 +320,11 @@ class MedicineController extends Controller
                 'catalog_id' => $pres->catalog_id,
                 'presentation_id' => $pres->id,
                 'charge_by' => $pres->pivot->charge_by ?? 'mg',
-                'precio' => ($pres->pivot->charge_by ?? 'mg') === 'frasco'
-                    ? ($pres->pivot->precio ?? null)
-                    : ($pres->pivot->precio_mg_override ?? null),
+                'precio' => match ($pres->pivot->charge_by ?? 'mg') {
+                    'frasco' => $pres->pivot->precio ?? null,
+                    'ml' => $pres->pivot->precio_ml_override ?? null,
+                    default => $pres->pivot->precio_mg_override ?? null,
+                },
             ];
         })
             ->values();
@@ -353,7 +358,7 @@ class MedicineController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'active_brands' => 'nullable|boolean',
-            'charge_by' => 'required|in:mg,frasco',
+            'charge_by' => 'required|in:mg,ml,frasco',
             'show_label_lot_expiry' => 'nullable|boolean',
             'has_mixing_service' => 'nullable|boolean',
             'mixing_service_price' => 'nullable|numeric|min:0',
@@ -378,7 +383,7 @@ class MedicineController extends Controller
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
             'medicamentos.*.precio' => 'required|numeric|min:0',
             'medicamentos.*.precio_mg' => 'nullable|numeric|min:0',
-            'medicamentos.*.charge_by' => 'nullable|in:mg,frasco',
+            'medicamentos.*.charge_by' => 'nullable|in:mg,ml,frasco',
             'medicamentos.*.iva_desglosado' => 'nullable|boolean',
             'medicamentos.*.selected' => 'nullable|boolean',
             'medicamentos.*.descripcion_remision' => 'nullable|string|max:500',
@@ -524,9 +529,12 @@ class MedicineController extends Controller
                     'precio' => $fromCatalogEditor || $rowChargeBy === 'frasco'
                         ? $precio
                         : null,
-                    'precio_mg_override' => $fromCatalogEditor
-                        ? $precioMg
-                        : ($rowChargeBy === 'mg' ? $precio : null),
+                    'precio_mg_override' => $rowChargeBy === 'mg'
+                        ? ($fromCatalogEditor && $precioMg > 0 ? $precioMg : $precio)
+                        : null,
+                    'precio_ml_override' => $rowChargeBy === 'ml'
+                        ? $precio
+                        : null,
                     'iva_desglosado' => filter_var(
                         $row['iva_desglosado'] ?? false,
                         FILTER_VALIDATE_BOOLEAN
@@ -655,7 +663,7 @@ class MedicineController extends Controller
     {
         $chargeBy = strtolower(trim((string) $value));
 
-        return in_array($chargeBy, ['frasco', 'mg'], true)
+        return in_array($chargeBy, ['frasco', 'mg', 'ml'], true)
             ? $chargeBy
             : $fallback;
     }

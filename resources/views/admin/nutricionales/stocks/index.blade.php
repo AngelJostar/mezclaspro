@@ -99,21 +99,10 @@
             @php
                 $activeSelection = $activeSelections[$catalog->id] ?? null;
 
-                $totalPiezasProducto = $catalog->presentations
-                    ->flatMap(function ($presentation) {
-                        return $presentation->stocks ?? collect();
-                    })
-                    ->sum(function ($stock) {
-                        return (float) $stock->frascos_actuales;
-                    });
-
-                $totalMlProducto = $catalog->presentations
-                    ->flatMap(function ($presentation) {
-                        return $presentation->stocks ?? collect();
-                    })
-                    ->sum(function ($stock) {
-                        return (float) $stock->stock_ml_actual;
-                    });
+                $totalPiezasProducto = $catalog->presentations->sum('frascos_total');
+                $totalMlCerrado = $catalog->presentations->sum('stock_total_ml');
+                $totalMlRemanente = $catalog->presentations->sum('remanente_total_ml');
+                $totalMlProducto = $totalMlCerrado + $totalMlRemanente;
             @endphp
 
             <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -156,6 +145,12 @@
                             <div class="text-xs text-green-700 font-semibold">
                                 {{ number_format($totalMlProducto, 2) }} ml
                             </div>
+
+                            @if ($totalMlRemanente > 0)
+                                <div class="text-xs text-amber-700 font-semibold">
+                                    Incluye {{ number_format($totalMlRemanente, 2) }} ml de remanente vigente
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -195,7 +190,7 @@
                                     $hasStock = $stocks->contains(function ($stock) {
                                         return (bool) $stock->is_active &&
                                             (((float) $stock->frascos_actuales > 0) || ((float) $stock->stock_ml_actual > 0));
-                                    });
+                                    }) || (float) ($presentation->remanente_total_ml ?? 0) > 0;
 
                                     $firstStock = $stocks->first();
 

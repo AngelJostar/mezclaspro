@@ -34,6 +34,7 @@ use App\Models\Nutricionales\MedicineStockMovement;
 use App\Models\Nutricionales\InspeccionNutricional;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Services\InstitutionBillingPricingService;
+use App\Services\MedicineRemainderService;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
@@ -302,6 +303,14 @@ class SolicitudController extends Controller
 
     private function devolverStockSolicitud(Solicitud $solicitud): void
     {
+        // Revierte remanentes antes de regresar al inventario los envases abiertos.
+        // El servicio bloquea la operacion si el sobrante ya se uso en otra mezcla.
+        app(MedicineRemainderService::class)->rollbackReference(
+            'Solicitud',
+            $solicitud->id,
+            auth()->id()
+        );
+
         $movimientosSalida = MedicineStockMovement::where('reference_type', 'Solicitud')
             ->where('reference_id', $solicitud->id)
             ->where('tipo', 'salida')
@@ -344,7 +353,7 @@ class SolicitudController extends Controller
                 'frascos_despues' => $frascosDespues,
                 'reference_type' => 'SolicitudCancelada',
                 'reference_id' => $solicitud->id,
-                'notes' => 'DevoluciÃƒÂ³n automÃƒÂ¡tica de inventario por cancelaciÃƒÂ³n de solicitud nutricional',
+                'notes' => 'Devolución automática de inventario por cancelación de solicitud nutricional',
             ]);
         }
     }
@@ -547,6 +556,18 @@ class SolicitudController extends Controller
 
         $listItems = \App\Models\Nutricionales\NutriMedicineListItem::with([
             'presentation.catalog',
+            'presentation.remainders' => function ($query) use ($hospital) {
+                $query->where('laboratory_id', $hospital->laboratory_id)
+                    ->where('is_active', 1)
+                    ->where('current_ml', '>', 0)
+                    ->where(function ($query) {
+                        $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+                    })
+                    ->orderByRaw('usable_until IS NULL ASC')
+                    ->orderBy('usable_until')
+                    ->orderBy('opened_at');
+            },
+            'presentation.remainders.nutritionStock',
             'presentation.stocks' => function ($query) use ($hospital) {
                 $query->where('laboratory_id', $hospital->laboratory_id)
                     ->where('is_active', 1)
@@ -578,7 +599,18 @@ class SolicitudController extends Controller
 
             $input->presentations_disponibles = $items
                 ->map(function ($item) {
-                    return $item->presentation;
+                    $presentation = $item->presentation;
+                    if (!$presentation) {
+                        return null;
+                    }
+
+                    $presentation->remanente_disponible_ml = round(
+                        (float) $presentation->remainders->sum('current_ml'),
+                        4
+                    );
+                    $presentation->remanente_proximo = $presentation->remainders->first();
+
+                    return $presentation;
                 })
                 ->filter()
                 ->values();
@@ -642,7 +674,7 @@ class SolicitudController extends Controller
 
             if ($fechaHoraEntrega->lt($horaMinima)) {
                 return redirect()->back()->withErrors([
-                    'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos despuÃƒÂ©s de la hora actual.'
+                    'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos después de la hora actual.'
                 ])->withInput();
             }
 
@@ -965,8 +997,8 @@ class SolicitudController extends Controller
             session()->flash(
                 'swal',
                 [
-                    'title' => 'Ã‚Â¡Bien hecho!',
-                    'text' => 'La solicitud se ha creado con ÃƒÂ©xito.',
+                    'title' => '¡Bien hecho!',
+                    'text' => 'La solicitud se ha creado con éxito.',
                     'icon' => "success"
                 ]
             );
@@ -1027,6 +1059,18 @@ class SolicitudController extends Controller
 
         $listItems = \App\Models\Nutricionales\NutriMedicineListItem::with([
             'presentation.catalog',
+            'presentation.remainders' => function ($query) use ($hospital) {
+                $query->where('laboratory_id', $hospital->laboratory_id)
+                    ->where('is_active', 1)
+                    ->where('current_ml', '>', 0)
+                    ->where(function ($query) {
+                        $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+                    })
+                    ->orderByRaw('usable_until IS NULL ASC')
+                    ->orderBy('usable_until')
+                    ->orderBy('opened_at');
+            },
+            'presentation.remainders.nutritionStock',
             'presentation.stocks' => function ($query) use ($hospital) {
                 $query->where('laboratory_id', $hospital->laboratory_id)
                     ->where('is_active', 1)
@@ -1068,8 +1112,26 @@ class SolicitudController extends Controller
                     }
 
                     $presentation->precio_ml_lista = $item->precio_ml;
+                    $presentation->remanente_disponible_ml = round(
+                        (float) $presentation->remainders->sum('current_ml'),
+                        4
+                    );
+                    $presentation->remanente_proximo = $presentation->remainders->first();
 
-                    $presentation->stocks_disponibles = $presentation->stocks
+                    $remainderStocks = $presentation->remainders
+                        ->map(function ($remainder) {
+                            return [
+                                'id' => 'remanente-' . $remainder->id,
+                                'lote' => $remainder->lote,
+                                'caducidad' => $remainder->caducidad?->format('Y-m-d'),
+                                'stock_ml_actual' => (float) $remainder->current_ml,
+                                'frascos_actuales' => 0,
+                                'is_remainder' => true,
+                                'usable_until' => $remainder->usable_until?->format('Y-m-d H:i:s'),
+                            ];
+                        });
+
+                    $closedStocks = $presentation->stocks
                         ->map(function ($stock) {
                             return [
                                 'id' => $stock->id,
@@ -1079,8 +1141,13 @@ class SolicitudController extends Controller
                                     : null,
                                 'stock_ml_actual' => (float) $stock->stock_ml_actual,
                                 'frascos_actuales' => (float) ($stock->frascos_actuales ?? 0),
+                                'is_remainder' => false,
+                                'usable_until' => null,
                             ];
-                        })
+                        });
+
+                    $presentation->stocks_disponibles = $remainderStocks
+                        ->concat($closedStocks)
                         ->values();
 
                     return $presentation;
@@ -1116,7 +1183,8 @@ class SolicitudController extends Controller
                     ->firstWhere('id', $input->presentation_precargada_id);
 
                 if ($presentationSeleccionada) {
-                    $stock = $presentationSeleccionada->stocks->first();
+                    $stock = $presentationSeleccionada->stocks->first()
+                        ?: $presentationSeleccionada->remanente_proximo?->nutritionStock;
 
                     if ($stock) {
                         if (!$input->lote_precargado) {
@@ -1144,6 +1212,7 @@ class SolicitudController extends Controller
                             'presentacion' => $presentation->presentacion,
                             'presentacion_ml' => (float) $presentation->presentacion_ml,
                             'precio_ml_lista' => (float) ($presentation->precio_ml_lista ?? 0),
+                            'remanente_disponible_ml' => (float) ($presentation->remanente_disponible_ml ?? 0),
                             'stocks' => $presentation->stocks_disponibles ?? [],
                         ];
                     })->values(),
@@ -1185,7 +1254,7 @@ class SolicitudController extends Controller
 
                 session()->flash('swal', [
                     'title' => 'Solicitud cancelada',
-                    'text' => 'La solicitud se ha cancelado y el inventario fue devuelto si ya habÃƒÂ­a sido descontado.',
+                    'text' => 'La solicitud se ha cancelado y el inventario fue devuelto si ya había sido descontado.',
                     'icon' => 'warning',
                 ]);
 
@@ -1573,13 +1642,13 @@ class SolicitudController extends Controller
             if ($accion === 'aprobar') {
                 session()->flash('swal', [
                     'title' => 'Solicitud Aprobada',
-                    'text' => 'La solicitud se ha aprobado con ÃƒÂ©xito.',
+                    'text' => 'La solicitud se ha aprobado con éxito.',
                     'icon' => 'success',
                 ]);
             } else {
                 session()->flash('swal', [
                     'title' => 'Solicitud Actualizada',
-                    'text' => 'La solicitud se ha editado con ÃƒÂ©xito.',
+                    'text' => 'La solicitud se ha editado con éxito.',
                     'icon' => 'success',
                 ]);
             }
@@ -1624,7 +1693,7 @@ class SolicitudController extends Controller
             ->first();
 
         if (!$itemLista) {
-            throw new \Exception("La presentaciÃ³n {$presentation->denominacion_comercial} no existe en la lista nutricional del hospital.");
+            throw new \Exception("La presentación {$presentation->denominacion_comercial} no existe en la lista nutricional del hospital.");
         }
 
         return (float) $itemLista->precio_ml;
@@ -1640,8 +1709,8 @@ class SolicitudController extends Controller
         return $categoryId === 6
             || $inputId === 40
             || str_contains($genericName, 'bolsa eva')
-            || str_contains($genericName, 'set de infusiÃ³n')
-            || str_contains($genericName, 'set de infusiÃ³n');
+            || str_contains($genericName, 'set de infusión')
+            || str_contains($genericName, 'set de infusion');
     }
 
     private function descontarStockPresentacion(
@@ -1662,13 +1731,23 @@ class SolicitudController extends Controller
         $presentacionMl = (float) ($presentation->presentacion_ml ?? 0);
 
         if ($presentacionMl <= 0) {
-            throw new \Exception("La presentaciÃ³n {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
+            throw new \Exception("La presentación {$presentation->denominacion_comercial} no tiene presentacion_ml configurado.");
         }
 
         $controlPorPieza = $this->usaInventarioPorPieza($presentation);
         $cantidadFrascos = $controlPorPieza
             ? max(1, (float) ($cantidadPiezas ?? 1))
-            : ($cantidadMl / $presentacionMl);
+            : (float) ceil($cantidadMl / $presentacionMl);
+
+        if (!$controlPorPieza) {
+            return $this->descontarMedicamentoConRemanentes(
+                $hospital,
+                $presentation,
+                $cantidadMl,
+                $solicitudId,
+                $presentacionMl
+            );
+        }
 
         $stockQuery = MedicineLaboratoryStock::where('nutrition_medicine_presentation_id', $presentation->id)
             ->where('laboratory_id', $hospital->laboratory_id)
@@ -1724,9 +1803,120 @@ class SolicitudController extends Controller
             'reference_type' => 'Solicitud',
             'reference_id' => $solicitudId,
             'notes' => $controlPorPieza
-                ? 'Descuento automÃ¡tico por aprobaciÃ³n de solicitud nutricional (control por pieza)'
-                : 'Descuento automÃ¡tico por aprobaciÃ³n de solicitud nutricional',
+                ? 'Descuento automático por aprobación de solicitud nutricional (control por pieza)'
+                : 'Descuento automático por aprobación de solicitud nutricional',
         ]);
+
+        return $stock;
+    }
+
+    private function descontarMedicamentoConRemanentes(
+        Hospital $hospital,
+        NutritionMedicinePresentation $presentation,
+        float $cantidadMl,
+        int $solicitudId,
+        float $presentacionMl
+    ): MedicineLaboratoryStock {
+        $remainderService = app(MedicineRemainderService::class);
+        $remainderResult = $remainderService->consumeAvailable(
+            'nutricional',
+            (int) $presentation->id,
+            (int) $hospital->laboratory_id,
+            $cantidadMl,
+            'Solicitud',
+            $solicitudId,
+            null,
+            auth()->id()
+        );
+
+        $cantidadPendiente = (float) $remainderResult['remaining_ml'];
+        $stockUsado = null;
+
+        if (!empty($remainderResult['allocations'])) {
+            $stockId = collect($remainderResult['allocations'])
+                ->pluck('medicine_laboratory_stock_id')
+                ->filter()
+                ->first();
+            $stockUsado = $stockId ? MedicineLaboratoryStock::find($stockId) : null;
+        }
+
+        if ($cantidadPendiente <= 0.0001) {
+            if (!$stockUsado) {
+                throw new \Exception('El remanente consumido no tiene un lote de inventario asociado.');
+            }
+
+            return $stockUsado;
+        }
+
+        $frascosAbrir = (int) ceil($cantidadPendiente / $presentacionMl);
+        $stock = MedicineLaboratoryStock::query()
+            ->where('nutrition_medicine_presentation_id', $presentation->id)
+            ->where('laboratory_id', $hospital->laboratory_id)
+            ->where('is_active', 1)
+            ->where('frascos_actuales', '>=', $frascosAbrir)
+            ->where(function ($query) {
+                $query->whereNull('caducidad')
+                    ->orWhereDate('caducidad', '>=', now()->toDateString());
+            })
+            ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('caducidad')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->first();
+
+        if (!$stock) {
+            throw new \Exception(
+                "No hay envases suficientes para {$presentation->denominacion_comercial}. " .
+                "Se requieren {$frascosAbrir} frasco(s) para completar {$cantidadPendiente} mL."
+            );
+        }
+
+        $stockAntes = (float) $stock->stock_ml_actual;
+        $frascosAntes = (float) $stock->frascos_actuales;
+        $mlAbiertos = $frascosAbrir * $presentacionMl;
+        $stockDespues = max(0, $stockAntes - $mlAbiertos);
+        $frascosDespues = max(0, $frascosAntes - $frascosAbrir);
+
+        $stock->update([
+            'stock_ml_actual' => $stockDespues,
+            'frascos_actuales' => $frascosDespues,
+            'is_active' => $frascosDespues > 0,
+        ]);
+
+        MedicineStockMovement::create([
+            'medicine_laboratory_stock_id' => $stock->id,
+            'warehouse_id' => $stock->warehouse_id,
+            'user_id' => auth()->id(),
+            'tipo' => 'salida',
+            'cantidad_ml' => $mlAbiertos,
+            'cantidad_frascos' => $frascosAbrir,
+            'stock_antes' => $stockAntes,
+            'stock_despues' => $stockDespues,
+            'frascos_antes' => $frascosAntes,
+            'frascos_despues' => $frascosDespues,
+            'reference_type' => 'Solicitud',
+            'reference_id' => $solicitudId,
+            'notes' => 'Apertura de envase(s); el volumen no usado se registra como remanente.',
+        ]);
+
+        $porConsumir = $cantidadPendiente;
+        for ($i = 0; $i < $frascosAbrir; $i++) {
+            $usadoDelFrasco = min($presentacionMl, $porConsumir);
+            $remainderService->openContainer([
+                'domain' => 'nutricional',
+                'laboratory_id' => $hospital->laboratory_id,
+                'warehouse_id' => $stock->warehouse_id,
+                'nutrition_medicine_presentation_id' => $presentation->id,
+                'medicine_laboratory_stock_id' => $stock->id,
+                'lote' => $stock->lote,
+                'caducidad' => $stock->caducidad,
+                'stability_hours' => $presentation->stability_hours,
+                'reference_type' => 'Solicitud',
+                'reference_id' => $solicitudId,
+                'user_id' => auth()->id(),
+            ], $presentacionMl, $usadoDelFrasco);
+            $porConsumir = max(0, $porConsumir - $usadoDelFrasco);
+        }
 
         return $stock;
     }
@@ -1737,7 +1927,7 @@ class SolicitudController extends Controller
         $role = $user->roles[0]->name;
 
         if (!in_array($role, ['Admin', 'Super Admin']) && $solicitud->user_id != $user->id) {
-            abort(Response::HTTP_NOT_FOUND, 'PÃ¡gina no encontrada');
+            abort(Response::HTTP_NOT_FOUND, 'Página no encontrada');
         }
 
         $solicitud_detalles = Solicitud::with(

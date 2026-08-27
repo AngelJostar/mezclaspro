@@ -13,7 +13,10 @@
         $presentation = $presentations->first();
     }
 
-    $stock = $presentation && $presentation->stocks->count() > 0 ? $presentation->stocks->first() : null;
+    $remainder = $presentation?->remanente_proximo;
+    $stock = $presentation && $presentation->stocks->count() > 0
+        ? $presentation->stocks->first()
+        : $remainder?->nutritionStock;
 
     $loteValue = old('l_' . $input->input_id, $stock->lote ?? '');
 
@@ -51,6 +54,14 @@
                     </label>
                     <input type="text" class="w-full rounded border-gray-300 bg-gray-100"
                         value="{{ $presentation?->denominacion_comercial ?? 'Sin presentación activa' }}" readonly>
+                    @if (($presentation?->remanente_disponible_ml ?? 0) > 0)
+                        <p class="mt-1 text-xs font-semibold text-emerald-700">
+                            Usar primero remanente: {{ number_format((float) $presentation->remanente_disponible_ml, 2) }} mL
+                            @if ($remainder?->usable_until)
+                                (vigente hasta {{ $remainder->usable_until->format('d/m/Y H:i') }})
+                            @endif
+                        </p>
+                    @endif
                 </div>
 
                 <div>

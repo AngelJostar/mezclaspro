@@ -48,6 +48,7 @@ class MedicineListExport implements FromCollection, WithHeadings, WithMapping, S
             'Cobro (presentación/lista)',
             'Precio frasco',
             'Precio mg (override)',
+            'Precio mL (override)',
         ];
     }
 
@@ -73,6 +74,7 @@ class MedicineListExport implements FromCollection, WithHeadings, WithMapping, S
         $cobro = $presentation->pivot->charge_by ?? $lista->charge_by ?? '—';
         $precioFrasco = (float) ($presentation->pivot->precio ?? 0);
         $precioMg     = (float) ($presentation->pivot->precio_mg_override ?? 0);
+        $precioMl     = (float) ($presentation->pivot->precio_ml_override ?? 0);
 
         return [
             $lista->id,
@@ -92,6 +94,7 @@ class MedicineListExport implements FromCollection, WithHeadings, WithMapping, S
             $cobro ?: '—',
             $precioFrasco,
             $precioMg,
+            $precioMl,
         ];
     }
 }

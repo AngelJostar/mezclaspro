@@ -262,6 +262,16 @@ class InstitutionBillingPricingService
             $unitLabel = 'mg';
             $vatBreakdown = (bool) ($firstConfig?->iva_desglosado ?? false);
             $vat = $this->calculateVatFromBase($subtotal, $vatBreakdown);
+        } elseif ($chargeBy === 'ml') {
+            $quantity = (float) $presentationsUsed->sum('volumen_usado_ml');
+            $snapshotPricePerMl = $medicamento->precio_ml_snapshot;
+            $unitPrice = $snapshotPricePerMl !== null
+                ? (float) $snapshotPricePerMl
+                : (float) ($firstConfig?->precio_ml_override ?? $firstConfig?->precio ?? 0);
+            $subtotal = round($quantity * $unitPrice, 2);
+            $unitLabel = 'mL';
+            $vatBreakdown = (bool) ($firstConfig?->iva_desglosado ?? false);
+            $vat = $this->calculateVatFromBase($subtotal, $vatBreakdown);
         } else {
             [$quantity, $unitPrice, $subtotal, $vat, $vatBreakdown] = $this->resolveBottlePricing(
                 $medicamento,
@@ -385,6 +395,7 @@ class InstitutionBillingPricingService
                     'mlp.charge_by',
                     'mlp.precio',
                     'mlp.precio_mg_override',
+                    'mlp.precio_ml_override',
                     'mlp.iva_desglosado',
                     'mlp.descripcion_remision',
                     'mp.presentacion',

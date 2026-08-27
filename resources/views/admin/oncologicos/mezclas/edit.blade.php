@@ -194,7 +194,7 @@
             const raw = med?.charge_by ?? med?.chargeBy ?? infoAdicional?.[catalogId]?.charge_by ?? 'frasco';
             const val = String(raw || 'frasco').toLowerCase().trim();
 
-            if (['mg', 'frasco', 'pieza'].includes(val)) return val;
+            if (['mg', 'ml', 'frasco', 'pieza'].includes(val)) return val;
             return 'frasco';
         }
 
@@ -252,7 +252,11 @@
                     precioMgInput.disabled = true;
                     precioMgInput.classList.add('bg-gray-100', 'text-gray-400');
                 }
-                if (precioHelp) precioHelp.textContent = 'El precio se edita por frasco en presentaciones.';
+                if (precioHelp) {
+                    precioHelp.textContent = getChargeBy(catalogIdOrOncoId) === 'ml'
+                        ? 'El precio se captura por mL en las presentaciones.'
+                        : 'El precio se edita por frasco en presentaciones.';
+                }
             }
         }
 
@@ -403,8 +407,9 @@
                     data-lote="${b.lote ?? ''}"
                     data-caducidad="${b.caducidad ?? ''}"
                     data-caducidad-text="${cad}"
-                    data-stock="${b.stock_actual ?? 0}">
-                    ${b.lote ?? 'Sin lote'} · Cad. ${cad} · Stock ${b.stock_actual ?? 0}
+                    data-stock="${b.stock_actual ?? 0}"
+                    data-remanente="${b.remanente_ml ?? 0}">
+                    ${b.lote ?? 'Sin lote'} | Cad. ${cad} | Stock ${b.stock_actual ?? 0} | Remanente ${Number(b.remanente_ml || 0).toFixed(2)} mL
                 </option>
             `;
                 }).join('');
@@ -425,6 +430,7 @@
                 tr.dataset.marca = p.marca || '';
                 tr.dataset.batchId = selectedBatch?.id || selectedBatchId || '';
                 tr.dataset.hasStock = hasStock ? '1' : '0';
+                tr.dataset.remanenteMl = selectedBatch?.remanente_ml || 0;
 
                 tr.innerHTML = `
             <td class="border px-1 py-1">${p.presentacion ?? '—'}</td>
@@ -452,7 +458,7 @@
             <td class="border px-1 py-1 text-center">
                 ${stockBadge}
                 <div class="text-[10px] text-gray-500 batch-stock">
-                    ${selectedBatch?.stock_actual ?? 0} frascos
+                    ${selectedBatch?.stock_actual ?? 0} frascos | ${Number(selectedBatch?.remanente_ml || 0).toFixed(2)} mL remanente
                 </div>
             </td>
             <td class="border px-1 py-1">
@@ -479,6 +485,7 @@
             if (!row || !option) return;
 
             row.dataset.batchId = option.value;
+            row.dataset.remanenteMl = option.dataset.remanente || 0;
 
             const caducidad = row.querySelector('.batch-caducidad');
             const stock = row.querySelector('.batch-stock');
@@ -488,7 +495,7 @@
             }
 
             if (stock) {
-                stock.textContent = `${option.dataset.stock || 0} frascos`;
+                stock.textContent = `${option.dataset.stock || 0} frascos | ${Number(option.dataset.remanente || 0).toFixed(2)} mL remanente`;
             }
 
             recalcularResumenPresentaciones(filaId);
@@ -1089,6 +1096,7 @@
                     const precioFrasco = r.querySelector('.input-precio-frasco')?.value || '';
                     const batchSelect = r.querySelector('.batch-select');
                     const batchId = batchSelect?.value || r.dataset.batchId || null;
+                    const remanenteMl = parseFloat(r.dataset.remanenteMl || '0');
 
                     // ✅ si no hay stock, forzar 0 (por seguridad)
                     if (!hasStock) {
@@ -1096,7 +1104,7 @@
                         return;
                     }
 
-                    if (frascos > 0 && batchId) {
+                    if ((frascos > 0 || remanenteMl > 0) && batchId) {
                         arr.push({
                             batch_id: batchId,
                             presentation_id: r.dataset.presentationId,
@@ -1150,16 +1158,14 @@
                 };
 
                 if (chargeBy !== 'mg') {
-                    // Exigir al menos una presentación con frascos > 0
+                    // Acepta frascos cerrados o un remanente vigente.
                     medObj.presentaciones = buildPresentacionesFromFila(row.tr);
 
-                    const totalFrascos = medObj.presentaciones.reduce((acc, p) => acc + Number(p.frascos || 0), 0);
-
-                    if (totalFrascos <= 0) {
+                    if (medObj.presentaciones.length <= 0) {
                         Swal.fire({
                             icon: 'error',
-                            title: 'Falta seleccionar stock',
-                            text: `Para "${row.nombre}" debes seleccionar al menos 1 frasco en una presentación con stock.`
+                            title: 'Falta seleccionar inventario',
+                            text: `Para "${row.nombre}" debes seleccionar un lote con frascos o remanente vigente.`
                         });
                         return;
                     }

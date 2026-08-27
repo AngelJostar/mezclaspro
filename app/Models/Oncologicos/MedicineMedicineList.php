@@ -18,12 +18,14 @@ class MedicineMedicineList extends Model
         'medicine_id',
         'precio',
         'precio_mg_override',
+        'precio_ml_override',
         'charge_by', // preferencia por lista (nullable)
     ];
 
     protected $casts = [
         'precio'             => 'decimal:2',
         'precio_mg_override' => 'decimal:4',
+        'precio_ml_override' => 'decimal:4',
         'charge_by'          => 'string',
     ];
 

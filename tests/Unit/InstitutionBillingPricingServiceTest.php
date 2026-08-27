@@ -139,6 +139,60 @@ class InstitutionBillingPricingServiceTest extends TestCase
         $this->assertSame(300.0, $line['subtotal']);
     }
 
+    public function test_remission_total_is_calculated_from_consumed_milliliters(): void
+    {
+        $pricing = new InstitutionBillingPricingService();
+        $catalog = (new MedicinesCatalog())->forceFill([
+            'id' => 12,
+            'denominacion' => 'Medicamento por mililitro',
+        ]);
+        $catalog->setRelation('presentations', collect());
+        $medicine = (new MedicineOnco())->forceFill(['catalog_id' => 12]);
+        $medicine->setRelation('catalog', $catalog);
+
+        $mixtureMedicine = (new MezclaMedicamento())->forceFill([
+            'dosis' => 100,
+            'charge_by' => 'ml',
+            'precio_ml_snapshot' => 25.5,
+        ]);
+        $mixtureMedicine->setRelation('medicamentoOnco', $medicine);
+        $mixtureMedicine->setRelation('presentacionesUsadas', collect([
+            (object) ['volumen_usado_ml' => 4.25],
+            (object) ['volumen_usado_ml' => 1.75],
+        ]));
+
+        $config = (object) [
+            'medicine_presentation_id' => 20,
+            'charge_by' => 'ml',
+            'precio' => 0,
+            'precio_ml_override' => 25.5,
+            'iva_desglosado' => false,
+            'descripcion_remision' => 'Medicamento por mL',
+        ];
+
+        $configCache = new ReflectionProperty($pricing, 'oncoPresentationConfigs');
+        $configCache->setValue($pricing, ['1:12' => collect([$config])]);
+
+        $resolver = new ReflectionMethod($pricing, 'resolveOncoMedication');
+        $line = $resolver->invoke($pricing, $mixtureMedicine, 1);
+
+        $this->assertSame('mL', $line['unit_label']);
+        $this->assertSame(6.0, $line['quantity']);
+        $this->assertSame(25.5, $line['unit_price']);
+        $this->assertSame(153.0, $line['subtotal']);
+    }
+
+    public function test_mixture_line_total_uses_the_ml_snapshot(): void
+    {
+        $medicine = (new MezclaMedicamento())->forceFill([
+            'charge_by' => 'ml',
+            'dosis_ml' => 7.5,
+            'precio_ml_snapshot' => 18.4,
+        ]);
+
+        $this->assertSame(138.0, $medicine->total());
+    }
+
     public function test_standard_billing_export_includes_the_bottle_quantity_column(): void
     {
         $headings = (new InstitutionBillingExport([]))->headings();

@@ -347,7 +347,8 @@ class SolicitudController extends Controller
                 'mp.precio_frasco',
                 'mlp.charge_by',
                 'mlp.precio',
-                'mlp.precio_mg_override'
+                'mlp.precio_mg_override',
+                'mlp.precio_ml_override'
             )
             ->orderBy('mp.presentacion')
             ->get();
@@ -492,6 +493,7 @@ class SolicitudController extends Controller
                 'mlp.charge_by',
                 'mlp.precio',
                 'mlp.precio_mg_override',
+                'mlp.precio_ml_override',
             ])
             ->groupBy('catalog_id')
             ->map(function ($rows) {
@@ -500,6 +502,7 @@ class SolicitudController extends Controller
                     'charge_by' => $first?->charge_by,
                     'precio'    => $first?->precio,
                     'precio_mg_override' => $first?->precio_mg_override,
+                    'precio_ml_override' => $first?->precio_ml_override,
                 ];
             });
 
@@ -648,7 +651,7 @@ class SolicitudController extends Controller
 
                         $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? ($catalog->charge_by ?? 'mg');
                         $chargeBy = strtolower(trim((string)$chargeBy));
-                        if (!in_array($chargeBy, ['mg', 'frasco', 'pieza'], true)) $chargeBy = 'mg';
+                        if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) $chargeBy = 'mg';
                         if ($chargeBy === 'pieza') $chargeBy = 'frasco';
 
                         $mc = DB::table('medicines_catalog as mc')
@@ -669,6 +672,9 @@ class SolicitudController extends Controller
 
                             'charge_by'                  => $chargeBy,
                             'precio_mg_snapshot'         => null,
+                            'precio_ml_snapshot'         => $chargeBy === 'ml'
+                                ? ($medicamento['precio_ml'] ?? $listaInfoPorCatalogo[$catalogId]['precio_ml_override'] ?? null)
+                                : null,
 
                             'denominacion_snapshot'      => $mc->denominacion ?? ($catalog->denominacion ?? null),
                             'marca_snapshot'             => null,
@@ -787,7 +793,8 @@ class SolicitudController extends Controller
                 'mp.precio_frasco',
                 'mlp.charge_by',
                 'mlp.precio',
-                'mlp.precio_mg_override'
+                'mlp.precio_mg_override',
+                'mlp.precio_ml_override'
             )
             ->orderBy('mp.presentacion')
             ->get();
@@ -1082,6 +1089,7 @@ class SolicitudController extends Controller
                     'mlp.charge_by',
                     'mlp.precio',
                     'mlp.precio_mg_override',
+                    'mlp.precio_ml_override',
                 ])
                 ->groupBy('catalog_id')
                 ->map(function ($rows) {
@@ -1090,6 +1098,7 @@ class SolicitudController extends Controller
                         'charge_by' => $first?->charge_by,
                         'precio'    => $first?->precio,
                         'precio_mg_override' => $first?->precio_mg_override,
+                        'precio_ml_override' => $first?->precio_ml_override,
                     ];
                 });
 
@@ -1216,7 +1225,7 @@ class SolicitudController extends Controller
 
                         $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? 'mg';
                         $chargeBy = strtolower(trim((string) $chargeBy));
-                        if (!in_array($chargeBy, ['mg', 'frasco', 'pieza'], true)) {
+                        if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) {
                             $chargeBy = 'mg';
                         }
                         if ($chargeBy === 'pieza') {
@@ -1236,6 +1245,9 @@ class SolicitudController extends Controller
 
                             'charge_by'                  => $chargeBy,
                             'precio_mg_snapshot'         => null,
+                            'precio_ml_snapshot'         => $chargeBy === 'ml'
+                                ? ($medicamento['precio_ml'] ?? $listaInfoPorCatalogo[$catalogId]['precio_ml_override'] ?? null)
+                                : null,
 
                             'denominacion_snapshot'      => $mc->denominacion,
                             'marca_snapshot'             => null,
@@ -1553,8 +1565,13 @@ class SolicitudController extends Controller
 
                 // ✅ 1A) SIN presentaciones usadas
                 if ($presentaciones->isEmpty()) {
-                    $unidadCobro = ($listaCharge === 'mg') ? 'mg' : 'frasco';
-                    $cantidad    = ($unidadCobro === 'mg') ? (float)($med->dosis ?? 0) : 1;
+                    $chargeByMed = $med->charge_by ?: $listaCharge;
+                    $unidadCobro = in_array($chargeByMed, ['mg', 'ml'], true) ? $chargeByMed : 'frasco';
+                    $cantidad = match ($unidadCobro) {
+                        'mg' => (float) ($med->dosis ?? 0),
+                        'ml' => (float) ($med->dosis_ml ?? 0),
+                        default => 1,
+                    };
 
                     // si no hay presentaciones, normalmente no hay precios/snapshots por frasco
                     // dejamos 0 como tú lo traías (robusto)
@@ -1565,10 +1582,15 @@ class SolicitudController extends Controller
                     // ✅ 1B) CON presentaciones usadas: usar snapshot de subtotal/precio
                     $sumSubtotal = 0.0;
                     $sumUnidades = 0.0;
+                    $sumVolumen = 0.0;
+                    $chargeSnapshots = [];
 
                     foreach ($presentaciones as $pu) {
                         $unidades = (float)($pu->unidades_usadas ?? 0);
-                        if ($unidades <= 0) $unidades = 1;
+                        $chargeSnapshot = strtolower((string) ($pu->charge_by_snapshot ?: $med->charge_by ?: $listaCharge));
+                        $chargeSnapshots[] = $chargeSnapshot;
+                        $sumVolumen += (float) ($pu->volumen_usado_ml ?? 0);
+                        if ($unidades <= 0 && $chargeSnapshot === 'frasco') $unidades = 1;
 
                         // ✅ snapshot: subtotal del renglón
                         $sub = $pu->subtotal;
@@ -1600,10 +1622,10 @@ class SolicitudController extends Controller
                     }
 
                     // Si hay snapshots por frascos usados, se asume cobro por frasco
-                    $unidadCobro = 'frasco';
-                    $cantidad    = $sumUnidades;
+                    $unidadCobro = in_array('ml', $chargeSnapshots, true) ? 'ml' : 'frasco';
+                    $cantidad    = $unidadCobro === 'ml' ? $sumVolumen : $sumUnidades;
                     $subtotal    = $sumSubtotal;
-                    $precioUnit  = ($sumUnidades > 0) ? ($sumSubtotal / $sumUnidades) : 0.0;
+                    $precioUnit  = ($cantidad > 0) ? ($sumSubtotal / $cantidad) : 0.0;
                 }
 
                 $precioUnit = round($precioUnit, 4);

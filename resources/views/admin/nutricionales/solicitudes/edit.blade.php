@@ -486,8 +486,9 @@
 
                         option.value = stock.lote;
                         option.dataset.caducidad = stock.caducidad;
-                        option.textContent =
-                            `${stock.lote} — Cad: ${stock.caducidad} — Stock: ${stock.stock_ml_actual} ml`;
+                        option.textContent = stock.is_remainder
+                            ? `${stock.lote} - REMANENTE: ${stock.stock_ml_actual} mL - Usar antes de: ${stock.usable_until}`
+                            : `${stock.lote} - Cad: ${stock.caducidad} - Stock cerrado: ${stock.stock_ml_actual} mL`;
 
                         if (selectedLote) {
                             option.selected = stock.lote === selectedLote;

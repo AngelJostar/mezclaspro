@@ -29,7 +29,7 @@ use HasFactory;
     public function medicineLists()
     {
         return $this->belongsToMany(MedicineList::class, 'medicine_medicine_lists', 'medicine_id', 'medicine_list_id')
-            ->withPivot(['precio', 'precio_mg_override', 'charge_by'])
+            ->withPivot(['precio', 'precio_mg_override', 'precio_ml_override', 'charge_by'])
             ->withTimestamps();
     }
 

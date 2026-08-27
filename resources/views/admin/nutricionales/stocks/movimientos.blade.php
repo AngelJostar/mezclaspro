@@ -203,6 +203,88 @@
             </div>
         </div>
 
+        <div class="overflow-hidden rounded-lg bg-white shadow">
+            <div class="border-b border-gray-200 px-5 py-4">
+                <h2 class="text-lg font-semibold text-gray-800">Remanentes abiertos del lote</h2>
+                <p class="mt-1 text-sm text-gray-500">
+                    Se consumen primero mientras conserven estabilidad. Al vencer, se descartan automaticamente.
+                </p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Apertura</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Utilizable hasta</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-600">Inicial</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-600">Disponible</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Estado</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Origen</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        @forelse ($remainders as $remainder)
+                            @php
+                                $vigente = $remainder->is_active
+                                    && (float) $remainder->current_ml > 0
+                                    && (!$remainder->usable_until || $remainder->usable_until->isFuture());
+                            @endphp
+                            <tr class="hover:bg-slate-50/80">
+                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                                    {{ $remainder->opened_at?->format('d/m/Y H:i') ?? '-' }}
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                                    {{ $remainder->usable_until?->format('d/m/Y H:i') ?? 'Sin estabilidad' }}
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-700">
+                                    {{ number_format((float) $remainder->initial_ml, 2) }} mL
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold {{ $vigente ? 'text-green-700' : 'text-gray-500' }}">
+                                    {{ number_format((float) $remainder->current_ml, 2) }} mL
+                                </td>
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $vigente ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
+                                        {{ $vigente ? 'Vigente' : ($remainder->discard_reason ?: 'Agotado o vencido') }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-700">
+                                    {{ $remainder->opened_for_type ?: '-' }}
+                                    @if ($remainder->opened_for_id)
+                                        #{{ $remainder->opened_for_id }}
+                                    @endif
+                                </td>
+                            </tr>
+                            @if ($remainder->movements->isNotEmpty())
+                                <tr class="bg-slate-50/60">
+                                    <td colspan="6" class="px-4 py-3">
+                                        <div class="flex flex-wrap gap-2 text-xs text-gray-600">
+                                            @foreach ($remainder->movements as $movement)
+                                                <span class="rounded border border-gray-200 bg-white px-2 py-1">
+                                                    {{ $movement->created_at?->format('d/m H:i') }}
+                                                    - {{ ucfirst($movement->movement_type) }}:
+                                                    {{ number_format((float) $movement->quantity_ml, 2) }} mL
+                                                    @if ($movement->user)
+                                                        por {{ $movement->user->name ?? $movement->user->username }}
+                                                    @endif
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endif
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-500">
+                                    Este lote aun no tiene remanentes abiertos.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="pb-2">
             {{ $movements->links() }}
         </div>

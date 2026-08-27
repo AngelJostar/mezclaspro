@@ -77,6 +77,11 @@ class MedicineList extends Model
         return $this->charge_by === 'frasco';
     }
 
+    public function chargeByMl(): bool
+    {
+        return $this->charge_by === 'ml';
+    }
+
     public function presentations()
     {
         return $this->belongsToMany(
@@ -88,6 +93,7 @@ class MedicineList extends Model
             'charge_by',
             'precio',
             'precio_mg_override',
+            'precio_ml_override',
             'iva_desglosado',
             'descripcion_remision',
         ])->withTimestamps();

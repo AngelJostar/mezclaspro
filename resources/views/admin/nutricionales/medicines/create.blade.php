@@ -82,6 +82,7 @@
                     'fabricante' => '',
                     'presentacion' => '',
                     'presentacion_ml' => '',
+                    'stability_hours' => '',
                     'is_available' => 1,
                 ],
             ]);
@@ -145,6 +146,13 @@
                                 <option value="0"
                                     {{ ($presentation['is_available'] ?? 1) == 0 ? 'selected' : '' }}>No</option>
                             </x-select>
+                        </div>
+                        <div>
+                            <x-label class="mb-2">Estabilidad después de abrir (horas)</x-label>
+                            <x-input type="number" min="0" max="8760"
+                                name="presentations[{{ $index }}][stability_hours]"
+                                value="{{ $presentation['stability_hours'] ?? '' }}" class="w-full"
+                                placeholder="Ej. 24" />
                         </div>
                     </div>
                 </div>
@@ -259,6 +267,15 @@
                                         <option value="1" selected>Sí</option>
                                         <option value="0">No</option>
                                     </select>
+                                </div>
+                                <div>
+                                    <label class="block mb-2 text-sm font-medium text-gray-700">
+                                        Estabilidad después de abrir (horas)
+                                    </label>
+                                    <input type="number" min="0" max="8760"
+                                        name="presentations[${index}][stability_hours]"
+                                        class="w-full rounded border-gray-300"
+                                        placeholder="Ej. 24" />
                                 </div>
                             </div>
                         </div>

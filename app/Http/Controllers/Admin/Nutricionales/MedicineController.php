@@ -55,6 +55,7 @@ class MedicineController extends Controller
             'presentations.*.fabricante' => 'nullable|string|max:255',
             'presentations.*.presentacion' => 'required|string|max:255',
             'presentations.*.presentacion_ml' => 'nullable|numeric|min:0',
+            'presentations.*.stability_hours' => 'nullable|integer|min:0|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
         ]);
 
@@ -88,6 +89,7 @@ class MedicineController extends Controller
                     'fabricante' => isset($presentation['fabricante']) ? trim($presentation['fabricante']) : null,
                     'presentacion' => trim($presentation['presentacion']),
                     'presentacion_ml' => $presentation['presentacion_ml'] ?? null,
+                    'stability_hours' => $presentation['stability_hours'] ?? null,
                     'is_available' => isset($presentation['is_available'])
                         ? (bool) $presentation['is_available']
                         : true,
@@ -145,6 +147,7 @@ class MedicineController extends Controller
             'presentations.*.fabricante' => 'nullable|string|max:255',
             'presentations.*.presentacion' => 'required|string|max:255',
             'presentations.*.presentacion_ml' => 'nullable|numeric|min:0',
+            'presentations.*.stability_hours' => 'nullable|integer|min:0|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
 
         ]);
@@ -182,6 +185,7 @@ class MedicineController extends Controller
                     'fabricante' => isset($presentation['fabricante']) ? trim($presentation['fabricante']) : null,
                     'presentacion' => trim($presentation['presentacion']),
                     'presentacion_ml' => $presentation['presentacion_ml'] ?? null,
+                    'stability_hours' => $presentation['stability_hours'] ?? null,
                     'is_available' => isset($presentation['is_available'])
                         ? (bool) $presentation['is_available']
                         : true,
