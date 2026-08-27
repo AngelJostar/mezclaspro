@@ -282,7 +282,7 @@ class InstitucionHospitalDetalleExport implements WithMultipleSheets
 
         return [
             $mezcla->id,
-            $mezcla->remision ?: ($solicitud?->remision ?: ''),
+            $mezcla->remision ?: '',
             $mezcla->lote ?: '',
             $solicitud?->hospital?->name ?: '',
             $solicitud?->nombre_paciente ?: '',

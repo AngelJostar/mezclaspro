@@ -90,7 +90,9 @@
                 <div>
                     <label class="text-sm font-semibold">Fecha de entrega</label>
                     <p class="border border-gray-300 rounded-md px-2 py-1 bg-gray-100 text-gray-700">
-                        {{ \Carbon\Carbon::parse($mezcla->solicitud->fecha_entrega)->format('Y-m-d\TH:i') }}
+                        {{ ($mezcla->fecha_entrega ?? $mezcla->solicitud->fecha_entrega)
+                            ? \Carbon\Carbon::parse($mezcla->fecha_entrega ?? $mezcla->solicitud->fecha_entrega)->format('Y-m-d H:i')
+                            : 'Sin fecha' }}
                     </p>
                 </div>
                 <div>
@@ -225,4 +227,3 @@
         </div>
     </div>
 </x-admin-layout>
-

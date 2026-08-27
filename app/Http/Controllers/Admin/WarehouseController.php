@@ -115,6 +115,18 @@ class WarehouseController extends Controller
             ->with('success', 'La informacion del almacen se actualizo correctamente.');
     }
 
+    public function destroy(Warehouse $warehouse)
+    {
+        $laboratoryId = $warehouse->laboratory_id;
+        $warehouseName = $warehouse->name;
+
+        $warehouse->delete();
+
+        return redirect()
+            ->route('admin.warehouses.index', ['laboratory_id' => $laboratoryId])
+            ->with('success', "El almacen {$warehouseName} se elimino correctamente.");
+    }
+
     public function purchaseOrders(Request $request)
     {
         $section = (string) $request->query('section', 'mine');

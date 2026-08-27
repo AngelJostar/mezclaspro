@@ -116,7 +116,7 @@
             <div class="w-1/4">
                 <label for="fecha_entrega">Fecha de entrega*</label>
                 <input type="datetime-local" name="fecha_entrega" id="fecha_entrega"
-                    value="{{ old('fecha_entrega', $solicitud->fecha_entrega ? \Carbon\Carbon::parse($solicitud->fecha_entrega)->format('Y-m-d\TH:i') : '') }}"
+                    value="{{ old('fecha_entrega', ($mezcla->fecha_entrega ?? $solicitud->fecha_entrega) ? \Carbon\Carbon::parse($mezcla->fecha_entrega ?? $solicitud->fecha_entrega)->format('Y-m-d\TH:i') : '') }}"
                     class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
             </div>
         </div>

@@ -294,10 +294,7 @@
                 <td class="border-x-1 border-r-0 px-1">Nombre del Médico: {{ $safe($solicitud->nombre_medico) }}</td>
             </tr>
             <tr>
-                <td class="border-1 border-l-0 px-1">Cédula del Médico: {{ $safe($solicitud->cedula_medico) }}</td>
-                <td class="border-1 border-r-0 px-1">
-                    Fecha de entrega*: {{ $fmtDate($solicitud->fecha_entrega ?? null) }}
-                </td>
+                <td colspan="2" class="border-1 border-x-0 px-1">Cédula del Médico: {{ $safe($solicitud->cedula_medico) }}</td>
             </tr>
         </table>
 
@@ -314,7 +311,8 @@
                     <tr>
                         <td class="border-t-1 border-b-1 px-1 text-center"
                             style="background: black; color: white; font-weight: bold; font-size: 14px">
-                            Mezcla #{{ $index + 1 }}
+                            Mezcla #{{ $index + 1 }} · Fecha de entrega:
+                            {{ $fmtDate($mezcla->fecha_entrega ?? $solicitud->fecha_entrega ?? null) }}
                         </td>
                     </tr>
                 </table>

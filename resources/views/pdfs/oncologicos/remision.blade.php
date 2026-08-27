@@ -227,7 +227,7 @@
                     Fecha de envío:
                     <strong>{{ $fmtDateTime($fechaEmision) }}</strong>
                 </td>
-                <td class="px-1 text-right">No. Remisión: {{ $solicitud->remision ?? '—' }}</td>
+                <td class="px-1 text-right">No. Remisión: {{ $mezclas->first()?->remision ?? '—' }}</td>
             </tr>
         </table>
 

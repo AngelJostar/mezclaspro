@@ -977,28 +977,27 @@ class MezclaController extends Controller
             $mezcla->lote = 'L' . $dia . $mesAbbr . $anio . $consecutivo;
         };
 
-        $asegurarRemisionPorSolicitud = function (SolicitudOnco $solicitud) {
-            if (!empty($solicitud->remision)) {
-                $solicitud->mezclas()
-                    ->whereNull('remision')
-                    ->update(['remision' => $solicitud->remision]);
-
-                return $solicitud->remision;
+        $asegurarRemisionPorMezcla = function (Mezcla $mezcla) {
+            if (!empty($mezcla->remision)) {
+                return $mezcla->remision;
             }
 
-            $maxNum = SolicitudOnco::whereNotNull('remision')
+            $maxSolicitud = SolicitudOnco::whereNotNull('remision')
+                ->lockForUpdate()
+                ->max(DB::raw('CAST(remision AS UNSIGNED)'));
+            $maxMezcla = Mezcla::whereNotNull('remision')
                 ->lockForUpdate()
                 ->max(DB::raw('CAST(remision AS UNSIGNED)'));
 
-            $nuevo = ((int) $maxNum) + 1;
+            $nuevo = max((int) $maxSolicitud, (int) $maxMezcla) + 1;
             $remision = (string) $nuevo;
 
-            $solicitud->remision = $remision;
-            $solicitud->save();
+            $mezcla->remision = $remision;
 
-            $solicitud->mezclas()
-                ->whereNull('remision')
-                ->update(['remision' => $remision]);
+            if ($mezcla->solicitud && empty($mezcla->solicitud->remision)) {
+                $mezcla->solicitud->remision = $remision;
+                $mezcla->solicitud->save();
+            }
 
             return $remision;
         };
@@ -1073,14 +1072,10 @@ class MezclaController extends Controller
         if ($request->accion === 'preparada') {
             $preparoNombre = $this->nombreUsuario($user);
 
-            DB::transaction(function () use ($mezcla, $generarLotePorMezcla, $asegurarRemisionPorSolicitud, $preparoNombre) {
+            DB::transaction(function () use ($mezcla, $generarLotePorMezcla, $asegurarRemisionPorMezcla, $preparoNombre) {
                 $mezcla->estado = 'preparada';
                 $generarLotePorMezcla($mezcla);
-
-                if ($mezcla->solicitud) {
-                    $remision = $asegurarRemisionPorSolicitud($mezcla->solicitud);
-                    $mezcla->remision = $remision;
-                }
+                $asegurarRemisionPorMezcla($mezcla);
 
                 $mezcla->save();
 
@@ -1290,6 +1285,7 @@ class MezclaController extends Controller
 
             $mezcla->volumen_dilucion        = $volumenDilucion;
             $mezcla->tiempo_infusion         = $tiempoInfusion;
+            $mezcla->fecha_entrega            = $request->fecha_entrega;
             $mezcla->set_infusion            = $setInfusion;
             $mezcla->infusor_id              = $infusorId;
             $mezcla->diluent_presentation_id = $diluentPresentationId ?: null;
@@ -1307,8 +1303,10 @@ class MezclaController extends Controller
                 $mezcla->solicitud->diagnostico       = $request->diagnostico;
                 $mezcla->solicitud->nombre_medico     = $request->medico_nombre;
                 $mezcla->solicitud->cedula_medico     = $request->medico_cedula;
-                $mezcla->solicitud->fecha_entrega     = $request->fecha_entrega;
                 $mezcla->solicitud->observaciones     = $request->observaciones;
+                $mezcla->solicitud->fecha_entrega     = $mezcla->solicitud->mezclas()
+                    ->whereNotNull('fecha_entrega')
+                    ->min('fecha_entrega') ?? $request->fecha_entrega;
                 $mezcla->solicitud->save();
             }
 

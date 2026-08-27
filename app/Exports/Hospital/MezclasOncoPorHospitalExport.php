@@ -150,7 +150,7 @@ class MezclasOncoPorHospitalExport implements FromArray, WithHeadings, ShouldAut
                         $solicitud->servicio,
                         $solicitud->estado,
                         $solicitud->created_at,
-                        $solicitud->fecha_entrega,
+                        $mezcla->fecha_entrega ?? $solicitud->fecha_entrega,
                         $solicitud->registro_paciente,
                         $solicitud->nombre_paciente,
                         $solicitud->sexo,
