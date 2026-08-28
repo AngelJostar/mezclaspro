@@ -43,22 +43,16 @@ class InstitutionBillingPricingService
         $medicationTotalWithVat = round($medicationTotal + $medicationVat, 2);
         $infusorApplies = ((bool) $mezcla->set_infusion || !empty($mezcla->infusor_id)) && $mezcla->infusor;
         $suppliesTotal = $infusorApplies ? round((float) ($mezcla->infusor?->precio ?? 0), 2) : 0.0;
-        $storedTotal = $this->parseMoney($mezcla->billing?->precio_total);
-        $minimumBaseTotal = round($medicationTotal + $suppliesTotal, 2);
-
         $additionalCharges = $this->additionalCharges($isAntibiotic ? 'antibioticos' : 'oncologicos', $medicineListId);
         $additionalTotal = (float) $additionalCharges->sum('total');
-        if ($storedTotal >= $minimumBaseTotal && $storedTotal > 0) {
-            $serviceTotal = round($storedTotal - $minimumBaseTotal, 2);
-            $totalIncluded = round($storedTotal + $medicationVat, 2);
-        } else {
-            $serviceTotal = 0.0;
-            $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $serviceTotal + $additionalTotal, 2);
-        }
+        $serviceTotal = 0.0;
+        $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $additionalTotal, 2);
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
         $suppliesVat = $this->splitIncludedVat($suppliesTotal);
-        $subtotalBeforeVat = round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'], 2);
+        $additionalBase = round((float) $additionalCharges->sum('subtotal_before_vat'), 2);
+        $additionalVat = round((float) $additionalCharges->sum('vat'), 2);
+        $subtotalBeforeVat = round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'] + $additionalBase, 2);
 
         $mezcla->setAttribute('infusor_aplica', (bool) $infusorApplies);
         $mezcla->setAttribute(
@@ -90,8 +84,10 @@ class InstitutionBillingPricingService
             'supplies_vat' => $suppliesVat['vat'],
             'supplies_total' => $suppliesTotal,
             'additional_charge_lines' => $additionalCharges,
+            'additional_charges_base' => $additionalBase,
+            'additional_charges_vat' => $additionalVat,
             'subtotal_before_vat' => $subtotalBeforeVat,
-            'vat_total' => round($medicationVat + $serviceVat['vat'] + $suppliesVat['vat'], 2),
+            'vat_total' => round($medicationVat + $serviceVat['vat'] + $suppliesVat['vat'] + $additionalVat, 2),
             'total_iva_included' => $totalIncluded,
         ];
     }
@@ -152,19 +148,14 @@ class InstitutionBillingPricingService
 
         $medicationTotal = round((float) $medicationLines->sum('subtotal'), 2);
         $suppliesTotal = round((float) $supplyLines->sum('subtotal'), 2);
-        $storedTotal = $this->parseMoney($solicitud->billing?->precio_total);
         $minimumTotal = round($medicationTotal + $suppliesTotal, 2);
-
-        if ($storedTotal >= $minimumTotal && $storedTotal > 0) {
-            $serviceTotal = round($storedTotal - $minimumTotal, 2);
-            $totalIncluded = round($storedTotal, 2);
-        } else {
-            $serviceTotal = 0.0;
-            $totalIncluded = round($minimumTotal + $serviceTotal + (float) $additionalCharges->sum('total'), 2);
-        }
+        $serviceTotal = 0.0;
+        $totalIncluded = round($minimumTotal + (float) $additionalCharges->sum('total'), 2);
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
         $suppliesVat = $this->splitIncludedVat($suppliesTotal);
+        $additionalBase = round((float) $additionalCharges->sum('subtotal_before_vat'), 2);
+        $additionalVat = round((float) $additionalCharges->sum('vat'), 2);
 
         return [
             'description' => $medicationLines
@@ -182,8 +173,10 @@ class InstitutionBillingPricingService
             'supplies_vat' => $suppliesVat['vat'],
             'supplies_total' => $suppliesTotal,
             'additional_charge_lines' => $additionalCharges,
-            'subtotal_before_vat' => round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'], 2),
-            'vat_total' => round($serviceVat['vat'] + $suppliesVat['vat'], 2),
+            'additional_charges_base' => $additionalBase,
+            'additional_charges_vat' => $additionalVat,
+            'subtotal_before_vat' => round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'] + $additionalBase, 2),
+            'vat_total' => round($serviceVat['vat'] + $suppliesVat['vat'] + $additionalVat, 2),
             'total_iva_included' => $totalIncluded,
         ];
     }

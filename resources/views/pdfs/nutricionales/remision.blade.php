@@ -223,10 +223,7 @@
                 <div>
                     <table class="introduccion"
                         style="margin-top: {{ $pagina === 1 ? '1rem' : '0.5rem' }}; margin-bottom: {{ $pagina === 1 ? '1rem' : '0.5rem' }}">
-                        @foreach (($pricingSummary['additional_charge_lines'] ?? collect()) as $charge)
-                        <tr><td style="text-align: center">{{ ++$contador }}</td><td><strong>{{ $charge['description'] }}</strong></td><td></td><td></td><td></td><td>1 {{ $charge['unit_label'] }}</td><td>${{ number_format((float) $charge['total'], 3, '.', '') }}</td><td>${{ number_format((float) $charge['total'], 3, '.', '') }}</td></tr>
-                        @endforeach
-                        @if(false)<tr>
+                        <tr>
                             <td style="width: 25%">
                                 <img style="width: 10rem" src="{{ $logoEncabezado }}" alt="">
                             </td>
@@ -237,7 +234,7 @@
                                 </strong>
                             </td>
                             <td style="width: 25%"></td>
-                        </tr>@endif
+                        </tr>
                     </table>
 
                     <table>
@@ -524,28 +521,23 @@
                             </tr>
                         @endif
 
-                        <tr>
+                        @foreach (($pricingSummary['additional_charge_lines'] ?? collect()) as $charge)
                             @php
                                 $contador++;
-                                $precioServicio = 0;
+                                $precioCargo = (float) ($charge['total'] ?? 0);
+                                $total += $precioCargo;
                             @endphp
-
-                            <td style="text-align: center">{{ $contador }}</td>
-                            <td>
-                                <strong>
-                                    Servicio heredado desactivado
-                                    <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span>
-                                </strong>
-                            </td>
-                            <td style="text-align: center"></td>
-                            <td style="text-align: center"></td>
-                            <td style="text-align: center"></td>
-                            <td>1 serv</td>
-                            <td>${{ number_format($precioServicio, 3, '.', '') }}</td>
-                            <td style="text-align: center">
-                                ${{ number_format($precioServicio, 3, '.', '') }}
-                            </td>
-                        </tr>
+                            <tr>
+                                <td style="text-align: center">{{ $contador }}</td>
+                                <td><strong>{{ $charge['description'] }} <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span></strong></td>
+                                <td style="text-align: center"></td>
+                                <td style="text-align: center"></td>
+                                <td style="text-align: center"></td>
+                                <td>1 {{ $charge['unit_label'] ?? 'pieza' }}</td>
+                                <td>${{ number_format($precioCargo, 3, '.', '') }}</td>
+                                <td style="text-align: center">${{ number_format($precioCargo, 3, '.', '') }}</td>
+                            </tr>
+                        @endforeach
 
                         <tr>
                             <td></td>
@@ -569,8 +561,8 @@
                         </tr>
                         <tr>
                             <td style="text-align: right; border-top: none">
-                                IVA servicio de mezclado (16%)
-                                ${{ number_format((float) ($pricingSummary['service_vat'] ?? 0), 2, '.', ',') }}
+                                IVA cargos adicionales (16%)
+                                ${{ number_format((float) ($pricingSummary['additional_charges_vat'] ?? 0), 2, '.', ',') }}
                             </td>
                         </tr>
                         <tr>
