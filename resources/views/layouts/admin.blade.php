@@ -82,6 +82,9 @@
     <script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
     <script>
         (function() {
+            let stickyHorizontalScrollFrame = null;
+            let livewireStickyHookRegistered = false;
+
             function syncStickyProxy(source, proxy, fromSource) {
                 if (fromSource) {
                     if (Math.abs(proxy.scrollLeft - source.scrollLeft) > 1) {
@@ -97,35 +100,30 @@
 
             function ensureStickyHorizontalScroll(root = document) {
                 const selectors = [
-                    '.admin-content .overflow-x-auto',
-                    '.admin-content .billing-table-scroll',
-                    '.admin-content [data-sticky-x-mode]'
+                    '.admin-content .overflow-x-auto:not([data-disable-sticky-x])',
+                    '.admin-content .billing-table-scroll'
                 ];
 
                 root.querySelectorAll(selectors.join(', ')).forEach((source) => {
                     if (source.dataset.stickyXReady === '1') {
-                        if (typeof source._stickyXRefresh === 'function') {
+                        if (source._stickyXProxy?.isConnected && typeof source._stickyXRefresh === 'function') {
                             source._stickyXRefresh();
+                            return;
                         }
-                        return;
+
+                        delete source.dataset.stickyXReady;
                     }
 
                     const parent = source.parentElement;
                     if (!parent) return;
 
-                    const fixedToViewport = source.dataset.stickyXMode === 'fixed';
-
+                    const isViewportFixed = source.dataset.stickyXPosition === 'viewport';
                     const proxy = document.createElement('div');
-                    proxy.className = `sticky-x-proxy is-hidden${fixedToViewport ? ' is-fixed' : ''}`;
-                    proxy.setAttribute('role', 'region');
-                    proxy.setAttribute('aria-label', 'Desplazamiento horizontal de la tabla');
+                    proxy.className = 'sticky-x-proxy is-hidden';
+                    proxy.classList.toggle('is-viewport-fixed', isViewportFixed);
                     proxy.innerHTML = '<div class="sticky-x-proxy-track"></div>';
 
-                    if (fixedToViewport) {
-                        document.body.appendChild(proxy);
-                    } else {
-                        parent.insertBefore(proxy, source.nextSibling);
-                    }
+                    parent.insertBefore(proxy, source.nextSibling);
 
                     const track = proxy.firstElementChild;
                     source.dataset.stickyXReady = '1';
@@ -138,15 +136,16 @@
                         const needsScroll = source.scrollWidth > source.clientWidth + 2;
                         let shouldShow = needsScroll;
 
-                        if (fixedToViewport) {
-                            const bounds = source.getBoundingClientRect();
-                            const visibleLeft = Math.max(0, bounds.left);
-                            const visibleRight = Math.min(window.innerWidth, bounds.right);
-                            const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+                        if (isViewportFixed) {
+                            const sourceRect = source.getBoundingClientRect();
+                            const left = Math.max(0, sourceRect.left);
+                            const right = Math.min(window.innerWidth, sourceRect.right);
+                            const visibleWidth = Math.max(0, right - left);
+                            const intersectsViewport = sourceRect.top < window.innerHeight && sourceRect.bottom > 0;
 
-                            proxy.style.left = `${visibleLeft}px`;
+                            proxy.style.left = `${left}px`;
                             proxy.style.width = `${visibleWidth}px`;
-                            shouldShow = needsScroll && visibleWidth > 40 && bounds.top < window.innerHeight && bounds.bottom > 0;
+                            shouldShow = needsScroll && intersectsViewport && visibleWidth > 24;
                         }
 
                         proxy.classList.toggle('is-hidden', !shouldShow);
@@ -184,34 +183,40 @@
                     }
 
                     source._stickyXRefresh = refresh;
-
-                    if (fixedToViewport) {
-                        window.addEventListener('scroll', refresh, {
-                            passive: true
-                        });
-                    }
-
+                    source._stickyXProxy = proxy;
                     refresh();
                 });
             }
 
+            function scheduleStickyHorizontalScroll() {
+                window.cancelAnimationFrame(stickyHorizontalScrollFrame);
+                stickyHorizontalScrollFrame = window.requestAnimationFrame(() => {
+                    ensureStickyHorizontalScroll();
+                });
+            }
+
+            function registerLivewireStickyHook() {
+                if (!window.Livewire || livewireStickyHookRegistered || typeof window.Livewire.hook !== 'function') {
+                    return;
+                }
+
+                livewireStickyHookRegistered = true;
+                window.Livewire.hook('message.processed', scheduleStickyHorizontalScroll);
+                window.Livewire.hook('morph.updated', scheduleStickyHorizontalScroll);
+            }
+
             document.addEventListener('DOMContentLoaded', () => {
                 ensureStickyHorizontalScroll();
+                registerLivewireStickyHook();
             });
 
-            window.addEventListener('resize', () => {
-                ensureStickyHorizontalScroll();
-            }, {
-                passive: true
-            });
+            window.addEventListener('resize', scheduleStickyHorizontalScroll, { passive: true });
+            window.addEventListener('scroll', scheduleStickyHorizontalScroll, { passive: true });
 
             document.addEventListener('livewire:init', () => {
-                if (window.Livewire && typeof window.Livewire.hook === 'function') {
-                    window.Livewire.hook('message.processed', () => {
-                        ensureStickyHorizontalScroll();
-                    });
-                }
+                registerLivewireStickyHook();
             });
+            document.addEventListener('livewire:navigated', scheduleStickyHorizontalScroll);
         })();
     </script>
     <font></font>
