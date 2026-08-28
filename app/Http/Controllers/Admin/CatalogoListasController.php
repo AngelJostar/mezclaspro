@@ -477,10 +477,7 @@ class CatalogoListasController extends Controller
                         'last_price' => $latest?->costo_unitario,
                         'last_date' => $latest?->fecha_ingreso,
                         'edit_url' => $presentation->catalog
-                            ? route('admin.oncologicos.medicines.catalog.presentations.edit', [
-                                'catalog' => $presentation->catalog,
-                                'presentation' => $presentation,
-                            ])
+                            ? route('admin.oncologicos.medicines.catalog.edit', $presentation->catalog)
                             : '#',
                     ];
                 });
