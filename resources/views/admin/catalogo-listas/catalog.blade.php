@@ -1,6 +1,7 @@
 @php
     $showCategoryColumn = $category === 'todos';
     $columnOffset = $showCategoryColumn ? 1 : 0;
+    $canEditGenericMedication = auth()->user()?->hasRole('Super Admin');
 @endphp
 
 <x-admin-layout>
@@ -50,7 +51,9 @@
                         <x-filterable-table-header :column="$columnOffset + 5" trigger-class="js-catalog-column-filter" align="center">Fecha</x-filterable-table-header>
                         <x-filterable-table-header :column="$columnOffset + 6" trigger-class="js-catalog-column-filter" align="right">Ultimo precio de compra</x-filterable-table-header>
                         <x-filterable-table-header :column="$columnOffset + 7" trigger-class="js-catalog-column-filter" align="center">Fecha</x-filterable-table-header>
-                        <th class="whitespace-nowrap px-3 py-2 text-center font-bold uppercase">Editar</th>
+                        @if ($canEditGenericMedication)
+                            <th class="whitespace-nowrap px-3 py-2 text-center font-bold uppercase">Editar</th>
+                        @endif
                     </tr>
                 </thead>
 
@@ -94,19 +97,21 @@
                             <td class="px-3 py-2 text-center text-gray-600">
                                 {{ $row->last_date ? \Carbon\Carbon::parse($row->last_date)->format('d/m/Y') : '-' }}
                             </td>
-                            <td class="px-3 py-2 text-center">
-                                @if ($row->edit_url !== '#')
-                                    <x-table-action-link href="{{ $row->edit_url }}" icon="fa-solid fa-pen">
-                                        Editar
-                                    </x-table-action-link>
-                                @else
-                                    <span class="text-gray-400">-</span>
-                                @endif
-                            </td>
+                            @if ($canEditGenericMedication)
+                                <td class="px-3 py-2 text-center">
+                                    @if ($row->edit_url !== '#')
+                                        <x-table-action-link href="{{ $row->edit_url }}" icon="fa-solid fa-pen">
+                                            Editar
+                                        </x-table-action-link>
+                                    @else
+                                        <span class="text-gray-400">-</span>
+                                    @endif
+                                </td>
+                            @endif
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $showCategoryColumn ? 10 : 9 }}" class="px-3 py-8 text-center text-sm text-gray-500">
+                            <td colspan="{{ ($showCategoryColumn ? 9 : 8) + ($canEditGenericMedication ? 1 : 0) }}" class="px-3 py-8 text-center text-sm text-gray-500">
                                 No hay productos registrados para esta categoria.
                             </td>
                         </tr>

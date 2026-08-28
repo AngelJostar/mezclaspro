@@ -116,6 +116,8 @@ class MedicineController extends Controller
 
     public function edit(NutritionMedicineCatalog $medicine)
     {
+        $this->ensureSuperAdminCanEdit();
+
         $medicine->load([
             'presentations' => function ($query) {
                 $query->orderBy('denominacion_comercial');
@@ -131,6 +133,8 @@ class MedicineController extends Controller
 
     public function update(Request $request, NutritionMedicineCatalog $medicine)
     {
+        $this->ensureSuperAdminCanEdit();
+
         $request->validate([
             'denominacion_generica' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
@@ -234,5 +238,10 @@ class MedicineController extends Controller
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    private function ensureSuperAdminCanEdit(): void
+    {
+        abort_unless(auth()->user()?->hasRole('Super Admin'), 403);
     }
 }

@@ -70,6 +70,8 @@ class MedicineCatalogController extends Controller
 
     public function edit(string $id)
     {
+        $this->ensureSuperAdminCanEdit();
+
         $medicamento = MedicinesCatalog::with([
             'diluents:id,denominacion_generica',
             'administrationRoutes:id,name',
@@ -99,6 +101,8 @@ class MedicineCatalogController extends Controller
 
     public function update(Request $request, $id)
     {
+        $this->ensureSuperAdminCanEdit();
+
         $request->validate([
             'denominacion'           => 'required|string|max:255',
             'conc_min'               => 'nullable|numeric|min:0',
@@ -179,5 +183,10 @@ class MedicineCatalogController extends Controller
 
         return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'oncologicos'])
             ->with('success', 'Medicamento deshabilitado correctamente.');
+    }
+
+    private function ensureSuperAdminCanEdit(): void
+    {
+        abort_unless(auth()->user()?->hasRole('Super Admin'), 403);
     }
 }

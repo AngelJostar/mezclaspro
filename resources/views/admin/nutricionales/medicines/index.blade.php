@@ -1,4 +1,5 @@
 <x-admin-layout>
+    @php($canEditGenericMedication = auth()->user()?->hasRole('Super Admin'))
     <div class="mt-2">
         <h1 class="text-2xl font-medium text-gray-800">Catálogo de Medicamentos</h1>
     </div>
@@ -30,7 +31,9 @@
                     <th scope="col" class="px-6 py-3">Categoría</th>
                     <th scope="col" class="px-6 py-3">Osmolaridad</th>
                     <th scope="col" class="px-6 py-3 text-center">Activo</th>
-                    <th scope="col" class="px-6 py-3 text-center">Editar</th>
+                    @if ($canEditGenericMedication)
+                        <th scope="col" class="px-6 py-3 text-center">Editar</th>
+                    @endif
                 </tr>
             </thead>
 
@@ -107,9 +110,11 @@
                             @endif
                         </td>
 
-                        <td class="px-6 py-4 text-center align-top">
-                            <x-catalog-edit-button href="{{ route('admin.nutricionales.medicines.edit', $medicine) }}" />
-                        </td>
+                        @if ($canEditGenericMedication)
+                            <td class="px-6 py-4 text-center align-top">
+                                <x-catalog-edit-button href="{{ route('admin.nutricionales.medicines.edit', $medicine) }}" />
+                            </td>
+                        @endif
                     </tr>
                 @endforeach
             </tbody>
@@ -122,7 +127,9 @@
                 new DataTable('#medicinesTable', {
                     order: [[1, 'asc']],
                     columnDefs: [
-                        { orderable: false, searchable: false, targets: -1 }
+                        @if ($canEditGenericMedication)
+                            { orderable: false, searchable: false, targets: -1 }
+                        @endif
                     ],
                     language: {
                         lengthMenu: "Mostrar _MENU_ registros por página",
