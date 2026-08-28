@@ -67,6 +67,9 @@ Route::prefix('distribucion')
         Route::post('/catalogo-rutas', [DistributionRouteController::class, 'store'])->name('routes.store');
         Route::get('/catalogo-rutas/{distributionRoute}/editar', [DistributionRouteController::class, 'edit'])->name('routes.edit');
         Route::patch('/catalogo-rutas/{distributionRoute}', [DistributionRouteController::class, 'update'])->name('routes.update');
+        Route::delete('/catalogo-rutas/{distributionRoute}', [DistributionRouteController::class, 'destroy'])
+            ->name('routes.destroy')
+            ->middleware(['role:Super Admin']);
         Route::get('/catalogo-rutas/{distributionRoute}/qr', [DistributionRouteController::class, 'qr'])->name('routes.qr');
         Route::get('/catalogo-mensajeros', [DistributionRouteController::class, 'messengers'])->name('messengers.index');
         Route::get('/programacion-entregas', [DistributionDeliveryController::class, 'index'])->name('deliveries.index');

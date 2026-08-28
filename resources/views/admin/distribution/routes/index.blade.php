@@ -135,7 +135,7 @@
         </div>
 
         <div class="mt-3 overflow-x-auto border border-slate-200">
-            <table class="min-w-[1100px] table-fixed text-left text-sm text-slate-600">
+            <table class="min-w-[1180px] table-fixed text-left text-sm text-slate-600">
                 <thead class="border-b border-slate-300 bg-slate-50 text-xs uppercase text-slate-700">
                     <tr>
                         <th data-force-column-filter scope="col" class="w-[8%] px-4 py-3">
@@ -146,7 +146,7 @@
                                     aria-hidden="true">{!! $sortSymbol('id') !!}</span>
                             </a>
                         </th>
-                        <th data-force-column-filter scope="col" class="w-[22%] px-4 py-3">
+                        <th data-force-column-filter scope="col" class="w-[20%] px-4 py-3">
                             <a href="{{ $sortUrl('name') }}" class="inline-flex w-full items-center gap-2 hover:text-blue-700"
                                 title="Ordenar por nombre de la ruta" aria-label="Ordenar por nombre de la ruta">
                                 <span class="min-w-0 flex-1">Nombre de la ruta</span>
@@ -170,7 +170,7 @@
                                     aria-hidden="true">{!! $sortSymbol('code') !!}</span>
                             </a>
                         </th>
-                        <th data-force-column-filter scope="col" class="w-[28%] px-4 py-3">
+                        <th data-force-column-filter scope="col" class="w-[24%] px-4 py-3">
                             <a href="{{ $sortUrl('hospitals') }}" class="inline-flex w-full items-center gap-2 hover:text-blue-700"
                                 title="Ordenar por hospitales en ruta" aria-label="Ordenar por hospitales en ruta">
                                 <span class="min-w-0 flex-1">Hospitales en ruta</span>
@@ -178,7 +178,7 @@
                                     aria-hidden="true">{!! $sortSymbol('hospitals') !!}</span>
                             </a>
                         </th>
-                        <th data-force-column-filter scope="col" class="w-[10%] px-4 py-3">
+                        <th data-force-column-filter scope="col" class="w-[8%] px-4 py-3">
                             <a href="{{ $sortUrl('stops') }}" class="inline-flex w-full items-center gap-2 hover:text-blue-700"
                                 title="Ordenar por n&uacute;mero de paradas" aria-label="Ordenar por n&uacute;mero de paradas">
                                 <span class="min-w-0 flex-1"># Paradas</span>
@@ -187,6 +187,9 @@
                             </a>
                         </th>
                         <th scope="col" class="w-[8%] px-4 py-3 text-center">Editar</th>
+                        @role('Super Admin')
+                            <th scope="col" class="w-[8%] px-4 py-3 text-center">Eliminar</th>
+                        @endrole
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 bg-white">
@@ -278,6 +281,22 @@
                                     <span>Editar</span>
                                 </button>
                             </td>
+                            @role('Super Admin')
+                                <td class="px-4 py-4 text-center">
+                                    <form method="POST" action="{{ route('admin.distribution.routes.destroy', $distributionRoute) }}"
+                                        class="!w-auto" data-delete-route data-route-name="{{ $distributionRoute->name }}">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit"
+                                            class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red-600 bg-white px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-300"
+                                            title="Eliminar {{ $distributionRoute->name }}"
+                                            aria-label="Eliminar {{ $distributionRoute->name }}">
+                                            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                                            <span>Eliminar</span>
+                                        </button>
+                                    </form>
+                                </td>
+                            @endrole
                         </tr>
                     @endforeach
                 </tbody>
@@ -336,6 +355,39 @@
                 const selectedCard = carousel.querySelector('[data-selected-laboratory]');
                 selectedCard?.scrollIntoView({ block: 'nearest', inline: 'center' });
                 requestAnimationFrame(updateNavigation);
+
+                document.querySelectorAll('[data-delete-route]').forEach((form) => {
+                    form.addEventListener('submit', async (event) => {
+                        event.preventDefault();
+
+                        const routeName = form.dataset.routeName || 'esta ruta';
+                        let confirmed = false;
+
+                        if (window.Swal) {
+                            const result = await Swal.fire({
+                                title: 'Eliminar ruta?',
+                                text: `Se eliminara ${routeName}. Esta accion no se puede deshacer.`,
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonText: 'Si, eliminar',
+                                cancelButtonText: 'Cancelar',
+                                reverseButtons: true,
+                                customClass: {
+                                    confirmButton: 'swal-button-confirm',
+                                    cancelButton: 'swal-button-cancel',
+                                },
+                            });
+
+                            confirmed = result.isConfirmed;
+                        } else {
+                            confirmed = window.confirm(`Se eliminara ${routeName}. Esta accion no se puede deshacer.`);
+                        }
+
+                        if (confirmed) {
+                            form.submit();
+                        }
+                    });
+                });
             })();
         </script>
     @endpush
