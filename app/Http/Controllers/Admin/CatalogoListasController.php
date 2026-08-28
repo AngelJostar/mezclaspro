@@ -129,6 +129,25 @@ class CatalogoListasController extends Controller
         return back()->with('swal', ['icon' => 'success', 'title' => 'Cargo agregado', 'text' => 'Se aplicará automáticamente.']);
     }
 
+    public function updateAdditionalCharge(Request $request, string $category, int $list, PriceListAdditionalCharge $charge)
+    {
+        $category = $this->normalizeCategory($category);
+        $this->findPriceList($category, $list);
+        abort_unless($charge->price_list_type === $category && $charge->price_list_id === $list, 404);
+        $data = $request->validate(['name' => ['required','string','max:120'], 'concept_type' => ['required','in:Servicio,Insumo'], 'amount' => ['required','numeric','min:0']]);
+        $charge->update([...$data, 'is_active' => $request->boolean('is_active'), 'iva_included' => true]);
+        return back()->with('swal', ['icon' => 'success', 'title' => 'Cargo actualizado']);
+    }
+
+    public function destroyAdditionalCharge(string $category, int $list, PriceListAdditionalCharge $charge)
+    {
+        $category = $this->normalizeCategory($category);
+        $this->findPriceList($category, $list);
+        abort_unless($charge->price_list_type === $category && $charge->price_list_id === $list, 404);
+        $charge->delete();
+        return back()->with('swal', ['icon' => 'success', 'title' => 'Cargo eliminado']);
+    }
+
     public function createList(string $category)
     {
         $category = $this->normalizeCategory($category);

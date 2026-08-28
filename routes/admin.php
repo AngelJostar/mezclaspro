@@ -189,6 +189,8 @@ Route::prefix('catalogo-listas')
         Route::get('{category}/listas/{list}/editar', [CatalogoListasController::class, 'editList'])->name('lists.edit');
         Route::post('{category}/listas/{list}/cargos', [CatalogoListasController::class, 'storeAdditionalCharge'])
             ->name('lists.additional-charges.store');
+        Route::put('{category}/listas/{list}/cargos/{charge}', [CatalogoListasController::class, 'updateAdditionalCharge'])->name('lists.additional-charges.update');
+        Route::delete('{category}/listas/{list}/cargos/{charge}', [CatalogoListasController::class, 'destroyAdditionalCharge'])->name('lists.additional-charges.destroy');
         Route::get('{category}/listas/{list}', [CatalogoListasController::class, 'showList'])->name('lists.show');
     });
 
