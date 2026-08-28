@@ -485,18 +485,6 @@
 
         <table>
             <tr>
-                <td class="text-right">Subtotal antes de IVA {{ $money($remisionTotals['subtotal_before_vat'] ?? 0) }}</td>
-            </tr>
-            <tr>
-                <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
-            </tr>
-            <tr>
-                <td class="text-right">IVA cargos adicionales (16%) {{ $money($remisionTotals['additional_charges_vat'] ?? 0) }}</td>
-            </tr>
-            <tr>
-                <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>
-            </tr>
-            <tr>
                 <td class="text-right"><strong>Total IVA incluido {{ $money($totalRemision) }}</strong></td>
             </tr>
         </table>
@@ -829,18 +817,6 @@
             </table>
 
             <table>
-                <tr>
-                    <td class="text-right">Subtotal antes de IVA {{ $money($remisionTotals['subtotal_before_vat'] ?? 0) }}</td>
-                </tr>
-                <tr>
-                    <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
-                </tr>
-                <tr>
-                    <td class="text-right">IVA cargos adicionales (16%) {{ $money($remisionTotals['additional_charges_vat'] ?? 0) }}</td>
-                </tr>
-                <tr>
-                    <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>
-                </tr>
                 <tr>
                     <td class="text-right"><strong>Total IVA incluido {{ $money($totalRemision) }}</strong></td>
                 </tr>

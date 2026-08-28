@@ -555,24 +555,6 @@
                     <table>
                         <tr>
                             <td style="text-align: right; border-top: none">
-                                Subtotal antes de IVA
-                                ${{ number_format((float) ($pricingSummary['subtotal_before_vat'] ?? 0), 2, '.', ',') }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; border-top: none">
-                                IVA cargos adicionales (16%)
-                                ${{ number_format((float) ($pricingSummary['additional_charges_vat'] ?? 0), 2, '.', ',') }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; border-top: none">
-                                IVA insumos gravados (16%)
-                                ${{ number_format((float) ($pricingSummary['supplies_vat'] ?? 0), 2, '.', ',') }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; border-top: none">
                                 <strong>
                                     Total IVA incluido
                                     ${{ number_format((float) ($pricingSummary['total_iva_included'] ?? $total), 2, '.', ',') }}
