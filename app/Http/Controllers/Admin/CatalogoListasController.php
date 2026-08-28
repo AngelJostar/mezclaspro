@@ -141,6 +141,19 @@ class CatalogoListasController extends Controller
         ], $this->editorLocationData()));
     }
 
+    private function syncInitialAdditionalCharges(Request $request, string $category, int $listId): void
+    {
+        foreach ((array) $request->input("additional_charges.{$category}", []) as $charge) {
+            $name = trim((string) ($charge['name'] ?? ''));
+            if ($name === '') continue;
+            PriceListAdditionalCharge::create([
+                'price_list_type' => $category, 'price_list_id' => $listId, 'name' => $name,
+                'concept_type' => $charge['concept_type'] ?? 'Servicio', 'amount' => $charge['amount'] ?? 0,
+                'iva_included' => true, 'is_active' => true,
+            ]);
+        }
+    }
+
     public function storeUnifiedList(
         Request $request,
         PriceListDocumentConfigurationService $documentConfiguration,
@@ -172,6 +185,9 @@ class CatalogoListasController extends Controller
             'category_items.*.*.charge_by' => ['nullable', 'in:frasco,mg'],
             'category_items.*.*.vat_breakdown' => ['nullable', 'boolean'],
             'category_items.*.*.remission_description' => ['nullable', 'string', 'max:500'],
+            'additional_charges' => ['nullable', 'array'],
+            'additional_charges.*.*.name' => ['nullable', 'string', 'max:120'],
+            'additional_charges.*.*.amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $selectedItems = $this->selectedUnifiedItems($request);
@@ -201,6 +217,7 @@ class CatalogoListasController extends Controller
                         $warehouseAttributes
                     );
                     $documentConfiguration->syncSubdistributor($list, $request, 'subdistributors/logos');
+                    $this->syncInitialAdditionalCharges($request, $category, $list->id);
                     $created->push($category);
                 }
 
@@ -213,6 +230,7 @@ class CatalogoListasController extends Controller
                         $warehouseAttributes
                     );
                     $documentConfiguration->syncSubdistributor($list, $request, 'subdistributors/logos');
+                    $this->syncInitialAdditionalCharges($request, 'nutricionales', $list->id);
                     $created->push('nutricionales');
                 }
 
