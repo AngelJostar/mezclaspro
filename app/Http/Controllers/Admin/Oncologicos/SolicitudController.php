@@ -84,6 +84,43 @@ class SolicitudController extends Controller
         return $listaId ? (int) $listaId : null;
     }
 
+    private function fallbackBatchForList(object $currentBatch, int $unidades, int $laboratoryId, int $listaId, int $catalogId): ?object
+    {
+        $list = DB::table('medicine_lists')
+            ->where('id', $listaId)
+            ->first(['warehouse_id', 'backup_enabled', 'backup_warehouse_id']);
+        $backupWarehouseId = (int) ($list?->backup_warehouse_id ?? 0);
+
+        if (! $list || ! $list->backup_enabled || $backupWarehouseId <= 0
+            || (int) ($currentBatch->warehouse_id ?? 0) !== (int) ($list->warehouse_id ?? 0)) {
+            return null;
+        }
+
+        return DB::table('medicine_batches as mb')
+            ->join('medicine_presentations as mp', 'mp.id', '=', 'mb.medicine_presentation_id')
+            ->join('medicine_list_presentation as mlp', function ($join) use ($listaId) {
+                $join->on('mlp.medicine_presentation_id', '=', 'mp.id')->where('mlp.medicine_list_id', $listaId);
+            })
+            ->where('mb.laboratory_id', $laboratoryId)
+            ->where('mb.warehouse_id', $backupWarehouseId)
+            ->where('mb.medicine_presentation_id', $currentBatch->medicine_presentation_id)
+            ->where('mp.catalog_id', $catalogId)
+            ->where('mp.is_available', 1)
+            ->where('mb.stock_actual', '>=', $unidades)
+            ->where(function ($query) {
+                $query->whereNull('mb.caducidad')->orWhereDate('mb.caducidad', '>=', now()->toDateString());
+            })
+            ->orderByRaw('mb.caducidad IS NULL')
+            ->orderBy('mb.caducidad')
+            ->orderBy('mb.id')
+            ->lockForUpdate()
+            ->select('mb.id', 'mb.warehouse_id', 'mb.lote', 'mb.caducidad', 'mb.stock_actual', 'mb.stock_reservado',
+                'mb.medicine_presentation_id', 'mp.id as presentation_id', 'mp.catalog_id', 'mp.presentacion',
+                'mp.cantidad_medicamento', 'mp.volumen_diluyente', 'mp.legend', 'mp.marca', 'mp.precio_frasco',
+                'mlp.precio as precio_lista')
+            ->first();
+    }
+
     private function consumeBatchForMix(
         int $batchId,
         int $unidades,
@@ -145,7 +182,12 @@ class SolicitudController extends Controller
         $stockActual = (int) ($batch->stock_actual ?? 0);
 
         if ($stockActual < $unidades) {
-            throw new \Exception("Stock insuficiente para el lote {$batch->lote}. Disponible: {$stockActual}, solicitado: {$unidades}.");
+            $fallbackBatch = $this->fallbackBatchForList($batch, $unidades, $laboratoryId, $listaId, $catalogId);
+            if (! $fallbackBatch) {
+                throw new \Exception("Stock insuficiente para el lote {$batch->lote}. Disponible: {$stockActual}, solicitado: {$unidades}.");
+            }
+            $batch = $fallbackBatch;
+            $stockActual = (int) $batch->stock_actual;
         }
 
         $nuevoStock = $stockActual - $unidades;
