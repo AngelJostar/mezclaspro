@@ -52,7 +52,7 @@ class InstitutionBillingPricingService
             $serviceTotal = round($storedTotal - $minimumBaseTotal, 2);
             $totalIncluded = round($storedTotal + $medicationVat, 2);
         } else {
-            $serviceTotal = $additionalCharges->isEmpty() ? $this->mixingServicePrice() : 0.0;
+            $serviceTotal = 0.0;
             $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $serviceTotal + $additionalTotal, 2);
         }
 
@@ -119,7 +119,7 @@ class InstitutionBillingPricingService
             $remissionDescription = trim((string) ($listConfig?->descripcion_remision ?? ''));
 
             if ($this->isNutritionService($description)) {
-                if ($additionalCharges->isNotEmpty()) continue;
+                continue;
                 $serviceFromInputs += $unitPrice;
                 continue;
             }
@@ -159,7 +159,7 @@ class InstitutionBillingPricingService
             $serviceTotal = round($storedTotal - $minimumTotal, 2);
             $totalIncluded = round($storedTotal, 2);
         } else {
-            $serviceTotal = $additionalCharges->isEmpty() ? round($serviceFromInputs > 0 ? $serviceFromInputs : $this->mixingServicePrice(), 2) : 0.0;
+            $serviceTotal = 0.0;
             $totalIncluded = round($minimumTotal + $serviceTotal + (float) $additionalCharges->sum('total'), 2);
         }
 

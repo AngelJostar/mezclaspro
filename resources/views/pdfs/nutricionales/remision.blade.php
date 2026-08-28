@@ -223,7 +223,10 @@
                 <div>
                     <table class="introduccion"
                         style="margin-top: {{ $pagina === 1 ? '1rem' : '0.5rem' }}; margin-bottom: {{ $pagina === 1 ? '1rem' : '0.5rem' }}">
-                        <tr>
+                        @foreach (($pricingSummary['additional_charge_lines'] ?? collect()) as $charge)
+                        <tr><td style="text-align: center">{{ ++$contador }}</td><td><strong>{{ $charge['description'] }}</strong></td><td></td><td></td><td></td><td>1 {{ $charge['unit_label'] }}</td><td>${{ number_format((float) $charge['total'], 3, '.', '') }}</td><td>${{ number_format((float) $charge['total'], 3, '.', '') }}</td></tr>
+                        @endforeach
+                        @if(false)<tr>
                             <td style="width: 25%">
                                 <img style="width: 10rem" src="{{ $logoEncabezado }}" alt="">
                             </td>
@@ -234,7 +237,7 @@
                                 </strong>
                             </td>
                             <td style="width: 25%"></td>
-                        </tr>
+                        </tr>@endif
                     </table>
 
                     <table>
@@ -524,14 +527,13 @@
                         <tr>
                             @php
                                 $contador++;
-                                $precioServicio = (float) ($servicio_preparacion->precio_ml ?? 0);
-                                $total += $precioServicio;
+                                $precioServicio = 0;
                             @endphp
 
                             <td style="text-align: center">{{ $contador }}</td>
                             <td>
                                 <strong>
-                                    {{ $servicio_preparacion->denominacion_generica ?? 'Servicio de preparación' }}
+                                    Servicio heredado desactivado
                                     <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span>
                                 </strong>
                             </td>

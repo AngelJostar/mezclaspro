@@ -2264,7 +2264,6 @@ class SolicitudController extends Controller
             ])
             ->first();
 
-        $servicio_preparacion = Medicine::where('id', 38)->first();
         $pricingSummary = $pricing->priceNutritionRequest($solicitud_detalles);
         $almacenesPorSolicitudInput = $this->almacenesPorSolicitudInput(
             $solicitud_detalles,
@@ -2278,7 +2277,6 @@ class SolicitudController extends Controller
             'inputs_solicitud',
             'bolsa_eva',
             'set_infusion',
-            'servicio_preparacion',
             'imprimirMarcas',
             'distributor',
             'priceList',
