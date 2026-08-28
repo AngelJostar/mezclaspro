@@ -90,7 +90,7 @@ class MezclaController extends Controller
             ->orderBy('mb.caducidad')
             ->orderBy('mb.id')
             ->lockForUpdate()
-            ->select('mb.id', 'mb.warehouse_id', 'mb.lote', 'mb.caducidad', 'mb.stock_actual', 'mb.stock_reservado',
+            ->select('mb.id', 'mb.warehouse_id', 'mb.lote', 'mb.caducidad', 'mb.stock_actual', 'mb.stock_ml_actual', 'mb.stock_reservado',
                 'mb.medicine_presentation_id', 'mp.id as presentation_id', 'mp.catalog_id', 'mp.presentacion',
                 'mp.cantidad_medicamento', 'mp.volumen_diluyente', 'mp.legend', 'mp.marca', 'mp.precio_frasco',
                 'mlp.precio as precio_lista')
@@ -317,6 +317,7 @@ class MezclaController extends Controller
                 'mb.lote',
                 'mb.caducidad',
                 'mb.stock_actual',
+                'mb.stock_ml_actual',
                 'mb.stock_reservado',
                 'mb.medicine_presentation_id',
 
@@ -349,11 +350,16 @@ class MezclaController extends Controller
         }
 
         $nuevoStock = $stockActual - $unidades;
+        $mlPorFrasco = (float) ($batch->volumen_diluyente ?? 0);
+        $stockMlAntes = (float) ($batch->stock_ml_actual ?? ($stockActual * $mlPorFrasco));
+        $cantidadMl = round($unidades * $mlPorFrasco, 2);
+        $stockMlDespues = max(0, round($stockMlAntes - $cantidadMl, 2));
 
         DB::table('medicine_batches')
             ->where('id', $batch->id)
             ->update([
                 'stock_actual' => $nuevoStock,
+                'stock_ml_actual' => $stockMlDespues,
                 'is_active'    => $nuevoStock > 0 ? 1 : 0,
                 'updated_at'   => now(),
             ]);
@@ -365,8 +371,11 @@ class MezclaController extends Controller
             'user_id'                => $userId,
             'movement_type'          => 'salida',
             'quantity'               => $unidades,
+            'quantity_ml'            => $cantidadMl,
             'stock_actual_before'    => $stockActual,
             'stock_actual_after'     => $nuevoStock,
+            'stock_ml_before'        => $stockMlAntes,
+            'stock_ml_after'         => $stockMlDespues,
             'stock_reservado_before' => (int) ($batch->stock_reservado ?? 0),
             'stock_reservado_after'  => (int) ($batch->stock_reservado ?? 0),
             'reference_type'         => 'mezcla',
