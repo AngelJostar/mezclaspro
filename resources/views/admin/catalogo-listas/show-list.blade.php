@@ -42,6 +42,30 @@
             </div>
         </dl>
 
+        <div class="mt-5 rounded-lg border border-cyan-200 bg-cyan-50 p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div><h3 class="font-bold text-gray-900">Cargos adicionales</h3><p class="text-xs text-gray-600">Se aplican automáticamente por {{ $category === 'nutricionales' ? 'solicitud' : 'mezcla' }}.</p></div>
+                <button type="button" onclick="document.getElementById('additionalChargeModal').showModal()" class="rounded-md bg-cyan-700 px-3 py-2 text-sm font-bold text-white">Agregar cargo</button>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+                @forelse ($additionalCharges as $charge)
+                    <span class="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">{{ $charge->name }} · ${{ number_format((float) $charge->amount, 2) }} · {{ $charge->is_active ? 'Activo' : 'Inactivo' }}</span>
+                @empty <span class="text-sm text-gray-500">No hay cargos configurados.</span>
+                @endforelse
+            </div>
+        </div>
+
+        <dialog id="additionalChargeModal" class="w-full max-w-md rounded-xl p-0 backdrop:bg-slate-900/40">
+            <form method="POST" action="{{ route('admin.catalogo-listas.lists.additional-charges.store', ['category' => $category, 'list' => $list->id]) }}" class="p-5">@csrf
+                <h3 class="text-lg font-bold">Nuevo cargo adicional</h3>
+                <label class="mt-4 block text-sm font-semibold">Nombre<input name="name" required class="mt-1 w-full rounded border-gray-300"></label>
+                <label class="mt-3 block text-sm font-semibold">Tipo<select name="concept_type" class="mt-1 w-full rounded border-gray-300"><option>Servicio</option><option>Insumo</option></select></label>
+                <label class="mt-3 block text-sm font-semibold">Precio con IVA<input name="amount" type="number" min="0" step="0.01" required class="mt-1 w-full rounded border-gray-300"></label>
+                <input type="hidden" name="iva_included" value="1"><input type="hidden" name="is_active" value="1">
+                <div class="mt-5 flex justify-end gap-2"><button type="button" onclick="this.closest('dialog').close()" class="rounded border px-3 py-2">Cancelar</button><button class="rounded bg-cyan-700 px-3 py-2 font-bold text-white">Guardar</button></div>
+            </form>
+        </dialog>
+
         <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
             <table class="min-w-full divide-y divide-gray-200 text-xs">
                 <thead class="bg-gray-50 text-gray-700">

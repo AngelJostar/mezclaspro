@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
+use App\Models\PriceListAdditionalCharge;
 use App\Models\Nutricionales\NutriMedicineList;
 use App\Models\Nutricionales\NutriMedicineListItem;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
@@ -89,13 +90,43 @@ class CatalogoListasController extends Controller
     {
         $category = $this->normalizeCategory($category);
 
+        $priceList = $this->findPriceList($category, $list);
+
         return view('admin.catalogo-listas.show-list', [
             'category' => $category,
             'mode' => 'listas',
             'categories' => self::CATEGORIES,
-            'list' => $this->findPriceList($category, $list),
+            'list' => $priceList,
             'items' => $this->priceListItems($category, $list),
+            'additionalCharges' => PriceListAdditionalCharge::query()
+                ->where('price_list_type', $category)
+                ->where('price_list_id', $priceList->id)
+                ->orderBy('name')
+                ->get(),
         ]);
+    }
+
+    public function storeAdditionalCharge(Request $request, string $category, int $list)
+    {
+        $category = $this->normalizeCategory($category);
+        $priceList = $this->findPriceList($category, $list);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'concept_type' => ['required', 'in:Servicio,Insumo'],
+            'amount' => ['required', 'numeric', 'min:0'],
+            'iva_included' => ['nullable', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        PriceListAdditionalCharge::create([
+            ...$data,
+            'price_list_type' => $category,
+            'price_list_id' => $priceList->id,
+            'iva_included' => $request->boolean('iva_included', true),
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+
+        return back()->with('swal', ['icon' => 'success', 'title' => 'Cargo agregado', 'text' => 'Se aplicará automáticamente.']);
     }
 
     public function createList(string $category)

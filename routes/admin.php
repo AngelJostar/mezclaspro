@@ -187,6 +187,8 @@ Route::prefix('catalogo-listas')
         Route::post('listas/unificadas', [CatalogoListasController::class, 'storeUnifiedList'])->name('lists.store-unified');
         Route::get('{category}/listas/respaldo/nueva', [CatalogoListasController::class, 'createBackupList'])->name('backup-lists.create');
         Route::get('{category}/listas/{list}/editar', [CatalogoListasController::class, 'editList'])->name('lists.edit');
+        Route::post('{category}/listas/{list}/cargos', [CatalogoListasController::class, 'storeAdditionalCharge'])
+            ->name('lists.additional-charges.store');
         Route::get('{category}/listas/{list}', [CatalogoListasController::class, 'showList'])->name('lists.show');
     });
 

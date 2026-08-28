@@ -6,6 +6,7 @@ use App\Models\Nutricionales\Medicine as NutricionalMedicine;
 use App\Models\Nutricionales\Solicitud as NutricionalSolicitud;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MedicinePresentation;
+use App\Models\PriceListAdditionalCharge;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -45,12 +46,14 @@ class InstitutionBillingPricingService
         $storedTotal = $this->parseMoney($mezcla->billing?->precio_total);
         $minimumBaseTotal = round($medicationTotal + $suppliesTotal, 2);
 
+        $additionalCharges = $this->additionalCharges($isAntibiotic ? 'antibioticos' : 'oncologicos', $medicineListId);
+        $additionalTotal = (float) $additionalCharges->sum('total');
         if ($storedTotal >= $minimumBaseTotal && $storedTotal > 0) {
             $serviceTotal = round($storedTotal - $minimumBaseTotal, 2);
             $totalIncluded = round($storedTotal + $medicationVat, 2);
         } else {
-            $serviceTotal = $this->mixingServicePrice();
-            $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $serviceTotal, 2);
+            $serviceTotal = $additionalCharges->isEmpty() ? $this->mixingServicePrice() : 0.0;
+            $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $serviceTotal + $additionalTotal, 2);
         }
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
@@ -86,6 +89,7 @@ class InstitutionBillingPricingService
             'supplies_base' => $suppliesVat['base'],
             'supplies_vat' => $suppliesVat['vat'],
             'supplies_total' => $suppliesTotal,
+            'additional_charge_lines' => $additionalCharges,
             'subtotal_before_vat' => $subtotalBeforeVat,
             'vat_total' => round($medicationVat + $serviceVat['vat'] + $suppliesVat['vat'], 2),
             'total_iva_included' => $totalIncluded,
@@ -106,6 +110,7 @@ class InstitutionBillingPricingService
         $medicationLines = collect();
         $supplyLines = collect();
         $serviceFromInputs = 0.0;
+        $additionalCharges = $this->additionalCharges('nutricionales', $medicineListId);
 
         foreach ($solicitud->input ?? collect() as $item) {
             $description = trim((string) ($item->input?->description ?? ''));
@@ -114,11 +119,13 @@ class InstitutionBillingPricingService
             $remissionDescription = trim((string) ($listConfig?->descripcion_remision ?? ''));
 
             if ($this->isNutritionService($description)) {
+                if ($additionalCharges->isNotEmpty()) continue;
                 $serviceFromInputs += $unitPrice;
                 continue;
             }
 
             if ($this->isNutritionTaxableSupply($description)) {
+                if ($additionalCharges->isNotEmpty() && stripos($description, 'bolsa eva') !== false) continue;
                 $supplyLines->push([
                     'description' => $this->nutritionSupplyDescription($description),
                     'quantity' => 1.0,
@@ -152,8 +159,8 @@ class InstitutionBillingPricingService
             $serviceTotal = round($storedTotal - $minimumTotal, 2);
             $totalIncluded = round($storedTotal, 2);
         } else {
-            $serviceTotal = round($serviceFromInputs > 0 ? $serviceFromInputs : $this->mixingServicePrice(), 2);
-            $totalIncluded = round($minimumTotal + $serviceTotal, 2);
+            $serviceTotal = $additionalCharges->isEmpty() ? round($serviceFromInputs > 0 ? $serviceFromInputs : $this->mixingServicePrice(), 2) : 0.0;
+            $totalIncluded = round($minimumTotal + $serviceTotal + (float) $additionalCharges->sum('total'), 2);
         }
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
@@ -174,6 +181,7 @@ class InstitutionBillingPricingService
             'supplies_base' => $suppliesVat['base'],
             'supplies_vat' => $suppliesVat['vat'],
             'supplies_total' => $suppliesTotal,
+            'additional_charge_lines' => $additionalCharges,
             'subtotal_before_vat' => round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'], 2),
             'vat_total' => round($serviceVat['vat'] + $suppliesVat['vat'], 2),
             'total_iva_included' => $totalIncluded,
@@ -515,6 +523,22 @@ class InstitutionBillingPricingService
         }
 
         return $description ?: 'Insumo';
+    }
+
+    private function additionalCharges(string $type, int $listId): Collection
+    {
+        if ($listId <= 0) return collect();
+
+        return PriceListAdditionalCharge::query()
+            ->where('price_list_type', $type)->where('price_list_id', $listId)->where('is_active', true)
+            ->orderBy('name')->get()
+            ->map(function ($charge) {
+                $total = round((float) $charge->amount, 2);
+                $vat = $charge->iva_included ? $this->splitIncludedVat($total) : ['base' => $total, 'vat' => 0.0, 'total' => $total];
+                return ['concept_type' => $charge->concept_type, 'description' => $charge->name, 'quantity' => 1.0,
+                    'unit_label' => $charge->concept_type === 'Servicio' ? 'servicio' : 'pieza',
+                    'unit_price_before_vat' => $vat['base'], 'subtotal_before_vat' => $vat['base'], 'vat' => $vat['vat'], 'total' => $total];
+            });
     }
 
     private function mixingServicePrice(): float

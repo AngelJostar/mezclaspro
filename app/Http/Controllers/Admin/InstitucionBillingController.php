@@ -797,6 +797,15 @@ class InstitucionBillingController extends Controller
             ];
         }
 
+        foreach ($pricing['additional_charge_lines'] ?? collect() as $charge) {
+            $lines[] = [
+                'concept_type' => $charge['concept_type'], 'description' => $charge['description'],
+                'quantity' => $charge['quantity'], 'unit_label' => $charge['unit_label'],
+                'unit_price_before_vat' => $charge['unit_price_before_vat'], 'subtotal_before_vat' => $charge['subtotal_before_vat'],
+                'vat' => $charge['vat'], 'total_with_vat' => $charge['total'],
+            ];
+        }
+
         if ((float) ($pricing['service_total'] ?? 0) > 0) {
             $lines[] = [
                 'concept_type' => 'Servicio',
