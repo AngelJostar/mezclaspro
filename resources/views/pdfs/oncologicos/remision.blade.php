@@ -451,6 +451,20 @@
                         <td class="border-1 border-r-0 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
                     </tr>
                 @endif
+                @foreach (($mezcla->additional_charge_lines ?? collect()) as $charge)
+                    <tr>
+                        <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                        <td class="border-1 px-1 text-center">{{ $charge['description'] }} (IVA incluido)</td>
+                        <td class="border-1 px-1 text-center">â€”</td>
+                        <td class="border-1 px-1 text-center">â€”</td>
+                        <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
+                        <td class="border-1 px-1 text-center">â€”</td>
+                        <td class="border-1 px-1 text-center">{{ $charge['unit_label'] ?? 'Servicio' }}</td>
+                        <td class="border-1 px-1 text-center">1</td>
+                        <td class="border-1 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                        <td class="border-1 border-r-0 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                    </tr>
+                @endforeach
             @endforeach
 
             @if ((float) ($totalServicioMezclado ?? 0) > 0)
@@ -477,7 +491,7 @@
                 <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
             </tr>
             <tr>
-                <td class="text-right">IVA servicio de mezclado (16%) {{ $money($remisionTotals['service_vat'] ?? 0) }}</td>
+                <td class="text-right">IVA cargos adicionales (16%) {{ $money($remisionTotals['additional_charges_vat'] ?? 0) }}</td>
             </tr>
             <tr>
                 <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>
@@ -782,6 +796,20 @@
                             <td class="border-1 border-r-0 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
                         </tr>
                     @endif
+                    @foreach (($mezcla->additional_charge_lines ?? collect()) as $charge)
+                        <tr>
+                            <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                            <td class="border-1 px-1 text-center">{{ $charge['description'] }} (IVA incluido)</td>
+                            <td class="border-1 px-1 text-center">â€”</td>
+                            <td class="border-1 px-1 text-center">â€”</td>
+                            <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
+                            <td class="border-1 px-1 text-center">â€”</td>
+                            <td class="border-1 px-1 text-center">{{ $charge['unit_label'] ?? 'Servicio' }}</td>
+                            <td class="border-1 px-1 text-center">1</td>
+                            <td class="border-1 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                            <td class="border-1 border-r-0 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                        </tr>
+                    @endforeach
                 @endforeach
 
                 @if ((float) ($totalServicioMezclado ?? 0) > 0)
@@ -808,7 +836,7 @@
                     <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
                 </tr>
                 <tr>
-                    <td class="text-right">IVA servicio de mezclado (16%) {{ $money($remisionTotals['service_vat'] ?? 0) }}</td>
+                    <td class="text-right">IVA cargos adicionales (16%) {{ $money($remisionTotals['additional_charges_vat'] ?? 0) }}</td>
                 </tr>
                 <tr>
                     <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>

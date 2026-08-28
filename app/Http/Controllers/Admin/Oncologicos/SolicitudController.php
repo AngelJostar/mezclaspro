@@ -1674,16 +1674,7 @@ class SolicitudController extends Controller
                 $mezcla->setAttribute('infusor_subtotal', 0);
             }
 
-            $billingTotal = $parseMoney(optional($mezcla->billing)->precio_total);
-            $servicioMezclado = $this->resolveOncoMixingServiceAmount($lista, $billingTotal, $totalMezclaSinServicio);
-
-            $mezcla->setAttribute('servicio_mezclado_subtotal', $servicioMezclado);
-
-            if ($servicioMezclado > 0) {
-                $cantidadServiciosMezclado++;
-                $totalServicioMezclado += $servicioMezclado;
-                $totalRemision += $servicioMezclado;
-            }
+            $mezcla->setAttribute('servicio_mezclado_subtotal', 0);
         }
 
         if ($cantidadServiciosMezclado === 0) {
@@ -1695,11 +1686,15 @@ class SolicitudController extends Controller
             : 0.0;
         $pricingSummaries = $solicitud_onco->mezclas
             ->map(fn ($mezcla) => $pricing->priceOncoMix($mezcla));
+        $solicitud_onco->mezclas->values()->each(function ($mezcla, $index) use ($pricingSummaries): void {
+            $mezcla->setAttribute('additional_charge_lines', $pricingSummaries->get($index)['additional_charge_lines'] ?? collect());
+        });
         $remisionTotals = [
             'subtotal_before_vat' => round((float) $pricingSummaries->sum('subtotal_before_vat'), 2),
             'medication_vat' => round((float) $pricingSummaries->sum('medication_vat'), 2),
             'service_vat' => round((float) $pricingSummaries->sum('service_vat'), 2),
             'supplies_vat' => round((float) $pricingSummaries->sum('supplies_vat'), 2),
+            'additional_charges_vat' => round((float) $pricingSummaries->sum('additional_charges_vat'), 2),
             'vat_total' => round((float) $pricingSummaries->sum('vat_total'), 2),
             'total_iva_included' => round((float) $pricingSummaries->sum('total_iva_included'), 2),
         ];
