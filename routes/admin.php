@@ -91,6 +91,41 @@ Route::resource('/users', UserController::class)
     ->except(['show'])
     ->middleware(['can:usuarios']);
 
+Route::patch('/users/{user}/deactivate', [UserController::class, 'deactivate'])
+    ->name('users.deactivate')
+    ->middleware(['can:usuarios']);
+
+Route::prefix('distribucion')
+    ->name('distribution.')
+    ->middleware(['can:menu.distribucion'])
+    ->group(function () {
+        Route::get('/catalogo-rutas', [DistributionRouteController::class, 'index'])->name('routes.index');
+        Route::get('/catalogo-rutas/crear', [DistributionRouteController::class, 'create'])->name('routes.create');
+        Route::post('/catalogo-rutas', [DistributionRouteController::class, 'store'])->name('routes.store');
+        Route::get('/catalogo-rutas/{distributionRoute}/editar', [DistributionRouteController::class, 'edit'])->name('routes.edit');
+        Route::patch('/catalogo-rutas/{distributionRoute}', [DistributionRouteController::class, 'update'])->name('routes.update');
+        Route::delete('/catalogo-rutas/{distributionRoute}', [DistributionRouteController::class, 'destroy'])
+            ->name('routes.destroy')
+            ->middleware(['role:Super Admin']);
+        Route::get('/catalogo-rutas/{distributionRoute}/qr', [DistributionRouteController::class, 'qr'])->name('routes.qr');
+        Route::get('/catalogo-mensajeros', [DistributionRouteController::class, 'messengers'])->name('messengers.index');
+        Route::get('/programacion-entregas', [DistributionDeliveryController::class, 'index'])->name('deliveries.index');
+        Route::post('/programacion-entregas', [DistributionDeliveryController::class, 'store'])->name('deliveries.store');
+        Route::patch('/programacion-entregas/mandar-a-ruta', [DistributionDeliveryController::class, 'send'])->name('deliveries.send');
+        Route::redirect('/rutas', '/admin/distribucion/catalogo-rutas')->name('routes.legacy');
+    });
+
+Route::prefix('superadministrador')
+    ->name('superadministrator.')
+    ->middleware(['role:Super Admin'])
+    ->group(function () {
+        Route::get('/', [SuperAdministratorController::class, 'index'])->name('index');
+        Route::patch('/administradores/{administrator}/destituir', [SuperAdministratorController::class, 'dismiss'])
+            ->name('administrators.dismiss');
+        Route::patch('/personal/{personnel}/nombrar', [SuperAdministratorController::class, 'appoint'])
+            ->name('personnel.appoint');
+    });
+
 Route::resource('/roles', RoleController::class)
     ->except('show')
     ->middleware(['can:roles']);

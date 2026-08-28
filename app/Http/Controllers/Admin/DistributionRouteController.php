@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -290,6 +291,29 @@ class DistributionRouteController extends Controller
                 'title' => 'Ruta actualizada',
                 'text' => 'La información de la ruta se guardó correctamente.',
             ]);
+    }
+
+    public function destroy(DistributionRoute $distributionRoute): RedirectResponse
+    {
+        $routeName = $distributionRoute->name;
+
+        DB::transaction(function () use ($distributionRoute): void {
+            if (Schema::hasTable('distribution_delivery_schedules')) {
+                DB::table('distribution_delivery_schedules')
+                    ->where('distribution_route_id', $distributionRoute->id)
+                    ->update(['distribution_route_id' => null]);
+            }
+
+            $distributionRoute->hospitals()->detach();
+            $distributionRoute->messengers()->detach();
+            $distributionRoute->delete();
+        });
+
+        return back()->with('swal', [
+            'icon' => 'success',
+            'title' => 'Ruta eliminada',
+            'text' => "La ruta {$routeName} se elimino correctamente.",
+        ]);
     }
 
     private function nextRouteCode(): string
