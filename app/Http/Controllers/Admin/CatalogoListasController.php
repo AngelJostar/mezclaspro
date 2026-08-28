@@ -322,6 +322,8 @@ class CatalogoListasController extends Controller
             'formMethod' => 'PUT',
             'list' => $priceList,
             'pricesByPresentation' => $this->editorPricesByPresentation($category, $priceList),
+            'additionalCharges' => PriceListAdditionalCharge::query()->where('price_list_type', $category)
+                ->where('price_list_id', $priceList->id)->orderBy('name')->get(),
         ], $locationData));
     }
 

@@ -96,6 +96,14 @@
             </div>
         @endif
 
+        @if ($list)
+            <section class="mt-5 rounded-lg border border-cyan-200 bg-cyan-50 p-4">
+                <div class="flex items-center justify-between gap-3"><div><h2 class="font-bold text-gray-900">Cargos adicionales</h2><p class="text-xs text-gray-600">Aplicación automática por {{ $category === 'nutricionales' ? 'solicitud' : 'mezcla' }}.</p></div><button type="button" onclick="document.getElementById('additionalChargeModal').showModal()" class="rounded bg-cyan-700 px-3 py-2 text-sm font-bold text-white">Agregar cargo</button></div>
+                <div class="mt-3 flex flex-wrap gap-2">@forelse($additionalCharges as $charge)<span class="rounded-full bg-white px-3 py-1 text-sm">{{ $charge->name }} · ${{ number_format((float) $charge->amount, 2) }}</span>@empty<span class="text-sm text-gray-500">Sin cargos configurados.</span>@endforelse</div>
+            </section>
+            <dialog id="additionalChargeModal" class="w-full max-w-md rounded-xl p-0 backdrop:bg-slate-900/40"><form method="POST" action="{{ route('admin.catalogo-listas.lists.additional-charges.store', ['category' => $category, 'list' => $list->id]) }}" class="p-5">@csrf<h2 class="text-lg font-bold">Nuevo cargo</h2><input name="name" required placeholder="Nombre" class="mt-3 w-full rounded border-gray-300"><select name="concept_type" class="mt-3 w-full rounded border-gray-300"><option>Servicio</option><option>Insumo</option></select><input name="amount" type="number" step="0.01" min="0" required placeholder="Precio con IVA" class="mt-3 w-full rounded border-gray-300"><input type="hidden" name="iva_included" value="1"><input type="hidden" name="is_active" value="1"><div class="mt-4 flex justify-end gap-2"><button type="button" onclick="this.closest('dialog').close()" class="rounded border px-3 py-2">Cancelar</button><button class="rounded bg-cyan-700 px-3 py-2 font-bold text-white">Guardar</button></div></form></dialog>
+        @endif
+
         @if (!$formAction)
             <div class="mt-5 rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
                 Esta categoria aun no tiene catalogo de productos configurado.

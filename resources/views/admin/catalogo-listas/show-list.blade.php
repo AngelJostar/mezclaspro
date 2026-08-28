@@ -45,7 +45,7 @@
         <div class="mt-5 rounded-lg border border-cyan-200 bg-cyan-50 p-4">
             <div class="flex items-center justify-between gap-3">
                 <div><h3 class="font-bold text-gray-900">Cargos adicionales</h3><p class="text-xs text-gray-600">Se aplican automáticamente por {{ $category === 'nutricionales' ? 'solicitud' : 'mezcla' }}.</p></div>
-                <button type="button" onclick="document.getElementById('additionalChargeModal').showModal()" class="rounded-md bg-cyan-700 px-3 py-2 text-sm font-bold text-white">Agregar cargo</button>
+                <a href="{{ route('admin.catalogo-listas.lists.edit', ['category' => $category, 'list' => $list->id]) }}" class="rounded-md border border-cyan-700 px-3 py-2 text-sm font-bold text-cyan-800">Administrar en Editar</a>
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
                 @forelse ($additionalCharges as $charge)
@@ -55,7 +55,8 @@
             </div>
         </div>
 
-        <dialog id="additionalChargeModal" class="w-full max-w-md rounded-xl p-0 backdrop:bg-slate-900/40">
+        {{-- Los cargos se administran desde Editar; esta vista solo muestra el resumen. --}}
+        <dialog id="additionalChargeModal" class="hidden">
             <form method="POST" action="{{ route('admin.catalogo-listas.lists.additional-charges.store', ['category' => $category, 'list' => $list->id]) }}" class="p-5">@csrf
                 <h3 class="text-lg font-bold">Nuevo cargo adicional</h3>
                 <label class="mt-4 block text-sm font-semibold">Nombre<input name="name" required class="mt-1 w-full rounded border-gray-300"></label>
