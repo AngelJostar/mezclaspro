@@ -14,6 +14,9 @@ use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\TrainingPersonnelController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\DistributionController;
+use App\Http\Controllers\Admin\DistributionDeliveryController;
+use App\Http\Controllers\Admin\DistributionRouteController;
+use App\Http\Controllers\Admin\SuperAdministratorController;
 use App\Models\Solicitud;
 use Illuminate\Support\Facades\Route; //Importamos para generar nuestras rutas.
 use App\Exports\SolicitudesExport;
