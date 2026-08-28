@@ -6,6 +6,42 @@ use Illuminate\Support\Facades\DB;
 
 class OncologicMedicationInventoryService
 {
+    private function fallbackBatch(object $currentBatch, int $laboratoryId, int $listId, int $catalogId): ?object
+    {
+        $list = DB::table('medicine_lists')->where('id', $listId)
+            ->first(['warehouse_id', 'backup_enabled', 'backup_warehouse_id']);
+        $backupWarehouseId = (int) ($list?->backup_warehouse_id ?? 0);
+
+        if (! $list || ! $list->backup_enabled || $backupWarehouseId <= 0
+            || (int) ($currentBatch->warehouse_id ?? 0) !== (int) ($list->warehouse_id ?? 0)) {
+            return null;
+        }
+
+        return DB::table('medicine_batches as mb')
+            ->join('medicine_presentations as mp', 'mp.id', '=', 'mb.medicine_presentation_id')
+            ->leftJoin('medicine_list_presentation as mlp', function ($join) use ($listId) {
+                $join->on('mlp.medicine_presentation_id', '=', 'mp.id')->where('mlp.medicine_list_id', $listId);
+            })
+            ->where('mb.laboratory_id', $laboratoryId)
+            ->where('mb.warehouse_id', $backupWarehouseId)
+            ->where('mb.medicine_presentation_id', $currentBatch->medicine_presentation_id)
+            ->where('mb.stock_actual', '>', 0)
+            ->where('mp.catalog_id', $catalogId)
+            ->where('mp.is_available', 1)
+            ->where(function ($query) {
+                $query->whereNull('mb.caducidad')->orWhereDate('mb.caducidad', '>=', now()->toDateString());
+            })
+            ->orderByRaw('mb.caducidad IS NULL')
+            ->orderBy('mb.caducidad')
+            ->orderBy('mb.id')
+            ->lockForUpdate()
+            ->select([
+                'mb.*', 'mp.id as presentation_id', 'mp.presentacion', 'mp.cantidad_medicamento',
+                'mp.volumen_diluyente', 'mp.stability_hours', 'mp.legend', 'mp.marca', 'mp.precio_frasco',
+                'mlp.precio as precio_lista',
+            ])->first();
+    }
+
     public function consume(
         int $batchId,
         int $maximumContainers,
@@ -53,6 +89,13 @@ class OncologicMedicationInventoryService
 
         if (!$batch) {
             throw new \RuntimeException('No se encontró el lote para el laboratorio y medicamento correspondientes.');
+        }
+
+        if ((int) ($batch->stock_actual ?? 0) <= 0) {
+            $fallbackBatch = $this->fallbackBatch($batch, $laboratoryId, $listId, $catalogId);
+            if ($fallbackBatch) {
+                $batch = $fallbackBatch;
+            }
         }
 
         $containerMl = (float) ($batch->volumen_diluyente ?? 0);
