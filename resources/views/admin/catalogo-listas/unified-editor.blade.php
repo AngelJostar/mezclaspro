@@ -81,7 +81,7 @@
                 <h2 class="font-bold text-gray-900">Cargos adicionales por categoría</h2>
                 <p class="mt-1 text-xs text-gray-600">Se aplican automáticamente: por solicitud en Nutrición y por mezcla en Oncología/Antibióticos.</p>
                 @foreach ($categories as $key => $settings)
-                    <div class="mt-3 rounded bg-white p-3" data-additional-charge-category="{{ $key }}">
+                    <div class="mt-3 rounded bg-white p-3 {{ $key === $activeCategory ? '' : 'hidden' }}" data-category-panel="{{ $key }}" data-additional-charge-category="{{ $key }}">
                         <p class="mb-2 text-sm font-semibold">{{ $settings['label'] }}</p>
                         <div class="grid gap-2 sm:grid-cols-3">
                             <input name="additional_charges[{{ $key }}][0][name]" placeholder="Nombre del cargo" class="rounded border-gray-300 text-sm">
