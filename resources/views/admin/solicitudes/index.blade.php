@@ -303,4 +303,22 @@
     @if ($canViewOncology)
         <livewire:oncologicos.inspeccion-mezcla />
     @endif
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let inspectionReloadScheduled = false;
+
+            const reloadAfterInspection = () => {
+                if (inspectionReloadScheduled) {
+                    return;
+                }
+
+                inspectionReloadScheduled = true;
+                window.setTimeout(() => window.location.reload(), 150);
+            };
+
+            window.addEventListener('nutricional-inspeccionada', reloadAfterInspection);
+            window.addEventListener('mezcla-inspeccionada', reloadAfterInspection);
+        });
+    </script>
 </x-admin-layout>

@@ -144,6 +144,11 @@
                                 <th class="px-4 py-3">Detalle del lote</th>
                                 <th class="px-4 py-3 text-center">Stock lote seleccionado</th>
                                 <th class="px-4 py-3 text-center">Estado</th>
+                                @role('Super Admin')
+                                    <th class="px-4 py-3 text-center">Editar</th>
+                                @endrole
+                                <th class="px-4 py-3 text-center">Merma</th>
+                                <th class="px-4 py-3 text-center">Movimientos</th>
                                 <th class="px-4 py-3 text-center">Ingresar lote</th>
                             </tr>
                         </thead>
@@ -175,6 +180,9 @@
                                             <select class="lote-select w-full rounded border-gray-300 text-sm">
                                                 @foreach ($batches as $batch)
                                                     <option value="{{ $batch->batch_id }}"
+                                                        data-edit-url="{{ route('admin.oncologicos.inventory.editBatch', $batch->batch_id) }}"
+                                                        data-merma-url="{{ route('admin.oncologicos.inventory.merma', $batch->batch_id) }}"
+                                                        data-movimientos-url="{{ route('admin.oncologicos.inventory.movimientos', $batch->batch_id) }}"
                                                         data-caducidad="{{ $batch->caducidad ? \Carbon\Carbon::parse($batch->caducidad)->format('d/m/Y') : '—' }}"
                                                         data-fecha-ingreso="{{ $batch->fecha_ingreso ? \Carbon\Carbon::parse($batch->fecha_ingreso)->format('d/m/Y') : '—' }}"
                                                         data-stock-inicial="{{ number_format((float) $batch->stock_inicial, 2) }}"
@@ -257,6 +265,35 @@
                                         @endif
                                     </td>
 
+                                    @role('Super Admin')
+                                        <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                            @if ($firstBatch)
+                                                <x-table-action-link href="{{ route('admin.oncologicos.inventory.editBatch', $firstBatch->batch_id) }}"
+                                                    class="edit-link">Editar</x-table-action-link>
+                                            @else
+                                                <span class="text-xs text-gray-400">-</span>
+                                            @endif
+                                        </td>
+                                    @endrole
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
+                                            <x-table-action-link href="{{ route('admin.oncologicos.inventory.merma', $firstBatch->batch_id) }}"
+                                                variant="red" class="merma-link">Merma</x-table-action-link>
+                                        @else
+                                            <span class="text-xs text-gray-400">-</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
+                                            <x-table-action-link href="{{ route('admin.oncologicos.inventory.movimientos', $firstBatch->batch_id) }}"
+                                                variant="gray" class="movimientos-link">Movimientos</x-table-action-link>
+                                        @else
+                                            <span class="text-xs text-gray-400">-</span>
+                                        @endif
+                                    </td>
+
                                     <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                         <a href="{{ route('admin.oncologicos.inventory.ingresoForm', [
                                             'laboratory_id' => $laboratoryId,
@@ -271,7 +308,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="px-6 py-6 text-center text-gray-500">
+                                    <td colspan="10" class="px-6 py-6 text-center text-gray-500">
                                         Este medicamento no tiene presentaciones disponibles.
                                     </td>
                                 </tr>
@@ -310,6 +347,17 @@
                     if (selectedStock) {
                         selectedStock.textContent = (option.dataset.stockActual || '0.00') + ' frascos';
                     }
+
+                    const movementsLink = row.querySelector('.movimientos-link');
+                    if (movementsLink && option.dataset.movimientosUrl) {
+                        movementsLink.href = option.dataset.movimientosUrl;
+                    }
+
+                    const editLink = row.querySelector('.edit-link');
+                    if (editLink && option.dataset.editUrl) editLink.href = option.dataset.editUrl;
+
+                    const mermaLink = row.querySelector('.merma-link');
+                    if (mermaLink && option.dataset.mermaUrl) mermaLink.href = option.dataset.mermaUrl;
                 });
             });
         </script>

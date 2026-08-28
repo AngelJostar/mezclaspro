@@ -584,6 +584,21 @@ Route::prefix('oncologicos/inventory')
         Route::get('/exportar', [InventoryController::class, 'exportarExcel'])
             ->name('exportar');
 
+        Route::get('/lotes/{batch}/movimientos', [InventoryController::class, 'movimientos'])
+            ->name('movimientos');
+
+        Route::get('/lotes/{batch}/editar', [InventoryController::class, 'editBatch'])
+            ->name('editBatch');
+
+        Route::put('/lotes/{batch}', [InventoryController::class, 'updateBatch'])
+            ->name('updateBatch');
+
+        Route::get('/lotes/{batch}/merma', [InventoryController::class, 'mermaForm'])
+            ->name('merma');
+
+        Route::post('/lotes/{batch}/merma', [InventoryController::class, 'registrarMerma'])
+            ->name('registrarMerma');
+
         Route::get('/select-laboratory', [InventoryController::class, 'selectLaboratory'])
             ->name('selectLaboratory');
 
