@@ -89,14 +89,18 @@
                                 @if ($estado === 'pendiente')
                                     <a href="{{ $isNutrition
                                         ? route('admin.nutricionales.solicitudes.edit', $solicitud)
-                                        : route('admin.oncologicos.solicitudes.edit', $solicitud->id) }}"
+                                        : ($mezcla
+                                            ? route('admin.oncologicos.mezclas.edit', $mezcla)
+                                            : route('admin.oncologicos.solicitudes.edit', $solicitud->id)) }}"
                                         class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
                                         Aprobar
                                     </a>
                                 @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
                                     <a href="{{ $isNutrition
                                         ? route('admin.nutricionales.solicitudes.edit', $solicitud)
-                                        : route('admin.oncologicos.solicitudes.edit', $solicitud->id) }}"
+                                        : ($mezcla
+                                            ? route('admin.oncologicos.mezclas.edit', $mezcla)
+                                            : route('admin.oncologicos.solicitudes.edit', $solicitud->id)) }}"
                                         class="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200">
                                         Editar
                                     </a>

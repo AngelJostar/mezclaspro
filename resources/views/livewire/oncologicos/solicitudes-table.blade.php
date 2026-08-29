@@ -70,12 +70,12 @@
                         <td class="whitespace-nowrap px-2 py-2 text-center">
                             @hasanyrole('Admin|Super Admin')
                                 @if ($estado === 'pendiente')
-                                    <a href="{{ route('admin.oncologicos.solicitudes.edit', $solicitud) }}"
+                                    <a href="{{ route('admin.oncologicos.mezclas.edit', $mezcla) }}"
                                         class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
                                         Aprobar
                                     </a>
                                 @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
-                                    <a href="{{ route('admin.oncologicos.solicitudes.edit', $solicitud) }}"
+                                    <a href="{{ route('admin.oncologicos.mezclas.edit', $mezcla) }}"
                                         class="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200">
                                         Editar
                                     </a>
