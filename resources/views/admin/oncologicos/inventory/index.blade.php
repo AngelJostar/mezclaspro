@@ -147,7 +147,9 @@
                                 @role('Super Admin')
                                     <th class="px-4 py-3 text-center">Editar</th>
                                 @endrole
-                                <th class="px-4 py-3 text-center">Merma</th>
+                                <th class="px-4 py-3 text-center">Remanente</th>
+                                <th class="px-4 py-3 text-center">Merma remanente</th>
+                                <th class="px-4 py-3 text-center">Merma de stock</th>
                                 <th class="px-4 py-3 text-center">Movimientos</th>
                                 <th class="px-4 py-3 text-center">Ingresar lote</th>
                             </tr>
@@ -187,7 +189,9 @@
                                                         data-fecha-ingreso="{{ $batch->fecha_ingreso ? \Carbon\Carbon::parse($batch->fecha_ingreso)->format('d/m/Y') : '—' }}"
                                                         data-stock-inicial="{{ number_format((float) $batch->stock_inicial, 2) }}"
                                                         data-stock-actual="{{ number_format((float) $batch->stock_actual, 2) }}"
-                                                        data-stock-reservado="{{ number_format((float) $batch->stock_reservado, 2) }}">
+                                                        data-stock-reservado="{{ number_format((float) $batch->stock_reservado, 2) }}"
+                                                        data-remanente-ml="{{ number_format((float) $batch->remanente_ml, 2, '.', '') }}"
+                                                        data-remanente-merma-url="{{ route('admin.oncologicos.inventory.descartarRemanente', $batch->batch_id) }}">
                                                         {{ $batch->lote }}
                                                     </option>
                                                 @endforeach
@@ -278,6 +282,30 @@
 
                                     <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                         @if ($firstBatch)
+                                            <span class="font-semibold text-amber-700 selected-remainder">
+                                                {{ number_format((float) $firstBatch->remanente_ml, 2) }} mL
+                                            </span>
+                                        @else
+                                            <span class="text-xs text-gray-400">0.00 mL</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
+                                            @php($hasRemainder = (float) $firstBatch->remanente_ml > 0.0001)
+                                            <form method="POST" action="{{ route('admin.oncologicos.inventory.descartarRemanente', $firstBatch->batch_id) }}" class="remainder-waste-form inline">
+                                                @csrf
+                                                <button type="submit" class="remainder-waste-button inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold {{ $hasRemainder ? 'bg-red-600 text-white hover:bg-red-700' : 'cursor-not-allowed bg-gray-300 text-gray-600' }}" @disabled(! $hasRemainder)>
+                                                    Merma
+                                                </button>
+                                            </form>
+                                        @else
+                                            <span class="text-xs text-gray-400">-</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
                                             <x-table-action-link href="{{ route('admin.oncologicos.inventory.merma', $firstBatch->batch_id) }}"
                                                 variant="red" class="merma-link">Merma</x-table-action-link>
                                         @else
@@ -358,6 +386,44 @@
 
                     const mermaLink = row.querySelector('.merma-link');
                     if (mermaLink && option.dataset.mermaUrl) mermaLink.href = option.dataset.mermaUrl;
+
+                    const remainderMl = Number(option.dataset.remainderMl || 0);
+                    const remainderLabel = row.querySelector('.selected-remainder');
+                    if (remainderLabel) remainderLabel.textContent = remainderMl.toFixed(2) + ' mL';
+
+                    const remainderForm = row.querySelector('.remainder-waste-form');
+                    const remainderButton = row.querySelector('.remainder-waste-button');
+                    if (remainderForm && option.dataset.remainderMermaUrl) remainderForm.action = option.dataset.remainderMermaUrl;
+                    if (remainderButton) {
+                        const enabled = remainderMl > 0.0001;
+                        remainderButton.disabled = !enabled;
+                        remainderButton.classList.toggle('bg-red-600', enabled);
+                        remainderButton.classList.toggle('text-white', enabled);
+                        remainderButton.classList.toggle('hover:bg-red-700', enabled);
+                        remainderButton.classList.toggle('cursor-not-allowed', !enabled);
+                        remainderButton.classList.toggle('bg-gray-300', !enabled);
+                        remainderButton.classList.toggle('text-gray-600', !enabled);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.remainder-waste-form').forEach(form => {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const button = form.querySelector('.remainder-waste-button');
+                    if (!button || button.disabled) return;
+
+                    Swal.fire({
+                        title: 'Enviar remanente a merma?',
+                        text: 'Esta accion dejara el remanente del lote en 0 mL.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Si, enviar a merma',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#dc2626',
+                    }).then((result) => {
+                        if (result.isConfirmed) form.submit();
+                    });
                 });
             });
         </script>

@@ -8,6 +8,7 @@ use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicineBatch;
 use App\Models\Oncologicos\MedicineBatchMovement;
 use App\Models\MedicineRemainder;
+use App\Services\MedicineRemainderService;
 use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -126,6 +127,58 @@ class InventoryController extends Controller
             'warehouse_id' => $batch->warehouse_id,
             'category' => $batch->presentation?->catalog?->catalog_category,
         ])->with('success', 'La merma se registro correctamente.');
+    }
+
+    public function descartarRemanente(MedicineBatch $batch)
+    {
+        DB::transaction(function () use ($batch) {
+            $lockedBatch = MedicineBatch::query()->lockForUpdate()->findOrFail($batch->id);
+            $remainders = MedicineRemainder::query()
+                ->where('domain', 'oncologico')
+                ->where('medicine_batch_id', $lockedBatch->id)
+                ->where('is_active', true)
+                ->where('current_ml', '>', 0)
+                ->where(function ($query) {
+                    $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+                })
+                ->lockForUpdate()
+                ->get();
+
+            $discardedMl = (float) $remainders->sum('current_ml');
+            if ($discardedMl <= 0.0001) {
+                throw new \InvalidArgumentException('El lote seleccionado no tiene remanente disponible para enviar a merma.');
+            }
+
+            $remainderService = app(MedicineRemainderService::class);
+            foreach ($remainders as $remainder) {
+                $remainderService->discard($remainder, 'Merma manual de remanente', 'MermaRemanente', $lockedBatch->id, auth()->id());
+            }
+
+            MedicineBatchMovement::create([
+                'medicine_batch_id' => $lockedBatch->id,
+                'laboratory_id' => $lockedBatch->laboratory_id,
+                'warehouse_id' => $lockedBatch->warehouse_id,
+                'user_id' => auth()->id(),
+                'movement_type' => 'merma',
+                'quantity' => 0,
+                'quantity_ml' => $discardedMl,
+                'stock_actual_before' => $lockedBatch->stock_actual,
+                'stock_actual_after' => $lockedBatch->stock_actual,
+                'stock_ml_before' => $lockedBatch->stock_ml_actual,
+                'stock_ml_after' => $lockedBatch->stock_ml_actual,
+                'stock_reservado_before' => $lockedBatch->stock_reservado,
+                'stock_reservado_after' => $lockedBatch->stock_reservado,
+                'reference_type' => 'MermaRemanente',
+                'reference_id' => $lockedBatch->id,
+                'notes' => 'Merma manual de remanente abierto: '.number_format($discardedMl, 4, '.', '').' mL.',
+            ]);
+        });
+
+        return redirect()->route('admin.oncologicos.inventory.index', [
+            'laboratory_id' => $batch->laboratory_id,
+            'warehouse_id' => $batch->warehouse_id,
+            'category' => $batch->presentation?->catalog?->catalog_category,
+        ])->with('success', 'El remanente se envio a merma correctamente.');
     }
 
     public function movimientos(MedicineBatch $batch)
@@ -486,6 +539,25 @@ class InventoryController extends Controller
             ->orderBy('mb.caducidad')
             ->orderBy('mb.id')
             ->get();
+
+        $remaindersByBatch = MedicineRemainder::query()
+            ->where('domain', 'oncologico')
+            ->where('laboratory_id', $laboratoryId)
+            ->where('warehouse_id', $warehouseId)
+            ->where('is_active', true)
+            ->where('current_ml', '>', 0)
+            ->where(function ($query) {
+                $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+            })
+            ->selectRaw('medicine_batch_id, SUM(current_ml) as remanente_ml')
+            ->groupBy('medicine_batch_id')
+            ->pluck('remanente_ml', 'medicine_batch_id');
+
+        $rows->each(function ($row) use ($remaindersByBatch) {
+            $row->remanente_ml = $row->batch_id
+                ? (float) ($remaindersByBatch->get($row->batch_id) ?? 0)
+                : 0.0;
+        });
 
         $groupedRows = $rows
             ->groupBy('catalog_id')

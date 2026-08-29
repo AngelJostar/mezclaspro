@@ -8,6 +8,7 @@
             'ajuste' => 'Ajuste',
             'reserva' => 'Reserva',
             'liberacion' => 'Liberacion',
+            'merma' => 'Merma',
         ];
     @endphp
 

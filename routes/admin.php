@@ -641,6 +641,9 @@ Route::prefix('oncologicos/inventory')
         Route::post('/lotes/{batch}/merma', [InventoryController::class, 'registrarMerma'])
             ->name('registrarMerma');
 
+        Route::post('/lotes/{batch}/remanente/merma', [InventoryController::class, 'descartarRemanente'])
+            ->name('descartarRemanente');
+
         Route::get('/select-laboratory', [InventoryController::class, 'selectLaboratory'])
             ->name('selectLaboratory');
 
