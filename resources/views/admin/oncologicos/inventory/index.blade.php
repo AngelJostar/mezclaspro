@@ -149,7 +149,7 @@
                                 @endrole
                                 <th class="px-4 py-3 text-center">Remanente</th>
                                 <th class="px-4 py-3 text-center">Merma remanente</th>
-                                <th class="px-4 py-3 text-center">Merma de stock</th>
+                                <th class="px-4 py-3 text-center">Perdida de stock</th>
                                 <th class="px-4 py-3 text-center">Movimientos</th>
                                 <th class="px-4 py-3 text-center">Ingresar lote</th>
                             </tr>
@@ -183,13 +183,14 @@
                                                 @foreach ($batches as $batch)
                                                     <option value="{{ $batch->batch_id }}"
                                                         data-edit-url="{{ route('admin.oncologicos.inventory.editBatch', $batch->batch_id) }}"
-                                                        data-merma-url="{{ route('admin.oncologicos.inventory.merma', $batch->batch_id) }}"
+                                                        data-loss-url="{{ route('admin.oncologicos.inventory.registrarMerma', $batch->batch_id) }}"
                                                         data-movimientos-url="{{ route('admin.oncologicos.inventory.movimientos', $batch->batch_id) }}"
                                                         data-caducidad="{{ $batch->caducidad ? \Carbon\Carbon::parse($batch->caducidad)->format('d/m/Y') : '—' }}"
                                                         data-fecha-ingreso="{{ $batch->fecha_ingreso ? \Carbon\Carbon::parse($batch->fecha_ingreso)->format('d/m/Y') : '—' }}"
                                                         data-stock-inicial="{{ number_format((float) $batch->stock_inicial, 2) }}"
                                                         data-stock-actual="{{ number_format((float) $batch->stock_actual, 2) }}"
                                                         data-stock-reservado="{{ number_format((float) $batch->stock_reservado, 2) }}"
+                                                        data-ml-per-bottle="{{ number_format((float) ($batch->volumen_diluyente ?? 0), 4, '.', '') }}"
                                                         data-remanente-ml="{{ number_format((float) $batch->remanente_ml, 2, '.', '') }}"
                                                         data-remanente-merma-url="{{ route('admin.oncologicos.inventory.descartarRemanente', $batch->batch_id) }}">
                                                         {{ $batch->lote }}
@@ -306,8 +307,15 @@
 
                                     <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                         @if ($firstBatch)
-                                            <x-table-action-link href="{{ route('admin.oncologicos.inventory.merma', $firstBatch->batch_id) }}"
-                                                variant="red" class="merma-link">Merma</x-table-action-link>
+                                            <form method="POST" action="{{ route('admin.oncologicos.inventory.registrarMerma', $firstBatch->batch_id) }}" class="stock-loss-form inline">
+                                                @csrf
+                                                <input type="hidden" name="unit" value="frasco">
+                                                <input type="hidden" name="quantity">
+                                                <input type="hidden" name="notes">
+                                                <button type="submit" class="stock-loss-button inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700">
+                                                    Perdida
+                                                </button>
+                                            </form>
                                         @else
                                             <span class="text-xs text-gray-400">-</span>
                                         @endif
@@ -384,8 +392,8 @@
                     const editLink = row.querySelector('.edit-link');
                     if (editLink && option.dataset.editUrl) editLink.href = option.dataset.editUrl;
 
-                    const mermaLink = row.querySelector('.merma-link');
-                    if (mermaLink && option.dataset.mermaUrl) mermaLink.href = option.dataset.mermaUrl;
+                    const lossForm = row.querySelector('.stock-loss-form');
+                    if (lossForm && option.dataset.lossUrl) lossForm.action = option.dataset.lossUrl;
 
                     const remainderMl = Number(option.dataset.remainderMl || 0);
                     const remainderLabel = row.querySelector('.selected-remainder');
@@ -423,6 +431,69 @@
                         confirmButtonColor: '#dc2626',
                     }).then((result) => {
                         if (result.isConfirmed) form.submit();
+                    });
+                });
+            });
+
+            document.querySelectorAll('.stock-loss-form').forEach(form => {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const row = form.closest('.presentation-row');
+                    const option = row?.querySelector('.lote-select')?.selectedOptions[0];
+                    const stock = Number(option?.dataset.stockActual || 0);
+                    const mlPerBottle = Number(option?.dataset.mlPerBottle || 0);
+
+                    Swal.fire({
+                        title: 'Registrar perdida de stock',
+                        html: `
+                            <p class="mb-3 text-sm text-gray-600">Registra una perdida de frascos cerrados o de volumen del lote seleccionado.</p>
+                            <select id="loss-unit" class="swal2-select"><option value="frasco">Frascos</option><option value="ml">mL</option></select>
+                            <input id="loss-quantity" type="number" min="0.01" step="0.01" class="swal2-input" placeholder="Cantidad">
+                            <textarea id="loss-notes" class="swal2-textarea" placeholder="Motivo de la perdida"></textarea>
+                        `,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Registrar perdida',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#dc2626',
+                        didOpen: () => {
+                            const unit = document.getElementById('loss-unit');
+                            const quantity = document.getElementById('loss-quantity');
+                            const updateLimit = () => {
+                                const byBottle = unit.value === 'frasco';
+                                quantity.step = byBottle ? '1' : '0.01';
+                                quantity.min = byBottle ? '1' : '0.01';
+                                quantity.max = byBottle ? String(Math.floor(stock)) : String((stock * mlPerBottle).toFixed(4));
+                                quantity.placeholder = byBottle ? `Maximo: ${Math.floor(stock)} frascos` : `Maximo: ${(stock * mlPerBottle).toFixed(2)} mL`;
+                            };
+                            unit.addEventListener('change', updateLimit);
+                            updateLimit();
+                        },
+                        preConfirm: () => {
+                            const unit = document.getElementById('loss-unit').value;
+                            const quantity = Number(document.getElementById('loss-quantity').value);
+                            const notes = document.getElementById('loss-notes').value.trim();
+                            const maximum = unit === 'frasco' ? Math.floor(stock) : stock * mlPerBottle;
+                            if (!Number.isFinite(quantity) || quantity <= 0 || quantity > maximum) {
+                                Swal.showValidationMessage('Captura una cantidad valida dentro del stock disponible.');
+                                return false;
+                            }
+                            if (unit === 'frasco' && !Number.isInteger(quantity)) {
+                                Swal.showValidationMessage('La cantidad de frascos debe ser entera.');
+                                return false;
+                            }
+                            if (!notes) {
+                                Swal.showValidationMessage('Indica el motivo de la perdida.');
+                                return false;
+                            }
+                            return { unit, quantity, notes };
+                        },
+                    }).then((result) => {
+                        if (!result.isConfirmed) return;
+                        form.querySelector('[name="unit"]').value = result.value.unit;
+                        form.querySelector('[name="quantity"]').value = result.value.quantity;
+                        form.querySelector('[name="notes"]').value = result.value.notes;
+                        form.submit();
                     });
                 });
             });

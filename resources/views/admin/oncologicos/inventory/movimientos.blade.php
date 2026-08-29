@@ -74,7 +74,7 @@
                             <tr>
                                 <td class="whitespace-nowrap px-4 py-3">{{ optional($movement->created_at)->format('d/m/Y H:i') }}</td>
                                 <td class="px-4 py-3">{{ $movement->user?->username ?? $movement->user?->name ?? 'Sistema' }}</td>
-                                <td class="px-4 py-3 font-semibold">{{ $movementLabels[$movement->movement_type] ?? ucfirst($movement->movement_type) }}</td>
+                                <td class="px-4 py-3 font-semibold">{{ $movement->reference_type === 'PerdidaStock' ? 'Perdida de stock' : ($movementLabels[$movement->movement_type] ?? ucfirst($movement->movement_type)) }}</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-right">{{ number_format((float) $movement->quantity_ml, 2) }} mL</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-right">{{ number_format((float) $movement->stock_ml_before, 2) }} mL</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-right font-semibold">{{ number_format((float) $movement->stock_ml_after, 2) }} mL</td>

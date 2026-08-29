@@ -68,33 +68,53 @@ class InventoryController extends Controller
 
     public function mermaForm(MedicineBatch $batch)
     {
-        $batch->load(['laboratory', 'warehouse', 'presentation.catalog']);
-
-        return view('admin.oncologicos.inventory.merma', compact('batch'));
+        return redirect()->route('admin.oncologicos.inventory.index', [
+            'laboratory_id' => $batch->laboratory_id,
+            'warehouse_id' => $batch->warehouse_id,
+            'category' => $batch->presentation?->catalog?->catalog_category,
+        ]);
     }
 
     public function registrarMerma(Request $request, MedicineBatch $batch)
     {
         $data = $request->validate([
-            'cantidad_ml' => 'required|numeric|min:0.01',
+            'cantidad_ml' => 'nullable|numeric|min:0.01',
+            'quantity' => 'nullable|numeric|min:0.01|required_without:cantidad_ml',
+            'unit' => 'nullable|in:ml,frasco|required_with:quantity',
             'notes' => 'required|string|max:500',
         ]);
 
         DB::transaction(function () use ($batch, $data) {
             $lockedBatch = MedicineBatch::query()->lockForUpdate()->findOrFail($batch->id);
-            $stockMlBefore = (float) $lockedBatch->stock_ml_actual;
-            $quantityMl = (float) $data['cantidad_ml'];
+            $stockActualBefore = (int) $lockedBatch->stock_actual;
+            $presentation = $lockedBatch->presentation()->firstOrFail();
+            $presentationMl = (float) ($presentation->volumen_diluyente
+                ?: ($presentation->contenido_unidad === 'ml' ? $presentation->contenido_valor : 0));
+            $storedStockMl = (float) ($lockedBatch->stock_ml_actual ?? 0);
+            $stockMlBefore = $storedStockMl > 0
+                ? $storedStockMl
+                : ($stockActualBefore * $presentationMl);
+            $unit = $data['unit'] ?? 'ml';
+            $quantity = isset($data['quantity']) ? (float) $data['quantity'] : (float) $data['cantidad_ml'];
 
-            if ($quantityMl > $stockMlBefore) {
-                throw new \InvalidArgumentException('La merma no puede ser mayor al stock disponible en mL.');
+            if ($unit === 'frasco' && floor($quantity) !== $quantity) {
+                throw new \InvalidArgumentException('La perdida por frascos debe ser un numero entero.');
+            }
+            $quantityMl = $unit === 'frasco' ? $quantity * $presentationMl : $quantity;
+
+            if ($unit === 'frasco' && $quantity > $stockActualBefore) {
+                throw new \InvalidArgumentException('La perdida no puede ser mayor al numero de frascos disponibles.');
+            }
+            if ($unit === 'ml' && ($stockMlBefore <= 0 || $quantityMl > $stockMlBefore)) {
+                throw new \InvalidArgumentException('La perdida no puede ser mayor al stock disponible en mL.');
             }
 
-            $stockMlAfter = max(0, $stockMlBefore - $quantityMl);
-            $stockActualBefore = (int) $lockedBatch->stock_actual;
-            $presentationMl = (float) ($lockedBatch->presentation()->value('contenido_valor') ?: 0);
-            $stockActualAfter = $stockMlAfter <= 0
-                ? 0
-                : ($presentationMl > 0 ? (int) ceil($stockMlAfter / $presentationMl) : $stockActualBefore);
+            $stockMlAfter = $presentationMl > 0
+                ? max(0, $stockMlBefore - $quantityMl)
+                : $stockMlBefore;
+            $stockActualAfter = $unit === 'frasco'
+                ? max(0, $stockActualBefore - (int) $quantity)
+                : ($stockMlAfter <= 0 ? 0 : ($presentationMl > 0 ? (int) ceil($stockMlAfter / $presentationMl) : $stockActualBefore));
 
             $lockedBatch->update([
                 'stock_ml_actual' => $stockMlAfter,
@@ -116,7 +136,7 @@ class InventoryController extends Controller
                 'stock_ml_after' => $stockMlAfter,
                 'stock_reservado_before' => $lockedBatch->stock_reservado,
                 'stock_reservado_after' => $lockedBatch->stock_reservado,
-                'reference_type' => 'MermaManual',
+                'reference_type' => 'PerdidaStock',
                 'reference_id' => $lockedBatch->id,
                 'notes' => $data['notes'],
             ]);
@@ -126,7 +146,7 @@ class InventoryController extends Controller
             'laboratory_id' => $batch->laboratory_id,
             'warehouse_id' => $batch->warehouse_id,
             'category' => $batch->presentation?->catalog?->catalog_category,
-        ])->with('success', 'La merma se registro correctamente.');
+        ])->with('success', 'La perdida de stock se registro correctamente.');
     }
 
     public function descartarRemanente(MedicineBatch $batch)
