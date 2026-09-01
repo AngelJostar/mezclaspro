@@ -170,7 +170,7 @@
                                 @role('Super Admin')
                                     <th class="px-4 py-3 text-center">Editar</th>
                                 @endrole
-                                <th class="px-4 py-3 text-center">Merma</th>
+                                <th class="px-4 py-3 text-center">Merma de frasco</th>
                                 <th class="px-4 py-3 text-center">Movimientos</th>
                                 <th class="px-4 py-3 text-center">Ingresar lote</th>
                             </tr>
@@ -370,7 +370,7 @@
                                             <x-table-action-link href="{{ route('admin.nutricionales.stocks.merma', $firstStock->id) }}"
                                                 variant="red"
                                                 class="action-merma">
-                                                Merma
+                                                Solicitar merma
                                             </x-table-action-link>
                                         @else
                                             <span class="text-gray-400 text-xs">-</span>

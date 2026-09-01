@@ -51,6 +51,247 @@ class SuperAdministratorManagementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_super_administrator_panel_starts_collapsed_and_shows_waste_report_filters(): void
+    {
+        $superAdministrator = $this->userWithRole('Super Admin');
+        $this->userWithRole('Admin');
+
+        $this->mock(InstitutionBillingPendingSummaryService::class, function ($mock) {
+            $mock->shouldReceive('counts')->once()->andReturn(['yellow' => 0, 'red' => 0]);
+        });
+
+        $this->actingAs($superAdministrator)
+            ->get(route('admin.superadministrator.index'))
+            ->assertOk()
+            ->assertSee('Autorizaciones')
+            ->assertDontSee('Administradores actuales')
+            ->assertSee('Reporte de mermas')
+            ->assertSee('Merma de remanente')
+            ->assertSee('Merma de frasco')
+            ->assertSee('Solicitudes de Merma')
+            ->assertSee('Marca')
+            ->assertSee('Precio costo por')
+            ->assertSee('mililitro')
+            ->assertSee('frasco')
+            ->assertSee('(Precio de compra)')
+            ->assertSee('name="waste_from_month"', false)
+            ->assertSee('name="waste_from_year"', false)
+            ->assertSee('name="waste_to_month"', false)
+            ->assertSee('name="waste_to_year"', false)
+            ->assertSee('id="waste-report-table"', false)
+            ->assertSee('js-waste-column-filter', false)
+            ->assertSee('js-waste-column-sort', false)
+            ->assertSee('min-height: clamp(500px, 62vh, 760px);', false)
+            ->assertSee('Aplicar filtro')
+            ->assertSee('Borrar filtro')
+            ->assertSee('authorizationsOpen: false', false)
+            ->assertSee("wasteOpen: false, wasteFilter: 'all'", false)
+            ->assertSee('aria-controls="authorizations-table"', false)
+            ->assertSee('aria-controls="waste-report-content"', false);
+    }
+
+    public function test_waste_report_normalizes_a_month_range_and_stays_open(): void
+    {
+        $superAdministrator = $this->userWithRole('Super Admin');
+
+        $this->mock(InstitutionBillingPendingSummaryService::class, function ($mock) {
+            $mock->shouldReceive('counts')->once()->andReturn(['yellow' => 0, 'red' => 0]);
+        });
+
+        $this->actingAs($superAdministrator)
+            ->get(route('admin.superadministrator.index', [
+                'waste_from_month' => '09',
+                'waste_from_year' => '2026',
+                'waste_to_month' => '08',
+                'waste_to_year' => '2026',
+            ]))
+            ->assertOk()
+            ->assertSee('value="08" selected', false)
+            ->assertSee('value="09" selected', false)
+            ->assertSee('value="2026" selected', false)
+            ->assertSee("wasteOpen: true, wasteFilter: 'all'", false)
+            ->assertSee('Borrar filtro');
+    }
+
+    public function test_oncology_container_waste_is_only_applied_after_super_administrator_approval(): void
+    {
+        $requester = $this->userWithRole('Admin');
+        $superAdministrator = $this->userWithRole('Super Admin');
+        [$laboratoryId, $warehouseId] = $this->inventoryLocation();
+        $catalogId = DB::table('medicines_catalog')->insertGetId([
+            'denominacion' => 'Medicamento de prueba',
+            'catalog_category' => 'oncologicos',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $presentationId = DB::table('medicine_presentations')->insertGetId([
+            'catalog_id' => $catalogId,
+            'presentacion' => 'Frasco 100 ml',
+            'contenido_valor' => 100,
+            'contenido_unidad' => 'ml',
+            'marca' => 'Marca prueba',
+            'volumen_diluyente' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $batchId = DB::table('medicine_batches')->insertGetId([
+            'laboratory_id' => $laboratoryId,
+            'warehouse_id' => $warehouseId,
+            'medicine_presentation_id' => $presentationId,
+            'lote' => 'LOTE-ONCO-1',
+            'stock_inicial' => 10,
+            'stock_actual' => 10,
+            'stock_reservado' => 2,
+            'stock_ml_inicial' => 1000,
+            'stock_ml_actual' => 1000,
+            'costo_unitario' => 500,
+            'is_current' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($requester)
+            ->post(route('admin.oncologicos.inventory.registrarMerma', $batchId), [
+                'unit' => 'frasco',
+                'quantity' => 2,
+                'notes' => 'Frascos dañados durante el traslado interno.',
+            ])
+            ->assertRedirect();
+
+        $wasteRequestId = (int) DB::table('waste_authorization_requests')->value('id');
+
+        $this->assertDatabaseHas('waste_authorization_requests', [
+            'id' => $wasteRequestId,
+            'medicine_batch_id' => $batchId,
+            'requested_by' => $requester->id,
+            'quantity_containers' => 2,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('medicine_batches', [
+            'id' => $batchId,
+            'stock_actual' => 10,
+        ]);
+        $this->assertDatabaseCount('medicine_batch_movements', 0);
+
+        $this->actingAs($superAdministrator)
+            ->patch(route('admin.superadministrator.waste-requests.approve', $wasteRequestId), [
+                'review_notes' => 'Daño físico confirmado.',
+            ])
+            ->assertRedirect(route('admin.superadministrator.index', [
+                'waste_open' => 1,
+                'waste_view' => 'requests',
+            ]));
+
+        $this->assertDatabaseHas('waste_authorization_requests', [
+            'id' => $wasteRequestId,
+            'status' => 'approved',
+            'reviewed_by' => $superAdministrator->id,
+        ]);
+        $this->assertDatabaseHas('medicine_batches', [
+            'id' => $batchId,
+            'stock_actual' => 8,
+            'stock_ml_actual' => 800,
+        ]);
+        $this->assertDatabaseHas('medicine_batch_movements', [
+            'medicine_batch_id' => $batchId,
+            'movement_type' => 'merma',
+            'quantity' => 2,
+            'quantity_ml' => 200,
+            'reference_type' => 'WasteAuthorizationRequest',
+            'reference_id' => $wasteRequestId,
+        ]);
+    }
+
+    public function test_nutrition_container_waste_rejection_does_not_change_inventory(): void
+    {
+        $requester = $this->userWithRole('Admin');
+        $superAdministrator = $this->userWithRole('Super Admin');
+        [$laboratoryId, $warehouseId] = $this->inventoryLocation();
+        $catalogId = DB::table('nutrition_medicines_catalog')->insertGetId([
+            'denominacion_generica' => 'Nutriente de prueba',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $presentationId = DB::table('nutrition_medicine_presentations')->insertGetId([
+            'nutrition_medicine_catalog_id' => $catalogId,
+            'denominacion_comercial' => 'Nutrición prueba',
+            'presentacion' => 'Frasco 250 ml',
+            'presentacion_ml' => 250,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $stockId = DB::table('medicine_laboratory_stocks')->insertGetId([
+            'nutrition_medicine_presentation_id' => $presentationId,
+            'laboratory_id' => $laboratoryId,
+            'warehouse_id' => $warehouseId,
+            'stock_ml_inicial' => 1000,
+            'stock_ml_actual' => 1000,
+            'frascos_iniciales' => 4,
+            'frascos_actuales' => 4,
+            'lote' => 'LOTE-NPT-1',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($requester)
+            ->post(route('admin.nutricionales.stocks.registrarMerma', $stockId), [
+                'quantity' => 1,
+                'notes' => 'Frasco reportado con sello irregular.',
+            ])
+            ->assertRedirect();
+
+        $wasteRequestId = (int) DB::table('waste_authorization_requests')->value('id');
+
+        $this->actingAs($superAdministrator)
+            ->patch(route('admin.superadministrator.waste-requests.reject', $wasteRequestId), [
+                'review_notes' => 'El frasco fue inspeccionado y está íntegro.',
+            ])
+            ->assertRedirect(route('admin.superadministrator.index', [
+                'waste_open' => 1,
+                'waste_view' => 'requests',
+            ]));
+
+        $this->assertDatabaseHas('waste_authorization_requests', [
+            'id' => $wasteRequestId,
+            'status' => 'rejected',
+            'reviewed_by' => $superAdministrator->id,
+        ]);
+        $this->assertDatabaseHas('medicine_laboratory_stocks', [
+            'id' => $stockId,
+            'stock_ml_actual' => 1000,
+            'frascos_actuales' => 4,
+        ]);
+        $this->assertDatabaseCount('medicine_stock_movements', 0);
+    }
+
+    public function test_non_super_administrator_cannot_authorize_container_waste(): void
+    {
+        $administrator = $this->userWithRole('Admin');
+
+        $requestId = DB::table('waste_authorization_requests')->insertGetId([
+            'domain' => 'oncologico',
+            'requested_by' => $administrator->id,
+            'quantity_containers' => 1,
+            'quantity_ml' => 100,
+            'reason' => 'Solicitud de control de acceso.',
+            'status' => 'pending',
+            'snapshot_product' => 'Producto de prueba',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($administrator)
+            ->patch(route('admin.superadministrator.waste-requests.approve', $requestId))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('waste_authorization_requests', [
+            'id' => $requestId,
+            'status' => 'pending',
+        ]);
+    }
+
     public function test_a_super_administrator_can_dismiss_an_administrator_and_revoke_access(): void
     {
         config(['session.driver' => 'database']);
@@ -903,6 +1144,25 @@ class SuperAdministratorManagementTest extends TestCase
         return $user;
     }
 
+    private function inventoryLocation(): array
+    {
+        $laboratoryId = DB::table('laboratories')->insertGetId([
+            'nombre' => 'Central de inventario',
+            'activo' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $warehouseId = DB::table('warehouses')->insertGetId([
+            'laboratory_id' => $laboratoryId,
+            'name' => 'Almacén de inventario',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [$laboratoryId, $warehouseId];
+    }
+
     private function createTestSchema(): void
     {
         Schema::create('hospitals', function (Blueprint $table) {
@@ -1064,6 +1324,137 @@ class SuperAdministratorManagementTest extends TestCase
             $table->string('state')->nullable();
             $table->string('address')->nullable();
             $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('medicines_catalog', function (Blueprint $table) {
+            $table->id();
+            $table->string('denominacion');
+            $table->string('catalog_category')->default('oncologicos');
+            $table->timestamps();
+        });
+
+        Schema::create('medicine_presentations', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('catalog_id');
+            $table->string('presentacion')->nullable();
+            $table->decimal('contenido_valor', 12, 4)->nullable();
+            $table->string('contenido_unidad')->nullable();
+            $table->string('marca')->nullable();
+            $table->decimal('volumen_diluyente', 12, 4)->nullable();
+            $table->decimal('precio_frasco', 12, 4)->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('medicine_batches', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('laboratory_id');
+            $table->foreignId('warehouse_id')->nullable();
+            $table->foreignId('medicine_presentation_id');
+            $table->string('lote');
+            $table->date('caducidad')->nullable();
+            $table->date('fecha_ingreso')->nullable();
+            $table->integer('stock_inicial')->default(0);
+            $table->integer('stock_actual')->default(0);
+            $table->integer('stock_reservado')->default(0);
+            $table->decimal('stock_ml_inicial', 12, 4)->default(0);
+            $table->decimal('stock_ml_actual', 12, 4)->default(0);
+            $table->decimal('costo_unitario', 12, 4)->nullable();
+            $table->boolean('is_current')->default(true);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('medicine_batch_movements', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('medicine_batch_id');
+            $table->foreignId('laboratory_id');
+            $table->foreignId('warehouse_id')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->string('movement_type');
+            $table->integer('quantity');
+            $table->decimal('quantity_ml', 12, 4)->nullable();
+            $table->integer('stock_actual_before')->default(0);
+            $table->integer('stock_actual_after')->default(0);
+            $table->decimal('stock_ml_before', 12, 4)->nullable();
+            $table->decimal('stock_ml_after', 12, 4)->nullable();
+            $table->integer('stock_reservado_before')->default(0);
+            $table->integer('stock_reservado_after')->default(0);
+            $table->string('reference_type')->nullable();
+            $table->unsignedBigInteger('reference_id')->nullable();
+            $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('nutrition_medicines_catalog', function (Blueprint $table) {
+            $table->id();
+            $table->string('denominacion_generica');
+            $table->timestamps();
+        });
+
+        Schema::create('nutrition_medicine_presentations', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('nutrition_medicine_catalog_id');
+            $table->string('denominacion_comercial')->nullable();
+            $table->string('presentacion')->nullable();
+            $table->decimal('presentacion_ml', 12, 4)->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('medicine_laboratory_stocks', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('nutrition_medicine_presentation_id');
+            $table->foreignId('laboratory_id');
+            $table->foreignId('warehouse_id')->nullable();
+            $table->decimal('stock_ml_inicial', 12, 2)->default(0);
+            $table->decimal('stock_ml_actual', 12, 2)->default(0);
+            $table->decimal('frascos_iniciales', 12, 2)->default(0);
+            $table->decimal('frascos_actuales', 12, 2)->default(0);
+            $table->string('lote');
+            $table->date('caducidad')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('medicine_stock_movements', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('medicine_laboratory_stock_id');
+            $table->foreignId('warehouse_id')->nullable();
+            $table->foreignId('user_id')->nullable();
+            $table->string('tipo');
+            $table->decimal('cantidad_ml', 12, 2);
+            $table->decimal('stock_antes', 12, 2);
+            $table->decimal('stock_despues', 12, 2);
+            $table->decimal('cantidad_frascos', 12, 2)->nullable();
+            $table->decimal('frascos_antes', 12, 2)->nullable();
+            $table->decimal('frascos_despues', 12, 2)->nullable();
+            $table->string('reference_type')->nullable();
+            $table->unsignedBigInteger('reference_id')->nullable();
+            $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('waste_authorization_requests', function (Blueprint $table) {
+            $table->id();
+            $table->string('domain');
+            $table->foreignId('medicine_batch_id')->nullable();
+            $table->foreignId('medicine_laboratory_stock_id')->nullable();
+            $table->foreignId('requested_by')->nullable();
+            $table->foreignId('reviewed_by')->nullable();
+            $table->unsignedInteger('quantity_containers');
+            $table->decimal('quantity_ml', 12, 4);
+            $table->text('reason');
+            $table->string('status')->default('pending');
+            $table->text('review_notes')->nullable();
+            $table->timestamp('reviewed_at')->nullable();
+            $table->string('snapshot_product');
+            $table->string('snapshot_presentation')->nullable();
+            $table->string('snapshot_brand')->nullable();
+            $table->string('snapshot_lot')->nullable();
+            $table->string('snapshot_laboratory')->nullable();
+            $table->string('snapshot_warehouse')->nullable();
+            $table->decimal('snapshot_cost_per_ml', 12, 4)->nullable();
+            $table->decimal('snapshot_cost_per_container', 12, 4)->nullable();
             $table->timestamps();
         });
 

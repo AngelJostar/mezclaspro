@@ -7,6 +7,7 @@
         request()->routeIs('admin.instituciones.reportes') => 'administracion',
         request()->routeIs('admin.users.*', 'admin.roles.*', 'admin.permissions.*') => 'usuarios_permisos',
         request()->routeIs('admin.capacitaciones.*') => 'capacitaciones',
+        request()->routeIs('admin.maintenance-qualifications.*') => 'maintenance_qualifications',
         request()->routeIs('admin.purchases.*', 'admin.warehouses.purchase-orders.*', 'admin.oncologicos.laboratory.purchase-orders.*', 'admin.suppliers.*') => 'compras',
         request()->routeIs('admin.catalogo-listas.*', 'admin.nutricionales.medicines.*', 'admin.nutricionales.inputs.*', 'admin.nutricionales.nutri-medicine-lists.*', 'admin.oncologicos.medicines.*', 'admin.oncologicos.diluents.*') => 'catalogo_listas',
         request()->routeIs('admin.distribution.*') => 'distribution',
@@ -376,6 +377,20 @@
             </li>
             @endif
             @endunless
+
+            @if ($menuAllows('menu.maintenance-qualifications', $sidebarUser?->hasRole('Super Admin') ?? false))
+                <li class="rounded-lg border border-emerald-200 bg-emerald-50 p-1 dark:border-emerald-700 dark:bg-emerald-900/20">
+                    <a href="{{ route('admin.maintenance-qualifications.index') }}" aria-label="Mantenimiento y Calificaciones"
+                        x-on:click="open = false"
+                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-emerald-100 dark:text-white dark:hover:bg-emerald-800/50 {{ request()->routeIs('admin.maintenance-qualifications.*') ? 'bg-emerald-100 dark:bg-emerald-800/50' : '' }}">
+                        <i class="fa-solid fa-screwdriver-wrench shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden="true"></i>
+                        <span class="ms-2 min-w-0 text-center text-xs font-bold leading-4">
+                            <span class="block">Mantenimiento y</span>
+                            <span class="block">Calificaciones</span>
+                        </span>
+                    </a>
+                </li>
+            @endif
 
             @unless (auth()->user()?->hasRole('Capacitacion'))
             <!-- Roles y Permisos -->

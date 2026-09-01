@@ -1,5 +1,21 @@
 <x-admin-layout>
-    <h1 class="text-2xl font-semibold text-gray-800 mb-6">Registrar merma</h1>
+    @php
+        $volumePerContainer = (float) ($stock->presentation->presentacion_ml ?? 0);
+        $availableContainers = $volumePerContainer > 0
+            ? max(0, (int) floor(min(
+                (float) $stock->frascos_actuales,
+                (float) $stock->stock_ml_actual / $volumePerContainer
+            )))
+            : 0;
+    @endphp
+
+    <h1 class="text-2xl font-semibold text-gray-800 mb-6">Solicitar merma de frasco</h1>
+
+    @if ($errors->any())
+        <div role="alert" class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {{ $errors->first() }}
+        </div>
+    @endif
 
     <div class="bg-white shadow rounded-lg p-6 mb-6 space-y-1">
         <p><strong>Central de mezclas:</strong> {{ $stock->laboratory->nombre }}</p>
@@ -21,13 +37,14 @@
 
         <div class="bg-white shadow rounded-lg p-6 space-y-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Cantidad a descartar (ml)</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Número de frascos enteros</label>
                 <input
                     type="number"
-                    step="0.01"
-                    min="0.01"
-                    name="cantidad_ml"
-                    value="{{ old('cantidad_ml') }}"
+                    step="1"
+                    min="1"
+                    max="{{ $availableContainers }}"
+                    name="quantity"
+                    value="{{ old('quantity') }}"
                     class="w-full rounded border-gray-300"
                     required
                 >
@@ -46,8 +63,9 @@
             <div class="flex justify-end">
                 <button
                     type="submit"
-                    class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded">
-                    Registrar merma
+                    class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded disabled:cursor-not-allowed disabled:bg-gray-300"
+                    @disabled($availableContainers < 1)>
+                    Enviar solicitud
                 </button>
             </div>
         </div>

@@ -101,8 +101,10 @@
                 SOLICITUD DE NUTRICIÓN PARENTERAL
             </h1>
             <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
-                class="justify-self-end rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                Cerrar
+                class="inline-flex h-10 w-10 shrink-0 items-center justify-center justify-self-end rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                title="Cerrar formato de solicitud"
+                aria-label="Cerrar formato de solicitud">
+                <span aria-hidden="true">&times;</span>
             </a>
         </div>
 

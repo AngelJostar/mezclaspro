@@ -1,26 +1,42 @@
 <x-admin-layout>
+    @php
+        $requestType = $requestType ?? 'oncologicos';
+        $closeRoute = $requestType === 'antibioticos'
+            ? 'admin.antibioticos.solicitudes.index'
+            : 'admin.oncologicos.solicitudes.index';
+    @endphp
+
     <div class="flex flex-col ">
-        <div class="mt-2 mb-4">
-            <h1 class="text-2xl font-medium text-gray-800">
-                Crear Nueva Solicitud {{ ($requestType ?? 'oncologicos') === 'antibioticos' ? 'de Antibioticos' : 'Oncologica' }}
-            </h1>
+        <div class="mt-2 mb-4 flex items-start justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-medium text-gray-800">
+                    Crear Nueva Solicitud {{ $requestType === 'antibioticos' ? 'de Antibioticos' : 'Oncologica' }}
+                </h1>
 
-            @if ($errors->any())
-                <div class="bg-red-100 text-red-700 p-4 rounded mb-4">
-                    <strong>Se encontraron los siguientes errores:</strong>
-                    <ul class="list-disc pl-6">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
+                @if ($errors->any())
+                    <div class="bg-red-100 text-red-700 p-4 rounded mb-4">
+                        <strong>Se encontraron los siguientes errores:</strong>
+                        <ul class="list-disc pl-6">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
 
-            @if (session('success'))
-                <div class="bg-green-100 text-green-800 p-4 rounded mb-4">
-                    {{ session('success') }}
-                </div>
-            @endif
+                @if (session('success'))
+                    <div class="bg-green-100 text-green-800 p-4 rounded mb-4">
+                        {{ session('success') }}
+                    </div>
+                @endif
+            </div>
+
+            <a href="{{ route($closeRoute) }}"
+                class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                title="Cerrar formato de solicitud"
+                aria-label="Cerrar formato de solicitud">
+                <span aria-hidden="true">&times;</span>
+            </a>
         </div>
 
         <form id="formularioSolicitud" action="{{ route('admin.oncologicos.solicitudes.store') }}" method="POST"

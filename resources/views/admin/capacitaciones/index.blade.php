@@ -4,6 +4,9 @@
         $isAlumnosPage = request()->routeIs('admin.capacitaciones.alumnos');
         $isStudentsPage = $isAlumnosPage || $isPersonnelPage;
         $trainingSectionTitle = $isPersonnelPage ? 'Personal' : ($isStudentsPage ? 'Alumnos' : 'Programas');
+        $availableLaboratories = $laboratories ?? collect();
+        $selectedLaboratory = $selectedLaboratory ?? null;
+        $selectedLaboratoryId = (int) ($selectedLaboratory?->id ?? 0);
 
         $personnel = [
             [
@@ -343,17 +346,9 @@
             <div class="training-page-heading">
                 <h1>Personal y Capacitaciones / {{ $trainingSectionTitle }}</h1>
 
-                @if ($isPersonnelPage)
-                    <div class="training-header-actions">
-                        <button type="button" class="training-primary-button" data-open-personnel-create>
-                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                            <span>Nuevo personal</span>
-                        </button>
-                        <button type="button" class="training-secondary-button">Personal concluido</button>
-                    </div>
-                @else
+                @unless ($isPersonnelPage)
                     <p>{{ $isStudentsPage ? 'Gestion y seguimiento de la capacitacion del personal' : 'Diseno y administracion de programas de capacitacion' }}</p>
-                @endif
+                @endunless
             </div>
 
             <div class="training-role-switch" aria-label="Cambiar vista de capacitaciones">
@@ -874,6 +869,87 @@
                     <h2>Avance del personal</h2>
                 </div>
             @endunless
+
+            @if ($isPersonnelPage)
+                <section class="training-laboratory-selector" aria-labelledby="personnel-laboratory-carousel-title">
+                    <div class="training-laboratory-selector-heading">
+                        <h2 id="personnel-laboratory-carousel-title">Selecciona una central</h2>
+                        <p>Consulta todas las centrales o selecciona una central espec&iacute;fica.</p>
+                    </div>
+
+                    @if ($availableLaboratories->isNotEmpty())
+                        <div class="training-laboratory-carousel-shell">
+                            <button type="button" class="training-laboratory-nav" data-personnel-laboratory-previous
+                                title="Central anterior" aria-label="Central anterior">
+                                <span aria-hidden="true">&lsaquo;</span>
+                            </button>
+
+                            <div class="training-laboratory-carousel" data-personnel-laboratory-carousel>
+                                <a href="{{ route('admin.capacitaciones.personal', request()->except(['page', 'laboratory_id'])) }}"
+                                    class="training-laboratory-card {{ $selectedLaboratoryId === 0 ? 'is-active' : '' }}"
+                                    @if ($selectedLaboratoryId === 0) data-selected-laboratory aria-current="page" @endif>
+                                    <span class="training-laboratory-card-heading">
+                                        <span class="training-laboratory-letter" aria-hidden="true">T</span>
+                                        <span class="training-laboratory-card-copy">
+                                            <strong>Todas</strong>
+                                            <small>Todas las centrales</small>
+                                            <em>Cat&aacute;logo consolidado</em>
+                                        </span>
+                                    </span>
+                                    <span class="training-laboratory-card-meta">
+                                        <span>
+                                            <i aria-hidden="true"></i>
+                                            Activas
+                                        </span>
+                                        <span>{{ $availableLaboratories->count() }} {{ $availableLaboratories->count() === 1 ? 'central' : 'centrales' }}</span>
+                                    </span>
+                                </a>
+
+                                @foreach ($availableLaboratories as $laboratory)
+                                    @php
+                                        $isSelectedLaboratory = $selectedLaboratoryId === (int) $laboratory->id;
+                                        $personnelCount = (int) ($laboratory->personnel_count ?? 0);
+                                    @endphp
+                                    <a href="{{ route('admin.capacitaciones.personal', array_merge(request()->except(['page']), ['laboratory_id' => $laboratory->id])) }}"
+                                        class="training-laboratory-card {{ $isSelectedLaboratory ? 'is-active' : '' }}"
+                                        @if ($isSelectedLaboratory) data-selected-laboratory aria-current="page" @endif>
+                                        <span class="training-laboratory-card-heading">
+                                            <span class="training-laboratory-letter" aria-hidden="true">C</span>
+                                            <span class="training-laboratory-card-copy">
+                                                <strong>{{ $laboratory->nombre }}</strong>
+                                                <small>{{ $laboratory->estado ?: 'Sin estado registrado' }}</small>
+                                                <em>{{ $laboratory->direccion ?: 'Sin direcci&oacute;n registrada' }}</em>
+                                            </span>
+                                        </span>
+                                        <span class="training-laboratory-card-meta">
+                                            <span>
+                                                <i aria-hidden="true"></i>
+                                                Activa
+                                            </span>
+                                            <span>{{ $personnelCount }} {{ $personnelCount === 1 ? 'persona' : 'personas' }}</span>
+                                        </span>
+                                    </a>
+                                @endforeach
+                            </div>
+
+                            <button type="button" class="training-laboratory-nav" data-personnel-laboratory-next
+                                title="Central siguiente" aria-label="Central siguiente">
+                                <span aria-hidden="true">&rsaquo;</span>
+                            </button>
+                        </div>
+                    @else
+                        <p class="training-laboratory-empty">No hay centrales activas disponibles.</p>
+                    @endif
+                </section>
+
+                <div class="training-header-actions training-personnel-actions">
+                    <button type="button" class="training-primary-button" data-open-personnel-create>
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                        <span>Nuevo personal</span>
+                    </button>
+                    <button type="button" class="training-secondary-button">Personal concluido</button>
+                </div>
+            @endif
 
             <div class="training-filters {{ $isPersonnelPage ? 'is-personnel' : '' }}">
                 @unless ($isPersonnelPage)
@@ -1397,6 +1473,10 @@
                 display: flex;
                 flex-wrap: wrap;
                 gap: 0.6rem;
+            }
+
+            .training-personnel-actions {
+                margin-top: 0.75rem;
             }
 
             .training-page-header h1 {
@@ -2727,6 +2807,204 @@
                 color: var(--training-teal-dark);
             }
 
+            .training-laboratory-selector {
+                margin-top: 1rem;
+                border-bottom: 1px solid var(--training-line);
+                padding-bottom: 1rem;
+            }
+
+            .training-laboratory-selector-heading {
+                margin-bottom: 0.65rem;
+            }
+
+            .training-laboratory-selector-heading h2 {
+                margin: 0;
+                color: var(--training-ink);
+                font-size: 0.9rem;
+                font-weight: 850;
+            }
+
+            .training-laboratory-selector-heading p {
+                margin: 0.15rem 0 0;
+                color: var(--training-soft);
+                font-size: 0.78rem;
+            }
+
+            .training-laboratory-carousel-shell {
+                display: flex;
+                align-items: center;
+                gap: 0.7rem;
+            }
+
+            .training-laboratory-nav {
+                display: grid;
+                width: 2.35rem;
+                height: 2.35rem;
+                flex: 0 0 2.35rem;
+                place-items: center;
+                border: 1px solid var(--training-line);
+                border-radius: 999px;
+                color: #9aaabc;
+                background: #ffffff;
+                box-shadow: 0 6px 14px rgba(16, 42, 67, 0.08);
+                font-size: 1.35rem;
+                line-height: 1;
+                transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+            }
+
+            .training-laboratory-nav:hover:not(:disabled) {
+                border-color: #9fb7d2;
+                color: #31516f;
+                background: #f8fbff;
+            }
+
+            .training-laboratory-nav:disabled {
+                cursor: not-allowed;
+                opacity: 0.45;
+            }
+
+            .training-laboratory-carousel {
+                display: flex;
+                min-width: 0;
+                flex: 1;
+                gap: 0.75rem;
+                overflow-x: auto;
+                padding: 0.1rem 0.1rem 0.55rem;
+                scroll-behavior: smooth;
+                scroll-snap-type: x mandatory;
+            }
+
+            .training-laboratory-card {
+                display: grid;
+                min-height: 7rem;
+                flex: 0 0 16rem;
+                align-content: space-between;
+                gap: 0.7rem;
+                border: 1px solid var(--training-line);
+                border-radius: 4px;
+                padding: 0.75rem;
+                color: var(--training-ink);
+                background: #ffffff;
+                text-decoration: none;
+                scroll-snap-align: start;
+                transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+            }
+
+            .training-laboratory-card:hover {
+                border-color: #9fb7d2;
+                background: #fbfdff;
+            }
+
+            .training-laboratory-card:focus-visible {
+                outline: 2px solid #67e8f9;
+                outline-offset: 2px;
+            }
+
+            .training-laboratory-card.is-active {
+                border-color: #06b6d4;
+                background: #ecfeff;
+            }
+
+            .training-laboratory-card-heading {
+                display: flex;
+                min-width: 0;
+                gap: 0.65rem;
+            }
+
+            .training-laboratory-letter {
+                display: grid;
+                width: 2rem;
+                height: 2rem;
+                flex: 0 0 2rem;
+                place-items: center;
+                border-radius: 4px;
+                color: #075985;
+                background: #ffffff;
+                font-size: 0.82rem;
+                font-weight: 850;
+                box-shadow: 0 1px 4px rgba(16, 42, 67, 0.08);
+            }
+
+            .training-laboratory-card-copy {
+                display: grid;
+                min-width: 0;
+                gap: 0.15rem;
+            }
+
+            .training-laboratory-card-copy strong,
+            .training-laboratory-card-copy small,
+            .training-laboratory-card-copy em {
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .training-laboratory-card-copy strong {
+                color: #0f172a;
+                font-size: 0.88rem;
+                font-weight: 850;
+                white-space: nowrap;
+            }
+
+            .training-laboratory-card-copy small {
+                color: #075985;
+                font-size: 0.72rem;
+                font-weight: 750;
+                white-space: nowrap;
+            }
+
+            .training-laboratory-card-copy em {
+                display: -webkit-box;
+                color: var(--training-soft);
+                font-size: 0.76rem;
+                font-style: normal;
+                line-height: 1.35;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+            }
+
+            .training-laboratory-card-meta {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.65rem;
+                color: var(--training-soft);
+                font-size: 0.76rem;
+                font-weight: 750;
+            }
+
+            .training-laboratory-card-meta > span {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                min-width: 0;
+            }
+
+            .training-laboratory-card-meta > span:last-child {
+                justify-content: flex-end;
+                text-align: right;
+            }
+
+            .training-laboratory-card-meta i {
+                width: 0.45rem;
+                height: 0.45rem;
+                flex: 0 0 0.45rem;
+                border-radius: 999px;
+                background: var(--training-teal);
+            }
+
+            .training-laboratory-card-meta > span:first-child {
+                color: var(--training-teal-dark);
+            }
+
+            .training-laboratory-empty {
+                border: 1px solid #f5d28a;
+                border-radius: 4px;
+                padding: 0.75rem 1rem;
+                color: #8a5a00;
+                background: #fff7e6;
+                font-size: 0.85rem;
+            }
+
             .training-section-heading {
                 justify-content: space-between;
                 gap: 1rem;
@@ -3808,6 +4086,32 @@
                 let editingExam = null;
                 let creatingExam = null;
                 let assignmentTargetRow = null;
+
+                const laboratoryCarousel = root.querySelector('[data-personnel-laboratory-carousel]');
+                const laboratoryPrevious = root.querySelector('[data-personnel-laboratory-previous]');
+                const laboratoryNext = root.querySelector('[data-personnel-laboratory-next]');
+
+                if (laboratoryCarousel && laboratoryPrevious && laboratoryNext) {
+                    const updateLaboratoryNavigation = () => {
+                        const maximumScroll = Math.max(0, laboratoryCarousel.scrollWidth - laboratoryCarousel.clientWidth);
+                        laboratoryPrevious.disabled = laboratoryCarousel.scrollLeft <= 1;
+                        laboratoryNext.disabled = laboratoryCarousel.scrollLeft >= maximumScroll - 1;
+                    };
+
+                    const moveLaboratoryCarousel = (direction) => {
+                        laboratoryCarousel.scrollBy({ left: direction * 300, behavior: 'smooth' });
+                    };
+
+                    laboratoryPrevious.addEventListener('click', () => moveLaboratoryCarousel(-1));
+                    laboratoryNext.addEventListener('click', () => moveLaboratoryCarousel(1));
+                    laboratoryCarousel.addEventListener('scroll', updateLaboratoryNavigation, { passive: true });
+                    window.addEventListener('resize', updateLaboratoryNavigation);
+
+                    laboratoryCarousel
+                        .querySelector('[data-selected-laboratory]')
+                        ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+                    requestAnimationFrame(updateLaboratoryNavigation);
+                }
 
                 function readStoredPrograms() {
                     try {

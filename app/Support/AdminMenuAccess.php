@@ -107,6 +107,11 @@ final class AdminMenuAccess
                 ],
             ],
             [
+                'permission' => 'menu.maintenance-qualifications',
+                'label' => 'Mantenimiento y Calificaciones',
+                'icon' => 'fa-screwdriver-wrench',
+            ],
+            [
                 'permission' => 'menu.users',
                 'label' => 'Roles y Permisos',
                 'icon' => 'fa-user-shield',
@@ -376,6 +381,10 @@ final class AdminMenuAccess
                 'admin.capacitaciones.personal.store' => 'menu.capacitaciones.personal',
                 default => 'menu.capacitaciones.programas',
             };
+        }
+
+        if (str_starts_with($routeName, 'admin.maintenance-qualifications.')) {
+            return 'menu.maintenance-qualifications';
         }
 
         if (in_array($routeName, [

@@ -13,8 +13,15 @@
     </div>
 
     <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-3">
-        <form method="GET" action="{{ route('admin.instituciones.reportes') }}"
-            class="flex flex-col gap-2 md:flex-row md:items-center md:justify-end mb-3">
+        <div class="mb-3 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <button type="button" id="custom-report-create"
+                class="inline-flex h-10 shrink-0 self-start items-center justify-center gap-2 rounded-md bg-blue-900 px-4 text-sm font-semibold text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                Crear nuevo reporte
+            </button>
+
+            <form method="GET" action="{{ route('admin.instituciones.reportes') }}"
+                class="flex flex-1 flex-col gap-2 md:flex-row md:items-center md:justify-end">
             <details class="group relative w-full md:w-auto" @if ($errors->has('daily_from') || $errors->has('daily_to')) open @endif>
                 <summary
                     class="flex cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 hover:bg-blue-100 [&::-webkit-details-marker]:hidden">
@@ -71,7 +78,22 @@
                 <i class="fa-solid fa-filter mr-2"></i>
                 Filtrar
             </button>
-        </form>
+            </form>
+        </div>
+
+        <section id="custom-report-library"
+            class="mb-3 border-y border-slate-200 bg-slate-50 px-3 py-2 {{ count($customReportTemplates) ? '' : 'hidden' }}"
+            aria-labelledby="custom-report-library-title">
+            <div class="flex flex-col gap-2 lg:flex-row lg:items-center">
+                <div class="shrink-0">
+                    <p id="custom-report-library-title" class="text-[11px] font-semibold uppercase text-slate-500">
+                        Plantillas personalizadas
+                    </p>
+                    <p class="text-xs text-slate-600"><span id="custom-report-count">{{ count($customReportTemplates) }}</span> guardadas</p>
+                </div>
+                <div id="custom-report-template-list" class="flex min-w-0 flex-1 flex-wrap gap-2"></div>
+            </div>
+        </section>
 
         <div id="report-format-actions"
             class="mb-3 hidden items-center justify-between gap-3 border-y border-slate-200 bg-slate-50 px-3 py-2">
@@ -127,6 +149,19 @@
                                         aria-label="Editar nombre de {{ $reportLabel }}">
                                         <i class="fa-solid fa-pen text-[10px]"></i>
                                     </button>
+                                </div>
+                            </th>
+                        @endforeach
+                        @foreach ($publishedCustomReportTemplates as $customTemplate)
+                            <th class="min-w-[170px] border border-slate-300 px-2 py-1 font-semibold">
+                                <button type="button" data-custom-template-edit="{{ $customTemplate['id'] }}"
+                                    class="mb-1 inline-flex items-center gap-1 rounded border border-emerald-200 bg-white px-2 py-1 text-[10px] font-semibold normal-case text-emerald-700 hover:bg-emerald-50"
+                                    title="Editar el formato {{ $customTemplate['name'] }}">
+                                    <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+                                    Formato
+                                </button>
+                                <div class="uppercase leading-tight">
+                                    {{ $customTemplate['name'] }}
                                 </div>
                             </th>
                         @endforeach
@@ -191,10 +226,25 @@
                                     'downloadUrl' => route('admin.instituciones.exportarReporteMensualInsumos', $institucion),
                                 ])
                             </td>
+                            @foreach ($publishedCustomReportTemplates as $customTemplate)
+                                <td class="border border-slate-200 px-2 py-1 whitespace-nowrap">
+                                    <a href="{{ route('admin.instituciones.reportes.plantillas.download', [
+                                        'customTemplate' => $customTemplate['id'],
+                                        'institucion' => $institucion,
+                                        'from' => $dailyReportFrom,
+                                        'to' => $dailyReportTo,
+                                    ]) }}"
+                                        class="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-800">
+                                        <i class="fa-solid fa-download text-[11px]" aria-hidden="true"></i>
+                                        Descargar
+                                    </a>
+                                </td>
+                            @endforeach
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="border border-slate-200 px-2 py-6 text-center text-slate-400">
+                            <td colspan="{{ 6 + count($reportColumns) + count($publishedCustomReportTemplates) }}"
+                                class="border border-slate-200 px-2 py-6 text-center text-slate-400">
                                 No se encontraron instituciones para mostrar.
                             </td>
                         </tr>
@@ -259,6 +309,9 @@
     </div>
 
     <script id="institution-report-templates-data" type="application/json">{!! json_encode($reportTemplates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+    <script id="custom-report-templates-data" type="application/json">{!! json_encode($customReportTemplates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+    <script id="custom-report-parameters-data" type="application/json">{!! json_encode($reportCatalogParameters, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+    <script id="custom-report-sources-data" type="application/json">{!! json_encode($reportDataSources, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
 
     <div id="report-template-modal"
         data-update-url="{{ route('admin.instituciones.reportes.formatos.update', ['reportTemplate' => '__REPORT__']) }}"
@@ -310,5 +363,201 @@
                 </footer>
             </section>
         </div>
+    </div>
+
+    <div id="custom-report-builder-modal"
+        data-store-url="{{ route('admin.instituciones.reportes.plantillas.store') }}"
+        data-update-url="{{ route('admin.instituciones.reportes.plantillas.update', ['customTemplate' => '__ID__']) }}"
+        data-publish-url="{{ route('admin.instituciones.reportes.plantillas.publish', ['customTemplate' => '__ID__']) }}"
+        data-delete-url="{{ route('admin.instituciones.reportes.plantillas.destroy', ['customTemplate' => '__ID__']) }}"
+        class="fixed inset-0 z-[80] hidden bg-slate-950/60 p-3 sm:p-5"
+        role="dialog" aria-modal="true" aria-labelledby="custom-report-builder-title">
+        <section class="mx-auto flex h-full w-full max-w-[96rem] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+            <header class="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-semibold uppercase text-blue-700">Diseñador de plantillas</p>
+                    <h2 id="custom-report-builder-title" class="truncate text-xl font-semibold text-slate-900">
+                        Crear nuevo reporte
+                    </h2>
+                </div>
+                <button type="button" data-custom-report-close
+                    class="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    title="Cerrar diseñador" aria-label="Cerrar diseñador">
+                    <span aria-hidden="true" class="text-2xl leading-none">&times;</span>
+                </button>
+            </header>
+
+            <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
+                <button type="button" data-grid-action="add-row"
+                    class="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    Agregar renglón
+                </button>
+                <button type="button" data-grid-action="add-column"
+                    class="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    Agregar columna
+                </button>
+                <button type="button" data-grid-action="remove-row"
+                    class="inline-flex h-9 items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Eliminar renglón seleccionado" aria-label="Eliminar renglón seleccionado">
+                    Quitar renglón
+                </button>
+                <button type="button" data-grid-action="remove-column"
+                    class="inline-flex h-9 items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Eliminar columna seleccionada" aria-label="Eliminar columna seleccionada">
+                    Quitar columna
+                </button>
+
+                <span class="mx-1 h-7 w-px bg-slate-300" aria-hidden="true"></span>
+
+                <label for="custom-cell-font" class="sr-only">Tipo de letra</label>
+                <select id="custom-cell-font" class="h-9 w-36 rounded-md border-slate-300 py-1 text-xs focus:border-blue-500 focus:ring-blue-500">
+                    <option>Arial</option>
+                    <option>Calibri</option>
+                    <option>Figtree</option>
+                    <option>Georgia</option>
+                    <option>Tahoma</option>
+                    <option>Times New Roman</option>
+                    <option>Verdana</option>
+                </select>
+                <label for="custom-cell-font-size" class="sr-only">Tamaño de letra</label>
+                <input id="custom-cell-font-size" type="number" min="8" max="36" step="1"
+                    class="h-9 w-16 rounded-md border-slate-300 px-2 py-1 text-center text-xs focus:border-blue-500 focus:ring-blue-500">
+
+                <div class="flex overflow-hidden rounded-md border border-slate-300 bg-white">
+                    <button type="button" data-style-toggle="bold"
+                        class="inline-flex size-9 items-center justify-center border-r border-slate-300 text-slate-700 hover:bg-slate-100"
+                        title="Negrita" aria-label="Negrita">
+                        <strong aria-hidden="true">B</strong>
+                    </button>
+                    <button type="button" data-style-toggle="italic"
+                        class="inline-flex size-9 items-center justify-center border-r border-slate-300 text-slate-700 hover:bg-slate-100"
+                        title="Cursiva" aria-label="Cursiva">
+                        <em aria-hidden="true">I</em>
+                    </button>
+                    <button type="button" data-style-toggle="underline"
+                        class="inline-flex size-9 items-center justify-center text-slate-700 hover:bg-slate-100"
+                        title="Subrayado" aria-label="Subrayado">
+                        <span aria-hidden="true" class="underline">U</span>
+                    </button>
+                </div>
+
+                <div class="flex overflow-hidden rounded-md border border-slate-300 bg-white text-[10px] font-semibold">
+                    <button type="button" data-cell-align="left"
+                        class="inline-flex h-9 items-center justify-center border-r border-slate-300 px-2 text-slate-700 hover:bg-slate-100"
+                        title="Alinear a la izquierda" aria-label="Alinear a la izquierda">
+                        Izq.
+                    </button>
+                    <button type="button" data-cell-align="center"
+                        class="inline-flex h-9 items-center justify-center border-r border-slate-300 px-2 text-slate-700 hover:bg-slate-100"
+                        title="Centrar" aria-label="Centrar">
+                        Cen.
+                    </button>
+                    <button type="button" data-cell-align="right"
+                        class="inline-flex h-9 items-center justify-center px-2 text-slate-700 hover:bg-slate-100"
+                        title="Alinear a la derecha" aria-label="Alinear a la derecha">
+                        Der.
+                    </button>
+                </div>
+
+                <label class="flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700">
+                    Texto
+                    <input id="custom-cell-color" type="color" value="#1F2937"
+                        class="h-6 w-7 cursor-pointer rounded border-0 bg-transparent p-0" title="Color del texto">
+                </label>
+                <label class="flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700">
+                    Fondo
+                    <input id="custom-cell-background" type="color" value="#FFFFFF"
+                        class="h-6 w-7 cursor-pointer rounded border-0 bg-transparent p-0" title="Color de fondo">
+                </label>
+            </div>
+
+            <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+                <main class="min-h-[360px] min-w-0 flex-1 overflow-auto bg-slate-100 p-4" aria-label="Cuadrícula de la plantilla">
+                    <div id="custom-report-grid" class="inline-block min-w-full overflow-hidden border border-slate-300 bg-white shadow-sm"></div>
+                </main>
+
+                <aside class="w-full shrink-0 overflow-y-auto border-t border-slate-200 bg-white p-4 lg:w-80 lg:border-l lg:border-t-0">
+                    <div class="space-y-4">
+                        <label class="block text-xs font-semibold text-slate-700">
+                            Nombre del reporte
+                            <input id="custom-report-name" type="text" maxlength="120" placeholder="Ej. Control mensual de entregas"
+                                class="mt-1 h-10 w-full rounded-md border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </label>
+                        <label class="block text-xs font-semibold text-slate-700">
+                            Origen de datos
+                            <select id="custom-report-source"
+                                class="mt-1 h-10 w-full rounded-md border-slate-300 py-1 text-sm focus:border-blue-500 focus:ring-blue-500"></select>
+                        </label>
+                        <label class="block text-xs font-semibold text-slate-700">
+                            Descripción
+                            <textarea id="custom-report-description" rows="2" maxlength="500"
+                                class="mt-1 w-full resize-y rounded-md border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </label>
+
+                        <div class="border-t border-slate-200 pt-4">
+                            <div class="mb-3 flex items-center justify-between">
+                                <h3 class="text-sm font-semibold text-slate-900">Celda <span id="custom-selected-cell">A1</span></h3>
+                            </div>
+                            <div class="grid grid-cols-3 overflow-hidden rounded-md border border-slate-300" role="group" aria-label="Tipo de celda">
+                                <button type="button" data-cell-type="text" class="h-9 border-r border-slate-300 px-2 text-xs font-semibold">Texto</button>
+                                <button type="button" data-cell-type="free" class="h-9 border-r border-slate-300 px-2 text-xs font-semibold">Campo libre</button>
+                                <button type="button" data-cell-type="parameter" class="h-9 px-2 text-xs font-semibold">Parámetro</button>
+                            </div>
+                        </div>
+
+                        <label id="custom-cell-value-wrap" class="block text-xs font-semibold text-slate-700">
+                            Contenido
+                            <textarea id="custom-cell-value" rows="3" maxlength="500"
+                                class="mt-1 w-full resize-y rounded-md border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </label>
+
+                        <label id="custom-cell-parameter-wrap" class="hidden text-xs font-semibold text-slate-700">
+                            Parámetro de catálogo
+                            <select id="custom-cell-parameter"
+                                class="mt-1 w-full rounded-md border-slate-300 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"></select>
+                        </label>
+
+                        <div id="custom-cell-repeat-wrap" class="hidden">
+                            <p class="mb-1 text-xs font-semibold text-slate-700">Continuación de datos</p>
+                            <div class="grid grid-cols-3 overflow-hidden rounded-md border border-slate-300" role="group" aria-label="Dirección de continuación">
+                                <button type="button" data-cell-repeat="none"
+                                    class="h-9 border-r border-slate-300 px-2 text-xs font-semibold">Sin repetir</button>
+                                <button type="button" data-cell-repeat="vertical"
+                                    class="inline-flex h-9 items-center justify-center gap-1 border-r border-slate-300 px-2 text-xs font-semibold">
+                                    <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+                                    Vertical
+                                </button>
+                                <button type="button" data-cell-repeat="horizontal"
+                                    class="inline-flex h-9 items-center justify-center gap-1 px-2 text-xs font-semibold">
+                                    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                                    Horizontal
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+
+            <footer class="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p id="custom-report-grid-size" class="text-xs font-medium text-slate-600"></p>
+                    <p id="custom-report-save-error" class="text-xs font-medium text-red-600"></p>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" data-custom-report-close
+                        class="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                        Cancelar
+                    </button>
+                    <button type="button" id="custom-report-save"
+                        class="inline-flex h-10 items-center gap-2 rounded-md bg-blue-900 px-4 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">
+                        Guardar plantilla
+                    </button>
+                    <button type="button" id="custom-report-publish"
+                        class="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60">
+                        Agregar a reportes
+                    </button>
+                </div>
+            </footer>
+        </section>
     </div>
 </x-admin-layout>

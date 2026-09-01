@@ -11,7 +11,6 @@
                         'requested_at' => 'created_at',
                         'delivery_at' => 'fecha_entrega',
                         'status' => 'estado',
-                        'remission' => 'remision',
                         'lot' => 'lote',
                     ],
                     'tableSortField' => $sortField,
@@ -49,7 +48,6 @@
                         <td class="px-2 py-2 text-center">
                             @include('admin.solicitudes._status-badge', ['status' => $estado])
                         </td>
-                        <td class="px-2 py-2 text-center">{{ $mezcla->remision ?? '—' }}</td>
                         <td class="px-2 py-2 text-center">{{ $mezcla->lote ?? '—' }}</td>
 
                         <td class="whitespace-nowrap px-2 py-2 text-center">
@@ -179,6 +177,14 @@
                                 target="_blank" rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
                                 Remisión
+                            </a>
+                        </td>
+
+                        <td class="whitespace-nowrap px-4 py-2 text-center">
+                            <a href="{{ route('admin.oncologicos.mezclas.remision', ['solicitud' => $solicitud, 'mezcla' => $mezcla->id, 'subdistribuidor' => 1]) }}"
+                                target="_blank" rel="noopener"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                Remision Subdistribuidor
                             </a>
                         </td>
                     </tr>

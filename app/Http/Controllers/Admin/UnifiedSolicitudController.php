@@ -113,9 +113,38 @@ class UnifiedSolicitudController extends Controller
             );
         }
 
-        if ($statusFilter !== SolicitudStatusFilter::ALL) {
-            $routeScheduleKeys = $this->routeScheduleKeys($requests);
+        $pendingApprovalCount = $requests
+            ->filter(fn (array $row) => SolicitudStatusFilter::matches(
+                SolicitudStatusFilter::PENDING,
+                $row['status']
+            ))
+            ->count();
 
+        $routeScheduleKeys = $this->routeScheduleKeys($requests);
+        $routePendingCount = $requests
+            ->filter(function (array $row) use ($routeScheduleKeys) {
+                $routeKey = $this->routeKey($row['hospital_id'], $row['delivery_at']);
+
+                return SolicitudStatusFilter::matches(
+                    SolicitudStatusFilter::PREPARATION,
+                    $row['status'],
+                    $routeKey !== null && $routeScheduleKeys->has($routeKey)
+                );
+            })
+            ->count();
+        $deliveryPendingCount = $requests
+            ->filter(function (array $row) use ($routeScheduleKeys) {
+                $routeKey = $this->routeKey($row['hospital_id'], $row['delivery_at']);
+
+                return SolicitudStatusFilter::matches(
+                    SolicitudStatusFilter::IN_ROUTE,
+                    $row['status'],
+                    $routeKey !== null && $routeScheduleKeys->has($routeKey)
+                );
+            })
+            ->count();
+
+        if ($statusFilter !== SolicitudStatusFilter::ALL) {
             $requests = $requests->filter(function (array $row) use ($routeScheduleKeys, $statusFilter) {
                 $routeKey = $this->routeKey($row['hospital_id'], $row['delivery_at']);
 
@@ -134,6 +163,9 @@ class UnifiedSolicitudController extends Controller
         return view('admin.solicitudes.index', compact(
             'requests',
             'statusFilter',
+            'pendingApprovalCount',
+            'routePendingCount',
+            'deliveryPendingCount',
             'canViewNutrition',
             'canViewOncology'
         ));

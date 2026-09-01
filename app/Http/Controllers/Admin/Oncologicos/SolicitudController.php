@@ -11,6 +11,7 @@ use App\Models\Oncologicos\MezclaMedicamento;
 use App\Models\Oncologicos\SolicitudOnco;
 use App\Services\InstitutionBillingPricingService;
 use App\Services\OncologyMixtureDeliveryScheduleService;
+use App\Support\SolicitudStatusFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -33,8 +34,16 @@ class SolicitudController extends Controller
     public function index(Request $request)
     {
         $requestType = $this->requestType($request->route('request_type') ?? $request->query('tipo_solicitud'));
+        $pendingApprovalCount = $this->pendingApprovalCount($requestType);
+        $routePendingCount = $this->routePendingCount($requestType);
+        $deliveryPendingCount = $this->deliveryPendingCount($requestType);
 
-        return view('admin.oncologicos.solicitudes.index', compact('requestType'));
+        return view('admin.oncologicos.solicitudes.index', compact(
+            'requestType',
+            'pendingApprovalCount',
+            'routePendingCount',
+            'deliveryPendingCount'
+        ));
     }
 
     private function requestType(?string $requestType): string
@@ -54,6 +63,82 @@ class SolicitudController extends Controller
         return $requestType === 'antibioticos'
             ? 'antibiotic_medicine_list_id'
             : 'onco_medicine_list_id';
+    }
+
+    private function pendingApprovalCount(string $requestType): int
+    {
+        $user = Auth::user();
+        $role = $user->roles[0]->name ?? null;
+
+        $query = Mezcla::query()
+            ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
+            ->where('oncology_requests.tipo_solicitud', $requestType)
+            ->whereRaw('('.$this->effectiveStatusExpression().') = ?', ['pendiente']);
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $query->where('oncology_requests.hospital_id', $user->hospital_id);
+        }
+
+        return (int) $query->count();
+    }
+
+    private function effectiveStatusExpression(): string
+    {
+        return "CASE
+            WHEN oncology_requests.estado IN ('cancelada', 'no_aprobada', 'no-aprobada')
+                THEN oncology_requests.estado
+            ELSE COALESCE(NULLIF(mezclas.estado, ''), 'pendiente')
+        END";
+    }
+
+    private function routePendingCount(string $requestType): int
+    {
+        $user = Auth::user();
+        $role = $user->roles[0]->name ?? null;
+
+        $query = Mezcla::query()
+            ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
+            ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
+                $join->on('request_delivery_schedules.hospital_id', '=', 'oncology_requests.hospital_id')
+                    ->where('request_delivery_schedules.status', 'sent')
+                    ->whereRaw(
+                        'DATE(request_delivery_schedules.scheduled_date) = DATE(COALESCE(mezclas.fecha_entrega, oncology_requests.fecha_entrega))'
+                    );
+            })
+            ->where('oncology_requests.tipo_solicitud', $requestType)
+            ->whereIn(DB::raw($this->effectiveStatusExpression()), SolicitudStatusFilter::PREPARATION_STATES)
+            ->whereNull('request_delivery_schedules.id');
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $query->where('oncology_requests.hospital_id', $user->hospital_id);
+        }
+
+        return (int) $query->count();
+    }
+
+    private function deliveryPendingCount(string $requestType): int
+    {
+        $user = Auth::user();
+        $role = $user->roles[0]->name ?? null;
+
+        $query = Mezcla::query()
+            ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
+            ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
+                $join->on('request_delivery_schedules.hospital_id', '=', 'oncology_requests.hospital_id')
+                    ->where('request_delivery_schedules.status', 'sent')
+                    ->whereRaw(
+                        'DATE(request_delivery_schedules.scheduled_date) = DATE(COALESCE(mezclas.fecha_entrega, oncology_requests.fecha_entrega))'
+                    );
+            })
+            ->where('oncology_requests.tipo_solicitud', $requestType)
+            ->whereIn(DB::raw($this->effectiveStatusExpression()), SolicitudStatusFilter::PREPARATION_STATES)
+            ->whereNotNull('request_delivery_schedules.id');
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $query->where('oncology_requests.hospital_id', $user->hospital_id);
+        }
+
+        return (int) $query->distinct('mezclas.id')->count('mezclas.id');
     }
 
     private function currentHospitalId(): int
@@ -1486,6 +1571,7 @@ class SolicitudController extends Controller
             // fallback viejo:
             'mezclas.medicamentos.medicamentoOnco.catalog.presentations',
             'mezclas.medicamentos.presentacionesUsadas.batch.presentation',
+            'mezclas.medicamentos.presentacionesUsadas.batch.warehouse',
 
             'mezclas.medicamentos.diluyente',
         ])->findOrFail($solicitud->id);

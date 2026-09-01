@@ -1,5 +1,8 @@
 @php
     $activeStatus = App\Support\SolicitudStatusFilter::normalize($activeStatus ?? request()->query('estado'));
+    $pendingApprovalCount = $pendingApprovalCount ?? null;
+    $routePendingCount = $routePendingCount ?? null;
+    $deliveryPendingCount = $deliveryPendingCount ?? null;
     $baseQuery = request()->except(['estado', 'page', 'buscar']);
 @endphp
 
@@ -25,6 +28,24 @@
                 'border-gray-200 bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50' => !$isActiveStatus,
             ])>
             {{ $statusLabel }}
+            @if ($statusKey === App\Support\SolicitudStatusFilter::PENDING && $pendingApprovalCount !== null)
+                <span
+                    class="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-300 px-1.5 text-[11px] font-bold leading-none text-yellow-900 ring-1 ring-yellow-400">
+                    {{ number_format((int) $pendingApprovalCount) }}
+                </span>
+            @endif
+            @if ($statusKey === App\Support\SolicitudStatusFilter::IN_ROUTE && $routePendingCount !== null)
+                <span
+                    class="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-300 px-1.5 text-[11px] font-bold leading-none text-yellow-900 ring-1 ring-yellow-400">
+                    {{ number_format((int) $routePendingCount) }}
+                </span>
+            @endif
+            @if ($statusKey === App\Support\SolicitudStatusFilter::DELIVERED && $deliveryPendingCount !== null)
+                <span
+                    class="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-300 px-1.5 text-[11px] font-bold leading-none text-yellow-900 ring-1 ring-yellow-400">
+                    {{ number_format((int) $deliveryPendingCount) }}
+                </span>
+            @endif
         </a>
     @endforeach
 </nav>

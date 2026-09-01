@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Nutricionales\MedicineLaboratoryStock;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
+use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicineBatch;
 use App\Models\Oncologicos\MedicinePresentation;
 use Illuminate\Database\Eloquent\Model;
@@ -65,6 +66,16 @@ class MedicineRemainder extends Model
             MedicineLaboratoryStock::class,
             'medicine_laboratory_stock_id'
         );
+    }
+
+    public function laboratory(): BelongsTo
+    {
+        return $this->belongsTo(Laboratory::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function oncologicBatch(): BelongsTo

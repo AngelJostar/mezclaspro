@@ -7,6 +7,7 @@ use App\Models\Oncologicos\Laboratory;
 use App\Models\PersonnelProfile;
 use App\Models\User;
 use App\Support\AdminMenuAccess;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,9 +21,25 @@ use Spatie\Permission\Models\Role;
 
 class TrainingPersonnelController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $persistedPersonnel = User::query()
+        $laboratories = Laboratory::query()
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'estado', 'direccion', 'activo']);
+
+        $selectedLaboratory = $request->integer('laboratory_id') > 0
+            ? $laboratories->firstWhere('id', $request->integer('laboratory_id'))
+            : null;
+
+        $laboratories->each(function (Laboratory $laboratory): void {
+            $laboratory->setAttribute(
+                'personnel_count',
+                $this->personnelUsersQuery((int) $laboratory->id)->count()
+            );
+        });
+
+        $persistedPersonnel = $this->personnelUsersQuery($selectedLaboratory?->id)
             ->select([
                 'id',
                 'name',
@@ -43,8 +60,6 @@ class TrainingPersonnelController extends Controller
                 'roles:id,name',
                 'permissions:id,name',
             ])
-            ->whereDoesntHave('roles', fn ($roleQuery) => $roleQuery
-                ->whereIn('name', ['Cliente', 'Institucion']))
             ->orderByDesc('id')
             ->get()
             ->map(function (User $user) {
@@ -81,14 +96,10 @@ class TrainingPersonnelController extends Controller
             })
             ->all();
 
-        $laboratories = Laboratory::query()
-            ->where('activo', true)
-            ->orderBy('nombre')
-            ->get(['id', 'nombre']);
-
         return view('admin.capacitaciones.index', [
             'persistedPersonnel' => $persistedPersonnel,
             'laboratories' => $laboratories,
+            'selectedLaboratory' => $selectedLaboratory,
             'jobCatalog' => $this->jobCatalog(),
             'isSuperAdmin' => Auth::user()?->hasRole('Super Admin') ?? false,
             'roleAccessTree' => AdminMenuAccess::tree(),
@@ -223,6 +234,33 @@ class TrainingPersonnelController extends Controller
             ->take(2)
             ->map(fn (string $part) => Str::upper(Str::substr($part, 0, 1)))
             ->implode('');
+    }
+
+    /**
+     * @return Builder<User>
+     */
+    private function personnelUsersQuery(?int $laboratoryId = null): Builder
+    {
+        $query = User::query()
+            ->whereDoesntHave('roles', fn ($roleQuery) => $roleQuery
+                ->whereIn('name', ['Cliente', 'Institucion']));
+
+        if ($laboratoryId) {
+            $query->where(function (Builder $personnelQuery) use ($laboratoryId): void {
+                $personnelQuery
+                    ->whereHas('personnelProfile', fn (Builder $profileQuery) => $profileQuery
+                        ->where('laboratory_id', $laboratoryId))
+                    ->orWhere(function (Builder $fallbackQuery) use ($laboratoryId): void {
+                        $fallbackQuery
+                            ->whereDoesntHave('personnelProfile', fn (Builder $profileQuery) => $profileQuery
+                                ->whereNotNull('laboratory_id'))
+                            ->whereHas('hospital', fn (Builder $hospitalQuery) => $hospitalQuery
+                                ->where('laboratory_id', $laboratoryId));
+                    });
+            });
+        }
+
+        return $query;
     }
 
     private function normalizePersonName(?string $name): string

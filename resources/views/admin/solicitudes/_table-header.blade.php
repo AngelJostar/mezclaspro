@@ -12,7 +12,6 @@
         ['key' => 'requested_at', 'lines' => ['Fecha y hora', 'de solicitud'], 'date' => true],
         ['key' => 'delivery_at', 'lines' => ['Fecha y hora', 'programada de entrega'], 'date' => true],
         ['key' => 'status', 'lines' => ['Estado operativo']],
-        ['key' => 'remission', 'lines' => ['Remisión']],
         ['key' => 'lot', 'lines' => ['Lote']],
         ['key' => 'view', 'lines' => ['Ver'], 'action' => true],
         ['key' => 'medical_request', 'lines' => ['Solicitud interna'], 'action' => true],
@@ -24,6 +23,7 @@
         ['key' => 'preparation_order', 'lines' => ['Orden de preparación'], 'action' => true],
         ['key' => 'shipping_records', 'lines' => ['Registros de envío'], 'action' => true],
         ['key' => 'remission_document', 'lines' => ['Remisión'], 'action' => true],
+        ['key' => 'subdistributor_remission', 'lines' => ['Remision', 'Subdistribuidor'], 'action' => true],
     ];
 @endphp
 

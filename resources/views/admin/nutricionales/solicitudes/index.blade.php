@@ -35,7 +35,12 @@
         </div>
     @endif
 
-    @include('admin.solicitudes._status-selector', ['activeStatus' => $statusFilter])
+    @include('admin.solicitudes._status-selector', [
+        'activeStatus' => $statusFilter,
+        'pendingApprovalCount' => $pendingApprovalCount,
+        'routePendingCount' => $routePendingCount,
+        'deliveryPendingCount' => $deliveryPendingCount,
+    ])
 
     <div class="relative">
 

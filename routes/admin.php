@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\HospitalController;
 use App\Http\Controllers\Admin\InputController;
 use App\Http\Controllers\Admin\CatalogoListasController;
 use App\Http\Controllers\Admin\CatalogProductController;
+use App\Http\Controllers\Admin\MaintenanceQualificationController;
 use App\Http\Controllers\Admin\Nutricionales\MedicineController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
@@ -127,6 +128,10 @@ Route::prefix('superadministrador')
             ->name('administrators.dismiss');
         Route::patch('/personal/{personnel}/nombrar', [SuperAdministratorController::class, 'appoint'])
             ->name('personnel.appoint');
+        Route::patch('/solicitudes-merma/{wasteRequest}/autorizar', [SuperAdministratorController::class, 'approveWasteRequest'])
+            ->name('waste-requests.approve');
+        Route::patch('/solicitudes-merma/{wasteRequest}/rechazar', [SuperAdministratorController::class, 'rejectWasteRequest'])
+            ->name('waste-requests.reject');
     });
 
 Route::resource('/roles', RoleController::class)
@@ -501,6 +506,29 @@ Route::get('instituciones-reportes', [InstitucionController::class, 'reportes'])
     ->name('instituciones.reportes')
     ->middleware($administrationReportsMiddleware);
 
+Route::post('instituciones-reportes/plantillas', [InstitutionReportTemplateController::class, 'storeCustom'])
+    ->name('instituciones.reportes.plantillas.store')
+    ->middleware($administrationReportsMiddleware);
+
+Route::put('instituciones-reportes/plantillas/{customTemplate}', [InstitutionReportTemplateController::class, 'updateCustom'])
+    ->name('instituciones.reportes.plantillas.update')
+    ->middleware($administrationReportsMiddleware);
+
+Route::patch('instituciones-reportes/plantillas/{customTemplate}/publicacion', [InstitutionReportTemplateController::class, 'publishCustom'])
+    ->name('instituciones.reportes.plantillas.publish')
+    ->middleware($administrationReportsMiddleware);
+
+Route::get(
+    'instituciones-reportes/plantillas/{customTemplate}/instituciones/{institucion}/descargar',
+    [InstitutionReportTemplateController::class, 'downloadCustom']
+)
+    ->name('instituciones.reportes.plantillas.download')
+    ->middleware($administrationReportsMiddleware);
+
+Route::delete('instituciones-reportes/plantillas/{customTemplate}', [InstitutionReportTemplateController::class, 'destroyCustom'])
+    ->name('instituciones.reportes.plantillas.destroy')
+    ->middleware($administrationReportsMiddleware);
+
 Route::put('instituciones-reportes/formatos/{reportTemplate}', [InstitutionReportTemplateController::class, 'update'])
     ->name('instituciones.reportes.formatos.update')
     ->middleware($administrationReportsMiddleware);
@@ -540,6 +568,46 @@ Route::post('instituciones-facturacion', [InstitucionBillingController::class, '
 Route::post('instituciones-facturacion/{billing}/mover', [InstitucionBillingController::class, 'moveFromHistory'])
     ->name('instituciones.billing.move')
     ->middleware($billingHistoryMiddleware);
+
+Route::get('mantenimiento-calificaciones', [MaintenanceQualificationController::class, 'index'])
+    ->name('maintenance-qualifications.index')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::get('mantenimiento-calificaciones/catalogo', [MaintenanceQualificationController::class, 'catalog'])
+    ->name('maintenance-qualifications.catalog')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::get('mantenimiento-calificaciones/lista-precios', [MaintenanceQualificationController::class, 'priceList'])
+    ->name('maintenance-qualifications.price-list')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::post('mantenimiento-calificaciones/catalogo', [MaintenanceQualificationController::class, 'store'])
+    ->name('maintenance-qualifications.catalog.store')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::patch('mantenimiento-calificaciones/catalogo/{maintenanceService}', [MaintenanceQualificationController::class, 'update'])
+    ->name('maintenance-qualifications.catalog.update')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::delete('mantenimiento-calificaciones/catalogo/{maintenanceService}', [MaintenanceQualificationController::class, 'destroy'])
+    ->name('maintenance-qualifications.catalog.destroy')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::post('mantenimiento-calificaciones/lista-precios/{maintenanceService}/cotizaciones', [MaintenanceQualificationController::class, 'storeQuote'])
+    ->name('maintenance-qualifications.price-list.quotes.store')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::patch('mantenimiento-calificaciones/lista-precios/cotizaciones/{maintenanceServiceQuote}', [MaintenanceQualificationController::class, 'updateQuote'])
+    ->name('maintenance-qualifications.price-list.quotes.update')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::delete('mantenimiento-calificaciones/lista-precios/cotizaciones/{maintenanceServiceQuote}', [MaintenanceQualificationController::class, 'destroyQuote'])
+    ->name('maintenance-qualifications.price-list.quotes.destroy')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::get('mantenimiento-calificaciones/catalogo-servicios', [MaintenanceQualificationController::class, 'source'])
+    ->name('maintenance-qualifications.source')
+    ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
 
 Route::view('capacitaciones', 'admin.capacitaciones.index')
     ->name('capacitaciones.index');

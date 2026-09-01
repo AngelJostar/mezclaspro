@@ -9,6 +9,7 @@ use App\Models\Oncologicos\MedicineBatch;
 use App\Models\Oncologicos\MedicineBatchMovement;
 use App\Models\MedicineRemainder;
 use App\Services\MedicineRemainderService;
+use App\Services\WasteAuthorizationService;
 use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -75,78 +76,30 @@ class InventoryController extends Controller
         ]);
     }
 
-    public function registrarMerma(Request $request, MedicineBatch $batch)
+    public function registrarMerma(
+        Request $request,
+        MedicineBatch $batch,
+        WasteAuthorizationService $wasteAuthorizationService
+    )
     {
         $data = $request->validate([
-            'cantidad_ml' => 'nullable|numeric|min:0.01',
-            'quantity' => 'nullable|numeric|min:0.01|required_without:cantidad_ml',
-            'unit' => 'nullable|in:ml,frasco|required_with:quantity',
+            'quantity' => 'required|integer|min:1',
+            'unit' => 'required|in:frasco',
             'notes' => 'required|string|max:500',
         ]);
 
-        DB::transaction(function () use ($batch, $data) {
-            $lockedBatch = MedicineBatch::query()->lockForUpdate()->findOrFail($batch->id);
-            $stockActualBefore = (int) $lockedBatch->stock_actual;
-            $presentation = $lockedBatch->presentation()->firstOrFail();
-            $presentationMl = (float) ($presentation->volumen_diluyente
-                ?: ($presentation->contenido_unidad === 'ml' ? $presentation->contenido_valor : 0));
-            $storedStockMl = (float) ($lockedBatch->stock_ml_actual ?? 0);
-            $stockMlBefore = $storedStockMl > 0
-                ? $storedStockMl
-                : ($stockActualBefore * $presentationMl);
-            $unit = $data['unit'] ?? 'ml';
-            $quantity = isset($data['quantity']) ? (float) $data['quantity'] : (float) $data['cantidad_ml'];
-
-            if ($unit === 'frasco' && floor($quantity) !== $quantity) {
-                throw new \InvalidArgumentException('La perdida por frascos debe ser un numero entero.');
-            }
-            $quantityMl = $unit === 'frasco' ? $quantity * $presentationMl : $quantity;
-
-            if ($unit === 'frasco' && $quantity > $stockActualBefore) {
-                throw new \InvalidArgumentException('La perdida no puede ser mayor al numero de frascos disponibles.');
-            }
-            if ($unit === 'ml' && ($stockMlBefore <= 0 || $quantityMl > $stockMlBefore)) {
-                throw new \InvalidArgumentException('La perdida no puede ser mayor al stock disponible en mL.');
-            }
-
-            $stockMlAfter = $presentationMl > 0
-                ? max(0, $stockMlBefore - $quantityMl)
-                : $stockMlBefore;
-            $stockActualAfter = $unit === 'frasco'
-                ? max(0, $stockActualBefore - (int) $quantity)
-                : ($stockMlAfter <= 0 ? 0 : ($presentationMl > 0 ? (int) ceil($stockMlAfter / $presentationMl) : $stockActualBefore));
-
-            $lockedBatch->update([
-                'stock_ml_actual' => $stockMlAfter,
-                'stock_actual' => $stockActualAfter,
-                'is_active' => $stockMlAfter > 0,
-            ]);
-
-            MedicineBatchMovement::create([
-                'medicine_batch_id' => $lockedBatch->id,
-                'laboratory_id' => $lockedBatch->laboratory_id,
-                'warehouse_id' => $lockedBatch->warehouse_id,
-                'user_id' => auth()->id(),
-                'movement_type' => 'merma',
-                'quantity' => max(0, $stockActualBefore - $stockActualAfter),
-                'quantity_ml' => $quantityMl,
-                'stock_actual_before' => $stockActualBefore,
-                'stock_actual_after' => $stockActualAfter,
-                'stock_ml_before' => $stockMlBefore,
-                'stock_ml_after' => $stockMlAfter,
-                'stock_reservado_before' => $lockedBatch->stock_reservado,
-                'stock_reservado_after' => $lockedBatch->stock_reservado,
-                'reference_type' => 'PerdidaStock',
-                'reference_id' => $lockedBatch->id,
-                'notes' => $data['notes'],
-            ]);
-        });
+        $wasteAuthorizationService->requestForBatch(
+            $batch,
+            (int) $data['quantity'],
+            $data['notes'],
+            (int) $request->user()->id
+        );
 
         return redirect()->route('admin.oncologicos.inventory.index', [
             'laboratory_id' => $batch->laboratory_id,
             'warehouse_id' => $batch->warehouse_id,
             'category' => $batch->presentation?->catalog?->catalog_category,
-        ])->with('success', 'La perdida de stock se registro correctamente.');
+        ])->with('success', 'La solicitud de merma fue enviada al superadministrador.');
     }
 
     public function descartarRemanente(MedicineBatch $batch)

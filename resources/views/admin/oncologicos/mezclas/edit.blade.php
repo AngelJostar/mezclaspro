@@ -1,6 +1,19 @@
 <x-admin-layout>
-    <div class="mb-4">
+    @php
+        $requestType = $solicitud->tipo_solicitud ?? 'oncologicos';
+        $closeRoute = $requestType === 'antibioticos'
+            ? 'admin.antibioticos.solicitudes.index'
+            : 'admin.oncologicos.solicitudes.index';
+    @endphp
+
+    <div class="mb-4 flex items-start justify-between gap-4">
         <h1 class="text-2xl font-bold">Editar Mezcla #{{ $mezcla->id }}</h1>
+        <a href="{{ route($closeRoute) }}"
+            class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+            title="Cerrar formato de solicitud"
+            aria-label="Cerrar formato de solicitud">
+            <span aria-hidden="true">&times;</span>
+        </a>
     </div>
 
     @if ($errors->any())

@@ -28,7 +28,12 @@
         </div>
     </div>
 
-    @include('admin.solicitudes._status-selector', ['activeStatus' => $statusFilter])
+    @include('admin.solicitudes._status-selector', [
+        'activeStatus' => $statusFilter,
+        'pendingApprovalCount' => $pendingApprovalCount,
+        'routePendingCount' => $routePendingCount,
+        'deliveryPendingCount' => $deliveryPendingCount,
+    ])
 
     <div class="mt-4 overflow-x-auto" data-sticky-x-position="viewport">
         <table class="w-full text-sm text-left text-gray-500">
@@ -60,7 +65,6 @@
                         <td class="px-2 py-2 text-center">
                             @include('admin.solicitudes._status-badge', ['status' => $estado])
                         </td>
-                        <td class="px-2 py-2 text-center">{{ $requestRow['remission'] ?: '—' }}</td>
                         <td class="px-2 py-2 text-center">{{ $requestRow['lot'] ?: '—' }}</td>
 
                         <td class="px-2 py-2 text-center whitespace-nowrap">
@@ -285,6 +289,24 @@
                                 <button type="button" disabled
                                     class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
                                     Remisión
+                                </button>
+                            @endif
+                        </td>
+                        <td class="px-4 py-2 text-center whitespace-nowrap">
+                            @if (!$isNutrition && $mezcla)
+                                <a href="{{ route('admin.oncologicos.mezclas.remision', [
+                                    'solicitud' => $solicitud,
+                                    'mezcla' => $mezcla,
+                                    'subdistribuidor' => 1,
+                                ]) }}"
+                                    target="_blank" rel="noopener"
+                                    class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                    Remision Subdistribuidor
+                                </a>
+                            @else
+                                <button type="button" disabled
+                                    class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                    Remision Subdistribuidor
                                 </button>
                             @endif
                         </td>

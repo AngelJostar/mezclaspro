@@ -1,8 +1,15 @@
 <x-admin-layout>
 
     <div class="flex flex-col items-center">
-        <div class="mt-2 mb-4">
-            <h1 class="text-2xl font-medium text-gray-800 text-center">SOLICITUD DE NUTRICIÓN PARENTERAL</h1>
+        <div class="mt-2 mb-4 flex w-full items-start justify-between gap-4">
+            <span class="h-10 w-10 shrink-0" aria-hidden="true"></span>
+            <h1 class="flex-1 text-center text-2xl font-medium text-gray-800">SOLICITUD DE NUTRICIÓN PARENTERAL</h1>
+            <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
+                class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                title="Cerrar formato de solicitud"
+                aria-label="Cerrar formato de solicitud">
+                <span aria-hidden="true">&times;</span>
+            </a>
         </div>
 
         @if ($errors->any())

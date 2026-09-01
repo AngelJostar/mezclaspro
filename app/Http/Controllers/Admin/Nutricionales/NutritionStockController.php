@@ -12,6 +12,7 @@ use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Warehouse;
+use App\Services\WasteAuthorizationService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1038,78 +1039,34 @@ class NutritionStockController extends Controller
         return view('admin.nutricionales.stocks.merma', compact('stock'));
     }
 
-    public function registrarMerma(Request $request, MedicineLaboratoryStock $stock)
+    public function registrarMerma(
+        Request $request,
+        MedicineLaboratoryStock $stock,
+        WasteAuthorizationService $wasteAuthorizationService
+    )
     {
-        $request->validate([
-            'cantidad_ml' => 'required|numeric|min:0.01',
+        $data = $request->validate([
+            'quantity' => 'required|integer|min:1',
             'notes' => 'required|string|max:500',
         ]);
 
-        DB::beginTransaction();
+        $wasteAuthorizationService->requestForNutritionStock(
+            $stock,
+            (int) $data['quantity'],
+            $data['notes'],
+            (int) $request->user()->id
+        );
 
-        try {
-            $stock->load('presentation');
+        session()->flash('swal', [
+            'title' => 'Solicitud enviada',
+            'text' => 'La merma del frasco quedó pendiente de autorización.',
+            'icon' => 'success',
+        ]);
 
-            $cantidadMl = (float) $request->cantidad_ml;
-            $stockAntes = (float) $stock->stock_ml_actual;
-            $frascosAntes = (float) $stock->frascos_actuales;
-
-            if ($cantidadMl > $stockAntes) {
-                throw new \Exception("La merma no puede ser mayor al stock actual ({$stockAntes} ml).");
-            }
-
-            $presentacionMl = (float) ($stock->presentation->presentacion_ml ?? 0);
-
-            if ($presentacionMl <= 0) {
-                throw new \Exception('La presentación no tiene configurado el campo presentacion_ml.');
-            }
-
-            $frascosMerma = $cantidadMl / $presentacionMl;
-
-            $stockDespues = $stockAntes - $cantidadMl;
-            $frascosDespues = max(0, $frascosAntes - $frascosMerma);
-
-            $stock->update([
-                'stock_ml_actual' => $stockDespues,
-                'frascos_actuales' => $frascosDespues,
-                'is_active' => $stockDespues > 0,
-            ]);
-
-            MedicineStockMovement::create([
-                'medicine_laboratory_stock_id' => $stock->id,
-                'warehouse_id' => $stock->warehouse_id,
-                'user_id' => auth()->id(),
-                'tipo' => 'merma',
-                'cantidad_ml' => $cantidadMl,
-                'cantidad_frascos' => $frascosMerma,
-                'stock_antes' => $stockAntes,
-                'stock_despues' => $stockDespues,
-                'frascos_antes' => $frascosAntes,
-                'frascos_despues' => $frascosDespues,
-                'reference_type' => 'MermaManual',
-                'reference_id' => $stock->id,
-                'notes' => $request->notes,
-            ]);
-
-            DB::commit();
-
-            session()->flash('swal', [
-                'title' => 'Merma registrada',
-                'text' => 'La merma se registró correctamente.',
-                'icon' => 'success',
-            ]);
-
-            return redirect()->route('admin.nutricionales.stocks.index', [
-                'laboratory_id' => $stock->laboratory_id,
-                'warehouse_id' => $stock->warehouse_id,
-            ]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-
-            return redirect()->back()
-                ->withErrors(['error' => $e->getMessage()])
-                ->withInput();
-        }
+        return redirect()->route('admin.nutricionales.stocks.index', [
+            'laboratory_id' => $stock->laboratory_id,
+            'warehouse_id' => $stock->warehouse_id,
+        ]);
     }
 
     public function movimientos(MedicineLaboratoryStock $stock)

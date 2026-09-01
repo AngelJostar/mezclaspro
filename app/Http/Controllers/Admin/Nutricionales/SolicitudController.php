@@ -35,6 +35,7 @@ use App\Models\Nutricionales\InspeccionNutricional;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Services\InstitutionBillingPricingService;
 use App\Services\MedicineRemainderService;
+use App\Support\SolicitudStatusFilter;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
@@ -67,7 +68,72 @@ class SolicitudController extends Controller
             //return $solicitudes;
         }
 
-        return view('admin.nutricionales.solicitudes.index', compact('solicitudes'));
+        $pendingApprovalCountQuery = Solicitud::query();
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $pendingApprovalCountQuery->where('user_id', $user->id);
+        }
+
+        $pendingApprovalCount = $pendingApprovalCountQuery
+            ->where(function ($query) {
+                $query->whereNull('estado')
+                    ->orWhere('estado', 'pendiente');
+            })
+            ->count();
+
+        $routePendingCountQuery = Solicitud::query()
+            ->leftJoin('users as request_delivery_users', 'request_delivery_users.id', '=', 'solicituds.user_id')
+            ->leftJoin(
+                'solicitud_details as request_delivery_details',
+                'request_delivery_details.id',
+                '=',
+                'solicituds.solicitud_detail_id'
+            )
+            ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
+                $join->on('request_delivery_schedules.hospital_id', '=', 'request_delivery_users.hospital_id')
+                    ->where('request_delivery_schedules.status', 'sent')
+                    ->whereRaw(
+                        'DATE(request_delivery_schedules.scheduled_date) = DATE(request_delivery_details.fecha_hora_entrega)'
+                    );
+            })
+            ->whereIn('solicituds.estado', SolicitudStatusFilter::PREPARATION_STATES)
+            ->whereNull('request_delivery_schedules.id');
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $routePendingCountQuery->where('solicituds.user_id', $user->id);
+        }
+
+        $routePendingCount = $routePendingCountQuery->count();
+        $deliveryPendingCountQuery = Solicitud::query()
+            ->leftJoin('users as request_delivery_users', 'request_delivery_users.id', '=', 'solicituds.user_id')
+            ->leftJoin(
+                'solicitud_details as request_delivery_details',
+                'request_delivery_details.id',
+                '=',
+                'solicituds.solicitud_detail_id'
+            )
+            ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
+                $join->on('request_delivery_schedules.hospital_id', '=', 'request_delivery_users.hospital_id')
+                    ->where('request_delivery_schedules.status', 'sent')
+                    ->whereRaw(
+                        'DATE(request_delivery_schedules.scheduled_date) = DATE(request_delivery_details.fecha_hora_entrega)'
+                    );
+            })
+            ->whereIn('solicituds.estado', SolicitudStatusFilter::PREPARATION_STATES)
+            ->whereNotNull('request_delivery_schedules.id');
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $deliveryPendingCountQuery->where('solicituds.user_id', $user->id);
+        }
+
+        $deliveryPendingCount = $deliveryPendingCountQuery->distinct('solicituds.id')->count('solicituds.id');
+
+        return view('admin.nutricionales.solicitudes.index', compact(
+            'solicitudes',
+            'pendingApprovalCount',
+            'routePendingCount',
+            'deliveryPendingCount'
+        ));
     }
 
 

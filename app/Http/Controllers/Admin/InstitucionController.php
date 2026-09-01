@@ -65,11 +65,19 @@ class InstitucionController extends Controller
             ->withQueryString();
 
         $reportTemplates = $templates->all();
+        $customReportTemplates = $templates->customTemplates();
+        $publishedCustomReportTemplates = $templates->publishedCustomTemplates();
+        $reportCatalogParameters = $templates->catalogParameters();
+        $reportDataSources = $templates->customDataSources();
 
         return view('admin.instituciones.reportes', compact(
             'instituciones',
             'search',
             'reportTemplates',
+            'customReportTemplates',
+            'publishedCustomReportTemplates',
+            'reportCatalogParameters',
+            'reportDataSources',
             'dailyReportFrom',
             'dailyReportTo'
         ));

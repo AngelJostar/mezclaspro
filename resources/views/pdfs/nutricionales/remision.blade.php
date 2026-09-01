@@ -242,6 +242,9 @@
                             <td style="border: none; border-top: 1px solid black; font-weight: bold">
                                 Fecha de envío:
                                 {{ date('d-m-Y', strtotime($solicitud_detalles->solicitud_detail['fecha_hora_entrega'])) }}
+                                <br>
+                                Fecha de solicitud:
+                                {{ $solicitud_detalles->created_at ? \Carbon\Carbon::parse($solicitud_detalles->created_at)->format('d-m-Y H:i') : '—' }}
                             </td>
                             <td style="text-align: right; border: none; border-top: 1px solid black;">
                                 DOMICILIO INSTITUCION RECEPTORA:
