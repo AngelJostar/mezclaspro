@@ -115,14 +115,17 @@
         </form>
     </div>
 
-    <script>
-        const existingDiluentLots = @json($existingLots);
-        const warehousesByLaboratory = @json($laboratories->mapWithKeys(fn ($laboratory) => [
+    @php
+        $warehousesByLaboratory = $laboratories->mapWithKeys(fn ($laboratory) => [
             (string) $laboratory->id => $laboratory->warehouses->map(fn ($warehouse) => [
                 'id' => $warehouse->id,
                 'name' => $warehouse->name,
-            ])->values(),
-        ]));
+            ])->values()->all(),
+        ])->all();
+    @endphp
+    <script>
+        const existingDiluentLots = @json($existingLots);
+        const warehousesByLaboratory = @json($warehousesByLaboratory);
 
         const fields = {
             laboratory: document.getElementById('laboratory_id'),

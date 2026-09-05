@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DistributionRoute;
+use App\Models\DistributionRouteRun;
+use App\Models\DistributionLocationUpdate;
 use App\Models\Hospital;
 use App\Models\Oncologicos\Laboratory;
+use App\Models\PersonnelProfile;
 use App\Models\User;
 use App\Support\HospitalMapCoordinates;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -13,6 +16,7 @@ use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
@@ -104,8 +108,19 @@ class DistributionRouteController extends Controller
 
         $editingRouteId = (int) ($request->old('route_id') ?: $request->query('edit'));
         $editingRoute = $editingRouteId > 0
-            ? DistributionRoute::query()->with('hospitals')->find($editingRouteId)
+            ? DistributionRoute::query()->with(['hospitals', 'messengers'])->find($editingRouteId)
             : null;
+
+        $mobileMessengers = User::query()
+            ->where('is_active', true)
+            ->whereHas('personnelProfile', function ($query): void {
+                $query
+                    ->where('employment_status', 'hired')
+                    ->whereJsonContains('positions', PersonnelProfile::POSITION_COURIER);
+            })
+            ->orderBy('name')
+            ->orderBy('lastname')
+            ->get(['id', 'name', 'lastname', 'username']);
 
         $routeHospitals = Hospital::query()
             ->with('distributionRoutes')
@@ -145,7 +160,8 @@ class DistributionRouteController extends Controller
             'laboratories',
             'selectedLaboratory',
             'routeHospitals',
-            'editingRoute'
+            'editingRoute',
+            'mobileMessengers'
         ));
     }
 
@@ -159,6 +175,68 @@ class DistributionRouteController extends Controller
         return redirect()->route('admin.distribution.routes.index', ['edit' => $distributionRoute->id]);
     }
 
+    public function monitor(DistributionRoute $distributionRoute): View
+    {
+        $distributionRoute->load([
+            'hospitals:id,name,short_name,adress,latitude,longitude',
+            'messengers:id,name,lastname',
+        ]);
+
+        return view('admin.distribution.routes.monitor', compact('distributionRoute'));
+    }
+
+    public function liveLocation(DistributionRoute $distributionRoute): JsonResponse
+    {
+        $run = DistributionRouteRun::query()
+            ->where('distribution_route_id', $distributionRoute->id)
+            ->with('messenger:id,name,lastname')
+            ->latest('started_at')
+            ->first();
+
+        $location = $run
+            ? DistributionLocationUpdate::query()
+                ->where('distribution_route_run_id', $run->id)
+                ->latest('recorded_at')
+                ->first()
+            : null;
+
+        $distributionRoute->loadMissing('hospitals:id,name,short_name,adress,latitude,longitude');
+
+        return response()->json([
+            'route' => [
+                'id' => $distributionRoute->id,
+                'name' => $distributionRoute->name,
+                'code' => $distributionRoute->code,
+                'status' => $distributionRoute->status,
+            ],
+            'messenger' => $run?->messenger ? [
+                'name' => trim($run->messenger->name.' '.$run->messenger->lastname),
+            ] : null,
+            'run' => $run ? [
+                'started_at' => $run->started_at?->toIso8601String(),
+                'ended_at' => $run->ended_at?->toIso8601String(),
+            ] : null,
+            'location' => $location ? [
+                'latitude' => $location->latitude,
+                'longitude' => $location->longitude,
+                'accuracy' => $location->accuracy,
+                'recorded_at' => $location->recorded_at?->toIso8601String(),
+            ] : null,
+            'stops' => $distributionRoute->hospitals
+                ->map(function (Hospital $hospital): array {
+                    $coordinates = HospitalMapCoordinates::resolve($hospital);
+
+                    return [
+                        'name' => $hospital->short_name ?: $hospital->name,
+                        'address' => $hospital->adress,
+                        'latitude' => $coordinates['latitude'],
+                        'longitude' => $coordinates['longitude'],
+                    ];
+                })
+                ->values(),
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $request->merge([
@@ -169,6 +247,7 @@ class DistributionRouteController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'route_type' => ['required', 'string', 'in:vehicular,dron'],
+            'messenger_id' => ['required', 'integer', 'exists:users,id'],
             'hospital_ids' => ['required', 'array', 'min:1'],
             'hospital_ids.*' => ['integer', 'distinct', 'exists:hospitals,id'],
         ]);
@@ -214,6 +293,7 @@ class DistributionRouteController extends Controller
                 ]);
 
             $distributionRoute->hospitals()->sync($hospitalAssignments);
+            $distributionRoute->messengers()->sync([$validated['messenger_id']]);
 
             return $distributionRoute;
         });
@@ -237,6 +317,7 @@ class DistributionRouteController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'route_type' => ['required', 'string', 'in:vehicular,dron'],
+            'messenger_id' => ['required', 'integer', 'exists:users,id'],
             'hospital_ids' => ['required', 'array', 'min:1'],
             'hospital_ids.*' => ['integer', 'distinct', 'exists:hospitals,id'],
         ]);
@@ -282,6 +363,7 @@ class DistributionRouteController extends Controller
                 ]);
 
             $distributionRoute->hospitals()->sync($hospitalAssignments);
+            $distributionRoute->messengers()->sync([$validated['messenger_id']]);
         });
 
         return redirect()

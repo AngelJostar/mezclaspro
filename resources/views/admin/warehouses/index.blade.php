@@ -14,9 +14,11 @@
 
         @if ($laboratories->isNotEmpty())
             <section class="border-b border-gray-200 pb-4" aria-labelledby="warehouse-laboratory-carousel-title">
-                <div class="mb-3">
-                    <h2 id="warehouse-laboratory-carousel-title" class="text-sm font-semibold text-gray-800">Selecciona una central de mezclas</h2>
-                    <p class="text-xs text-gray-500">Gestiona la central seleccionada y consulta abajo sus almacenes e inventarios.</p>
+                <div class="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 id="warehouse-laboratory-carousel-title" class="text-sm font-semibold text-gray-800">Selecciona una central de mezclas</h2>
+                        <p class="text-xs text-gray-500">Gestiona la central seleccionada y consulta abajo sus almacenes e inventarios.</p>
+                    </div>
                 </div>
 
                 <div class="flex items-center gap-2">
@@ -198,11 +200,21 @@
                     ],
                     [
                         'key' => 'insumos',
-                        'title' => 'Subalmacén de insumos',
+                        'title' => 'Inventario de diluyentes',
                         'description' => 'Inventario de medicamentos, lotes, caducidades y existencias.',
                         'icon' => 'fa-boxes-stacked',
                         'color' => 'text-amber-800 bg-amber-50',
                         'url' => $selectedWarehouse ? route('admin.warehouses.supplies.index', $selectedWarehouse) : null,
+                        'count_label' => 'lotes',
+                        'stock_label' => 'piezas',
+                    ],
+                    [
+                        'key' => 'consumibles',
+                        'title' => 'Inventario de consumibles',
+                        'description' => 'Inventario de consumibles, lotes, caducidades y existencias.',
+                        'icon' => 'fa-syringe',
+                        'color' => 'text-purple-800 bg-purple-50',
+                        'url' => $selectedWarehouse ? route('admin.warehouses.consumables.index', $selectedWarehouse) : null,
                         'count_label' => 'lotes',
                         'stock_label' => 'piezas',
                     ],

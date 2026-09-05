@@ -10,6 +10,8 @@ use App\Models\Nutricionales\NutriMedicineListItem;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\DiluentPresentation;
+use App\Models\Oncologicos\Diluent;
+use App\Models\ConsumableItem;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicineList;
 use App\Models\Oncologicos\MedicinePresentation;
@@ -56,6 +58,16 @@ class CatalogoListasController extends Controller
             'icon' => 'fa-solid fa-boxes-stacked',
             'theme' => 'amber',
         ],
+        'diluyentes' => [
+            'label' => 'Diluyentes',
+            'icon' => 'fa-solid fa-droplet',
+            'theme' => 'sky',
+        ],
+        'consumibles' => [
+            'label' => 'Consumibles',
+            'icon' => 'fa-solid fa-syringe',
+            'theme' => 'violet',
+        ],
     ];
 
     public function index(Request $request)
@@ -77,6 +89,24 @@ class CatalogoListasController extends Controller
     public function catalog(string $category)
     {
         $category = $this->normalizeBrowseCategory($category);
+
+        if ($category === 'diluyentes') {
+            return view('admin.catalogo-listas.diluents', [
+                'category' => $category,
+                'mode' => 'catalogo',
+                'categories' => $this->browseCategories(),
+                'diluents' => Diluent::query()->with('catalogPresentations')->orderBy('denominacion_generica')->get(),
+            ]);
+        }
+
+        if ($category === 'consumibles') {
+            return view('admin.catalogo-listas.consumables', [
+                'category' => $category,
+                'mode' => 'catalogo',
+                'categories' => $this->browseCategories(),
+                'consumables' => ConsumableItem::query()->with('catalogPresentations')->where('is_active', true)->orderBy('name')->get(),
+            ]);
+        }
 
         return view('admin.catalogo-listas.catalog', [
             'category' => $category,

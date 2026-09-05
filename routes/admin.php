@@ -17,6 +17,9 @@ use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\DistributionController;
 use App\Http\Controllers\Admin\DistributionDeliveryController;
 use App\Http\Controllers\Admin\DistributionRouteController;
+use App\Http\Controllers\Admin\ProductionSupplyRequestController;
+use App\Http\Controllers\Admin\ConsumableInventoryController;
+use App\Http\Controllers\Admin\ConsumableCatalogController;
 use App\Http\Controllers\Admin\SuperAdministratorController;
 use App\Models\Solicitud;
 use Illuminate\Support\Facades\Route; //Importamos para generar nuestras rutas.
@@ -107,6 +110,8 @@ Route::prefix('distribucion')
         Route::get('/catalogo-rutas/crear', [DistributionRouteController::class, 'create'])->name('routes.create');
         Route::post('/catalogo-rutas', [DistributionRouteController::class, 'store'])->name('routes.store');
         Route::get('/catalogo-rutas/{distributionRoute}/editar', [DistributionRouteController::class, 'edit'])->name('routes.edit');
+        Route::get('/catalogo-rutas/{distributionRoute}/monitoreo', [DistributionRouteController::class, 'monitor'])->name('routes.monitor');
+        Route::get('/catalogo-rutas/{distributionRoute}/ubicacion', [DistributionRouteController::class, 'liveLocation'])->name('routes.live-location');
         Route::patch('/catalogo-rutas/{distributionRoute}', [DistributionRouteController::class, 'update'])->name('routes.update');
         Route::delete('/catalogo-rutas/{distributionRoute}', [DistributionRouteController::class, 'destroy'])
             ->name('routes.destroy')
@@ -417,6 +422,10 @@ Route::delete('oncologicos/diluents/{diluent}', [DiluentController::class, 'dest
     ->middleware(['can:oncologicos_diluents_destroy']);
 
 //END DILUENTS
+
+Route::post('oncologicos/diluents/{diluent}/catalogo-presentaciones', [DiluentController::class, 'storeCatalogPresentation'])
+    ->name('oncologicos.diluents.catalog-presentations.store')
+    ->middleware(['can:oncologicos_diluents_store']);
 
 //SUBCRUD DE DILUYENTES
 // LISTAR presentaciones de un diluyente
@@ -779,6 +788,32 @@ Route::get('/compras/nueva', [WarehouseController::class, 'newPurchaseOrder'])
 Route::get('/almacenes/{warehouse}/insumos', [WarehouseController::class, 'suppliesInventory'])
     ->name('warehouses.supplies.index')
     ->middleware(['can:oncologicos_laboratory_index']);
+Route::get('/almacenes/{warehouse}/insumos/ingresar', [WarehouseController::class, 'createSupplyLot'])
+    ->name('warehouses.supplies.create')
+    ->middleware(['can:oncologicos_laboratory_create']);
+Route::post('/almacenes/{warehouse}/insumos/ingresar', [WarehouseController::class, 'storeSupplyLot'])
+    ->name('warehouses.supplies.store')
+    ->middleware(['can:oncologicos_laboratory_create']);
+
+Route::get('/almacenes/{warehouse}/consumibles', [ConsumableInventoryController::class, 'index'])->name('warehouses.consumables.index')->middleware(['can:oncologicos_laboratory_index']);
+Route::get('/almacenes/{warehouse}/consumibles/crear', [ConsumableInventoryController::class, 'create'])->name('warehouses.consumables.create')->middleware(['can:oncologicos_laboratory_create']);
+Route::post('/almacenes/{warehouse}/consumibles', [ConsumableInventoryController::class, 'store'])->name('warehouses.consumables.store')->middleware(['can:oncologicos_laboratory_create']);
+
+Route::get('/catalogo-listas/consumibles/crear', [ConsumableCatalogController::class, 'create'])->name('consumables.catalog.create')->middleware(['can:oncologicos_laboratory_create']);
+Route::post('/catalogo-listas/consumibles', [ConsumableCatalogController::class, 'store'])->name('consumables.catalog.store')->middleware(['can:oncologicos_laboratory_create']);
+Route::get('/catalogo-listas/consumibles/{item}/editar', [ConsumableCatalogController::class, 'edit'])->name('consumables.catalog.edit')->middleware(['can:oncologicos_laboratory_edit']);
+Route::put('/catalogo-listas/consumibles/{item}', [ConsumableCatalogController::class, 'update'])->name('consumables.catalog.update')->middleware(['can:oncologicos_laboratory_edit']);
+
+Route::prefix('insumos/solicitudes-produccion')->name('production-supplies.')->middleware(['can:oncologicos_laboratory_index'])->group(function () {
+    Route::get('/', [ProductionSupplyRequestController::class, 'index'])->name('index');
+    Route::get('/crear', [ProductionSupplyRequestController::class, 'create'])->name('create');
+    Route::post('/', [ProductionSupplyRequestController::class, 'store'])->name('store');
+    Route::get('/{productionSupplyRequest}', [ProductionSupplyRequestController::class, 'show'])->name('show');
+    Route::patch('/{productionSupplyRequest}/aprobar', [ProductionSupplyRequestController::class, 'approve'])->name('approve');
+    Route::patch('/{productionSupplyRequest}/rechazar', [ProductionSupplyRequestController::class, 'reject'])->name('reject');
+    Route::patch('/{productionSupplyRequest}/surtir', [ProductionSupplyRequestController::class, 'supply'])->name('supply');
+    Route::patch('/{productionSupplyRequest}/recibir', [ProductionSupplyRequestController::class, 'receive'])->name('receive');
+});
 
 // Crear
 Route::get('/oncologicos/laboratory/crear', [LaboratoryController::class, 'create'])

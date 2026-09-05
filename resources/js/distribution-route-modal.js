@@ -74,6 +74,7 @@ function initializeDistributionRouteModal() {
     const modalTitle = document.getElementById('route-create-title');
     const modalSubtitle = document.getElementById('route-create-subtitle');
     const nameInput = document.getElementById('route-name');
+    const messengerSelect = document.getElementById('route-messenger');
     const searchInput = document.getElementById('route-hospital-search');
     const suggestions = document.getElementById('route-hospital-suggestions');
     const mapElement = document.getElementById('route-hospital-map');
@@ -95,7 +96,7 @@ function initializeDistributionRouteModal() {
         : [];
 
     if (!form || !methodInput || !routeIdInput || !routeTypeInput || !modalTitle || !modalSubtitle
-        || !nameInput || !searchInput || !suggestions || !mapElement
+        || !nameInput || !messengerSelect || !searchInput || !suggestions || !mapElement
         || !selectedCount || !selectedEmpty || !selectedList || !hospitalInputs || !saveButton) {
         return;
     }
@@ -153,7 +154,7 @@ function initializeDistributionRouteModal() {
     const hideSuggestions = () => setSuggestionVisibility(false);
 
     const updateSaveState = () => {
-        saveButton.disabled = nameInput.value.trim() === '' || selectedIds.length === 0;
+        saveButton.disabled = nameInput.value.trim() === '' || messengerSelect.value === '' || selectedIds.length === 0;
     };
 
     const updateMapSelection = () => {
@@ -643,6 +644,7 @@ function initializeDistributionRouteModal() {
         }
 
         nameInput.value = String(routeData?.name || '');
+        messengerSelect.value = routeData?.messenger_id ? String(routeData.messenger_id) : '';
         selectedIds = normalizeHospitalIds(routeData?.hospital_ids);
         searchInput.value = '';
         hideSuggestions();
@@ -663,6 +665,7 @@ function initializeDistributionRouteModal() {
             route_id: trigger.dataset.routeId,
             name: trigger.dataset.routeName,
             route_type: trigger.dataset.routeType,
+            messenger_id: trigger.dataset.routeMessengerId,
             update_url: trigger.dataset.routeUpdateUrl,
             hospital_ids: hospitalIds,
         };
@@ -790,6 +793,7 @@ function initializeDistributionRouteModal() {
     });
 
     nameInput.addEventListener('input', updateSaveState);
+    messengerSelect.addEventListener('change', updateSaveState);
     searchInput.addEventListener('input', renderSuggestions);
     searchInput.addEventListener('focus', () => {
         if (searchInput.value.trim() !== '') renderSuggestions();

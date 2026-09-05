@@ -39,7 +39,7 @@ class DistributionDeliveryController extends Controller
         }
 
         $search = trim((string) $request->query('search', ''));
-        $allowedStatuses = ['all', 'pending', 'ready', 'scheduled', 'sent'];
+        $allowedStatuses = ['all', 'pending', 'ready', 'scheduled', 'sent', 'delivered'];
         $status = (string) $request->query('status', 'all');
         $status = in_array($status, $allowedStatuses, true) ? $status : 'all';
 
@@ -90,7 +90,7 @@ class DistributionDeliveryController extends Controller
             ->filter();
 
         $scheduleQuery = DistributionDeliverySchedule::query()
-            ->with(['route', 'warehouse:id,laboratory_id'])
+            ->with(['route', 'warehouse:id,laboratory_id', 'confirmation:id,distribution_delivery_schedule_id,delivered_at'])
             ->whereBetween('scheduled_date', [$deliveryDateFrom, $deliveryDateTo])
             ->whereIn('hospital_id', $hospitalIds);
 
@@ -137,7 +137,9 @@ class DistributionDeliveryController extends Controller
 
                 $catalogRoute = $routesByHospital->get((int) $hospitalId);
                 $route = $schedule?->route ?? $catalogRoute;
-                $operationalStatus = match ($schedule?->status) {
+                $operationalStatus = $schedule?->confirmation
+                    ? 'delivered'
+                    : match ($schedule?->status) {
                     'sent' => 'sent',
                     'scheduled' => 'scheduled',
                     default => $route ? 'ready' : 'pending',

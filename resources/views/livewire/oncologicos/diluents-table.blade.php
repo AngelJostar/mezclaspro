@@ -22,9 +22,8 @@
                         {!! $sortField === 'denominacion_generica' ? ($sortDirection === 'asc' ? '▲' : '▼') : '↕' !!}
                     </span>
                 </th>
-                <th class="px-4 py-3 text-center">Editar</th>
                 <th class="px-4 py-3 text-center">Presentaciones</th>
-                <th class="px-4 py-3 text-center">Eliminar</th>
+                <th class="px-4 py-3 text-center">Editar</th>
             </tr>
         </thead>
 
@@ -33,32 +32,16 @@
                 <tr>
                     <td class="px-4 py-3">{{ $d->denominacion_generica }}</td>
 
+                    <td class="px-4 py-3 text-center">{{ $d->catalogPresentations->count() }}</td>
                     <td class="px-4 py-3 text-center whitespace-nowrap">
                         <x-table-action-link href="{{ route('admin.oncologicos.diluents.edit', $d) }}" icon="fa-solid fa-pen">
                             Editar
                         </x-table-action-link>
                     </td>
-
-                    <td class="px-4 py-3 text-center whitespace-nowrap">
-                        <x-table-action-link href="{{ route('admin.oncologicos.diluent_presentations.index', $d) }}" icon="fa-solid fa-layer-group">
-                            Presentaciones
-                        </x-table-action-link>
-                    </td>
-
-                    <td class="px-4 py-3 text-center whitespace-nowrap">
-                        <form action="{{ route('admin.oncologicos.diluents.destroy', $d) }}"
-                            method="POST" class="inline-block form-eliminar-diluent">
-                            @csrf
-                            @method('DELETE')
-                            <x-table-action-button type="submit" variant="red" icon="fa-solid fa-trash">
-                                Eliminar
-                            </x-table-action-button>
-                        </form>
-                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td class="px-4 py-6 text-center text-gray-500" colspan="4">
+                    <td class="px-4 py-6 text-center text-gray-500" colspan="3">
                         No hay diluyentes.
                     </td>
                 </tr>

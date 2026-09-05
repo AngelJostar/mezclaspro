@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DistributionDeliverySchedule extends Model
 {
@@ -36,5 +37,10 @@ class DistributionDeliverySchedule extends Model
     public function route(): BelongsTo
     {
         return $this->belongsTo(DistributionRoute::class, 'distribution_route_id');
+    }
+
+    public function confirmation(): HasOne
+    {
+        return $this->hasOne(DistributionDeliveryConfirmation::class, 'distribution_delivery_schedule_id');
     }
 }

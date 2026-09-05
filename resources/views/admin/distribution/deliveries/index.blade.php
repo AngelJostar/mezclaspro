@@ -164,6 +164,7 @@
                         <option value="ready" @selected($status === 'ready')>Listos para ruta</option>
                         <option value="scheduled" @selected($status === 'scheduled')>Programados</option>
                         <option value="sent" @selected($status === 'sent')>En ruta</option>
+                        <option value="delivered" @selected($status === 'delivered')>Entregadas</option>
                     </select>
 
                     <button type="submit"
@@ -195,6 +196,7 @@
                         @foreach ($distributionHospitals as $hospital)
                             @php
                                 $statusMeta = match ($hospital['status']) {
+                                    'delivered' => ['Entregada', 'border-blue-200 bg-blue-50 text-blue-700'],
                                     'sent' => ['En ruta', 'border-emerald-200 bg-emerald-50 text-emerald-700'],
                                     'scheduled' => ['Programada', 'border-violet-200 bg-violet-50 text-violet-700'],
                                     'ready' => ['Lista para ruta', 'border-amber-200 bg-amber-50 text-amber-700'],
@@ -220,7 +222,7 @@
                                     </button>
                                 </td>
                                 <td class="px-4 py-4 text-center">
-                                    @if ($hospital['warehouse_id'] && $hospital['route_id'] && $hospital['status'] !== 'sent')
+                                    @if ($hospital['warehouse_id'] && $hospital['route_id'] && ! in_array($hospital['status'], ['sent', 'delivered'], true))
                                         <form method="POST" action="{{ route('admin.distribution.deliveries.send') }}" class="!w-auto">
                                             @csrf
                                             @method('PATCH')
@@ -240,11 +242,13 @@
                                         <button type="button" disabled
                                             class="inline-flex h-9 cursor-not-allowed items-center justify-center rounded-md bg-slate-200 px-3 text-xs font-semibold text-slate-500"
                                             title="{{ match (true) {
+                                                $hospital['status'] === 'delivered' => 'La entrega ya fue confirmada desde la app',
                                                 $hospital['status'] === 'sent' => 'El hospital ya esta en ruta',
                                                 ! $hospital['warehouse_id'] => 'La central no tiene un origen de surtido activo',
                                                 default => 'Asigna el hospital a una ruta en el catalogo',
                                             } }}">
                                             {{ match (true) {
+                                                $hospital['status'] === 'delivered' => 'Entregada',
                                                 $hospital['status'] === 'sent' => 'En ruta',
                                                 ! $hospital['warehouse_id'] => 'Central no disponible',
                                                 default => 'Sin ruta asignada',

@@ -59,8 +59,11 @@
             class="category-carousel flex min-w-0 flex-1 justify-start gap-2 overflow-x-auto scroll-smooth py-1"
             style="scrollbar-width: none; -ms-overflow-style: none;">
             @foreach ($categories as $key => $meta)
+                @if (in_array($key, ['diluyentes', 'consumibles'], true))
+                    @continue
+                @endif
                 @php
-                    $isActive = $category === $key;
+                    $isActive = $category === $key || ($key === 'oncologicos' && in_array($category, ['diluyentes', 'consumibles'], true));
                     $activeClass = $isActive
                         ? 'border-cyan-500 bg-cyan-50 text-gray-900 shadow-sm ring-1 ring-cyan-300'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-cyan-300 hover:bg-gray-50';
@@ -92,6 +95,22 @@
             <span aria-hidden="true" class="text-lg font-bold leading-none">&rsaquo;</span>
         </button>
     </div>
+
+    @if (in_array($category, ['oncologicos', 'diluyentes', 'consumibles'], true))
+        <div class="mt-2 flex items-center gap-2">
+            <span class="w-8"></span>
+            <a href="{{ route('admin.catalogo-listas.catalog', ['category' => 'diluyentes']) }}"
+                class="flex h-16 w-48 items-center gap-3 rounded-lg border px-4 text-left transition {{ $category === 'diluyentes' ? 'border-cyan-500 bg-cyan-50 text-gray-900 shadow-sm ring-1 ring-cyan-300' : 'border-gray-200 bg-white text-gray-700 hover:border-cyan-300 hover:bg-gray-50' }}">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-50 text-cyan-700"><i class="fa-solid fa-droplet"></i></span>
+                <span class="text-sm font-bold">Diluyentes</span>
+            </a>
+            <a href="{{ route('admin.catalogo-listas.catalog', ['category' => 'consumibles']) }}"
+                class="flex h-16 w-48 items-center gap-3 rounded-lg border px-4 text-left transition {{ $category === 'consumibles' ? 'border-cyan-500 bg-cyan-50 text-gray-900 shadow-sm ring-1 ring-cyan-300' : 'border-gray-200 bg-white text-gray-700 hover:border-cyan-300 hover:bg-gray-50' }}">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-50 text-amber-700"><i class="fa-solid fa-syringe"></i></span>
+                <span class="text-sm font-bold">Consumibles</span>
+            </a>
+        </div>
+    @endif
 
     @unless ($embedded)
         <div class="mt-3 flex flex-wrap items-center gap-2">

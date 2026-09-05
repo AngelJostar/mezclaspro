@@ -5,6 +5,7 @@
         : collect($editingRoute?->hospitals?->pluck('id') ?? [])->map(fn ($id) => (int) $id)->values();
     $initialRouteName = old('name', $editingRoute?->name ?? '');
     $initialRouteType = old('route_type', $editingRoute?->route_type ?? 'vehicular');
+    $initialMessengerId = (int) old('messenger_id', $editingRoute?->messengers->first()?->id ?? 0);
     $initialRouteType = in_array($initialRouteType, ['vehicular', 'dron'], true) ? $initialRouteType : 'vehicular';
     $initialUpdateUrl = $editingRoute
         ? route('admin.distribution.routes.update', $editingRoute)
@@ -15,6 +16,7 @@
         'route_id' => $editingRoute?->id,
         'name' => $initialRouteName,
         'route_type' => $initialRouteType,
+        'messenger_id' => $initialMessengerId,
         'update_url' => $initialUpdateUrl,
         'hospital_ids' => $initialHospitalIds,
     ];
@@ -63,13 +65,27 @@
                     </div>
                 @endif
 
-                <div class="grid gap-4 md:grid-cols-2">
+                <div class="grid gap-4 md:grid-cols-3">
                     <div>
                         <label for="route-name" class="mb-1 block text-sm font-semibold text-slate-700">Nombre de la ruta *</label>
                         <input id="route-name" name="name" type="text" value="{{ $initialRouteName }}" required maxlength="255"
                             placeholder="Ej. Ruta Norte 01"
                             class="h-10 w-full rounded-md border-slate-300 px-3 text-sm focus:border-blue-600 focus:ring-blue-600">
                         @error('name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
+
+                    <div>
+                        <label for="route-messenger" class="mb-1 block text-sm font-semibold text-slate-700">Mensajero asignado *</label>
+                        <select id="route-messenger" name="messenger_id" required
+                            class="h-10 w-full rounded-md border-slate-300 px-3 text-sm focus:border-blue-600 focus:ring-blue-600">
+                            <option value="">Selecciona un mensajero</option>
+                            @foreach ($mobileMessengers as $messenger)
+                                <option value="{{ $messenger->id }}" @selected($initialMessengerId === $messenger->id)>
+                                    {{ trim($messenger->name.' '.$messenger->lastname) }} ({{ $messenger->username }})
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('messenger_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
                     <div class="relative">

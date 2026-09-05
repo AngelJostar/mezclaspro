@@ -24,5 +24,9 @@ class Diluent extends Model
     {
         return $this->hasMany(DiluentPresentation::class);
     }
+    public function catalogPresentations()
+    {
+        return $this->hasMany(DiluentCatalogPresentation::class);
+    }
 
 }

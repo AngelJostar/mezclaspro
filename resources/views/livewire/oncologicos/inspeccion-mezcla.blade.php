@@ -163,10 +163,21 @@
                                     Aprobo
                                 </label>
 
-                                <input type="text"
-                                    wire:model.defer="aprobo_nombre"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200 bg-gray-100"
-                                    readonly>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Solo Responsable sanitario o Auxiliar de responsable sanitario.
+                                </p>
+
+                                <select wire:model.defer="aprobo_nombre"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200">
+                                    <option value="">Seleccione quién aprobó...</option>
+                                    @foreach ($aprobadores as $valor => $etiqueta)
+                                        <option value="{{ $valor }}">{{ $etiqueta }}</option>
+                                    @endforeach
+                                </select>
+
+                                @error('aprobo_nombre')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
                     </div>
@@ -190,6 +201,10 @@
 
     @push('js')
         <script>
+            window.addEventListener('mezcla-inspeccionada', () => {
+                window.location.reload();
+            });
+
             function marcarDefault() {
                 const defaults = {
                     esta_rotulado: true,

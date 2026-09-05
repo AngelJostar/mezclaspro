@@ -196,7 +196,7 @@
                     @foreach ($distributionRoutes as $distributionRoute)
                         @php
                             $statusMeta = match ($distributionRoute->status) {
-                                'active' => ['En ruta', 'border-emerald-200 bg-emerald-50 text-emerald-700', 'bg-emerald-500'],
+                                'active', 'in_route' => ['En ruta', 'border-emerald-200 bg-emerald-50 text-emerald-700', 'bg-emerald-500'],
                                 'completed' => ['Completada', 'border-blue-200 bg-blue-50 text-blue-700', 'bg-blue-500'],
                                 'paused' => ['Pausada', 'border-amber-200 bg-amber-50 text-amber-700', 'bg-amber-500'],
                                 'cancelled' => ['Cancelada', 'border-red-200 bg-red-50 text-red-700', 'bg-red-500'],
@@ -268,10 +268,17 @@
                                 <span class="block text-xs font-normal text-slate-500">paradas</span>
                             </td>
                             <td class="px-4 py-4 text-center">
+                                <a href="{{ route('admin.distribution.routes.monitor', $distributionRoute) }}"
+                                    class="mb-2 inline-flex h-9 items-center justify-center gap-2 rounded-md border border-emerald-600 bg-white px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                    title="Monitorear {{ $distributionRoute->name }}">
+                                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                                    <span>Monitorear</span>
+                                </a>
                                 <button type="button" data-route-modal-edit
                                     data-route-id="{{ $distributionRoute->id }}"
                                     data-route-name="{{ $distributionRoute->name }}"
                                     data-route-type="{{ $distributionRoute->route_type ?: 'vehicular' }}"
+                                    data-route-messenger-id="{{ $distributionRoute->messengers->first()?->id }}"
                                     data-route-update-url="{{ route('admin.distribution.routes.update', $distributionRoute) }}"
                                     data-route-hospital-ids='@json($distributionRoute->hospitals->pluck('id')->values())'
                                     class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-700 px-3 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400"

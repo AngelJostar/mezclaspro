@@ -1326,6 +1326,10 @@ class MezclaController extends Controller
         }
 
         if ($accion === 'entregada') {
+            if ($mezcla->estado !== 'revisada') {
+                return back()->withErrors(['error' => 'Solo una mezcla revisada puede marcarse como entregada.']);
+            }
+
             $liberoNombre = $this->nombreUsuario($user);
 
             DB::transaction(function () use ($mezcla, $liberoNombre) {

@@ -150,7 +150,6 @@
                 </li>
             @endif
 
-            <!-- Distribución -->
             @if ($menuAllows('menu.distribucion', $sidebarUser?->can('laboratorios')))
                 <li class="rounded-lg border border-cyan-200 bg-cyan-50 p-1 dark:border-cyan-700 dark:bg-cyan-900/20">
                     <button type="button" @click="openMenu === 'distribution' ? openMenu = null : openMenu = 'distribution'"

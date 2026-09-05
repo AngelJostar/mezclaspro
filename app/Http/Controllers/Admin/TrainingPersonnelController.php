@@ -437,6 +437,7 @@ class TrainingPersonnelController extends Controller
         return [
             'Operacion tecnica' => [
                 'Responsable sanitario',
+                'Auxiliar de responsable sanitario',
                 'Coordinador de produccion',
                 'Preparador de mezclas',
                 'Verificador',
