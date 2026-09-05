@@ -46,7 +46,7 @@ class SolicitudesTable extends Component
 
         $query = NutricionalesSolicitud::query()
             ->with([
-                'user.hospital',
+                'user.hospital.instituciones',
                 'solicitud_detail',
                 'solicitud_patient',
             ]);

@@ -49,18 +49,12 @@ class HospitalController extends Controller
     private function createView(Institucion $institucion)
     {
         $laboratories = Laboratory::where('activo', 1)->orderBy('nombre')->get();
-        $nutriMedicineLists = NutriMedicineList::where('is_active', 1)->orderBy('name')->get();
-        $oncoMedicineLists = MedicineList::forCategory('oncologicos')->orderBy('name')->get();
-        $antibioticMedicineLists = MedicineList::forCategory('antibioticos')->orderBy('name')->get();
         $formAction = route('admin.instituciones.hospitals.store', $institucion);
         $cancelRoute = route('admin.instituciones.hospitals', $institucion);
 
         return view('admin.hospitals.create', compact(
             'institucion',
             'laboratories',
-            'nutriMedicineLists',
-            'oncoMedicineLists',
-            'antibioticMedicineLists',
             'formAction',
             'cancelRoute'
         ));
@@ -73,50 +67,56 @@ class HospitalController extends Controller
 
     private function storeHospital(Request $request, Institucion $institucion)
     {
+        $coordinates = $this->parseCoordinatePair($request->input('coordinates'));
+
+        if ($request->filled('coordinates') && $coordinates === null) {
+            throw ValidationException::withMessages([
+                'coordinates' => 'Captura las coordenadas con formato latitud, longitud.',
+            ]);
+        }
+
         if ($request->boolean('use_institution_fiscal_data')) {
             $request->merge([
+                'fiscal_name' => $request->filled('fiscal_name')
+                    ? $request->input('fiscal_name')
+                    : ($institucion->razon_social ?: $institucion->nombre),
                 'rfc' => $request->filled('rfc') ? $request->input('rfc') : $institucion->rfc,
-                'phone' => $request->filled('phone') ? $request->input('phone') : $institucion->telefono,
+                'billing_phone' => $request->filled('billing_phone') ? $request->input('billing_phone') : $institucion->telefono,
             ]);
         }
 
         $data = $request->validate([
             'name_hp' => ['required', 'string', 'max:255'],
             'short_name' => ['nullable', 'string', 'max:100'],
-            'internal_key' => ['required', 'string', 'max:50', Rule::unique('hospitals', 'internal_key')],
+            'internal_key' => ['nullable', 'string', 'max:50', Rule::unique('hospitals', 'internal_key')],
             'unit_type' => ['required', 'string', 'max:100'],
             'care_level' => ['nullable', 'string', 'max:100'],
+            'fiscal_name' => ['nullable', 'string', 'max:255'],
             'rfc' => ['nullable', 'string', 'max:20'],
+            'fiscal_regime' => ['nullable', 'string', 'max:255'],
+            'cfdi_use' => ['nullable', 'string', 'max:255'],
+            'billing_email' => ['nullable', 'email', 'max:150'],
+            'billing_phone' => ['nullable', 'string', 'max:30'],
             'clues' => ['nullable', 'string', 'max:30'],
             'free_text' => ['nullable', 'string', 'max:10000'],
             'google_maps_url' => ['nullable', 'url:http,https', 'max:2048'],
+            'coordinates' => ['nullable', 'string', 'max:80'],
             'country' => ['required', 'string', 'max:100'],
             'state' => ['required', 'string', 'max:100'],
             'municipality' => ['required', 'string', 'max:150'],
             'postal_code' => ['required', 'string', 'max:10'],
             'neighborhood' => ['nullable', 'string', 'max:150'],
             'street_number' => ['required', 'string', 'max:255'],
-            'contact_name' => ['required', 'string', 'max:150'],
+            'contact_name' => ['nullable', 'string', 'max:150'],
             'contact_position' => ['nullable', 'string', 'max:100'],
-            'phone' => ['required', 'string', 'max:30'],
-            'email' => ['required', 'email', 'max:150'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:150'],
             'reception_hours' => ['nullable', 'string', 'max:100'],
             'operation_days' => ['nullable', 'array'],
             'operation_days.*' => ['string', Rule::in([
                 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo',
             ])],
             'laboratory_id' => ['nullable', 'integer', 'exists:laboratories,id'],
-            'nutri_medicine_list_id' => ['nullable', 'integer', 'exists:nutri_medicine_lists,id'],
-            'onco_medicine_list_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('medicine_lists', 'id')->where('catalog_category', 'oncologicos'),
-            ],
-            'antibiotic_medicine_list_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('medicine_lists', 'id')->where('catalog_category', 'antibioticos'),
-            ],
             'access_username' => [
                 'required',
                 'string',
@@ -145,7 +145,11 @@ class HospitalController extends Controller
         $data['service_oncology'] = $request->boolean('service_oncology');
         $data['service_antibiotics'] = $request->boolean('service_antibiotics');
         $data['service_nutrition'] = $request->boolean('service_nutrition');
-        unset($data['name_hp']);
+        if ($coordinates !== null) {
+            $data['latitude'] = $coordinates['latitude'];
+            $data['longitude'] = $coordinates['longitude'];
+        }
+        unset($data['name_hp'], $data['coordinates']);
 
         $accessCredentials = [
             'username' => trim($data['access_username']),
@@ -194,9 +198,44 @@ class HospitalController extends Controller
         return redirect()->route('admin.instituciones.hospitals', $institucion);
     }
 
+    private function parseCoordinatePair(?string $value): ?array
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        $parts = preg_split('/\s*,\s*/', $value);
+
+        if (! is_array($parts) || count($parts) !== 2) {
+            return null;
+        }
+
+        $latitude = filter_var($parts[0], FILTER_VALIDATE_FLOAT);
+        $longitude = filter_var($parts[1], FILTER_VALIDATE_FLOAT);
+
+        if ($latitude === false || $longitude === false) {
+            return null;
+        }
+
+        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            return null;
+        }
+
+        return [
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+        ];
+    }
+
     public function edit(Hospital $hospital)
     {
-        $laboratories = Laboratory::where('activo', 1)->orderBy('nombre')->get();
+        $hospital->load('instituciones');
+        $laboratories = Laboratory::where('activo', 1)
+            ->orWhere('id', $hospital->laboratory_id)
+            ->orderBy('nombre')
+            ->get();
         $nutriMedicineLists = NutriMedicineList::where('is_active', 1)->orderBy('name')->get();
         $oncoMedicineLists = MedicineList::forCategory('oncologicos')->orderBy('name')->get();
         $antibioticMedicineLists = MedicineList::forCategory('antibioticos')->orderBy('name')->get();
@@ -253,6 +292,30 @@ class HospitalController extends Controller
         ]);
 
         return redirect()->route('admin.hospitals.index');
+    }
+
+    public function changeInstitution(Request $request, Hospital $hospital)
+    {
+        $data = $request->validateWithBag('changeInstitution', [
+            'new_institution_id' => ['required', 'integer', Rule::exists('clientes', 'id')],
+        ], [
+            'new_institution_id.required' => 'Selecciona la nueva institucion.',
+            'new_institution_id.integer' => 'Selecciona una institucion del catalogo.',
+            'new_institution_id.exists' => 'La institucion seleccionada ya no existe en el catalogo.',
+        ]);
+
+        DB::transaction(function () use ($hospital, $data) {
+            $lockedHospital = Hospital::whereKey($hospital->id)->lockForUpdate()->firstOrFail();
+            $lockedHospital->instituciones()->sync([(int) $data['new_institution_id']]);
+        });
+
+        return redirect()->route('admin.hospitals.index', [
+            'institution_id' => $request->input('institution_filter', 'all'),
+        ])->with('swal', [
+            'title' => 'Institucion actualizada',
+            'text' => 'La institucion del hospital se cambio correctamente.',
+            'icon' => 'success',
+        ]);
     }
 
     public function toggleStatus(Request $request, Hospital $hospital)

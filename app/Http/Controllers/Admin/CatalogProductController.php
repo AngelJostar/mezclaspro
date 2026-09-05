@@ -10,7 +10,9 @@ use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\AdministrationRoute;
 use App\Models\Oncologicos\Diluent;
 use App\Models\Oncologicos\DiluentPresentation;
+use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicinesCatalog;
+use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,9 +21,24 @@ use Illuminate\View\View;
 
 class CatalogProductController extends Controller
 {
-    public function create(string $category): View
+    public function create(Request $request, string $category): View
     {
         $category = $this->normalizeCategory($category);
+        $isSupplies = $category === 'insumos';
+        $laboratories = $isSupplies
+            ? Laboratory::query()
+                ->where('activo', true)
+                ->with(['warehouses' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderBy('name')])
+                ->orderBy('nombre')
+                ->get()
+            : collect();
+
+        $selectedLaboratory = $laboratories->firstWhere('id', $request->integer('laboratory_id'))
+            ?? $laboratories->first();
+        $selectedWarehouse = $selectedLaboratory?->warehouses->firstWhere('id', $request->integer('warehouse_id'))
+            ?? $selectedLaboratory?->warehouses->first();
 
         return view('admin.catalogo-listas.product-form', [
             'category' => $category,
@@ -33,6 +50,9 @@ class CatalogProductController extends Controller
             'routes' => AdministrationRoute::query()
                 ->orderBy('name')
                 ->get(['id', 'name']),
+            'laboratories' => $laboratories,
+            'selectedLaboratoryId' => $selectedLaboratory?->id,
+            'selectedWarehouseId' => $selectedWarehouse?->id,
             'concentrationUnit' => in_array($category, ['nutricionales', 'insumos'], true) ? 'ml' : 'mg',
         ]);
     }
@@ -47,6 +67,7 @@ class CatalogProductController extends Controller
             'concentration' => ['required', 'numeric', 'gt:0'],
             'presentation' => ['required', 'string', 'max:255'],
             'commercial_name' => ['required', 'string', 'max:255'],
+            'stability_hours' => ['required', 'integer', 'min:1', 'max:8760'],
             'manufacturer' => ['nullable', 'string', 'max:255'],
             'diluents' => ['nullable', 'array'],
             'diluents.*' => ['integer', 'exists:diluents,id'],
@@ -54,6 +75,8 @@ class CatalogProductController extends Controller
             'routes.*' => ['integer', 'exists:administration_routes,id'],
             'conc_min' => ['nullable', 'numeric', 'min:0'],
             'conc_max' => ['nullable', 'numeric', 'min:0'],
+            'laboratory_id' => [$isSupplies ? 'required' : 'nullable', 'integer', 'exists:laboratories,id'],
+            'warehouse_id' => [$isSupplies ? 'required' : 'nullable', 'integer', 'exists:warehouses,id'],
         ], [
             'generic_description.required' => $isSupplies
                 ? 'Captura el nombre generico del insumo.'
@@ -68,7 +91,27 @@ class CatalogProductController extends Controller
             'commercial_name.required' => $isSupplies
                 ? 'Captura el nombre comercial.'
                 : 'Captura la descripcion distintiva o marca.',
+            'stability_hours.required' => 'Captura la estabilidad del producto reconstituido.',
+            'stability_hours.integer' => 'La estabilidad debe indicarse en horas completas.',
+            'stability_hours.min' => 'La estabilidad debe ser de al menos una hora.',
+            'stability_hours.max' => 'La estabilidad no puede superar 8760 horas.',
+            'laboratory_id.required' => 'Selecciona la central del subalmacen de insumos.',
+            'warehouse_id.required' => 'Selecciona el subalmacen de insumos.',
         ]);
+
+        if ($isSupplies) {
+            $warehouseBelongsToLaboratory = Warehouse::query()
+                ->whereKey($data['warehouse_id'])
+                ->where('laboratory_id', $data['laboratory_id'])
+                ->where('is_active', true)
+                ->exists();
+
+            if (! $warehouseBelongsToLaboratory) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => 'Selecciona un subalmacen de insumos valido para la central.',
+                ]);
+            }
+        }
 
         if (
             ($data['conc_min'] ?? null) !== null
@@ -150,6 +193,7 @@ class CatalogProductController extends Controller
             'contenido_unidad' => 'mg',
             'marca' => trim($data['commercial_name']),
             'cantidad_medicamento' => $data['concentration'],
+            'stability_hours' => $data['stability_hours'],
             'is_available' => true,
         ]);
     }
@@ -213,6 +257,7 @@ class CatalogProductController extends Controller
             'denominacion_comercial' => trim($data['commercial_name']),
             'presentacion' => trim($data['presentation']),
             'presentacion_ml' => $data['concentration'],
+            'stability_hours' => $data['stability_hours'],
             'is_available' => true,
         ]);
     }
@@ -230,6 +275,7 @@ class CatalogProductController extends Controller
         $presentationExists = $diluent->presentations()
             ->where('presentacion', $presentationName)
             ->where('denominacion_comercial', $commercialName)
+            ->where('warehouse_id', (int) $data['warehouse_id'])
             ->exists();
 
         if ($presentationExists) {
@@ -240,6 +286,8 @@ class CatalogProductController extends Controller
 
         DiluentPresentation::create([
             'diluent_id' => $diluent->id,
+            'laboratory_id' => $data['laboratory_id'],
+            'warehouse_id' => $data['warehouse_id'],
             'presentacion' => $presentationName,
             'volume_ml' => $data['concentration'],
             'denominacion_comercial' => $commercialName,

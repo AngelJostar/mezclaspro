@@ -55,7 +55,7 @@ class MedicineController extends Controller
             'presentations.*.fabricante' => 'nullable|string|max:255',
             'presentations.*.presentacion' => 'required|string|max:255',
             'presentations.*.presentacion_ml' => 'nullable|numeric|min:0',
-            'presentations.*.stability_hours' => 'nullable|integer|min:0|max:8760',
+            'presentations.*.stability_hours' => 'required|integer|min:1|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
         ]);
 
@@ -151,7 +151,7 @@ class MedicineController extends Controller
             'presentations.*.fabricante' => 'nullable|string|max:255',
             'presentations.*.presentacion' => 'required|string|max:255',
             'presentations.*.presentacion_ml' => 'nullable|numeric|min:0',
-            'presentations.*.stability_hours' => 'nullable|integer|min:0|max:8760',
+            'presentations.*.stability_hours' => 'nullable|integer|min:1|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
 
         ]);

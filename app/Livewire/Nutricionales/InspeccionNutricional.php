@@ -14,6 +14,8 @@ class InspeccionNutricional extends Component
 
     public $solicitudId;
     public $lote_mezcla = '';
+    #[\Livewire\Attributes\Locked]
+    public string $mixtureContext = '';
 
     public $es_limpia = 0;
     public $es_libre = 0;
@@ -74,7 +76,9 @@ class InspeccionNutricional extends Component
 
         $this->solicitudId = (int) $solicitudId;
         $this->mostrarModalInspeccion = true;
-        $this->lote_mezcla = (string) (Solicitud::find($this->solicitudId)?->lote ?? '');
+        $solicitud = Solicitud::with('user.hospital.instituciones')->find($this->solicitudId);
+        $this->lote_mezcla = (string) ($solicitud?->lote ?? '');
+        $this->mixtureContext = \App\Support\MixtureWorkflowContext::label($this->solicitudId, $solicitud?->user?->hospital);
 
         $ins = NutricionalesInspeccionNutricional::where('solicitud_id', $this->solicitudId)->first();
 

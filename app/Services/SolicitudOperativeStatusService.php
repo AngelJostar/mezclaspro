@@ -9,9 +9,10 @@ class SolicitudOperativeStatusService
     private const STAGE_ORDER = [
         'pendiente' => 0,
         'aprobada' => 1,
-        'preparada' => 2,
-        'revisada' => 3,
-        'entregada' => 4,
+        'dispensada' => 2,
+        'preparada' => 3,
+        'revisada' => 4,
+        'entregada' => 5,
     ];
 
     private const TERMINAL_REQUEST_STATES = [

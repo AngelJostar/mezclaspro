@@ -81,12 +81,49 @@
                 <h2 class="font-bold text-gray-900">Cargos adicionales por categoría</h2>
                 <p class="mt-1 text-xs text-gray-600">Se aplican automáticamente: por solicitud en Nutrición y por mezcla en Oncología/Antibióticos.</p>
                 @foreach ($categories as $key => $settings)
+                    @php
+                        $categoryCharges = old('additional_charges.' . $key, [
+                            ['name' => '', 'concept_type' => 'Servicio', 'amount' => ''],
+                        ]);
+
+                        if (! is_array($categoryCharges) || $categoryCharges === []) {
+                            $categoryCharges = [];
+                        }
+                    @endphp
                     <div class="mt-3 rounded bg-white p-3 {{ $key === $activeCategory ? '' : 'hidden' }}" data-category-panel="{{ $key }}" data-additional-charge-category="{{ $key }}">
-                        <p class="mb-2 text-sm font-semibold">{{ $settings['label'] }}</p>
-                        <div class="grid gap-2 sm:grid-cols-3">
-                            <input name="additional_charges[{{ $key }}][0][name]" placeholder="Nombre del cargo" class="rounded border-gray-300 text-sm">
-                            <select name="additional_charges[{{ $key }}][0][concept_type]" class="rounded border-gray-300 text-sm"><option>Servicio</option><option>Insumo</option></select>
-                            <input name="additional_charges[{{ $key }}][0][amount]" type="number" min="0" step="0.01" placeholder="Precio con IVA" class="rounded border-gray-300 text-sm">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p class="text-sm font-semibold">{{ $settings['label'] }}</p>
+                            <button type="button" data-additional-charge-add="{{ $key }}"
+                                class="inline-flex h-8 items-center justify-center gap-2 self-start rounded-md border border-cyan-700 bg-white px-3 text-xs font-bold text-cyan-800 transition hover:bg-cyan-50">
+                                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                Agregar cargo
+                            </button>
+                        </div>
+
+                        <div class="mt-2 space-y-2" data-additional-charge-list="{{ $key }}">
+                            @foreach ($categoryCharges as $chargeIndex => $charge)
+                                <div class="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_160px_150px_40px]" data-additional-charge-row>
+                                    <input name="additional_charges[{{ $key }}][{{ $chargeIndex }}][name]"
+                                        value="{{ $charge['name'] ?? '' }}" maxlength="120"
+                                        placeholder="Nombre del cargo" class="rounded border-gray-300 text-sm">
+
+                                    <select name="additional_charges[{{ $key }}][{{ $chargeIndex }}][concept_type]"
+                                        class="rounded border-gray-300 text-sm">
+                                        <option value="Servicio" @selected(($charge['concept_type'] ?? 'Servicio') === 'Servicio')>Servicio</option>
+                                        <option value="Insumo" @selected(($charge['concept_type'] ?? 'Servicio') === 'Insumo')>Insumo</option>
+                                    </select>
+
+                                    <input name="additional_charges[{{ $key }}][{{ $chargeIndex }}][amount]"
+                                        value="{{ $charge['amount'] ?? '' }}" type="number" min="0" step="0.01"
+                                        placeholder="Precio con IVA" class="rounded border-gray-300 text-sm">
+
+                                    <button type="button" data-additional-charge-remove
+                                        class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100"
+                                        title="Eliminar cargo" aria-label="Eliminar cargo">
+                                        <i class="fa-solid fa-minus" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                            @endforeach
                         </div>
                     </div>
                 @endforeach
@@ -232,10 +269,59 @@
                 const subdistributorFields = document.getElementById('subdistributorFields');
                 const hasContract = document.getElementById('hasContract');
                 const contractFields = document.getElementById('contractFields');
+                const additionalChargeLists = Array.from(document.querySelectorAll('[data-additional-charge-list]'));
                 let activeCategory = activeCategoryInput?.value || categories[0];
 
                 const rowsFor = (category) => rows.filter((row) => row.dataset.category === category);
                 const visibleRowsFor = (category) => rowsFor(category).filter((row) => !row.classList.contains('hidden'));
+
+                const additionalChargeRowMarkup = (category, index) => `
+                    <div class="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_160px_150px_40px]" data-additional-charge-row>
+                        <input name="additional_charges[${category}][${index}][name]" maxlength="120"
+                            placeholder="Nombre del cargo" class="rounded border-gray-300 text-sm">
+                        <select name="additional_charges[${category}][${index}][concept_type]"
+                            class="rounded border-gray-300 text-sm">
+                            <option value="Servicio">Servicio</option>
+                            <option value="Insumo">Insumo</option>
+                        </select>
+                        <input name="additional_charges[${category}][${index}][amount]" type="number" min="0" step="0.01"
+                            placeholder="Precio con IVA" class="rounded border-gray-300 text-sm">
+                        <button type="button" data-additional-charge-remove
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100"
+                            title="Eliminar cargo" aria-label="Eliminar cargo">
+                            <i class="fa-solid fa-minus" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                `;
+
+                const reindexAdditionalCharges = (list) => {
+                    const category = list.dataset.additionalChargeList;
+
+                    list.querySelectorAll('[data-additional-charge-row]').forEach((row, index) => {
+                        row.querySelectorAll('[name]').forEach((input) => {
+                            input.name = input.name.replace(
+                                /additional_charges\[[^\]]+\]\[[^\]]+\]/,
+                                `additional_charges[${category}][${index}]`
+                            );
+                        });
+                    });
+                };
+
+                const addAdditionalChargeRow = (category, focus = true) => {
+                    const list = document.querySelector(`[data-additional-charge-list="${category}"]`);
+
+                    if (!list) {
+                        return;
+                    }
+
+                    const index = list.querySelectorAll('[data-additional-charge-row]').length;
+                    list.insertAdjacentHTML('beforeend', additionalChargeRowMarkup(category, index));
+                    reindexAdditionalCharges(list);
+
+                    if (focus) {
+                        list.querySelector('[data-additional-charge-row]:last-child input')?.focus();
+                    }
+                };
 
                 const syncConditionalSection = (toggle, section) => {
                     if (!toggle || !section) {
@@ -363,6 +449,7 @@
 
                     syncSelectAll(category);
                     syncChargeBySelectAll(category);
+                    window.dispatchEvent(new Event('resize'));
                 };
 
                 tabs.forEach((tab) => {
@@ -439,6 +526,25 @@
                     });
                 });
 
+                document.querySelectorAll('[data-additional-charge-add]').forEach((button) => {
+                    button.addEventListener('click', () => addAdditionalChargeRow(button.dataset.additionalChargeAdd));
+                });
+
+                document.addEventListener('click', (event) => {
+                    const removeButton = event.target.closest('[data-additional-charge-remove]');
+
+                    if (!removeButton) {
+                        return;
+                    }
+
+                    const list = removeButton.closest('[data-additional-charge-list]');
+                    removeButton.closest('[data-additional-charge-row]')?.remove();
+
+                    if (list) {
+                        reindexAdditionalCharges(list);
+                    }
+                });
+
                 hasSubdistributor?.addEventListener('change', () => syncConditionalSection(hasSubdistributor, subdistributorFields));
                 hasContract?.addEventListener('change', () => syncConditionalSection(hasContract, contractFields));
 
@@ -467,6 +573,7 @@
 
                 syncConditionalSection(hasSubdistributor, subdistributorFields);
                 syncConditionalSection(hasContract, contractFields);
+                additionalChargeLists.forEach(reindexAdditionalCharges);
                 syncCounts();
                 categories.forEach(syncChargeBySelectAll);
                 activateCategory(activeCategory);

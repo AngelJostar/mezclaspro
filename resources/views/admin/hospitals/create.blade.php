@@ -11,6 +11,11 @@
         $selectedDays = old('operation_days', old('operation_days_submitted') ? [] : $days);
         $inputClass = 'mt-0.5 h-8 w-full rounded border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:ring-blue-500';
         $labelClass = 'block text-xs font-medium text-gray-700';
+        $institutionFiscalData = [
+            'fiscal_name' => $institucion?->razon_social ?: $institucion?->nombre,
+            'rfc' => $institucion?->rfc,
+            'billing_phone' => $institucion?->telefono,
+        ];
     @endphp
 
     <section class="mx-auto max-w-7xl overflow-hidden rounded-lg bg-white shadow-lg">
@@ -59,8 +64,8 @@
                             </label>
 
                             <label class="{{ $labelClass }}">
-                                Clave interna <span class="text-red-600">*</span>
-                                <input name="internal_key" value="{{ old('internal_key') }}" required class="{{ $inputClass }}">
+                                Clave interna
+                                <input name="internal_key" value="{{ old('internal_key') }}" class="{{ $inputClass }}">
                             </label>
 
                             <label class="{{ $labelClass }}">
@@ -95,11 +100,6 @@
                             </div>
 
                             <label class="{{ $labelClass }}">
-                                RFC
-                                <input name="rfc" value="{{ old('rfc') }}" maxlength="20" class="{{ $inputClass }}">
-                            </label>
-
-                            <label class="{{ $labelClass }}">
                                 CLUES
                                 <input name="clues" value="{{ old('clues') }}" maxlength="30" class="{{ $inputClass }}">
                             </label>
@@ -109,6 +109,47 @@
                                 <textarea name="free_text" rows="2" maxlength="10000"
                                     placeholder="Agrega cualquier informaci&oacute;n adicional sobre el hospital."
                                     class="mt-0.5 min-h-14 w-full resize-y rounded border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:ring-blue-500">{{ old('free_text') }}</textarea>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="mt-5 border-t border-gray-200 pt-4">
+                        <legend class="text-sm font-semibold text-gray-900">Datos fiscales del hospital</legend>
+                        <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-3">
+                            <label class="{{ $labelClass }}">
+                                Raz&oacute;n social
+                                <input name="fiscal_name" value="{{ old('fiscal_name') }}" maxlength="255"
+                                    data-fiscal-field="fiscal_name" class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
+                                RFC
+                                <input name="rfc" value="{{ old('rfc') }}" maxlength="20"
+                                    data-fiscal-field="rfc" class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
+                                R&eacute;gimen fiscal
+                                <input name="fiscal_regime" value="{{ old('fiscal_regime') }}" maxlength="255"
+                                    class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
+                                Uso CFDI
+                                <input name="cfdi_use" value="{{ old('cfdi_use') }}" maxlength="255"
+                                    class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
+                                Correo de facturaci&oacute;n
+                                <input type="email" name="billing_email" value="{{ old('billing_email') }}" maxlength="150"
+                                    class="{{ $inputClass }}">
+                            </label>
+
+                            <label class="{{ $labelClass }}">
+                                Tel&eacute;fono de facturaci&oacute;n
+                                <input name="billing_phone" value="{{ old('billing_phone') }}" maxlength="30"
+                                    data-fiscal-field="billing_phone" class="{{ $inputClass }}">
                             </label>
                         </div>
                     </fieldset>
@@ -156,6 +197,12 @@
                                 <input type="url" name="google_maps_url" value="{{ old('google_maps_url') }}"
                                     placeholder="https://maps.google.com/..." class="{{ $inputClass }}">
                             </label>
+
+                            <label class="{{ $labelClass }}">
+                                Coordenadas
+                                <input name="coordinates" value="{{ old('coordinates') }}" maxlength="80"
+                                    placeholder="19.432608, -99.133209" class="{{ $inputClass }}">
+                            </label>
                         </div>
                     </fieldset>
 
@@ -163,8 +210,8 @@
                         <legend class="text-sm font-semibold text-gray-900">Contacto y operaci&oacute;n</legend>
                         <div class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-6">
                             <label class="{{ $labelClass }} md:col-span-2">
-                                Responsable del hospital <span class="text-red-600">*</span>
-                                <input name="contact_name" value="{{ old('contact_name') }}" required class="{{ $inputClass }}">
+                                Responsable del hospital
+                                <input name="contact_name" value="{{ old('contact_name') }}" class="{{ $inputClass }}">
                             </label>
 
                             <label class="{{ $labelClass }} md:col-span-2">
@@ -173,13 +220,13 @@
                             </label>
 
                             <label class="{{ $labelClass }} md:col-span-2">
-                                Tel&eacute;fono <span class="text-red-600">*</span>
-                                <input name="phone" value="{{ old('phone') }}" required class="{{ $inputClass }}">
+                                Tel&eacute;fono
+                                <input name="phone" value="{{ old('phone') }}" class="{{ $inputClass }}">
                             </label>
 
                             <label class="{{ $labelClass }} md:col-span-2">
-                                Correo electr&oacute;nico <span class="text-red-600">*</span>
-                                <input type="email" name="email" value="{{ old('email') }}" required class="{{ $inputClass }}">
+                                Correo electr&oacute;nico
+                                <input type="email" name="email" value="{{ old('email') }}" class="{{ $inputClass }}">
                             </label>
 
                             <label class="{{ $labelClass }} md:col-span-2">
@@ -243,36 +290,6 @@
                                     @endforeach
                                 </select>
                             </label>
-
-                            <label class="{{ $labelClass }}">
-                                Lista oncol&oacute;gica
-                                <select name="onco_medicine_list_id" class="{{ $inputClass }}">
-                                    <option value="">Sin asignar</option>
-                                    @foreach ($oncoMedicineLists as $list)
-                                        <option value="{{ $list->id }}" @selected((string) old('onco_medicine_list_id') === (string) $list->id)>{{ $list->name }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-
-                            <label class="{{ $labelClass }}">
-                                Lista nutricional
-                                <select name="nutri_medicine_list_id" class="{{ $inputClass }}">
-                                    <option value="">Sin asignar</option>
-                                    @foreach ($nutriMedicineLists as $list)
-                                        <option value="{{ $list->id }}" @selected((string) old('nutri_medicine_list_id') === (string) $list->id)>{{ $list->name }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-
-                            <label class="{{ $labelClass }}">
-                                Lista de antibi&oacute;ticos
-                                <select name="antibiotic_medicine_list_id" class="{{ $inputClass }}">
-                                    <option value="">Sin asignar</option>
-                                    @foreach ($antibioticMedicineLists as $list)
-                                        <option value="{{ $list->id }}" @selected((string) old('antibiotic_medicine_list_id') === (string) $list->id)>{{ $list->name }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
                         </div>
                     </fieldset>
 
@@ -332,7 +349,7 @@
 
                     @if ($institucion)
                         <label class="mt-5 flex cursor-pointer items-start gap-2 text-xs text-gray-700">
-                            <input type="checkbox" name="use_institution_fiscal_data" value="1"
+                            <input id="use-institution-fiscal-data" type="checkbox" name="use_institution_fiscal_data" value="1"
                                 class="mt-0.5 rounded border-gray-300 text-blue-800 focus:ring-blue-500"
                                 @checked(old('use_institution_fiscal_data'))>
                             Usar los datos fiscales de la instituci&oacute;n
@@ -359,6 +376,38 @@
 
     @push('js')
         <script>
+            (() => {
+                const checkbox = document.getElementById('use-institution-fiscal-data');
+
+                if (!checkbox) return;
+
+                const fiscalData = @json($institutionFiscalData);
+                const fields = {
+                    fiscal_name: document.querySelector('[data-fiscal-field="fiscal_name"]'),
+                    rfc: document.querySelector('[data-fiscal-field="rfc"]'),
+                    billing_phone: document.querySelector('[data-fiscal-field="billing_phone"]'),
+                };
+
+                function applyInstitutionFiscalData(onlyEmpty = false) {
+                    Object.entries(fields).forEach(([field, input]) => {
+                        if (!input) return;
+                        if (onlyEmpty && input.value.trim() !== '') return;
+
+                        input.value = fiscalData[field] ?? '';
+                    });
+                }
+
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) {
+                        applyInstitutionFiscalData();
+                    }
+                });
+
+                if (checkbox.checked) {
+                    applyInstitutionFiscalData(true);
+                }
+            })();
+
             (() => {
                 const nameInput = document.getElementById('hospital-name');
                 const usernameInput = document.getElementById('access-username');

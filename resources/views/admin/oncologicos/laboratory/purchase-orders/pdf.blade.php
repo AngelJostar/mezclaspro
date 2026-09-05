@@ -1,4 +1,5 @@
 @php
+    $preparedBy = $order->prepared_by ?: trim(($order->creator?->name ?? '') . ' ' . ($order->creator?->lastname ?? ''));
     $orderFontRegularPath = 'C:/Windows/Fonts/ARIALN.TTF';
     $orderFontBoldPath = 'C:/Windows/Fonts/ARIALNB.TTF';
     $orderFontRegular = file_exists($orderFontRegularPath)
@@ -332,8 +333,8 @@
             </div>
         @endif
 
-        @if ($isLastPage && ($order->prepared_by || $order->creator?->name))
-            <div class="value small center" style="left:220pt; top:715pt; width:172pt; height:12pt">{{ $order->prepared_by ?: $order->creator?->name }}</div>
+        @if ($isLastPage && $preparedBy)
+            <div class="value small center" style="left:220pt; top:715pt; width:172pt; height:12pt">{{ $preparedBy }}</div>
         @endif
     </div>
 @endforeach

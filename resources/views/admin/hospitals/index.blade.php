@@ -54,10 +54,11 @@
                             </button>
                         </div>
                     </th>
+                    <th scope="col" class="px-6 py-3 text-center">Cambiar<br> instituci&oacute;n</th>
                     <th scope="col" class="px-6 py-3">
                         <div class="flex items-center justify-between gap-2">
                             <span>Direccion</span>
-                            <button type="button" data-column="3"
+                            <button type="button" data-column="4"
                                 class="js-hospital-column-filter inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-800"
                                 title="Filtrar Direccion" aria-label="Filtrar Direccion" aria-expanded="false">
                                 <span aria-hidden="true" class="text-sm font-black leading-none text-slate-800">&#9660;</span>
@@ -67,7 +68,7 @@
                     <th scope="col" class="px-6 py-3">
                         <div class="flex items-center justify-between gap-2">
                             <span>Estado</span>
-                            <button type="button" data-column="4"
+                            <button type="button" data-column="5"
                                 class="js-hospital-column-filter inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-800"
                                 title="Filtrar Estado" aria-label="Filtrar Estado" aria-expanded="false">
                                 <span aria-hidden="true" class="text-sm font-black leading-none text-slate-800">&#9660;</span>
@@ -93,6 +94,18 @@
                             @empty
                                 <span class="text-gray-400">Sin institucion</span>
                             @endforelse
+                        </td>
+                        <td class="px-6 py-4 text-center whitespace-nowrap">
+                            <button type="button"
+                                class="js-change-institution inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300"
+                                data-hospital-id="{{ $hospital->id }}"
+                                data-hospital-name="{{ $hospital->name }}"
+                                data-current-institutions="{{ $hospital->instituciones->pluck('nombre')->join(', ') }}"
+                                data-current-institution-ids="{{ json_encode($hospital->instituciones->modelKeys()) }}"
+                                data-update-url="{{ route('admin.hospitals.change-institution', $hospital) }}"
+                                aria-haspopup="dialog" aria-controls="change-institution-dialog">
+                                Cambiar
+                            </button>
                         </td>
                         <td class="px-6 py-4">
                             {{ $hospital->adress }}
@@ -128,13 +141,139 @@
         </table>
     </div>
 
+    <dialog id="change-institution-dialog" aria-labelledby="change-institution-title">
+        <div class="mb-4 flex items-start justify-between gap-4">
+            <h2 id="change-institution-title" class="text-xl font-medium text-gray-800">Cambiar instituci&oacute;n</h2>
+            <button type="button" data-close-institution-dialog
+                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-red-500 text-red-600 hover:bg-red-50"
+                aria-label="Cerrar" title="Cerrar">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <form id="change-institution-form" method="POST">
+            @csrf
+            @method('PATCH')
+            <input type="hidden" name="institution_change_hospital_id" id="institution-change-hospital-id">
+            <input type="hidden" name="institution_filter" value="{{ $institutionId }}">
+
+            <div class="mb-4">
+                <p class="mb-1 text-sm text-gray-600">Hospital</p>
+                <p id="institution-change-hospital-name" class="break-words text-sm font-semibold text-gray-800"></p>
+            </div>
+            <div class="mb-4">
+                <p id="current-institutions-label" class="mb-2 text-sm font-medium text-gray-700">Instituci&oacute;n actual</p>
+                <div id="institution-change-current" role="group" aria-labelledby="current-institutions-label"
+                    class="break-words rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600"></div>
+            </div>
+            <div class="mb-4">
+                <label for="new-institution-id" class="mb-2 block text-sm font-medium text-gray-700">Nueva instituci&oacute;n</label>
+                <select id="new-institution-id" name="new_institution_id" required
+                    class="w-full min-w-0 rounded border-gray-300 text-sm"
+                    @if ($errors->changeInstitution->has('new_institution_id')) aria-describedby="institution-change-error" @endif>
+                    <option value="">Selecciona una instituci&oacute;n</option>
+                    @foreach ($instituciones as $institucion)
+                        <option value="{{ $institucion->id }}">{{ $institucion->nombre }}</option>
+                    @endforeach
+                </select>
+                @if ($instituciones->isEmpty())
+                    <p class="mt-2 text-sm text-gray-600">No hay instituciones registradas.</p>
+                @endif
+                @error('new_institution_id', 'changeInstitution')
+                    <p id="institution-change-error" role="alert" class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+            <div class="mt-6 flex flex-wrap justify-end gap-2">
+                <button type="button" data-close-institution-dialog
+                    class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+                <button id="confirm-institution-change" type="submit" disabled
+                    class="rounded bg-azul-prodifem px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">Confirmar cambio</button>
+            </div>
+        </form>
+    </dialog>
+
+    @push('css')
+        <style>
+            #change-institution-dialog {
+                margin: auto;
+                width: min(440px, calc(100vw - 32px));
+                max-height: calc(100dvh - 32px);
+                overflow-y: auto;
+                padding: 24px;
+                border: 0;
+                border-radius: 8px;
+                background: white;
+                box-shadow: 0 20px 40px rgb(0 0 0 / 20%);
+            }
+
+            #change-institution-dialog::backdrop {
+                background: rgb(0 0 0 / 40%);
+            }
+
+            #change-institution-dialog button[aria-label="Cerrar"] {
+                border-color: #ef4444;
+                color: #dc2626;
+                font-size: 24px;
+                line-height: 1;
+            }
+        </style>
+    @endpush
+
     @push('js')
         <script>
             document.addEventListener('DOMContentLoaded', function() {
+                const institutionDialog = document.getElementById('change-institution-dialog');
+                const institutionForm = document.getElementById('change-institution-form');
+                const institutionSelect = document.getElementById('new-institution-id');
+                const confirmInstitutionChange = document.getElementById('confirm-institution-change');
+                let institutionChangeTrigger = null;
+
+                function openInstitutionDialog(trigger, selectedInstitution = '') {
+                    institutionChangeTrigger = trigger;
+                    institutionForm.reset();
+                    institutionForm.action = trigger.dataset.updateUrl;
+                    document.getElementById('institution-change-hospital-id').value = trigger.dataset.hospitalId;
+                    document.getElementById('institution-change-hospital-name').textContent = trigger.dataset.hospitalName;
+                    document.getElementById('institution-change-current').textContent = trigger.dataset.currentInstitutions || 'Sin instituci\u00f3n asignada';
+                    const currentIds = JSON.parse(trigger.dataset.currentInstitutionIds).map(String);
+                    Array.from(institutionSelect.options).forEach((option) => {
+                        option.disabled = currentIds.length === 1 && currentIds.includes(option.value);
+                    });
+                    institutionSelect.value = selectedInstitution;
+                    confirmInstitutionChange.disabled = !institutionSelect.value || institutionSelect.selectedOptions[0]?.disabled;
+                    institutionDialog.showModal();
+                    institutionSelect.focus();
+                }
+
+                document.getElementById('hospitalsTable').addEventListener('click', (event) => {
+                    const trigger = event.target.closest('.js-change-institution');
+                    if (!trigger) return;
+                    document.getElementById('institution-change-error')?.remove();
+                    openInstitutionDialog(trigger);
+                });
+
+                institutionDialog.querySelectorAll('[data-close-institution-dialog]').forEach((button) => {
+                    button.addEventListener('click', () => institutionDialog.close());
+                });
+                institutionDialog.addEventListener('close', () => institutionChangeTrigger?.focus());
+                institutionSelect.addEventListener('change', () => {
+                    confirmInstitutionChange.disabled = !institutionSelect.value || institutionSelect.selectedOptions[0]?.disabled;
+                });
+                institutionForm.addEventListener('submit', () => {
+                    confirmInstitutionChange.disabled = true;
+                });
+
+                @if ($errors->changeInstitution->any())
+                    const failedHospitalId = String(@json(old('institution_change_hospital_id', '')));
+                    const failedTrigger = Array.from(document.querySelectorAll('.js-change-institution'))
+                        .find((button) => button.dataset.hospitalId === failedHospitalId);
+                    if (failedTrigger) openInstitutionDialog(failedTrigger, String(@json(old('new_institution_id', ''))));
+                @endif
+
                 const hospitalsDataTable = new DataTable('#hospitalsTable', {
                     paging: false,
                     lengthChange: false,
                     info: false,
+                    columnDefs: [{ targets: [3, 6], orderable: false, searchable: false }],
                     order: [
                         [0, 'desc']
                     ],
@@ -147,7 +286,7 @@
                 });
 
                 const hospitalColumnFilters = new Map();
-                const filterableHospitalColumns = [0, 1, 2, 3, 4];
+                const filterableHospitalColumns = [0, 1, 2, 4, 5];
                 const filterPanel = document.createElement('div');
                 let activeFilterColumn = null;
                 let activeFilterTrigger = null;

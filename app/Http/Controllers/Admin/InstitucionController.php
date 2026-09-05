@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\Instituciones\InstitucionGeneralExport;
 use App\Exports\Instituciones\InstitucionHospitalDetalleExport;
 use App\Exports\Instituciones\InstitucionHospitalExport;
+use App\Exports\Instituciones\InstitucionHospitalesRelacionadosExport;
 use App\Exports\Instituciones\InstitucionMezclasOncoExport;
 use App\Exports\Instituciones\InstitutionDailyNutritionPatientHospitalExport;
 use App\Exports\Instituciones\InstitutionMonthlyNutritionSupplyExport;
@@ -14,6 +15,7 @@ use App\Models\Institucion;
 use App\Services\InstitutionDailyNutritionPatientReportService;
 use App\Services\InstitutionMonthlyNutritionSupplyReportService;
 use App\Services\InstitutionReportTemplateService;
+use App\Support\HospitalMapCoordinates;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -128,6 +130,7 @@ class InstitucionController extends Controller
             'icon' => 'success',
             'title' => 'Institucion actualizada',
             'text' => 'Los datos de la institucion se actualizaron correctamente.',
+            'redirectUrl' => route('admin.instituciones.index'),
         ]);
 
         return redirect()->route('admin.instituciones.edit', $institucion);
@@ -355,7 +358,7 @@ class InstitucionController extends Controller
         $hospitals = $institucion->hospitals()
             ->with([
                 'users' => fn ($query) => $query
-                    ->select('id', 'hospital_id', 'username', 'credential_password', 'is_active')
+                    ->select('id', 'hospital_id', 'username', 'credential_password', 'training_credential_password', 'is_active')
                     ->whereHas('roles', fn ($roleQuery) => $roleQuery
                         ->whereIn('name', ['Cliente', 'Institucion']))
                     ->orderByDesc('is_active')
@@ -392,7 +395,33 @@ class InstitucionController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        $totalHospitals = $institucion->hospitals()->count();
+        // The map covers the entire institution, independently of table filters and pagination.
+        $mapHospitals = $institucion->hospitals()
+            ->select([
+                'hospitals.id', 'hospitals.name', 'hospitals.adress', 'hospitals.municipality',
+                'hospitals.state', 'hospitals.postal_code', 'hospitals.latitude',
+                'hospitals.longitude', 'hospitals.is_active',
+            ])
+            ->withExists('distributionRoutes as has_assigned_route')
+            ->orderBy('hospitals.name')
+            ->get()
+            ->map(function (Hospital $hospital): array {
+                $coordinates = HospitalMapCoordinates::resolveKnownLocation($hospital);
+
+                return [
+                    'id' => $hospital->id,
+                    'name' => $hospital->name,
+                    'address' => trim((string) ($hospital->adress ?: collect([
+                        $hospital->municipality, $hospital->state, $hospital->postal_code,
+                    ])->filter()->join(', '))),
+                    'is_active' => (bool) $hospital->is_active,
+                    'has_assigned_route' => (bool) $hospital->has_assigned_route,
+                    'latitude' => $coordinates['latitude'] ?? null,
+                    'longitude' => $coordinates['longitude'] ?? null,
+                    'estimated' => $coordinates['estimated'] ?? false,
+                ];
+            });
+        $totalHospitals = $mapHospitals->count();
         $unitTypes = $institucion->hospitals()
             ->whereNotNull('hospitals.unit_type')
             ->where('hospitals.unit_type', '<>', '')
@@ -404,12 +433,23 @@ class InstitucionController extends Controller
             'institucion',
             'hospitals',
             'totalHospitals',
+            'mapHospitals',
             'unitTypes',
             'search',
             'status',
             'unitType',
             'service'
         ));
+    }
+
+    public function exportarHospitalesRelacionados(Institucion $institucion): Response
+    {
+        $filename = 'hospitales_relacionados_institucion_'.$institucion->id.'.xlsx';
+
+        return $this->downloadExcel(
+            new InstitucionHospitalesRelacionadosExport($institucion->id),
+            $filename
+        );
     }
 
     public function storeHospital(Request $request, Institucion $institucion)

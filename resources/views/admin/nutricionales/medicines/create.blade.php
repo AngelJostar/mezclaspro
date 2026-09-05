@@ -148,8 +148,8 @@
                             </x-select>
                         </div>
                         <div>
-                            <x-label class="mb-2">Estabilidad después de abrir (horas)</x-label>
-                            <x-input type="number" min="0" max="8760"
+                            <x-label class="mb-2">Estabilidad reconstituido (horas) <span class="text-red-600">*</span></x-label>
+                            <x-input type="number" min="1" max="8760" required
                                 name="presentations[{{ $index }}][stability_hours]"
                                 value="{{ $presentation['stability_hours'] ?? '' }}" class="w-full"
                                 placeholder="Ej. 24" />
@@ -270,9 +270,9 @@
                                 </div>
                                 <div>
                                     <label class="block mb-2 text-sm font-medium text-gray-700">
-                                        Estabilidad después de abrir (horas)
+                                        Estabilidad reconstituido (horas) <span class="text-red-600">*</span>
                                     </label>
-                                    <input type="number" min="0" max="8760"
+                                    <input type="number" min="1" max="8760" required
                                         name="presentations[${index}][stability_hours]"
                                         class="w-full rounded border-gray-300"
                                         placeholder="Ej. 24" />

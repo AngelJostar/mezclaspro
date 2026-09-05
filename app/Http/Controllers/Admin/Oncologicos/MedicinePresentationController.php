@@ -50,7 +50,7 @@ class MedicinePresentationController extends Controller
             'presentations.*.forma_reconstitucion'            => 'nullable|string|max:2000',
             'presentations.*.temp_min_c'                      => 'nullable|integer|min:0|max:99',
             'presentations.*.temp_max_c'                      => 'nullable|integer|min:0|max:99',
-            'presentations.*.stability_hours'                 => 'nullable|integer|min:0|max:2000',
+            'presentations.*.stability_hours'                 => 'required|integer|min:1|max:8760',
 
             // disponibilidad
             'presentations.*.is_available'                    => 'required|in:0,1',
@@ -156,7 +156,7 @@ class MedicinePresentationController extends Controller
             'forma_reconstitucion' => 'nullable|string|max:2000',
             'temp_min_c'           => 'nullable|integer|min:0|max:99',
             'temp_max_c'           => 'nullable|integer|min:0|max:99',
-            'stability_hours'      => 'nullable|integer|min:0|max:2000',
+            'stability_hours'      => 'nullable|integer|min:1|max:8760',
 
             'is_available'         => 'required|in:0,1',
 

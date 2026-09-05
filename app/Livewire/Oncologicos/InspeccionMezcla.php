@@ -14,6 +14,8 @@ class InspeccionMezcla extends Component
 
     public $mezclaId;
     public $lote_mezcla = '';
+    #[\Livewire\Attributes\Locked]
+    public string $mixtureContext = '';
 
     // checks
     public $es_limpia = 0;
@@ -76,7 +78,9 @@ class InspeccionMezcla extends Component
 
         $this->mezclaId = (int) $mezclaId;
         $this->mostrarModalInspeccion = true;
-        $this->lote_mezcla = (string) (Mezcla::find($this->mezclaId)?->lote ?? '');
+        $mezcla = Mezcla::with('solicitud.hospital.instituciones')->find($this->mezclaId);
+        $this->lote_mezcla = (string) ($mezcla?->lote ?? '');
+        $this->mixtureContext = \App\Support\MixtureWorkflowContext::label($this->mezclaId, $mezcla?->solicitud?->hospital);
 
         // Hidratar con la inspección existente (creada en "Aprobar")
         $ins = OncologicosInspeccionMezcla::where('mezcla_id', $mezclaId)->first();

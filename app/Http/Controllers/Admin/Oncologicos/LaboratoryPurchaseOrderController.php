@@ -7,12 +7,15 @@ use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\LaboratoryPurchaseOrder;
+use App\Services\PurchaseOrderCatalogService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class LaboratoryPurchaseOrderController extends Controller
@@ -52,7 +55,35 @@ class LaboratoryPurchaseOrderController extends Controller
         ))->with('inventoryDestinations', LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS);
     }
 
-    public function store(Request $request, Laboratory $laboratory): RedirectResponse
+    public function products(Request $request, Laboratory $laboratory, PurchaseOrderCatalogService $catalog): JsonResponse
+    {
+        $validated = $request->validate($this->destinationRules($request));
+        $warehouse = Warehouse::findOrFail($validated['warehouse_id']);
+
+        return response()->json([
+            'products' => $catalog->products($warehouse, $validated['inventory_destination']),
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    private function destinationRules(Request $request): array
+    {
+        return [
+            'delivery_laboratory_id' => [
+                'required', 'integer', Rule::exists('laboratories', 'id')->where('activo', true),
+            ],
+            'warehouse_id' => [
+                'required', 'integer',
+                Rule::exists('warehouses', 'id')->where(fn ($query) => $query
+                    ->where('laboratory_id', $request->integer('delivery_laboratory_id'))
+                    ->where('is_active', true)),
+            ],
+            'inventory_destination' => [
+                'required', 'string', Rule::in(array_keys(LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS)),
+            ],
+        ];
+    }
+
+    public function store(Request $request, Laboratory $laboratory, PurchaseOrderCatalogService $catalog): RedirectResponse
     {
         $validated = $request->validate([
             'department' => ['required', 'string', 'max:255'],
@@ -73,37 +104,21 @@ class LaboratoryPurchaseOrderController extends Controller
             'invoice_address' => ['required', 'string', 'max:2000'],
             'invoice_rfc' => ['required', 'string', 'max:20'],
             'invoice_emails' => ['nullable', 'string', 'max:1000'],
-            'delivery_laboratory_id' => [
-                'required',
-                'integer',
-                Rule::exists('laboratories', 'id')->where('activo', true),
-            ],
-            'warehouse_id' => [
-                'required',
-                'integer',
-                Rule::exists('warehouses', 'id')->where(
-                    fn ($query) => $query
-                        ->where('laboratory_id', $request->integer('delivery_laboratory_id'))
-                        ->where('is_active', true)
-                ),
-            ],
-            'inventory_destination' => [
-                'required',
-                'string',
-                Rule::in(array_keys(LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS)),
-            ],
+            ...$this->destinationRules($request),
             'delivery_attention' => ['nullable', 'string', 'max:255'],
             'delivery_address' => ['required', 'string', 'max:2000'],
             'delivery_schedule' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.description' => ['required', 'string', 'max:500'],
+            'items.*.product_key' => ['required', 'string', 'max:80'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0'],
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'discount' => ['nullable', 'numeric', 'min:0'],
             'tax_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:10000'],
-            'prepared_by' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $creator = $request->user();
+        $validated['prepared_by'] = trim(($creator?->name ?? '') . ' ' . ($creator?->lastname ?? ''));
 
         $deliveryLaboratory = Laboratory::findOrFail($validated['delivery_laboratory_id']);
         $warehouse = Warehouse::query()
@@ -113,13 +128,26 @@ class LaboratoryPurchaseOrderController extends Controller
 
         $validated['delivery_attention'] = $warehouse->name . ' - ' . $deliveryLaboratory->nombre;
 
+        $products = $catalog->products($warehouse, $validated['inventory_destination'])->keyBy('product_key');
+        $validated['items'] = array_values($validated['items']);
+        $errors = [];
+        foreach ($validated['items'] as $index => $item) {
+            if (! $products->has($item['product_key'])) {
+                $errors["items.$index.product_key"] = 'Partida '.($index + 1).': selecciona un producto del almacén y subalmacén indicados.';
+            }
+        }
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
+
         $items = collect($validated['items'])
-            ->map(function (array $item): array {
+            ->map(function (array $item) use ($products): array {
                 $quantity = round((float) $item['quantity'], 4);
                 $unitPrice = round((float) $item['unit_price'], 2);
 
                 return [
-                    'description' => trim($item['description']),
+                    'product_key' => $item['product_key'],
+                    'description' => $products[$item['product_key']]['description'],
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
                     'subtotal' => round($quantity * $unitPrice, 2),

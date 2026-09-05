@@ -14,7 +14,7 @@ return new class extends Migration {
                 ->constrained('solicitud_oncos')
                 ->onDelete('cascade');
 
-            $table->enum('estado', ['pendiente', 'aprobada', 'preparada', 'revisada', 'cancelada', 'entregada'])
+            $table->enum('estado', ['pendiente', 'aprobada', 'dispensada', 'preparada', 'revisada', 'cancelada', 'entregada'])
                 ->nullable();
 
             $table->string('remision', 50)->nullable();

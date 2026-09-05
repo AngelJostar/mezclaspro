@@ -12,7 +12,7 @@
         'employment_status',
         'positions',
         'username',
-        'temporary_password',
+        'password',
         'cv',
         'prior_experience',
         'additional_information',
@@ -80,7 +80,7 @@
                         <label class="personnel-field">
                             <span>Apellido materno</span>
                             <input type="text" name="maternal_surname" value="{{ old('maternal_surname') }}"
-                                maxlength="120">
+                                maxlength="120" data-personnel-maternal-surname>
                             @error('maternal_surname')<small>{{ $message }}</small>@enderror
                         </label>
                     </div>
@@ -185,16 +185,16 @@
                         </label>
 
                         <label class="personnel-field">
-                            <span>Contrase&ntilde;a temporal <b>*</b></span>
+                            <span>Contrase&ntilde;a definitiva <b>*</b></span>
                             <span class="personnel-input-with-action">
-                                <input type="text" name="temporary_password" value="{{ old('temporary_password') }}"
+                                <input type="text" name="password" value="{{ old('password') }}"
                                     maxlength="50" autocomplete="new-password" required data-personnel-password>
                                 <button type="button" title="Copiar contrase&ntilde;a" aria-label="Copiar contrase&ntilde;a"
-                                    data-copy-personnel-field="temporary_password">
+                                    data-copy-personnel-field="password">
                                     <i class="fa-regular fa-copy" aria-hidden="true"></i>
                                 </button>
                             </span>
-                            @error('temporary_password')<small>{{ $message }}</small>@enderror
+                            @error('password')<small>{{ $message }}</small>@enderror
                         </label>
 
                         <button type="button" class="personnel-regenerate-button" data-regenerate-personnel-credentials>
@@ -203,11 +203,6 @@
                         </button>
                     </div>
 
-                    <label class="personnel-checkbox-row">
-                        <input type="hidden" name="force_password_change" value="0">
-                        <input type="checkbox" name="force_password_change" value="1" @checked((bool) old('force_password_change', true))>
-                        <span>Solicitar cambio de contrase&ntilde;a al iniciar sesi&oacute;n</span>
-                    </label>
                 </section>
 
                 <section class="personnel-form-section">
@@ -619,22 +614,6 @@
             white-space: nowrap;
         }
 
-        .personnel-checkbox-row {
-            display: inline-flex;
-            align-items: center;
-            width: fit-content;
-            gap: 0.45rem;
-            color: #31516f;
-            font-size: 0.72rem;
-            font-weight: 650;
-        }
-
-        .personnel-checkbox-row input {
-            width: 1rem;
-            height: 1rem;
-            accent-color: #0fa98f;
-        }
-
         .personnel-file-input {
             display: grid;
             min-height: 5.5rem;
@@ -822,6 +801,7 @@
             const form = modal.querySelector('[data-personnel-create-form]');
             const firstNameInput = modal.querySelector('[data-personnel-first-name]');
             const paternalSurnameInput = modal.querySelector('[data-personnel-paternal-surname]');
+            const maternalSurnameInput = modal.querySelector('[data-personnel-maternal-surname]');
             const usernameInput = modal.querySelector('[data-personnel-username]');
             const passwordInput = modal.querySelector('[data-personnel-password]');
             const employmentToggle = modal.querySelector('[data-employment-toggle]');
@@ -834,6 +814,8 @@
             const cvInput = modal.querySelector('[data-personnel-cv]');
             const cvLabel = modal.querySelector('[data-personnel-cv-label]');
             let usernameWasEdited = Boolean(usernameInput && usernameInput.value);
+            let passwordWasEdited = Boolean(passwordInput && passwordInput.value);
+            let credentialYear = randomCredentialYear();
 
             function normalizeCredential(value) {
                 return String(value || '')
@@ -857,18 +839,26 @@
             }
 
             function proposedUsername() {
-                const firstName = normalizeCredential(firstNameInput && firstNameInput.value.split(/\s+/)[0]);
-                const surname = normalizeCredential(paternalSurnameInput && paternalSurnameInput.value.split(/\s+/)[0]);
+                const nameInitials = String(firstNameInput && firstNameInput.value || '')
+                    .trim()
+                    .split(/\s+/)
+                    .map(function(name) { return normalizeCredential(name).slice(0, 1); })
+                    .filter(Boolean)
+                    .join('');
+                const paternalSurname = normalizeCredential(paternalSurnameInput && paternalSurnameInput.value);
+                const maternalInitial = normalizeCredential(maternalSurnameInput && maternalSurnameInput.value).slice(0, 1);
 
-                return [firstName, surname].filter(Boolean).join('.').slice(0, 30);
+                return (nameInitials + paternalSurname + maternalInitial).slice(0, 30);
+            }
+
+            function randomCredentialYear() {
+                return String(2024 + Math.floor(Math.random() * 3));
             }
 
             function proposedPassword() {
-                const namePart = normalizeCredential(firstNameInput && firstNameInput.value).slice(0, 3) || 'usr';
-                const surnameInitial = normalizeCredential(paternalSurnameInput && paternalSurnameInput.value).slice(0, 1) || 'p';
-                const randomPart = String(Math.floor(1000 + Math.random() * 9000));
+                const username = normalizeUsername(usernameInput && usernameInput.value);
 
-                return namePart.charAt(0).toUpperCase() + namePart.slice(1) + surnameInitial + '!' + randomPart;
+                return username ? username + credentialYear : '';
             }
 
             function refreshUsername(force) {
@@ -879,15 +869,21 @@
                 usernameInput.value = proposedUsername();
             }
 
-            function ensureCredentials() {
-                if (usernameInput && !usernameInput.value) {
-                    usernameWasEdited = false;
-                    refreshUsername(true);
+            function refreshPassword(force) {
+                if (!passwordInput || (!force && passwordWasEdited)) {
+                    return;
                 }
 
-                if (passwordInput && !passwordInput.value) {
-                    passwordInput.value = proposedPassword();
-                }
+                passwordInput.value = proposedPassword();
+            }
+
+            function refreshCredentials(force) {
+                refreshUsername(force);
+                refreshPassword(force);
+            }
+
+            function ensureCredentials() {
+                refreshCredentials(false);
             }
 
             function openModal() {
@@ -958,21 +954,28 @@
                 openModal();
             }
 
-            [firstNameInput, paternalSurnameInput].forEach(function(input) {
+            [firstNameInput, paternalSurnameInput, maternalSurnameInput].forEach(function(input) {
                 input && input.addEventListener('input', function() {
                     refreshUsername(false);
+                    refreshPassword(false);
                 });
             });
 
             usernameInput && usernameInput.addEventListener('input', function() {
                 usernameWasEdited = true;
                 usernameInput.value = normalizeUsername(usernameInput.value);
+                refreshPassword(false);
+            });
+
+            passwordInput && passwordInput.addEventListener('input', function() {
+                passwordWasEdited = true;
             });
 
             modal.querySelector('[data-regenerate-personnel-credentials]')?.addEventListener('click', function() {
                 usernameWasEdited = false;
-                refreshUsername(true);
-                passwordInput.value = proposedPassword();
+                passwordWasEdited = false;
+                credentialYear = randomCredentialYear();
+                refreshCredentials(true);
             });
 
             modal.querySelectorAll('[data-copy-personnel-field]').forEach(function(button) {

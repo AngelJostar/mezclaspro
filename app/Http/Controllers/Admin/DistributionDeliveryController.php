@@ -20,7 +20,8 @@ use Illuminate\View\View;
 
 class DistributionDeliveryController extends Controller
 {
-    private const ELIGIBLE_STATES = ['aprobada', 'preparada', 'revisada'];
+    private const NUTRITION_ELIGIBLE_STATES = ['aprobada', 'preparada', 'revisada'];
+    private const ONCOLOGY_ELIGIBLE_STATES = ['dispensada', 'preparada', 'revisada'];
 
     public function index(Request $request): View
     {
@@ -428,7 +429,7 @@ class DistributionDeliveryController extends Controller
         $rangeEnd = Carbon::createFromFormat('Y-m-d', $dateTo, 'America/Mexico_City')->endOfDay();
 
         $nutrition = NutritionSolicitud::query()
-            ->whereIn('estado', self::ELIGIBLE_STATES)
+            ->whereIn('estado', self::NUTRITION_ELIGIBLE_STATES)
             ->whereHas(
                 'solicitud_detail',
                 fn ($query) => $query->whereBetween('fecha_hora_entrega', [$rangeStart, $rangeEnd])
@@ -463,7 +464,7 @@ class DistributionDeliveryController extends Controller
             });
 
         $oncology = Mezcla::query()
-            ->whereIn('estado', self::ELIGIBLE_STATES)
+            ->whereIn('estado', self::ONCOLOGY_ELIGIBLE_STATES)
             ->where(function ($query) use ($rangeStart, $rangeEnd) {
                 $query->whereBetween('mezclas.fecha_entrega', [$rangeStart, $rangeEnd])
                     ->orWhere(function ($legacyQuery) use ($rangeStart, $rangeEnd) {

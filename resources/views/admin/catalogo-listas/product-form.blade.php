@@ -1,5 +1,7 @@
 <x-admin-layout>
-    @php($isSupplies = $category === 'insumos')
+    @php
+        $isSupplies = $category === 'insumos';
+    @endphp
 
     <div class="rounded-xl bg-white p-5 shadow-sm">
         @include('admin.catalogo-listas.partials.section-nav', [
@@ -43,7 +45,7 @@
             @csrf
 
             <section>
-                <h3 class="mb-3 text-sm font-bold text-gray-900">Datos del producto</h3>
+                <h3 class="mb-3 text-sm font-bold text-gray-900">{{ $isSupplies ? 'Datos del insumo' : 'Datos del producto' }}</h3>
 
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
@@ -88,6 +90,16 @@
                             class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
 
+                    <div>
+                        <label for="stability_hours" class="mb-1 block text-sm font-semibold text-gray-700">
+                            Estabilidad reconstituido (horas) <span class="text-red-600">*</span>
+                        </label>
+                        <input type="number" id="stability_hours" name="stability_hours"
+                            value="{{ old('stability_hours') }}" required min="1" max="8760" step="1"
+                            placeholder="Ej. 24"
+                            class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
                     @if ($isSupplies)
                         <div>
                             <label for="manufacturer" class="mb-1 block text-sm font-semibold text-gray-700">
@@ -118,6 +130,43 @@
                     @endif
                 </div>
             </section>
+
+            @if ($isSupplies)
+                <section class="border-t border-gray-200 pt-5">
+                    <h3 class="text-sm font-bold text-gray-900">Relacion con subalmacen</h3>
+                    <p class="mb-3 mt-1 text-xs text-gray-500">Selecciona la central y su subalmacen de insumos.</p>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label for="supply_laboratory_id" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Central <span class="text-red-600">*</span>
+                            </label>
+                            <select id="supply_laboratory_id" name="laboratory_id" required
+                                @disabled(($laboratories ?? collect())->isEmpty())
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">Selecciona una central</option>
+                                @foreach (($laboratories ?? collect()) as $laboratory)
+                                    <option value="{{ $laboratory->id }}"
+                                        @selected((string) old('laboratory_id', $selectedLaboratoryId ?? '') === (string) $laboratory->id)>
+                                        {{ $laboratory->nombre }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="supply_warehouse_id" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Subalmacen de insumos <span class="text-red-600">*</span>
+                            </label>
+                            <select id="supply_warehouse_id" name="warehouse_id" required
+                                data-selected="{{ old('warehouse_id', $selectedWarehouseId ?? '') }}"
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">Selecciona un subalmacen</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+            @endif
 
             @unless ($isSupplies)
                 <section class="grid gap-5 border-t border-gray-200 pt-5 lg:grid-cols-2">
@@ -172,4 +221,49 @@
             </div>
         </form>
     </div>
+
+    @if ($isSupplies)
+        @php
+            $warehousesByLaboratory = ($laboratories ?? collect())->mapWithKeys(fn ($laboratory) => [
+                (string) $laboratory->id => $laboratory->warehouses->map(fn ($warehouse) => [
+                    'id' => $warehouse->id,
+                    'name' => $warehouse->name,
+                ])->values(),
+            ]);
+        @endphp
+        @push('js')
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const laboratorySelect = document.getElementById('supply_laboratory_id');
+                    const warehouseSelect = document.getElementById('supply_warehouse_id');
+                    const selectedWarehouse = warehouseSelect?.dataset.selected || '';
+                    const warehousesByLaboratory = @json($warehousesByLaboratory);
+
+                    const populateWarehouses = (preferredValue = '') => {
+                        if (!laboratorySelect || !warehouseSelect) {
+                            return;
+                        }
+
+                        const warehouses = warehousesByLaboratory[laboratorySelect.value] || [];
+                        warehouseSelect.innerHTML = '<option value="">Selecciona un subalmacen</option>';
+
+                        warehouses.forEach((warehouse) => {
+                            const option = document.createElement('option');
+                            option.value = warehouse.id;
+                            option.textContent = warehouse.name;
+                            option.selected = String(warehouse.id) === String(preferredValue);
+                            warehouseSelect.appendChild(option);
+                        });
+
+                        if (!warehouseSelect.value && warehouses.length > 0) {
+                            warehouseSelect.value = warehouses[0].id;
+                        }
+                    };
+
+                    laboratorySelect?.addEventListener('change', () => populateWarehouses());
+                    populateWarehouses(selectedWarehouse);
+                });
+            </script>
+        @endpush
+    @endif
 </x-admin-layout>

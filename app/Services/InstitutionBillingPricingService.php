@@ -111,7 +111,8 @@ class InstitutionBillingPricingService
         foreach ($solicitud->input ?? collect() as $item) {
             $description = trim((string) ($item->input?->description ?? ''));
             $listConfig = $this->nutritionListConfig($item, $medicineListId);
-            $unitPrice = $this->nutritionUnitPrice($item, $listConfig);
+            $chargeBy = $this->resolveNutritionChargeMethod($listConfig);
+            $unitPrice = $this->nutritionUnitPrice($item, $listConfig, $chargeBy);
             $remissionDescription = trim((string) ($listConfig?->descripcion_remision ?? ''));
 
             if ($this->isNutritionService($description)) {
@@ -125,14 +126,14 @@ class InstitutionBillingPricingService
                 $supplyLines->push([
                     'description' => $this->nutritionSupplyDescription($description),
                     'quantity' => 1.0,
-                    'unit_label' => 'pieza',
+                    'unit_label' => $chargeBy === 'frasco' ? 'frasco' : 'pieza',
                     'unit_price' => $unitPrice,
                     'subtotal' => round($unitPrice, 2),
                 ]);
                 continue;
             }
 
-            $quantity = $this->nutritionVolume($solicitud, $item);
+            $quantity = $chargeBy === 'frasco' ? 1.0 : $this->nutritionVolume($solicitud, $item);
             $subtotal = round($quantity * $unitPrice, 2);
 
             $medicationLines->push([
@@ -140,7 +141,7 @@ class InstitutionBillingPricingService
                     ?: ($item->input?->nutritionMedicineCatalog?->denominacion_generica
                         ?: ($description ?: 'Ingrediente de nutrición parenteral')),
                 'quantity' => $quantity,
-                'unit_label' => 'mL',
+                'unit_label' => $chargeBy === 'frasco' ? 'frasco' : 'mL',
                 'unit_price' => $unitPrice,
                 'subtotal' => $subtotal,
             ]);
@@ -438,7 +439,7 @@ class InstitutionBillingPricingService
         foreach ([$config?->charge_by, $medicamento->charge_by] as $value) {
             $chargeBy = strtolower(trim((string) $value));
 
-            if (in_array($chargeBy, ['frasco', 'mg'], true)) {
+            if (in_array($chargeBy, ['frasco', 'mg', 'ml'], true)) {
                 return $chargeBy;
             }
         }
@@ -446,14 +447,30 @@ class InstitutionBillingPricingService
         return $this->oncoPricePerMilligram($config) > 0 ? 'mg' : 'frasco';
     }
 
-    private function nutritionUnitPrice($item, $listConfig): float
+    private function resolveNutritionChargeMethod($listConfig): string
+    {
+        $chargeBy = strtolower(trim((string) ($listConfig?->charge_by ?? '')));
+
+        return in_array($chargeBy, ['frasco', 'ml'], true) ? $chargeBy : 'ml';
+    }
+
+    private function nutritionUnitPrice($item, $listConfig, string $chargeBy): float
     {
         $snapshot = (float) ($item->precio_ml ?? 0);
+        $listPricePerMl = (float) ($listConfig?->precio_ml ?? 0);
+
+        if ($chargeBy === 'frasco') {
+            $presentationMl = (float) ($item->presentation?->presentacion_ml ?? 0);
+            $pricePerMl = $listPricePerMl > 0 ? $listPricePerMl : $snapshot;
+
+            return $presentationMl > 0 ? round($pricePerMl * $presentationMl, 4) : $pricePerMl;
+        }
+
         if ($snapshot > 0) {
             return $snapshot;
         }
 
-        return (float) ($listConfig?->precio_ml ?? 0);
+        return $listPricePerMl;
     }
 
     private function nutritionListConfig($item, int $medicineListId): ?object
@@ -472,6 +489,7 @@ class InstitutionBillingPricingService
                 ->where('nutrition_medicine_presentation_id', $presentationId)
                 ->first([
                     'precio_ml',
+                    'charge_by',
                     'descripcion_remision',
                 ]);
         }

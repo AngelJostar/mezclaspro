@@ -40,7 +40,7 @@
                 <label class="text-sm">Medicamento (mg)<input type="number" step=".0001" min="0" class="mt-1 w-full rounded border-gray-300" data-field="cantidad_medicamento"></label>
                 <label class="text-sm">Volumen (mL)<input type="number" step=".0001" min="0" class="mt-1 w-full rounded border-gray-300" data-field="volumen_diluyente"></label>
                 <label class="text-sm">Precio por frasco<input type="number" step=".0001" min="0" class="mt-1 w-full rounded border-gray-300" data-field="precio_frasco"></label>
-                <label class="text-sm">Estabilidad (horas)<input type="number" min="0" class="mt-1 w-full rounded border-gray-300" data-field="stability_hours"></label>
+                <label class="text-sm">Estabilidad reconstituido (horas)<input type="number" min="1" max="8760" class="mt-1 w-full rounded border-gray-300" data-field="stability_hours"></label>
                 <label class="text-sm"><input type="hidden" data-field="is_available" value="0"><input type="checkbox" data-field="is_available" value="1"> Disponible</label>
             </div>
         </div>

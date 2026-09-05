@@ -26,6 +26,7 @@ class OncologyMixtureStatusTest extends TestCase
     {
         return [
             'mixture has its own state' => ['aprobada', 'preparada', 'preparada'],
+            'dispensed mixture has its own state' => ['aprobada', 'dispensada', 'dispensada'],
             'blank mixture is pending' => ['pendiente', null, 'pendiente'],
             'cancelled request overrides mixture' => ['cancelada', 'preparada', 'cancelada'],
             'rejected request overrides mixture' => ['no_aprobada', 'aprobada', 'no_aprobada'],

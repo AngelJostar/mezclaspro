@@ -7,6 +7,10 @@
 }
 
 @layer base {
+    :root {
+        --corporate-header-height: 84px;
+    }
+
     html {
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
@@ -18,9 +22,314 @@
 }
 
 @layer components {
+    .corporate-header {
+        position: fixed;
+        inset: 0 0 auto;
+        z-index: 50;
+        height: var(--corporate-header-height);
+        color: #ffffff;
+        background: linear-gradient(110deg, #0a2453 0%, #103f98 100%);
+        border-bottom: 1px solid #ffffff30;
+        box-shadow: 0 3px 10px #10285226;
+    }
+
+    .corporate-header__inner,
+    .corporate-header__identity,
+    .corporate-header__actions,
+    .corporate-brand {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .corporate-header__inner {
+        height: 100%;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 0 24px;
+    }
+
+    .corporate-header__identity {
+        gap: 12px;
+    }
+
+    .corporate-header__actions {
+        flex-shrink: 0;
+        gap: 16px;
+    }
+
+    .corporate-brand {
+        gap: 24px;
+        color: #ffffff;
+    }
+
+    .corporate-logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 216px;
+        height: 52px;
+        padding: 6px 12px;
+        overflow: hidden;
+        border: 1px solid #dde5f1;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    .corporate-logo__art {
+        position: relative;
+        display: block;
+        width: 100%;
+        aspect-ratio: 970 / 200;
+        overflow: hidden;
+    }
+
+    /* Frame the supplied logo without its large white margins. */
+    .corporate-logo__art img {
+        position: absolute;
+        width: 149.28%;
+        max-width: none;
+        height: auto;
+        left: -27.42%;
+        top: -214%;
+    }
+
+    .corporate-brand__details {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+        min-height: 48px;
+        gap: 2px;
+        padding-left: 24px;
+        border-left: 1px solid #c9d7ee9c;
+    }
+
+    .corporate-brand__name {
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.4;
+    }
+
+    .corporate-brand__contact {
+        color: #eef4ff;
+        font-size: 16px;
+        line-height: 1.4;
+    }
+
+    .corporate-control {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        height: 46px;
+        gap: 12px;
+        padding: 0 16px;
+        border: 1px solid #c5d8f561;
+        border-radius: 8px;
+        background: #ffffff03;
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.25;
+        transition: background-color 150ms ease, border-color 150ms ease;
+    }
+
+    .corporate-control:hover,
+    .corporate-control[aria-expanded="true"] {
+        background: #ffffff14;
+        border-color: #dce9ffb3;
+    }
+
+    .corporate-control:focus-visible,
+    .corporate-brand:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 3px;
+    }
+
+    .corporate-control svg {
+        width: 24px;
+        height: 24px;
+        flex-shrink: 0;
+    }
+
+    .corporate-sidebar-toggle {
+        display: none;
+    }
+
+    .corporate-avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: #ffffff;
+        color: #16428b;
+        object-fit: cover;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .corporate-account__name {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .corporate-control .corporate-account__chevron {
+        width: 18px;
+        height: 18px;
+    }
+
+    .corporate-notifications__icon {
+        display: flex;
+        width: 24px;
+        height: 24px;
+    }
+
+    .corporate-notifications__badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 10px;
+        background: #dc3545;
+        color: #ffffff;
+        font-size: 11px;
+    }
+
+    .corporate-dropdown-panel {
+        max-width: calc(100vw - 24px);
+        color: #26354b;
+    }
+
+    .corporate-notifications__list {
+        max-height: calc(100dvh - var(--corporate-header-height) - 24px);
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+    }
+
+    .account-page {
+        padding-top: var(--corporate-header-height);
+    }
+
+    @media (max-width: 1100px) {
+        .corporate-header__inner {
+            gap: 16px;
+            padding-inline: 16px;
+        }
+
+        .corporate-brand,
+        .corporate-header__actions {
+            gap: 12px;
+        }
+
+        .corporate-brand__details {
+            padding-left: 16px;
+        }
+
+        .corporate-brand__name {
+            font-size: 16px;
+        }
+
+        .corporate-brand__contact {
+            font-size: 14px;
+        }
+
+        .corporate-logo {
+            width: 192px;
+        }
+    }
+
+    @media (max-width: 959px) {
+        :root {
+            --corporate-header-height: 72px;
+        }
+
+        .corporate-brand__details {
+            display: none;
+        }
+    }
+
+    @media (max-width: 639px) {
+        .corporate-header__inner {
+            gap: 8px;
+            padding-inline: 12px;
+        }
+
+        .corporate-header__identity,
+        .corporate-header__actions {
+            gap: 8px;
+        }
+
+        .corporate-sidebar-toggle {
+            display: inline-flex;
+        }
+
+        .corporate-control {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+        }
+
+        .corporate-logo {
+            width: 144px;
+            height: 42px;
+            padding: 4px 6px;
+        }
+
+        .corporate-account__name,
+        .corporate-account__chevron,
+        .corporate-notifications__label {
+            display: none;
+        }
+
+        .corporate-avatar {
+            width: 28px;
+            height: 28px;
+            font-size: 16px;
+        }
+
+        .corporate-notifications__badge {
+            position: absolute;
+            right: -6px;
+            top: -6px;
+        }
+
+        .corporate-notifications .corporate-dropdown-panel {
+            position: fixed;
+            inset: calc(var(--corporate-header-height) - 4px) 12px auto;
+            width: auto;
+            margin-top: 0;
+        }
+    }
+
+    @media (max-width: 359px) {
+        .corporate-logo {
+            width: 112px;
+        }
+
+        .corporate-header__inner,
+        .corporate-header__identity,
+        .corporate-header__actions {
+            gap: 6px;
+        }
+    }
+
+    #logo-sidebar {
+        padding-top: calc(var(--corporate-header-height) + 12px);
+    }
+
     .admin-page {
         min-height: 100vh;
-        padding: 4.5rem 0.75rem 1rem;
+        padding: calc(var(--corporate-header-height) + 12px) 0.75rem 1rem;
     }
 
     .admin-content {
@@ -279,7 +588,7 @@
 
     @media (min-width: 640px) {
         .admin-page {
-            padding: 5rem 1rem 1.5rem;
+            padding: calc(var(--corporate-header-height) + 12px) 1rem 1.5rem;
         }
 
         .admin-content {
@@ -289,7 +598,7 @@
 
     @media (min-width: 1024px) {
         .admin-page {
-            padding: 5rem 1.5rem 1.5rem;
+            padding: calc(var(--corporate-header-height) + 12px) 1.5rem 1.5rem;
         }
     }
 
@@ -354,7 +663,7 @@
 
     @media (max-width: 767px) {
         .admin-page {
-            padding: 4.25rem 0.5rem 0.75rem;
+            padding: calc(var(--corporate-header-height) + 12px) 0.5rem 0.75rem;
         }
 
         .admin-content {

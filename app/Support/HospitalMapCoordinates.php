@@ -57,6 +57,28 @@ final class HospitalMapCoordinates
      */
     public static function resolve(Hospital $hospital): array
     {
+        $knownLocation = self::resolveKnownLocation($hospital);
+
+        if ($knownLocation !== null) {
+            return $knownLocation;
+        }
+
+        $id = max(1, (int) $hospital->getKey());
+
+        return [
+            'latitude' => round(19.4326 + (((($id * 17) % 19) - 9) * 0.012), 6),
+            'longitude' => round(-99.1332 + (((($id * 29) % 19) - 9) * 0.014), 6),
+            'estimated' => true,
+        ];
+    }
+
+    /**
+     * Unlike the route preview, an institution map must not invent an unknown location.
+     *
+     * @return array{latitude: float, longitude: float, estimated: bool}|null
+     */
+    public static function resolveKnownLocation(Hospital $hospital): ?array
+    {
         $storedCoordinates = self::storedCoordinates($hospital);
 
         if ($storedCoordinates !== null) {
@@ -83,13 +105,7 @@ final class HospitalMapCoordinates
             }
         }
 
-        $id = max(1, (int) $hospital->getKey());
-
-        return [
-            'latitude' => round(19.4326 + (((($id * 17) % 19) - 9) * 0.012), 6),
-            'longitude' => round(-99.1332 + (((($id * 29) % 19) - 9) * 0.014), 6),
-            'estimated' => true,
-        ];
+        return null;
     }
 
     public static function hasStoredCoordinates(Hospital $hospital): bool

@@ -62,6 +62,7 @@ class SolicitudesTable extends Component
             ->select('mezclas.*')
             ->with([
                 "solicitud.hospital.{$priceListRelation}.distributor",
+                'solicitud.hospital.instituciones',
                 'solicitud.user',
             ])
             ->where('oncology_requests.tipo_solicitud', $this->requestType);

@@ -9,6 +9,7 @@ use App\Models\Nutricionales\NutriMedicineList;
 use App\Models\Nutricionales\NutriMedicineListItem;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
+use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicineList;
 use App\Models\Oncologicos\MedicinePresentation;
@@ -28,6 +29,12 @@ class CatalogoListasController extends Controller
 
     private const ALL_CATEGORY = 'todos';
 
+    private const PRICE_LIST_CATEGORIES = [
+        'oncologicos',
+        'nutricionales',
+        'antibioticos',
+    ];
+
     public const CATEGORIES = [
         'oncologicos' => [
             'label' => 'Oncologicos',
@@ -43,6 +50,11 @@ class CatalogoListasController extends Controller
             'label' => 'Antibioticos',
             'icon' => 'fa-solid fa-capsules',
             'theme' => 'rose',
+        ],
+        'insumos' => [
+            'label' => 'Insumos',
+            'icon' => 'fa-solid fa-boxes-stacked',
+            'theme' => 'amber',
         ],
     ];
 
@@ -78,6 +90,10 @@ class CatalogoListasController extends Controller
     {
         $category = $this->normalizeBrowseCategory($category);
 
+        if ($category === 'insumos') {
+            return redirect()->route('admin.catalogo-listas.catalog', ['category' => $category]);
+        }
+
         return view('admin.catalogo-listas.lists', [
             'category' => $category,
             'mode' => 'listas',
@@ -88,14 +104,14 @@ class CatalogoListasController extends Controller
 
     public function showList(string $category, int $list)
     {
-        $category = $this->normalizeCategory($category);
+        $category = $this->normalizePriceListCategory($category);
 
         $priceList = $this->findPriceList($category, $list);
 
         return view('admin.catalogo-listas.show-list', [
             'category' => $category,
             'mode' => 'listas',
-            'categories' => self::CATEGORIES,
+            'categories' => $this->priceListCategories(),
             'list' => $priceList,
             'items' => $this->priceListItems($category, $list),
             'additionalCharges' => PriceListAdditionalCharge::query()
@@ -108,7 +124,7 @@ class CatalogoListasController extends Controller
 
     public function storeAdditionalCharge(Request $request, string $category, int $list)
     {
-        $category = $this->normalizeCategory($category);
+        $category = $this->normalizePriceListCategory($category);
         $priceList = $this->findPriceList($category, $list);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -131,7 +147,7 @@ class CatalogoListasController extends Controller
 
     public function updateAdditionalCharge(Request $request, string $category, int $list, PriceListAdditionalCharge $charge)
     {
-        $category = $this->normalizeCategory($category);
+        $category = $this->normalizePriceListCategory($category);
         $this->findPriceList($category, $list);
         abort_unless($charge->price_list_type === $category && $charge->price_list_id === $list, 404);
         $data = $request->validate(['name' => ['required','string','max:120'], 'concept_type' => ['required','in:Servicio,Insumo'], 'amount' => ['required','numeric','min:0']]);
@@ -141,7 +157,7 @@ class CatalogoListasController extends Controller
 
     public function destroyAdditionalCharge(string $category, int $list, PriceListAdditionalCharge $charge)
     {
-        $category = $this->normalizeCategory($category);
+        $category = $this->normalizePriceListCategory($category);
         $this->findPriceList($category, $list);
         abort_unless($charge->price_list_type === $category && $charge->price_list_id === $list, 404);
         $charge->delete();
@@ -150,12 +166,13 @@ class CatalogoListasController extends Controller
 
     public function createList(string $category)
     {
-        $category = $this->normalizeCategory($category);
+        $category = $this->normalizePriceListCategory($category);
+        $categories = $this->priceListCategories();
 
         return view('admin.catalogo-listas.unified-editor', array_merge([
             'category' => $category,
-            'categories' => self::CATEGORIES,
-            'catalogsByCategory' => collect(array_keys(self::CATEGORIES))
+            'categories' => $categories,
+            'catalogsByCategory' => collect(array_keys($categories))
                 ->mapWithKeys(fn (string $key) => [$key => $this->editorCatalogs($key)]),
         ], $this->editorLocationData()));
     }
@@ -201,11 +218,12 @@ class CatalogoListasController extends Controller
             'category_items.*.*.selected' => ['nullable', 'boolean'],
             'category_items.*.*.price_bottle' => ['required', 'numeric', 'min:0'],
             'category_items.*.*.price_unit' => ['nullable', 'numeric', 'min:0'],
-            'category_items.*.*.charge_by' => ['nullable', 'in:frasco,mg'],
+            'category_items.*.*.charge_by' => ['nullable', 'in:frasco,mg,ml'],
             'category_items.*.*.vat_breakdown' => ['nullable', 'boolean'],
             'category_items.*.*.remission_description' => ['nullable', 'string', 'max:500'],
             'additional_charges' => ['nullable', 'array'],
             'additional_charges.*.*.name' => ['nullable', 'string', 'max:120'],
+            'additional_charges.*.*.concept_type' => ['nullable', 'in:Servicio,Insumo'],
             'additional_charges.*.*.amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
@@ -263,7 +281,7 @@ class CatalogoListasController extends Controller
             ]);
         }
 
-        $createdCategories = collect(array_keys(self::CATEGORIES))
+        $createdCategories = collect(self::PRICE_LIST_CATEGORIES)
             ->filter(fn (string $key) => $createdCategories->contains($key))
             ->values();
 
@@ -290,7 +308,7 @@ class CatalogoListasController extends Controller
 
     public function createBackupList(Request $request, string $category)
     {
-        $category = $this->normalizeCategory($category);
+        $category = $this->normalizePriceListCategory($category);
         $laboratoryId = $request->integer('laboratory_id');
         $warehouseId = $request->integer('warehouse_id');
         $primaryWarehouseId = $request->integer('primary_warehouse_id');
@@ -316,7 +334,7 @@ class CatalogoListasController extends Controller
         return view('admin.catalogo-listas.editor', array_merge([
             'category' => $category,
             'mode' => 'listas',
-            'categories' => self::CATEGORIES,
+            'categories' => $this->priceListCategories(),
             'catalogs' => $this->editorCatalogs($category),
             'formAction' => $this->storeRoute($category),
             'formMethod' => 'POST',
@@ -336,7 +354,7 @@ class CatalogoListasController extends Controller
 
     public function editList(string $category, int $list)
     {
-        $category = $this->normalizeCategory($category);
+        $category = $this->normalizePriceListCategory($category);
         $priceList = $this->findPriceList($category, $list);
 
         $locationData = $this->editorLocationData($priceList);
@@ -353,7 +371,7 @@ class CatalogoListasController extends Controller
         return view('admin.catalogo-listas.editor', array_merge([
             'category' => $category,
             'mode' => 'listas',
-            'categories' => self::CATEGORIES,
+            'categories' => $this->priceListCategories(),
             'catalogs' => $this->editorCatalogs($category),
             'formAction' => $this->updateRoute($category, $priceList),
             'formMethod' => 'PUT',
@@ -367,6 +385,13 @@ class CatalogoListasController extends Controller
     private function normalizeCategory(string $category): string
     {
         abort_unless(array_key_exists($category, self::CATEGORIES), 404);
+
+        return $category;
+    }
+
+    private function normalizePriceListCategory(string $category): string
+    {
+        abort_unless(array_key_exists($category, $this->priceListCategories()), 404);
 
         return $category;
     }
@@ -390,6 +415,11 @@ class CatalogoListasController extends Controller
         ];
     }
 
+    private function priceListCategories(): array
+    {
+        return array_intersect_key(self::CATEGORIES, array_flip(self::PRICE_LIST_CATEGORIES));
+    }
+
     private function browseCatalogRows(string $category): Collection
     {
         $categories = $category === self::ALL_CATEGORY
@@ -411,7 +441,7 @@ class CatalogoListasController extends Controller
     private function browsePriceListRows(string $category): Collection
     {
         $categories = $category === self::ALL_CATEGORY
-            ? array_keys(self::CATEGORIES)
+            ? array_keys($this->priceListCategories())
             : [$category];
 
         return collect($categories)
@@ -472,6 +502,7 @@ class CatalogoListasController extends Controller
                         'dose' => $this->doseLabel($this->oncologyDoseMg($presentation), 'mg'),
                         'presentation' => $presentation->presentacion ?? '-',
                         'commercial_name' => $presentation->marca ?: '-',
+                        'stability_hours' => $presentation->stability_hours,
                         'lowest_price' => $lowest?->costo_unitario,
                         'lowest_date' => $lowest?->fecha_ingreso,
                         'last_price' => $latest?->costo_unitario,
@@ -508,6 +539,7 @@ class CatalogoListasController extends Controller
                         ),
                         'presentation' => $presentation->presentacion ?: '-',
                         'commercial_name' => $presentation->denominacion_comercial ?: '-',
+                        'stability_hours' => $presentation->stability_hours,
                         'lowest_price' => null,
                         'lowest_date' => null,
                         'last_price' => null,
@@ -515,6 +547,57 @@ class CatalogoListasController extends Controller
                         'edit_url' => $presentation->catalog
                             ? route('admin.nutricionales.medicines.edit', ['medicine' => $presentation->catalog])
                             : '#',
+                    ];
+                });
+        }
+
+        if ($category === 'insumos') {
+            return DiluentPresentation::query()
+                ->with([
+                    'diluent:id,denominacion_generica',
+                    'laboratory:id,nombre,estado',
+                    'warehouse:id,name,laboratory_id',
+                ])
+                ->whereNotNull('laboratory_id')
+                ->whereNotNull('warehouse_id')
+                ->get()
+                ->sortBy(fn (DiluentPresentation $presentation) => mb_strtolower(
+                    trim(
+                        (string) $presentation->laboratory?->nombre.' '.
+                        (string) $presentation->warehouse?->name.' '.
+                        (string) $presentation->diluent?->denominacion_generica.' '.
+                        (string) $presentation->presentacion
+                    ),
+                    'UTF-8'
+                ))
+                ->values()
+                ->map(function (DiluentPresentation $presentation) {
+                    return (object) [
+                        'product' => $presentation->diluent?->denominacion_generica ?? '-',
+                        'dose' => $this->doseLabel(
+                            $presentation->volume_ml !== null ? (float) $presentation->volume_ml : null,
+                            'ml'
+                        ),
+                        'presentation' => $presentation->presentacion ?: '-',
+                        'commercial_name' => $presentation->denominacion_comercial ?: '-',
+                        'stability_hours' => null,
+                        'lowest_price' => null,
+                        'lowest_date' => null,
+                        'last_price' => null,
+                        'last_date' => $presentation->fecha_ingreso,
+                        'edit_url' => $presentation->diluent_id
+                            ? route('admin.oncologicos.diluent_presentations.edit', [
+                                'diluent' => $presentation->diluent_id,
+                                'presentation' => $presentation->id,
+                            ])
+                            : '#',
+                        'central' => $presentation->laboratory?->nombre ?? '-',
+                        'warehouse' => $presentation->warehouse?->name ?? '-',
+                        'manufacturer' => $presentation->fabricante ?: '-',
+                        'lot' => $presentation->lote ?: '-',
+                        'expiry_date' => $presentation->caducidad,
+                        'stock_actual' => (float) ($presentation->stock_actual ?? 0),
+                        'is_active' => (bool) $presentation->is_active,
                     ];
                 });
         }
@@ -675,7 +758,7 @@ class CatalogoListasController extends Controller
                         'presentation' => trim(($item->presentation?->denominacion_comercial ?? '').' '.($item->presentation?->presentacion ?? '')),
                         'price_bottle' => $milliliters > 0 ? $priceMl * $milliliters : null,
                         'unit_price' => $priceMl,
-                        'charge_by' => null,
+                        'charge_by' => $this->normalizeNutritionChargeBy($item->charge_by ?? null),
                     ];
                 });
         }
@@ -783,6 +866,7 @@ class CatalogoListasController extends Controller
                         $item->nutrition_medicine_presentation_id => [
                             'price_bottle' => $milliliters > 0 ? $priceMl * $milliliters : 0,
                             'price_unit' => $priceMl,
+                            'charge_by' => $this->normalizeNutritionChargeBy($item->charge_by ?? null),
                             'remission_description' => $item->descripcion_remision,
                         ],
                     ];
@@ -794,7 +878,7 @@ class CatalogoListasController extends Controller
 
     private function selectedUnifiedItems(Request $request): Collection
     {
-        return collect(array_keys(self::CATEGORIES))
+        return collect(self::PRICE_LIST_CATEGORIES)
             ->mapWithKeys(function (string $category) use ($request) {
                 $items = collect($request->input('category_items.'.$category, []))
                     ->filter(fn ($item) => filter_var(
@@ -961,6 +1045,7 @@ class CatalogoListasController extends Controller
             $priceUnit = $unitAmount > 0
                 ? $priceBottle / $unitAmount
                 : (float) ($item['price_unit'] ?? 0);
+            $chargeBy = $this->normalizeNutritionChargeBy($item['charge_by'] ?? null);
             $description = $this->nullableTrimmed($item['remission_description'] ?? null)
                 ?? trim(implode(' ', array_filter([
                     trim((string) $presentation?->catalog?->denominacion_generica),
@@ -971,6 +1056,7 @@ class CatalogoListasController extends Controller
                 'nutri_medicine_list_id' => $list->id,
                 'nutrition_medicine_presentation_id' => $presentationId,
                 'precio_ml' => $priceUnit,
+                'charge_by' => $chargeBy,
                 'descripcion_remision' => $description,
             ]);
         }
@@ -989,9 +1075,16 @@ class CatalogoListasController extends Controller
     {
         $chargeBy = strtolower(trim((string) $value));
 
-        return in_array($chargeBy, ['frasco', 'mg'], true)
+        return in_array($chargeBy, ['frasco', 'mg', 'ml'], true)
             ? $chargeBy
             : $fallback;
+    }
+
+    private function normalizeNutritionChargeBy($value): string
+    {
+        $chargeBy = strtolower(trim((string) $value));
+
+        return in_array($chargeBy, ['frasco', 'ml'], true) ? $chargeBy : 'ml';
     }
 
     private function editorLocationData($list = null, array $overrides = []): array

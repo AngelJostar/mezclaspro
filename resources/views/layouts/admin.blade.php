@@ -1,3 +1,14 @@
+@php
+    $isWorkflowPage = request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit')
+        && (request()->boolean('approval_popup') || request()->boolean('dispensing_popup'));
+    $workflowCompleted = $isWorkflowPage && (session('approval_popup_done') || session('dispensing_popup_done'));
+    $workflowPageConfig = [
+        'embedded' => $isWorkflowPage,
+        'completed' => (bool) $workflowCompleted,
+        'waitForConfirmation' => (bool) ($workflowCompleted && (session('success') || session('swal'))),
+        'returnTo' => session('approval_popup_return_to') ?: session('dispensing_popup_return_to'),
+    ];
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
@@ -7,6 +18,12 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <title>Central de Mezclas</title>
+
+    @if ($isWorkflowPage)
+        <script>
+            if (window.parent !== window) document.documentElement.classList.add('workflow-embedded');
+        </script>
+    @endif
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -32,11 +49,13 @@
 <body class="font-sans antialiased bg-slate-100 text-slate-900 sm:overflow-auto" :class="{ 'overflow-hidden': open }" x-data="{ open: false }">
 
 
-    @include('layouts.includes.admin.nav')
+    @unless ($isWorkflowPage)
+        @include('layouts.includes.admin.nav')
 
-    @include('layouts.includes.admin.aside')
+        @include('layouts.includes.admin.aside')
+    @endunless
 
-    <main class="admin-page sm:ml-44">
+    <main @class(['admin-page', 'sm:ml-44' => ! $isWorkflowPage, 'workflow-page' => $isWorkflowPage])>
         <div class="admin-content">
             {{ $slot }}
         </div>
@@ -45,11 +64,19 @@
         style="display: none"class="bg-gray-900/50 dark:bg-gray-900/80 fixed inset-0 z-30 sm:hidden"></div>
     @stack('modals')
 
-    @livewireScripts
+    @unless ($isWorkflowPage)
+        @include('layouts.includes.workflow-modal')
+    @endunless
+    <script type="application/json" id="workflow-page-config">@json($workflowPageConfig, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)</script>
+
+    @include('layouts.includes.livewire-scripts')
 
     @if (session('swal'))
         <script>
             let swalConfig = @json(session('swal'));
+            const swalRedirectUrl = swalConfig.redirectUrl ?? null;
+            delete swalConfig.redirectUrl;
+
             swalConfig = {
                 ...swalConfig, // Extiende la configuración existente
                 confirmButtonText: 'Aceptar',
@@ -61,7 +88,13 @@
                 }
             };
 
-            Swal.fire(swalConfig);
+            Swal.fire(swalConfig).then((result) => {
+                document.dispatchEvent(new CustomEvent('workflow-popup-dialog-closed'));
+
+                if (result.isConfirmed && swalRedirectUrl) {
+                    window.location.href = swalRedirectUrl;
+                }
+            });
         </script>
     @endif
     @auth
