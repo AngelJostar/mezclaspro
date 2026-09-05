@@ -6,6 +6,7 @@
         str_contains($normalizedStatus, 'cancel') => 'cancelada',
         str_contains($normalizedStatus, 'entreg'), str_contains($normalizedStatus, 'finaliz') => 'entregada',
         str_contains($normalizedStatus, 'revis'), str_contains($normalizedStatus, 'inspeccion') => 'revisada',
+        str_contains($normalizedStatus, 'dispens') => 'dispensada',
         str_contains($normalizedStatus, 'prepar'), str_contains($normalizedStatus, 'enproceso') => 'preparada',
         str_contains($normalizedStatus, 'aprob') => 'aprobada',
         default => 'pendiente',
@@ -13,6 +14,7 @@
 
     $statusClass = match ($statusKey) {
         'aprobada' => 'bg-green-100 text-green-700',
+        'dispensada' => 'bg-sky-100 text-sky-700',
         'preparada' => 'bg-blue-100 text-blue-700',
         'revisada' => 'bg-purple-100 text-purple-700',
         'entregada' => 'bg-gray-200 text-gray-700',
@@ -23,6 +25,7 @@
 
     $statusLabel = match ($statusKey) {
         'aprobada' => 'Aprobada',
+        'dispensada' => 'Dispensada',
         'preparada' => 'Preparada',
         'revisada' => 'Inspeccionada',
         'entregada' => 'Entregada',

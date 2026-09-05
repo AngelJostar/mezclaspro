@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\AdminMenuAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -45,8 +46,10 @@ class TrainingPersonnelController extends Controller
                 'name',
                 'lastname',
                 'username',
+                'password',
                 'credential_password',
                 'training_username',
+                'training_password',
                 'training_credential_password',
                 'is_active',
                 'hospital_id',
@@ -107,6 +110,161 @@ class TrainingPersonnelController extends Controller
         ]);
     }
 
+    public function students(): View
+    {
+        $assignmentPersonnel = $this->personnelUsersQuery()
+            ->select(['id', 'name', 'lastname'])
+            ->orderBy('name')
+            ->orderBy('lastname')
+            ->get()
+            ->map(fn (User $user): array => [
+                'id' => (string) $user->id,
+                'name' => $this->normalizePersonName(trim($user->name.' '.$user->lastname)),
+            ])
+            ->filter(fn (array $person): bool => $person['name'] !== '')
+            ->values()
+            ->all();
+
+        return view('admin.capacitaciones.index', [
+            'assignmentPersonnel' => $assignmentPersonnel,
+        ]);
+    }
+
+    public function edit(User $personnel): JsonResponse
+    {
+        $personnel = $this->personnelUsersQuery()->findOrFail($personnel->id);
+        $profile = $personnel->personnelProfile;
+        $laboratory = $profile?->laboratory ?? $personnel->hospital?->laboratory;
+
+        return response()->json([
+            'action' => route('admin.capacitaciones.personal.update', $personnel),
+            'name' => $this->normalizePersonName(trim($personnel->name.' '.$personnel->lastname)),
+            'fields' => [
+                'first_name' => $personnel->name,
+                // Legacy accounts do not store the two surnames separately.
+                'paternal_surname' => $profile?->paternal_surname ?? $personnel->lastname,
+                'maternal_surname' => $profile?->maternal_surname,
+                'phone' => $profile?->phone,
+                'personal_email' => $profile?->personal_email,
+                'laboratory_id' => $laboratory?->id,
+                'department' => $profile?->department,
+                'hire_date' => $profile?->hire_date?->toDateString(),
+                'positions' => $profile?->positions ?? [],
+                'prior_experience' => $profile?->prior_experience,
+                'additional_information' => $profile?->additional_information,
+            ],
+            'laboratory' => $laboratory ? ['id' => $laboratory->id, 'name' => $laboratory->nombre] : null,
+            'cv_name' => $profile?->cv_original_name,
+        ]);
+    }
+
+    public function update(Request $request, User $personnel): JsonResponse
+    {
+        $personnel = $this->personnelUsersQuery()->findOrFail($personnel->id);
+        $profile = $personnel->personnelProfile;
+        $currentLaboratoryId = $profile?->laboratory_id ?? $personnel->hospital?->laboratory_id;
+        $previousName = $this->normalizePersonName(trim($personnel->name.' '.$personnel->lastname));
+
+        if (is_string($request->input('personal_email'))) {
+            $request->merge(['personal_email' => Str::lower(trim($request->input('personal_email')))]);
+        }
+
+        // Validate scalar input before applying the same name normalization used for new personnel.
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:120'],
+            'paternal_surname' => ['required', 'string', 'max:120'],
+            'maternal_surname' => ['nullable', 'string', 'max:120'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'personal_email' => ['required', 'email:rfc', 'max:255',
+                Rule::unique('personnel_profiles', 'personal_email')->ignore($profile?->id)],
+            'laboratory_id' => ['required', 'integer', Rule::exists('laboratories', 'id')
+                ->where(fn ($query) => $query->where('activo', true)->orWhere('id', $currentLaboratoryId))],
+            'department' => ['required', Rule::in(['Administracion', 'Almacen', 'Calidad', 'Operaciones', 'Produccion'])],
+            'hire_date' => ['required', 'date', 'before_or_equal:today'],
+            'positions' => ['required', 'array', 'min:1'],
+            'positions.*' => ['required', 'string', Rule::in(array_merge($this->jobNames(), $profile?->positions ?? []))],
+            'cv' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'prior_experience' => ['nullable', 'string', 'max:3000'],
+            'additional_information' => ['nullable', 'string', 'max:5000'],
+        ], [
+            'positions.required' => 'Selecciona al menos un puesto.',
+            'positions.*.in' => 'Selecciona puestos del catalogo.',
+            'personal_email.unique' => 'Ya existe una persona registrada con este correo.',
+            'laboratory_id.required' => 'Selecciona una central.',
+            'laboratory_id.exists' => 'Selecciona una central activa.',
+        ]);
+
+        $cvPath = $request->file('cv')?->store('personnel/cv', 'local');
+        $oldCvPath = $profile?->cv_path;
+
+        try {
+            DB::transaction(function () use ($personnel, $validated, $request, $cvPath) {
+                $personnel = User::query()->lockForUpdate()->findOrFail($personnel->id);
+                $profile = $personnel->personnelProfile()->firstOrNew();
+                $paternalSurname = $this->normalizePersonName($validated['paternal_surname']);
+                $maternalSurname = $this->normalizePersonName($validated['maternal_surname'] ?? null);
+
+                $personnel->fill([
+                    'name' => $this->normalizePersonName($validated['first_name']),
+                    'lastname' => trim($paternalSurname.' '.$maternalSurname),
+                ])->save();
+                $personnel->touch();
+
+                // Keep the existing primary position first when it remains selected.
+                $positions = array_values(array_unique(array_merge(
+                    array_intersect($profile->positions ?? [], $validated['positions']),
+                    $validated['positions']
+                )));
+
+                $profile->fill([
+                    'laboratory_id' => $validated['laboratory_id'],
+                    'paternal_surname' => $paternalSurname,
+                    'maternal_surname' => $maternalSurname ?: null,
+                    'phone' => $validated['phone'] ?? null,
+                    'personal_email' => Str::lower(trim($validated['personal_email'])),
+                    'department' => $validated['department'],
+                    'hire_date' => $validated['hire_date'],
+                    'positions' => $positions,
+                    'prior_experience' => $validated['prior_experience'] ?? null,
+                    'additional_information' => $validated['additional_information'] ?? null,
+                ]);
+
+                if (! $profile->exists) {
+                    $profile->employment_status = $personnel->is_active ? 'hired' : 'inactive';
+                    $profile->force_password_change = false;
+                }
+
+                if ($cvPath) {
+                    $profile->cv_path = $cvPath;
+                    $profile->cv_original_name = $request->file('cv')->getClientOriginalName();
+                }
+
+                $personnel->personnelProfile()->save($profile);
+            });
+        } catch (\Throwable $exception) {
+            if ($cvPath) {
+                Storage::disk('local')->delete($cvPath);
+            }
+            throw $exception;
+        }
+
+        if ($cvPath && $oldCvPath && $oldCvPath !== $cvPath) {
+            Storage::disk('local')->delete($oldCvPath);
+        }
+
+        $request->session()->flash('swal', [
+            'title' => 'Personal actualizado',
+            'text' => 'La informacion del personal se actualizo correctamente.',
+            'icon' => 'success',
+        ]);
+        $personnel->refresh();
+
+        return response()->json([
+            'previous_name' => $previousName,
+            'name' => $this->normalizePersonName(trim($personnel->name.' '.$personnel->lastname)),
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $maternalSurname = $this->normalizePersonName($request->input('maternal_surname'));
@@ -150,8 +308,7 @@ class TrainingPersonnelController extends Controller
                 Rule::unique('users', 'username'),
                 Rule::unique('users', 'training_username'),
             ],
-            'temporary_password' => ['required', 'string', 'min:6', 'max:50'],
-            'force_password_change' => ['nullable', 'boolean'],
+            'password' => ['required', 'string', 'min:6', 'max:50'],
             'cv' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
             'prior_experience' => ['nullable', 'string', 'max:3000'],
             'additional_information' => ['nullable', 'string', 'max:5000'],
@@ -168,7 +325,7 @@ class TrainingPersonnelController extends Controller
 
         try {
             DB::transaction(function () use ($validated, $request, $cvPath) {
-                $plainPassword = $validated['temporary_password'];
+                $plainPassword = $validated['password'];
                 $lastName = trim($validated['paternal_surname'].' '.($validated['maternal_surname'] ?? ''));
                 $trainingUsername = User::suggestTrainingUsername($validated['username']);
 
@@ -202,7 +359,7 @@ class TrainingPersonnelController extends Controller
                     'department' => $validated['department'],
                     'hire_date' => $validated['hire_date'],
                     'employment_status' => $validated['employment_status'],
-                    'force_password_change' => $request->boolean('force_password_change'),
+                    'force_password_change' => false,
                     'cv_path' => $cvPath,
                     'cv_original_name' => $request->file('cv')?->getClientOriginalName(),
                     'prior_experience' => $validated['prior_experience'] ?? null,

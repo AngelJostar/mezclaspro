@@ -170,6 +170,10 @@ Route::patch('/hospitals/{hospital}/status', [HospitalController::class, 'toggle
     ->name('hospitals.toggle-status')
     ->middleware(['can:hospitales']);
 
+Route::patch('/hospitals/{hospital}/institution', [HospitalController::class, 'changeInstitution'])
+    ->name('hospitals.change-institution')
+    ->middleware(['can:hospitales']);
+
 Route::resource('nutricionales/medicines', MedicineController::class)
     ->except(['show', 'destroy'])
     ->middleware(['can:medicamentos_nutricionales'])
@@ -615,7 +619,7 @@ Route::view('capacitaciones', 'admin.capacitaciones.index')
 Route::view('capacitaciones/programas', 'admin.capacitaciones.index')
     ->name('capacitaciones.programas');
 
-Route::view('capacitaciones/alumnos', 'admin.capacitaciones.index')
+Route::get('capacitaciones/alumnos', [TrainingPersonnelController::class, 'students'])
     ->name('capacitaciones.alumnos');
 
 Route::get('capacitaciones/personal', [TrainingPersonnelController::class, 'index'])
@@ -624,8 +628,20 @@ Route::get('capacitaciones/personal', [TrainingPersonnelController::class, 'inde
 Route::post('capacitaciones/personal', [TrainingPersonnelController::class, 'store'])
     ->name('capacitaciones.personal.store');
 
+Route::get('capacitaciones/personal/{personnel}/edit', [TrainingPersonnelController::class, 'edit'])
+    ->name('capacitaciones.personal.edit')
+    ->middleware('role_or_permission:Super Admin|Admin|menu.capacitaciones.personal');
+
+Route::patch('capacitaciones/personal/{personnel}', [TrainingPersonnelController::class, 'update'])
+    ->name('capacitaciones.personal.update')
+    ->middleware('role_or_permission:Super Admin|Admin|menu.capacitaciones.personal');
+
 Route::get('instituciones/{institucion}/hospitals', [InstitucionController::class, 'hospitales'])
     ->name('instituciones.hospitals')
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
+
+Route::get('instituciones/{institucion}/hospitals/exportar', [InstitucionController::class, 'exportarHospitalesRelacionados'])
+    ->name('instituciones.hospitals.export')
     ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
 
 Route::get('instituciones/{institucion}/hospitals/create', [HospitalController::class, 'createForInstitution'])
@@ -779,6 +795,10 @@ Route::get('/oncologicos/laboratory/{laboratory}/ordenes-de-compra/nueva', [Labo
 
 Route::post('/oncologicos/laboratory/{laboratory}/ordenes-de-compra', [LaboratoryPurchaseOrderController::class, 'store'])
     ->name('oncologicos.laboratory.purchase-orders.store')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::get('/oncologicos/laboratory/{laboratory}/ordenes-de-compra/productos', [LaboratoryPurchaseOrderController::class, 'products'])
+    ->name('oncologicos.laboratory.purchase-orders.products')
     ->middleware(['can:oncologicos_laboratory_index']);
 
 Route::get('/oncologicos/laboratory/{laboratory}/ordenes-de-compra/{purchaseOrder}/descargar', [LaboratoryPurchaseOrderController::class, 'download'])

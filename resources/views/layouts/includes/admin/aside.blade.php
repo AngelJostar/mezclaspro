@@ -17,7 +17,7 @@
 @endphp
 
 <aside id="logo-sidebar"
-    class="fixed top-0 left-0 z-40 w-64 h-screen pt-20 transition-transform duration-200 ease-in-out bg-white border-r border-gray-200 shadow-xl sm:w-44 sm:translate-x-0 sm:shadow-none dark:bg-gray-800 dark:border-gray-700"
+    class="fixed top-0 left-0 z-40 w-64 h-screen transition-transform duration-200 ease-in-out bg-white border-r border-gray-200 shadow-xl sm:w-44 sm:translate-x-0 sm:shadow-none dark:bg-gray-800 dark:border-gray-700"
     x-bind:class="open ? 'translate-x-0' : '-translate-x-full'"
     x-data="{ openMenu: @js($initialOpenMenu) }" aria-label="Sidebar">
 

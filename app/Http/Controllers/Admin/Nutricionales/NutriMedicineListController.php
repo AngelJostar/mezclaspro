@@ -79,6 +79,7 @@ class NutriMedicineListController extends Controller
             'items' => 'required|array|size:'.$totalPresentations,
             'items.*.nutrition_medicine_presentation_id' => 'required|exists:nutrition_medicine_presentations,id',
             'items.*.precio_ml' => 'required|numeric|min:0',
+            'items.*.charge_by' => 'nullable|in:frasco,ml',
             'items.*.selected' => 'nullable|boolean',
             'items.*.descripcion_remision' => 'nullable|string|max:500',
         ], [
@@ -153,6 +154,7 @@ class NutriMedicineListController extends Controller
                     'nutri_medicine_list_id' => $list->id,
                     'nutrition_medicine_presentation_id' => $presentationId,
                     'precio_ml' => $item['precio_ml'],
+                    'charge_by' => $this->normalizeChargeBy($item['charge_by'] ?? null),
                     'descripcion_remision' => $remissionDescription,
                 ]);
             }
@@ -259,6 +261,7 @@ class NutriMedicineListController extends Controller
             'items' => 'required|array|size:'.$totalPresentations,
             'items.*.nutrition_medicine_presentation_id' => 'required|exists:nutrition_medicine_presentations,id',
             'items.*.precio_ml' => 'required|numeric|min:0',
+            'items.*.charge_by' => 'nullable|in:frasco,ml',
             'items.*.selected' => 'nullable|boolean',
             'items.*.descripcion_remision' => 'nullable|string|max:500',
         ], [
@@ -363,6 +366,7 @@ class NutriMedicineListController extends Controller
                     'nutri_medicine_list_id' => $nutriMedicineList->id,
                     'nutrition_medicine_presentation_id' => $presentationId,
                     'precio_ml' => $item['precio_ml'],
+                    'charge_by' => $this->normalizeChargeBy($item['charge_by'] ?? null),
                     'descripcion_remision' => $remissionDescription,
                 ]);
             }
@@ -420,6 +424,13 @@ class NutriMedicineListController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function normalizeChargeBy($value): string
+    {
+        $chargeBy = strtolower(trim((string) $value));
+
+        return in_array($chargeBy, ['frasco', 'ml'], true) ? $chargeBy : 'ml';
     }
 
     private function defaultRemissionDescriptions($presentationIds)

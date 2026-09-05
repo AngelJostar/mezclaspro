@@ -1,5 +1,13 @@
 <x-admin-layout>
-    @php $usesMilligrams = in_array($category, ['oncologicos', 'antibioticos'], true); @endphp
+    @php
+        $usesMilligrams = in_array($category, ['oncologicos', 'antibioticos'], true);
+        $usesChargeMethod = $usesMilligrams || $category === 'nutricionales';
+        $chargeLabel = fn ($value) => match ($value) {
+            'mg' => 'Miligramo',
+            'ml' => 'Mililitro',
+            default => 'Frasco',
+        };
+    @endphp
 
     <div class="rounded-xl bg-white p-5 shadow-sm">
         @include('admin.catalogo-listas.partials.section-nav', [
@@ -75,8 +83,11 @@
                         <th class="whitespace-nowrap px-3 py-2 text-left font-bold uppercase">Presentacion</th>
                         <th class="whitespace-nowrap px-3 py-2 text-right font-bold uppercase">Precio por frasco</th>
                         <th class="whitespace-nowrap px-3 py-2 text-right font-bold uppercase">Precio por {{ $usesMilligrams ? 'miligramo' : 'mililitro' }}</th>
-                        @if ($usesMilligrams)
+                        @if ($usesChargeMethod)
                             <th class="whitespace-nowrap px-3 py-2 text-center font-bold uppercase">Cobrar por</th>
+                        @endif
+
+                        @if ($usesMilligrams)
                             <th class="whitespace-nowrap px-3 py-2 text-center font-bold uppercase">IVA desglosado</th>
                         @endif
                     </tr>
@@ -97,12 +108,15 @@
                             <td class="px-3 py-2 text-right tabular-nums text-gray-700">
                                 {{ $item->unit_price !== null ? '$' . number_format((float) $item->unit_price, 4) : '-' }}
                             </td>
-                            @if ($usesMilligrams)
+                            @if ($usesChargeMethod)
                                 <td class="px-3 py-2 text-center">
                                     <span class="inline-flex rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
-                                        {{ $item->charge_by === 'mg' ? 'Miligramo' : 'Frasco' }}
+                                        {{ $chargeLabel($item->charge_by) }}
                                     </span>
                                 </td>
+                            @endif
+
+                            @if ($usesMilligrams)
                                 <td class="px-3 py-2 text-center">
                                     <span class="inline-flex rounded-full px-2 py-1 font-semibold {{ $item->vat_breakdown ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500' }}">
                                         {{ $item->vat_breakdown ? 'Si' : 'No' }}
@@ -112,7 +126,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $usesMilligrams ? 6 : 4 }}" class="px-3 py-8 text-center text-sm text-gray-500">
+                            <td colspan="{{ $usesMilligrams ? 6 : ($usesChargeMethod ? 5 : 4) }}" class="px-3 py-8 text-center text-sm text-gray-500">
                                 Esta lista no tiene productos capturados.
                             </td>
                         </tr>

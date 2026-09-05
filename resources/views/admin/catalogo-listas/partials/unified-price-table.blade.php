@@ -1,13 +1,17 @@
 @php
     $usesMedicineCatalog = in_array($categoryKey, ['oncologicos', 'antibioticos'], true);
     $usesMilligrams = $usesMedicineCatalog;
+    $usesChargeMethod = $usesMedicineCatalog || $categoryKey === 'nutricionales';
+    $chargeUnitValue = $usesMilligrams ? 'mg' : 'ml';
+    $chargeUnitLabel = $usesMilligrams ? 'Miligramo' : 'Mililitro';
+    $defaultChargeBy = $usesMilligrams ? 'frasco' : 'ml';
     $inputPrefix = 'category_items.' . $categoryKey;
     $rowIndex = 0;
 @endphp
 
 <section id="category-panel-{{ $categoryKey }}" role="tabpanel"
     data-category-panel="{{ $categoryKey }}" @class(['hidden' => $categoryKey !== $activeCategory])>
-    <div class="overflow-x-auto rounded-md border border-gray-200">
+    <div class="overflow-x-auto rounded-md border border-gray-200" data-sticky-x-position="viewport">
         <table class="min-w-full divide-y divide-gray-200 text-xs">
             <thead class="bg-gray-50 text-gray-700">
                 <tr>
@@ -23,8 +27,8 @@
                     <th class="whitespace-nowrap px-3 py-2 text-left font-bold uppercase">Descripción remisión</th>
                     <th class="whitespace-nowrap px-3 py-2 text-right font-bold uppercase">{{ $usesMilligrams ? 'MG' : 'ML' }}</th>
                     <th class="whitespace-nowrap px-3 py-2 text-right font-bold uppercase">Precio por frasco</th>
-                    <th class="whitespace-nowrap px-3 py-2 text-right font-bold uppercase">Precio por {{ $usesMilligrams ? 'miligramo' : 'mililitro' }}</th>
-                    @if ($usesMedicineCatalog)
+                    <th class="whitespace-nowrap px-3 py-2 text-right font-bold uppercase">Precio por {{ Str::lower($chargeUnitLabel) }}</th>
+                    @if ($usesChargeMethod)
                         <th class="min-w-40 px-0 py-2 text-center font-bold uppercase">
                             <span class="block px-3">Cobrar por</span>
                             <span class="mt-1 grid grid-cols-2 border-t border-gray-200 pt-1 text-[10px]">
@@ -37,15 +41,18 @@
                                         aria-label="Seleccionar o deseleccionar cobro por frasco en todos los renglones visibles">
                                 </label>
                                 <label class="inline-flex cursor-pointer items-center justify-center gap-1.5"
-                                    title="Seleccionar o deseleccionar Miligramo en todos los renglones visibles">
-                                    <span>Miligramo</span>
+                                    title="Seleccionar o deseleccionar {{ $chargeUnitLabel }} en todos los renglones visibles">
+                                    <span>{{ $chargeUnitLabel }}</span>
                                     <input type="checkbox" data-charge-by-select-all="{{ $categoryKey }}"
-                                        data-charge-by-option="mg"
+                                        data-charge-by-option="{{ $chargeUnitValue }}"
                                         class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                        aria-label="Seleccionar o deseleccionar cobro por miligramo en todos los renglones visibles">
+                                        aria-label="Seleccionar o deseleccionar cobro por {{ Str::lower($chargeUnitLabel) }} en todos los renglones visibles">
                                 </label>
                             </span>
                         </th>
+                    @endif
+
+                    @if ($usesMedicineCatalog)
                         <th class="whitespace-nowrap px-3 py-2 text-center font-bold uppercase">IVA desglosado</th>
                     @endif
                 </tr>
@@ -79,11 +86,11 @@
                             $fieldName = 'category_items[' . $categoryKey . '][' . $rowIndex . ']';
                             $initialChargeBy = strtolower((string) old(
                                 $inputPrefix . '.' . $rowIndex . '.charge_by',
-                                'frasco'
+                                $defaultChargeBy
                             ));
 
-                            if (! in_array($initialChargeBy, ['frasco', 'mg'], true)) {
-                                $initialChargeBy = 'frasco';
+                            if (! in_array($initialChargeBy, ['frasco', $chargeUnitValue], true)) {
+                                $initialChargeBy = $defaultChargeBy;
                             }
                         @endphp
 
@@ -128,15 +135,20 @@
                                         value="{{ number_format($initialUnit, 4, '.', '') }}" readonly>
                                 </div>
                             </td>
-                            @if ($usesMedicineCatalog)
+                            @if ($usesChargeMethod)
                                 <td class="px-0 py-2 text-center">
                                     @include('admin.catalogo-listas.partials.charge-method-selector', [
                                         'fieldName' => $fieldName,
                                         'initialChargeBy' => $initialChargeBy,
                                         'productName' => $productName,
                                         'presentationName' => $presentationName,
+                                        'unitOptionValue' => $chargeUnitValue,
+                                        'unitOptionLabel' => $chargeUnitLabel,
                                     ])
                                 </td>
+                            @endif
+
+                            @if ($usesMedicineCatalog)
                                 <td class="px-3 py-2 text-center">
                                     <input type="hidden" name="{{ $fieldName }}[vat_breakdown]" value="0">
                                     <label class="inline-flex cursor-pointer items-center justify-center"
@@ -154,7 +166,7 @@
                     @endforeach
                 @empty
                     <tr>
-                        <td colspan="{{ $usesMedicineCatalog ? 10 : 8 }}" class="px-3 py-8 text-center text-sm text-gray-500">
+                        <td colspan="{{ $usesMedicineCatalog ? 10 : ($usesChargeMethod ? 9 : 8) }}" class="px-3 py-8 text-center text-sm text-gray-500">
                             No hay productos disponibles en esta categoría.
                         </td>
                     </tr>

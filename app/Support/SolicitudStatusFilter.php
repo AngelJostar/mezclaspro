@@ -18,6 +18,7 @@ final class SolicitudStatusFilter
 
     public const PREPARATION_STATES = [
         'aprobada',
+        'dispensada',
         'enproceso',
         'preparada',
         'revisada',

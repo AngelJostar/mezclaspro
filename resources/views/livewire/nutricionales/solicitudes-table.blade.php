@@ -20,10 +20,24 @@
             <tbody>
                 @foreach ($solicitudes as $solicitud)
                     @php
-                        $estado = $solicitud->estado ?? 'pendiente';
+                        $estado = str_replace('-', '_', mb_strtolower(trim((string) ($solicitud->estado ?? 'pendiente'))));
+                        $requestListUrl = route('admin.nutricionales.solicitudes.index');
+                        $approvalUrl = $estado === 'pendiente'
+                            ? route('admin.nutricionales.solicitudes.edit', [
+                                'solicitud' => $solicitud,
+                                'approval' => 1,
+                                'approval_popup' => 1,
+                                'return_to' => $requestListUrl,
+                            ])
+                            : null;
+                        $approvalStateLabel = match (true) {
+                            in_array($estado, ['aprobada', 'dispensada', 'preparada', 'revisada', 'entregada'], true) => 'Aprobada',
+                            in_array($estado, ['cancelada', 'no_aprobada'], true) => 'Rechazada',
+                            default => 'Sin acción',
+                        };
                     @endphp
 
-                    <tr class="border-b">
+                    <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->user?->hospital) }}">
                         <td class="px-2 py-2 text-center whitespace-nowrap">
                             @include('admin.solicitudes._type-badge', ['type' => 'nutricionales'])
                         </td>
@@ -67,36 +81,31 @@
                         </td>
 
                         <td class="px-2 py-2 text-center whitespace-nowrap">
-                            <a href="{{ route('admin.nutricionales.solicitudes.solicitud', $solicitud) }}"
-                                target="_blank"
-                                rel="noopener"
-                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Ver
-                            </a>
-                        </td>
-
-                        <td class="px-2 py-2 text-center whitespace-nowrap">
                             @hasanyrole('Admin|Super Admin')
-                                @if (in_array($estado, ['pendiente'], true))
-                                    <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
+                                @if ($approvalUrl)
+                                    <a href="{{ $approvalUrl }}"
+                                        data-approval-popup="approval-nutricionales-{{ $solicitud->id }}"
                                         class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
                                         Aprobar
                                     </a>
-                                @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
-                                    <a href="{{ route('admin.nutricionales.solicitudes.edit', $solicitud) }}"
-                                        class="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200">
-                                        Editar
-                                    </a>
                                 @else
                                     <button type="button" disabled
-                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
-                                        Editar
+                                        @class([
+                                            'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                                            'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
+                                            'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
+                                        ])>
+                                        {{ $approvalStateLabel }}
                                     </button>
                                 @endif
                             @else
                                 <button type="button" disabled
-                                    class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
-                                    Editar
+                                    @class([
+                                        'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                                        'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
+                                        'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
+                                    ])>
+                                    {{ $approvalStateLabel }}
                                 </button>
                             @endhasanyrole
                         </td>

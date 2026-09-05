@@ -2,6 +2,10 @@
     $embedded = (bool) ($embedded ?? false);
     $usesMedicineCatalog = in_array($category, ['oncologicos', 'antibioticos'], true);
     $usesMilligrams = $usesMedicineCatalog;
+    $usesChargeMethod = $usesMedicineCatalog || $category === 'nutricionales';
+    $chargeUnitValue = $usesMilligrams ? 'mg' : 'ml';
+    $chargeUnitLabel = $usesMilligrams ? 'Miligramo' : 'Mililitro';
+    $defaultChargeBy = $usesMilligrams ? 'frasco' : 'ml';
     $hasOldMedicineRows = old('medicamentos') !== null;
     $hasOldNutritionRows = old('items') !== null;
     $subdistributor = $list?->distributor;
@@ -25,22 +29,25 @@
         ['label' => $usesMilligrams ? 'MG' : 'ML', 'column' => 5, 'align' => 'right', 'type' => 'number'],
         ['label' => 'Precio por frasco', 'column' => 6, 'align' => 'right', 'type' => 'number'],
         [
-            'label' => 'Precio por ' . ($usesMilligrams ? 'miligramo' : 'mililitro'),
+            'label' => 'Precio por ' . Str::lower($chargeUnitLabel),
             'column' => 7,
             'align' => 'right',
             'type' => 'number',
         ],
     ];
 
-    if ($usesMedicineCatalog) {
+    if ($usesChargeMethod) {
         $priceTableHeaders[] = [
             'label' => 'Cobrar por',
             'column' => 8,
             'align' => 'center',
             'type' => 'text',
-            'sub_labels' => ['Frasco', 'Miligramo'],
-            'sub_values' => ['frasco', 'mg'],
+            'sub_labels' => ['Frasco', $chargeUnitLabel],
+            'sub_values' => ['frasco', $chargeUnitValue],
         ];
+    }
+
+    if ($usesMedicineCatalog) {
         $priceTableHeaders[] = [
             'label' => 'IVA desglosado',
             'column' => 9,
@@ -267,7 +274,7 @@
                     <p class="mt-2 text-sm font-medium text-red-600">{{ $selectionError }}</p>
                 @endif
 
-                <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
+                <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200" data-sticky-x-position="viewport">
                     <table id="priceEditorTable" class="min-w-full divide-y divide-gray-200 text-xs">
                         <thead class="bg-gray-50 text-gray-700">
                             <tr>
@@ -356,7 +363,7 @@
                                         $priceData = $pricesByPresentation->get($presentation->id, [
                                             'price_bottle' => 0,
                                             'price_unit' => 0,
-                                            'charge_by' => 'frasco',
+                                            'charge_by' => $defaultChargeBy,
                                             'vat_breakdown' => false,
                                             'remission_description' => null,
                                         ]);
@@ -384,8 +391,8 @@
                                                 $initialChargeBy
                                             ));
 
-                                            if (! in_array($initialChargeBy, ['frasco', 'mg'], true)) {
-                                                $initialChargeBy = 'frasco';
+                                            if (! in_array($initialChargeBy, ['frasco', $chargeUnitValue], true)) {
+                                                $initialChargeBy = $defaultChargeBy;
                                             }
 
                                             $initialVatBreakdown = (bool) old(
@@ -407,6 +414,14 @@
                                                 'items.' . $rowIndex . '.descripcion_remision',
                                                 $initialRemissionDescription
                                             );
+                                            $initialChargeBy = strtolower((string) old(
+                                                'items.' . $rowIndex . '.charge_by',
+                                                $initialChargeBy
+                                            ));
+
+                                            if (! in_array($initialChargeBy, ['frasco', $chargeUnitValue], true)) {
+                                                $initialChargeBy = $defaultChargeBy;
+                                            }
                                         }
 
                                         $isSelected = $usesMedicineCatalog
@@ -501,15 +516,20 @@
                                             </div>
                                         </td>
 
-                                        @if ($usesMedicineCatalog)
+                                        @if ($usesChargeMethod)
                                             <td class="px-0 py-2 text-center">
                                                 @include('admin.catalogo-listas.partials.charge-method-selector', [
-                                                    'fieldName' => 'medicamentos[' . $rowIndex . ']',
+                                                    'fieldName' => ($usesMedicineCatalog ? 'medicamentos' : 'items') . '[' . $rowIndex . ']',
                                                     'initialChargeBy' => $initialChargeBy,
                                                     'productName' => $productName,
                                                     'presentationName' => $presentationName,
+                                                    'unitOptionValue' => $chargeUnitValue,
+                                                    'unitOptionLabel' => $chargeUnitLabel,
                                                 ])
                                             </td>
+                                        @endif
+
+                                        @if ($usesMedicineCatalog)
                                             <td class="px-3 py-2 text-center">
                                                 <input type="hidden"
                                                     name="medicamentos[{{ $rowIndex }}][iva_desglosado]"
@@ -532,7 +552,7 @@
                                 @endforeach
                             @empty
                                 <tr>
-                                    <td colspan="{{ $usesMedicineCatalog ? 10 : 8 }}" class="px-3 py-8 text-center text-sm text-gray-500">
+                                    <td colspan="{{ $usesMedicineCatalog ? 10 : ($usesChargeMethod ? 9 : 8) }}" class="px-3 py-8 text-center text-sm text-gray-500">
                                         No hay productos disponibles para crear una lista.
                                     </td>
                                 </tr>

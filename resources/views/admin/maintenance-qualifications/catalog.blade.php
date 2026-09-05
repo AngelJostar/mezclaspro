@@ -186,7 +186,8 @@
     @endif
 
     <section class="mt-4" aria-labelledby="service-catalog-heading">
-        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm"
+            data-sticky-x-position="viewport">
             <table class="min-w-[1420px] table-fixed text-left text-xs text-slate-700">
                 <thead class="border-b border-slate-300 bg-slate-50 text-[11px] uppercase text-slate-700">
                     <tr>

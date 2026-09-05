@@ -11,8 +11,38 @@
 
             return str_ends_with($formatted, '.00') ? substr($formatted, 0, -3) : $formatted;
         };
-        $filterButtonClass = 'inline-flex h-5 w-5 flex-none items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-500';
     @endphp
+
+    @push('css')
+        <style>
+            .maintenance-calendar-table th {
+                padding: 8px 6px;
+                white-space: normal;
+                line-height: 1.3;
+            }
+            .maintenance-calendar-table th > div { gap: 4px; }
+            .maintenance-calendar-table td {
+                padding: 10px 6px;
+                overflow-wrap: anywhere;
+                line-height: 1.4;
+            }
+            .maintenance-calendar-table td:nth-child(7),
+            .maintenance-calendar-table td:nth-child(8) { white-space: nowrap; }
+            #maintenance-identification-dialog {
+                width: min(560px, calc(100% - 32px));
+                max-height: calc(100dvh - 32px);
+                padding: 0;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                color: #0f172a;
+                background: white;
+            }
+            #maintenance-identification-dialog::backdrop { background: rgb(15 23 42 / 45%); }
+            #maintenance-identification-dialog[open] { display: flex; flex-direction: column; }
+            #maintenance-identification-dialog .identification-body { overflow: auto; overflow-wrap: anywhere; }
+            html:has(#maintenance-identification-dialog[open]) { overflow: hidden; }
+        </style>
+    @endpush
 
     <nav class="text-xs text-slate-500" aria-label="Ruta de navegaci&oacute;n">
         <span>Administraci&oacute;n</span>
@@ -227,83 +257,21 @@
         </div>
 
         <div class="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div class="overflow-x-auto" data-disable-sticky-x>
-                <table class="min-w-[1760px] table-fixed text-left text-sm text-slate-700">
+            <div class="overflow-x-auto" data-sticky-x-position="viewport">
+                <table class="maintenance-calendar-table table-fixed text-left text-xs text-slate-700"
+                    style="width: {{ 896 + count($calendar['months']) * 96 }}px">
                     <thead class="bg-white text-[11px] uppercase text-slate-950">
                         <tr class="border-b border-slate-200">
-                            <th scope="col" class="w-16 px-3 py-4">
-                                <div class="flex items-center justify-center gap-2">
-                                    <span class="font-bold">ID</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar ID">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
-                            <th scope="col" class="w-32 px-3 py-4">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-bold">Frecuencia</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar frecuencia">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
-                            <th scope="col" class="w-64 px-3 py-4">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-bold">Servicio</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar servicio">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
-                            <th scope="col" class="w-24 px-3 py-4 text-center">
-                                <div class="flex items-center justify-center gap-2">
-                                    <span class="font-bold">Cantidad</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar cantidad">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
-                            <th scope="col" class="w-64 px-3 py-4">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-bold">Identificaci&oacute;n</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar identificacion">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
-                            <th scope="col" class="w-32 px-3 py-4">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-bold">Proveedor</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar proveedor">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
-                            <th scope="col" class="w-36 px-3 py-4 text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <span class="font-bold leading-4">Precio unitario</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar precio unitario">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
-                            <th scope="col" class="w-32 border-r border-slate-200 px-3 py-4 text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <span class="font-bold">&Uacute;nica OC</span>
-                                    <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar unica ocasion">
-                                        <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </th>
+                            <th scope="col" style="width: 52px">ID</th>
+                            <th scope="col" style="width: 112px">Frecuencia</th>
+                            <th scope="col" style="width: 184px">Servicio</th>
+                            <th scope="col" style="width: 100px" class="text-center">Cantidad</th>
+                            <th scope="col" style="width: 132px" data-force-column-filter>Identificaci&oacute;n</th>
+                            <th scope="col" style="width: 108px">Proveedor</th>
+                            <th scope="col" style="width: 108px" class="text-right">Precio unitario</th>
+                            <th scope="col" style="width: 100px" class="border-r border-slate-200 text-right">&Uacute;nica OC</th>
                             @foreach ($calendar['months'] as $month)
-                                <th scope="col" class="w-24 px-3 py-4 text-center">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <span class="font-bold">{{ $month['label'] }}</span>
-                                        <button type="button" class="{{ $filterButtonClass }}" aria-label="Filtrar {{ $month['label'] }}">
-                                            <i class="fa-solid fa-filter text-[9px]" aria-hidden="true"></i>
-                                        </button>
-                                    </div>
-                                </th>
+                                <th scope="col" style="width: 96px" class="text-center">{{ $month['label'] }}</th>
                             @endforeach
                         </tr>
                     </thead>
@@ -312,13 +280,15 @@
                             <tr class="align-top transition hover:bg-slate-50">
                                 <td class="px-5 py-6 text-center font-semibold text-slate-950">{{ $row['id'] }}</td>
                                 <td class="px-5 py-6">
-                                    <span class="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold uppercase text-emerald-700">
+                                    <span class="inline-flex rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold uppercase text-emerald-700">
                                         {{ $row['frequency'] }}
                                     </span>
                                 </td>
                                 <td class="px-5 py-6 font-bold leading-5 text-slate-950">{{ $row['service'] }}</td>
                                 <td class="px-5 py-6 text-center text-slate-600">{{ $plainNumber($row['quantity']) }}</td>
-                                <td class="px-5 py-6 leading-5 text-slate-600">{{ $row['identification'] ?: '-' }}</td>
+                                <td class="text-center" data-column-filter-value="{{ $row['identification'] ?: '-' }}">
+                                    @include('admin.maintenance-qualifications._identification-button', ['row' => $row])
+                                </td>
                                 <td class="px-5 py-6 font-medium text-slate-600">{{ $row['provider'] }}</td>
                                 <td class="px-5 py-6 text-right font-medium text-slate-600">{{ $currency($row['unit_price']) }}</td>
                                 <td class="border-r border-slate-200 px-5 py-6 text-right font-medium text-slate-600">{{ $currency($row['one_time']) }}</td>
@@ -363,7 +333,7 @@
                             <th scope="col" class="w-80 px-3 py-3">Servicio</th>
                             <th scope="col" class="w-28 px-3 py-3">Frecuencia</th>
                             <th scope="col" class="w-24 px-3 py-3 text-center">Cantidad</th>
-                            <th scope="col" class="w-64 px-3 py-3">Identificaci&oacute;n</th>
+                            <th scope="col" class="w-40 px-3 py-3" data-force-column-filter>Identificaci&oacute;n</th>
                             <th scope="col" class="w-32 px-3 py-3">Proveedor</th>
                             <th scope="col" class="w-28 px-3 py-3 text-right">Precio unitario</th>
                             <th scope="col" class="w-28 px-3 py-3 text-right">Total {{ $calendar['year'] }}</th>
@@ -376,7 +346,9 @@
                                 <td class="px-3 py-3 font-semibold text-slate-950">{{ $row['service'] }}</td>
                                 <td class="px-3 py-3 text-slate-600">{{ $row['frequency'] }}</td>
                                 <td class="px-3 py-3 text-center">{{ $plainNumber($row['quantity']) }}</td>
-                                <td class="px-3 py-3 text-slate-600">{{ $row['identification'] ?: '-' }}</td>
+                                <td class="px-3 py-3 text-center" data-column-filter-value="{{ $row['identification'] ?: '-' }}">
+                                    @include('admin.maintenance-qualifications._identification-button', ['row' => $row])
+                                </td>
                                 <td class="px-3 py-3 font-medium text-slate-700">{{ $row['provider'] }}</td>
                                 <td class="px-3 py-3 text-right">{{ $currency($row['unit_price']) }}</td>
                                 <td class="px-3 py-3 text-right font-semibold text-emerald-700">{{ $currency($row['total']) }}</td>
@@ -423,6 +395,20 @@
             </aside>
         </div>
     </section>
+
+    <dialog id="maintenance-identification-dialog" aria-labelledby="maintenance-identification-title">
+        <div class="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-5 py-3">
+            <h2 id="maintenance-identification-title" class="text-base font-semibold">Identificaci&oacute;n</h2>
+            <button type="button" data-close-identification autofocus aria-label="Cerrar ventana" title="Cerrar ventana"
+                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-300 text-slate-600 hover:bg-slate-100 focus:ring-2 focus:ring-blue-500">
+                <i data-identification-icon="x" class="h-4 w-4" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="identification-body space-y-4 p-5 text-sm">
+            <p data-identification-service class="font-semibold"></p>
+            <p data-identification-content class="whitespace-pre-wrap leading-6 text-slate-700"></p>
+        </div>
+    </dialog>
 
     @push('js')
         <script>

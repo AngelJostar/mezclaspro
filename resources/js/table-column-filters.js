@@ -62,6 +62,7 @@ function controlValue(control) {
 function cellValue(row, columnIndex) {
     const cell = row.cells[columnIndex];
     if (!cell) return '';
+    if (cell.hasAttribute('data-column-filter-value')) return normalize(cell.dataset.columnFilterValue);
 
     const controls = Array.from(cell.querySelectorAll('input:not([type="hidden"]), select, textarea'));
     if (controls.length > 0) {

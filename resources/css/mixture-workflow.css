@@ -1,0 +1,63 @@
+.mixture-workflow-heading {
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.mixture-confirmation-context {
+    padding: 12px 20px;
+    border-bottom: 1px solid #dbe4ec;
+    color: #172b4d;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.dispensing-patient { margin-bottom: 14px; }
+.dispensing-patient-section { margin-bottom: 6px; border: 1px solid #dbe7f1; border-radius: 4px; }
+.dispensing-patient-section h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 5px 10px;
+    color: #174c82;
+    background: #eff6fb;
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: 700;
+}
+.dispensing-patient-section h2 svg { width: 16px; height: 16px; flex: none; }
+.dispensing-patient-grid { display: grid; gap: 8px 12px; padding: 6px 10px 8px; }
+.dispensing-patient-grid.patient-data { grid-template-columns: 2.2fr 1.2fr 1fr 1.2fr .9fr; }
+.dispensing-patient-grid.hospital-care { grid-template-columns: 2.2fr 1fr 1fr 1.6fr; }
+.dispensing-patient-grid.clinical-data { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dispensing-patient-field { min-width: 0; }
+.dispensing-patient-field.is-wide { grid-column: 1 / -1; }
+.dispensing-patient-field label { display: block; margin-bottom: 3px; color: #334155; font-size: 11px; line-height: 1.4; }
+.dispensing-patient-field input, .dispensing-patient-field select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    padding: 4px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #172b4d;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.dispensing-patient-field select { padding-right: 30px; }
+.dispensing-patient-field input:focus, .dispensing-patient-field select:focus { outline: 2px solid #93c5fd; outline-offset: 1px; }
+@media (max-width: 760px) {
+    .dispensing-patient-grid.patient-data, .dispensing-patient-grid.hospital-care,
+    .dispensing-patient-grid.clinical-data { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dispensing-patient-grid.patient-data > :first-child,
+    .dispensing-patient-grid.hospital-care > :first-child,
+    .dispensing-patient-grid.hospital-care > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 400px) {
+    .dispensing-patient-grid.clinical-data { grid-template-columns: minmax(0, 1fr); }
+}

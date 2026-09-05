@@ -44,6 +44,60 @@ use Illuminate\Support\Facades\URL;
 
 class SolicitudController extends Controller
 {
+    private function redirectAfterSolicitudAction(Solicitud $solicitud, Request $request)
+    {
+        $returnTo = trim((string) $request->input('return_to', ''));
+        $safeReturnTo = '';
+
+        if ($returnTo !== '') {
+            if (
+                str_starts_with($returnTo, '/')
+                && ! str_starts_with($returnTo, '//')
+                && (str_starts_with($returnTo, '/admin/') || str_contains($returnTo, '/admin/'))
+            ) {
+                $safeReturnTo = $returnTo;
+            } else {
+                $urlParts = parse_url($returnTo) ?: [];
+                $path = (string) ($urlParts['path'] ?? '');
+                $allowedHosts = array_filter([
+                    $request->getHost(),
+                    parse_url((string) config('app.url'), PHP_URL_HOST),
+                ]);
+
+                if (
+                    isset($urlParts['host'])
+                    && in_array($urlParts['host'], $allowedHosts, true)
+                    && (str_starts_with($path, '/admin/') || str_contains($path, '/admin/'))
+                ) {
+                    $query = isset($urlParts['query']) ? '?' . $urlParts['query'] : '';
+                    $safeReturnTo = $path . $query;
+                }
+            }
+        }
+
+        if ($request->boolean('approval_popup')) {
+            $routeParams = [
+                'solicitud' => $solicitud->id,
+                'approval' => 1,
+                'approval_popup' => 1,
+            ];
+
+            if ($safeReturnTo !== '') {
+                $routeParams['return_to'] = $safeReturnTo;
+            }
+
+            return redirect()
+                ->route('admin.nutricionales.solicitudes.edit', $routeParams)
+                ->with('approval_popup_done', true)
+                ->with('approval_popup_return_to', $safeReturnTo ?: route('admin.solicitudes.index'));
+        }
+
+        if ($safeReturnTo !== '') {
+            return redirect()->to($safeReturnTo);
+        }
+
+        return redirect()->route('admin.nutricionales.solicitudes.index');
+    }
 
 
     /**
@@ -1089,7 +1143,7 @@ class SolicitudController extends Controller
         }
 
         $solicitud = Solicitud::with([
-            'user.hospital',
+            'user.hospital.instituciones',
             'solicitud_detail',
             'solicitud_patient',
             'input',
@@ -1304,6 +1358,24 @@ class SolicitudController extends Controller
             $estadoAnterior = $solicitud->estado ?? 'pendiente';
 
             $accion = $request->input('accion', 'actualizar');
+
+            if ($accion === 'rechazar') {
+                if (($solicitud->estado ?? 'pendiente') !== 'pendiente') {
+                    throw new \Exception('Solo una solicitud pendiente puede rechazarse.');
+                }
+
+                $solicitud->estado = 'no_aprobada';
+                $solicitud->save();
+
+                DB::commit();
+
+                return $this->redirectAfterSolicitudAction($solicitud, $request)
+                    ->with('swal', [
+                        'title' => 'Mezcla rechazada',
+                        'text' => 'La mezcla fue rechazada correctamente.',
+                        'icon' => 'success',
+                    ]);
+            }
 
             if ($accion === 'cancelar') {
                 if (in_array($solicitud->estado, ['aprobada', 'preparada', 'revisada'], true)) {
@@ -1721,7 +1793,7 @@ class SolicitudController extends Controller
 
             DB::commit();
 
-            return redirect()->route('admin.nutricionales.solicitudes.index');
+            return $this->redirectAfterSolicitudAction($solicitud, $request);
         } catch (\Exception $e) {
             DB::rollBack();
 

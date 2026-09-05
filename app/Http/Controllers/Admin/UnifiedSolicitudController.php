@@ -27,7 +27,7 @@ class UnifiedSolicitudController extends Controller
 
         if ($canViewNutrition) {
             $nutritionQuery = NutritionSolicitud::query()
-                ->with(['user.hospital', 'solicitud_detail', 'solicitud_patient']);
+                ->with(['user.hospital.instituciones', 'solicitud_detail', 'solicitud_patient']);
 
             if (in_array($role, ['Cliente', 'Institucion'], true)) {
                 $nutritionQuery->where('user_id', $user->id);
@@ -64,7 +64,7 @@ class UnifiedSolicitudController extends Controller
         if ($canViewOncology) {
             $oncologyQuery = SolicitudOnco::query()
                 ->with([
-                    'hospital',
+                    'hospital.instituciones',
                     'user',
                     'mezclas' => fn ($query) => $query
                         ->select('id', 'solicitud_id', 'lote', 'estado', 'remision', 'fecha_entrega')

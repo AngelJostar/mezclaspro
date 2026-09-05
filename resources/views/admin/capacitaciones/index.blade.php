@@ -14,7 +14,7 @@
                 'name' => 'Ana Torres',
                 'completedPrograms' => [],
                 'currentPrograms' => [
-                    ['id' => 'induccion', 'name' => 'Induccion y seguridad operativa', 'progress' => 75],
+                    ['id' => 'induccion', 'name' => 'Induccion y seguridad operativa', 'progress' => 75, 'startDate' => '01/08/2026'],
                 ],
                 'positions' => [
                     ['name' => 'Coordinadora administrativa', 'current' => true],
@@ -35,7 +35,7 @@
                 'name' => 'Carlos Hernandez',
                 'completedPrograms' => [],
                 'currentPrograms' => [
-                    ['id' => 'induccion', 'name' => 'Induccion y seguridad operativa', 'progress' => 40],
+                    ['id' => 'induccion', 'name' => 'Induccion y seguridad operativa', 'progress' => 40, 'startDate' => '12/08/2026'],
                 ],
                 'positions' => [
                     ['name' => 'Almacenista', 'current' => true],
@@ -75,7 +75,7 @@
                 'name' => 'Fernanda Ortiz',
                 'completedPrograms' => [],
                 'currentPrograms' => [
-                    ['id' => 'citotoxicos', 'name' => 'Manejo seguro de citotoxicos', 'progress' => 20],
+                    ['id' => 'citotoxicos', 'name' => 'Manejo seguro de citotoxicos', 'progress' => 20, 'startDate' => '14/08/2026'],
                 ],
                 'positions' => [
                     ['name' => 'Analista administrativa', 'current' => true],
@@ -92,7 +92,7 @@
                 'name' => 'Hector Ruiz',
                 'completedPrograms' => [],
                 'currentPrograms' => [
-                    ['id' => 'proveedores', 'name' => 'Validacion de proveedores', 'progress' => 90],
+                    ['id' => 'proveedores', 'name' => 'Validacion de proveedores', 'progress' => 90, 'startDate' => '05/08/2026'],
                 ],
                 'positions' => [
                     ['name' => 'Coordinador de calidad', 'current' => true],
@@ -108,6 +108,30 @@
                 'activity' => 'Hoy, 08:15',
                 'avatar' => 'sky',
             ],
+        ];
+
+        $learnerProfiles = collect($personnel)
+            ->filter(static fn (array $personRecord): bool => ! empty($personRecord['currentPrograms']))
+            ->map(function (array $personRecord, int $index): array {
+                $currentProgram = $personRecord['currentPrograms'][0];
+
+                return [
+                    'id' => 'preview-' . ($index + 1) . '-' . \Illuminate\Support\Str::slug($personRecord['name']),
+                    'name' => $personRecord['name'],
+                    'programId' => $currentProgram['id'],
+                    'programName' => $currentProgram['name'],
+                    'progress' => (int) $currentProgram['progress'],
+                ];
+            })
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+        $defaultLearnerProfile = $learnerProfiles[0] ?? [
+            'id' => 'default',
+            'name' => 'Alumno',
+            'programId' => 'induccion',
+            'programName' => 'Induccion y seguridad operativa',
+            'progress' => 30,
         ];
 
         $personnel = $isPersonnelPage ? ($persistedPersonnel ?? []) : $personnel;
@@ -156,10 +180,17 @@
         $visiblePersonnel = array_slice($personnel, $personnelOffset, $personnelPageSize);
         $personnelRangeStart = $personnelTotal === 0 ? 0 : $personnelOffset + 1;
         $personnelRangeEnd = min($personnelOffset + count($visiblePersonnel), $personnelTotal);
+        $assignmentPersonnel = $assignmentPersonnel ?? array_map(
+            static fn (array $personRecord, int $index): array => [
+                'id' => (string) ((($personRecord['user'] ?? null)?->id) ?? ('preview-' . $index)),
+                'name' => $personRecord['name'],
+            ],
+            $visiblePersonnel,
+            array_keys($visiblePersonnel)
+        );
 
         $programTabs = [
-            ['id' => 'projects', 'label' => 'Programas', 'icon' => 'fa-regular fa-folder', 'active' => true],
-            ['id' => 'modules', 'label' => 'Modulos', 'icon' => 'fa-solid fa-book-open'],
+            ['id' => 'modules', 'label' => 'Modulos', 'icon' => 'fa-solid fa-book-open', 'active' => true],
             ['id' => 'exams', 'label' => 'Examenes', 'icon' => 'fa-regular fa-clipboard'],
             ['id' => 'tasks', 'label' => 'Tareas', 'icon' => 'fa-solid fa-list-check'],
         ];
@@ -326,18 +357,116 @@
         ];
 
         $learnerTabs = [
-            ['label' => 'Inicio', 'icon' => 'fa-solid fa-house', 'active' => true],
-            ['label' => 'Mi capacitacion', 'icon' => 'fa-solid fa-play'],
-            ['label' => 'Tareas', 'icon' => 'fa-solid fa-list-check'],
-            ['label' => 'Resultados', 'icon' => 'fa-solid fa-chart-line'],
-            ['label' => 'Certificados', 'icon' => 'fa-solid fa-award'],
+            ['id' => 'home', 'label' => 'Inicio', 'icon' => 'fa-solid fa-house', 'active' => true],
+            ['id' => 'training', 'label' => 'Mi capacitacion', 'icon' => 'fa-solid fa-play'],
+            ['id' => 'tasks', 'label' => 'Tareas', 'icon' => 'fa-solid fa-list-check'],
+            ['id' => 'results', 'label' => 'Resultados', 'icon' => 'fa-solid fa-chart-line'],
+            ['id' => 'certificates', 'label' => 'Certificados', 'icon' => 'fa-solid fa-award'],
         ];
 
-        $routeSteps = [
-            ['title' => 'Bienvenida e induccion', 'meta' => '2 capitulos vistos', 'status' => 'Completado', 'progress' => 100],
-            ['title' => 'Seguridad operativa', 'meta' => 'Capitulo activo', 'status' => 'En curso', 'progress' => 50],
-            ['title' => 'Procesos esenciales', 'meta' => 'Examen pendiente', 'status' => 'Bloqueado', 'progress' => 0],
-            ['title' => 'Cierre y certificado', 'meta' => 'Se desbloquea al aprobar', 'status' => 'Bloqueado', 'progress' => 0],
+        $learnerTasks = [
+            ['id' => 1, 'title' => 'Lista de verificacion de induccion', 'module' => 'Modulo 1', 'moduleName' => 'Bienvenida e induccion', 'status' => 'approved'],
+            ['id' => 2, 'title' => 'Identificacion de riesgos en area esteril', 'module' => 'Modulo 2', 'moduleName' => 'Seguridad operativa', 'status' => 'locked', 'due' => '06 sep.'],
+            ['id' => 3, 'title' => 'Registro de proceso critico', 'module' => 'Modulo 3', 'moduleName' => 'Procesos esenciales', 'status' => 'locked'],
+            ['id' => 4, 'title' => 'Actividad integradora final', 'module' => 'Modulo 4', 'moduleName' => 'Cierre y certificado', 'status' => 'locked'],
+        ];
+
+        $learnerCurriculum = [
+            [
+                'number' => 1,
+                'title' => 'Bienvenida e induccion',
+                'taskId' => 1,
+                'examId' => 'induccion-bienvenida',
+                'minimum' => 80,
+                'chapters' => [
+                    [
+                        'title' => 'Introduccion al programa',
+                        'videos' => [
+                            ['id' => 'm1-c1-v1', 'title' => 'Bienvenida a PRODIFEM', 'duration' => '6 min', 'description' => 'Conoce el objetivo general y la estructura de la capacitacion.'],
+                            ['id' => 'm1-c1-v2', 'title' => 'Objetivos y alcance del programa', 'duration' => '7 min', 'description' => 'Identifica los resultados esperados y las responsabilidades del alumno.'],
+                        ],
+                    ],
+                    [
+                        'title' => 'Ruta de aprendizaje',
+                        'videos' => [
+                            ['id' => 'm1-c2-v1', 'title' => 'Reglas de avance y evaluacion', 'duration' => '8 min', 'description' => 'Revisa los criterios para concluir cada etapa y desbloquear la siguiente.'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'number' => 2,
+                'title' => 'Seguridad operativa',
+                'taskId' => 2,
+                'examId' => 'induccion-seguridad',
+                'minimum' => 80,
+                'chapters' => [
+                    [
+                        'title' => 'Prevencion y proteccion',
+                        'videos' => [
+                            ['id' => 'm2-c1-v1', 'title' => 'Equipo de proteccion personal', 'duration' => '9 min', 'description' => 'Verifica el uso y las condiciones correctas del equipo de proteccion.'],
+                            ['id' => 'm2-c1-v2', 'title' => 'Buenas practicas en area esteril', 'duration' => '12 min', 'description' => 'Reconoce los puntos criticos antes de ingresar y trabajar en el area.'],
+                        ],
+                    ],
+                    [
+                        'title' => 'Respuesta operativa',
+                        'videos' => [
+                            ['id' => 'm2-c2-v1', 'title' => 'Identificacion y reporte de incidentes', 'duration' => '11 min', 'description' => 'Aplica el procedimiento de respuesta ante una condicion insegura.'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'number' => 3,
+                'title' => 'Procesos esenciales',
+                'taskId' => 3,
+                'examId' => 'induccion-procesos',
+                'minimum' => 80,
+                'chapters' => [
+                    [
+                        'title' => 'Proceso y controles',
+                        'videos' => [
+                            ['id' => 'm3-c1-v1', 'title' => 'Secuencia critica de preparacion', 'duration' => '10 min', 'description' => 'Identifica el orden obligatorio de las actividades del proceso.'],
+                            ['id' => 'm3-c1-v2', 'title' => 'Registro de controles', 'duration' => '9 min', 'description' => 'Documenta controles, responsables y resultados de cada etapa.'],
+                        ],
+                    ],
+                    [
+                        'title' => 'Evidencias del proceso',
+                        'videos' => [
+                            ['id' => 'm3-c2-v1', 'title' => 'Integracion de evidencias', 'duration' => '10 min', 'description' => 'Reune la evidencia necesaria para demostrar el cumplimiento.'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'number' => 4,
+                'title' => 'Cierre y certificacion',
+                'taskId' => 4,
+                'examId' => 'induccion-certificacion',
+                'minimum' => 80,
+                'chapters' => [
+                    [
+                        'title' => 'Cierre del programa',
+                        'videos' => [
+                            ['id' => 'm4-c1-v1', 'title' => 'Revision final del recorrido', 'duration' => '9 min', 'description' => 'Confirma que todas las actividades y evidencias estan completas.'],
+                            ['id' => 'm4-c1-v2', 'title' => 'Integracion del expediente', 'duration' => '8 min', 'description' => 'Prepara el expediente que respalda la terminacion del programa.'],
+                        ],
+                    ],
+                    [
+                        'title' => 'Certificacion',
+                        'videos' => [
+                            ['id' => 'm4-c2-v1', 'title' => 'Evaluacion y emision del certificado', 'duration' => '9 min', 'description' => 'Conoce el proceso final de evaluacion y liberacion del certificado.'],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $learnerModules = [
+            ['number' => 1, 'title' => 'Bienvenida e induccion', 'status' => 'approved', 'chapters' => 2, 'tasks' => 1, 'score' => 88],
+            ['number' => 2, 'title' => 'Seguridad operativa', 'status' => 'current', 'progress' => 34],
+            ['number' => 3, 'title' => 'Procesos esenciales', 'status' => 'locked', 'requirement' => 'Debes aprobar el modulo 2 para desbloquear este contenido.'],
+            ['number' => 4, 'title' => 'Cierre y certificacion', 'status' => 'locked', 'requirement' => 'Debes aprobar el modulo 3 para desbloquear este contenido.'],
         ];
     @endphp
 
@@ -359,6 +488,61 @@
 
         <section data-role-panel="admin">
             @unless ($isStudentsPage)
+                <div class="training-program-carousel" data-program-carousel>
+                    <button type="button" class="training-program-carousel-arrow" data-program-carousel-previous
+                        title="Programas anteriores" aria-label="Mostrar programas anteriores">
+                        <span aria-hidden="true">&lsaquo;</span>
+                    </button>
+
+                    <div class="training-program-carousel-viewport" data-program-carousel-viewport
+                        role="region" aria-label="Programas de capacitacion" tabindex="0">
+                        <div class="training-program-carousel-track">
+                            <button type="button" class="training-program-new-tile" data-new-program>
+                                <span class="training-program-new-icon"><i class="fa-solid fa-plus"></i></span>
+                                <span>
+                                    <strong>Nuevo programa</strong>
+                                    <small>Crear programa</small>
+                                </span>
+                            </button>
+
+                            @foreach ($projects as $index => $project)
+                                <article class="training-program-carousel-card {{ $index === 0 ? 'is-active' : '' }}"
+                                    data-program-card data-program-id="{{ $project['id'] }}">
+                                    <button type="button" class="training-program-carousel-select"
+                                        data-program-carousel-item data-program-id="{{ $project['id'] }}"
+                                        aria-pressed="{{ $index === 0 ? 'true' : 'false' }}">
+                                        <span class="training-program-carousel-card-header">
+                                            <span class="training-program-carousel-icon"><i class="fa-regular fa-folder-open"></i></span>
+                                            <span class="training-program-status is-{{ $project['tone'] }}" data-program-status>{{ $project['status'] }}</span>
+                                        </span>
+                                        <strong data-program-title>{{ $project['title'] }}</strong>
+                                        <span class="training-program-carousel-description" data-program-description>{{ $project['description'] }}</span>
+                                        <span class="training-program-carousel-meta">
+                                            <span><small>Responsable</small><b data-program-owner>{{ $project['owner'] }}</b></span>
+                                            <span><small>Modulos</small><b>{{ $project['modules'] }}</b></span>
+                                        </span>
+                                    </button>
+                                    <button type="button" class="training-program-carousel-edit" data-edit-program
+                                        title="Editar programa" aria-label="Editar {{ $project['title'] }}">
+                                        <span class="training-program-edit-glyph" aria-hidden="true">&#9998;</span>
+                                    </button>
+                                </article>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <button type="button" class="training-program-carousel-arrow" data-program-carousel-next
+                        title="Programas siguientes" aria-label="Mostrar programas siguientes">
+                        <span aria-hidden="true">&rsaquo;</span>
+                    </button>
+                </div>
+
+                <select data-program-selector hidden aria-hidden="true" tabindex="-1">
+                    @foreach ($projects as $project)
+                        <option value="{{ $project['id'] }}">{{ $project['title'] }}</option>
+                    @endforeach
+                </select>
+
                 <nav class="training-tabs is-programs" aria-label="Secciones de programas">
                     @foreach ($programTabs as $tab)
                         <button type="button" data-program-tab="{{ $tab['id'] }}"
@@ -369,114 +553,58 @@
                     @endforeach
                 </nav>
 
-                <div class="training-program-context" data-program-context hidden>
-                    <label>
-                        <span>Programa de capacitacion</span>
-                        <span class="training-program-select-control">
-                            <select data-program-selector aria-label="Seleccionar programa de capacitacion">
-                                @foreach ($projects as $project)
-                                    <option value="{{ $project['id'] }}">{{ $project['title'] }}</option>
-                                @endforeach
-                            </select>
-                            <i class="fa-solid fa-chevron-down training-program-select-icon" aria-hidden="true"></i>
-                        </span>
-                    </label>
-                </div>
+                <dialog class="training-program-modal" data-program-modal aria-labelledby="training-program-modal-title">
+                    <form data-program-form>
+                        <header>
+                            <div>
+                                <span>Programa de capacitacion</span>
+                                <h3 id="training-program-modal-title" data-program-modal-title>Editar programa</h3>
+                            </div>
+                            <button type="button" class="training-modal-close" data-close-program-modal
+                                title="Cerrar" aria-label="Cerrar ventana de edicion">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </header>
 
-                <div data-program-panel="projects">
-                    <div class="training-section-heading">
-                        <div>
-                            <h2>Programas de capacitacion</h2>
-                            <p>Programas activos y en preparacion.</p>
+                        <div class="training-program-modal-body">
+                            <input type="hidden" name="program_id">
+
+                            <label class="is-wide">
+                                <span>Nombre del programa</span>
+                                <input name="title" required maxlength="150">
+                            </label>
+
+                            <label class="is-wide">
+                                <span>Descripcion</span>
+                                <textarea name="description" rows="4" maxlength="1000"></textarea>
+                            </label>
+
+                            <label>
+                                <span>Responsable</span>
+                                <input name="owner" required maxlength="100">
+                            </label>
+
+                            <label>
+                                <span>Estatus</span>
+                                <select name="status" required>
+                                    <option value="Activo">Activo</option>
+                                    <option value="Borrador">Borrador</option>
+                                    <option value="Inactivo">Inactivo</option>
+                                </select>
+                            </label>
                         </div>
 
-                        <button type="button" class="training-primary-button">
-                            <i class="fa-solid fa-plus"></i>
-                            <span>Nuevo programa</span>
-                        </button>
-                    </div>
+                        <footer>
+                            <button type="button" class="training-secondary-button" data-close-program-modal>Cancelar</button>
+                            <button type="submit" class="training-primary-button">
+                                <i class="fa-solid fa-check"></i>
+                                <span data-program-submit-label>Guardar cambios</span>
+                            </button>
+                        </footer>
+                    </form>
+                </dialog>
 
-                    <div class="training-project-grid">
-                        @foreach ($projects as $project)
-                            <article class="training-project-card" data-program-card data-program-id="{{ $project['id'] }}">
-                                <div class="training-project-card-header">
-                                    <span class="training-project-icon"><i class="fa-regular fa-folder-open"></i></span>
-                                    <span class="training-program-status is-{{ $project['tone'] }}" data-program-status>{{ $project['status'] }}</span>
-                                </div>
-                                <h3 data-program-title>{{ $project['title'] }}</h3>
-                                <p data-program-description>{{ $project['description'] }}</p>
-                                <dl>
-                                    <div><dt>Responsable</dt><dd data-program-owner>{{ $project['owner'] }}</dd></div>
-                                    <div><dt>Modulos</dt><dd>{{ $project['modules'] }}</dd></div>
-                                    <div><dt>Alumnos</dt><dd>{{ $project['students'] }}</dd></div>
-                                </dl>
-                                <div class="training-card-actions">
-                                    <button type="button" class="training-secondary-button">
-                                        <i class="fa-solid fa-folder-open"></i>
-                                        <span>Abrir programa</span>
-                                    </button>
-                                    <button type="button" class="training-edit-button" data-edit-program>
-                                        <i class="fa-solid fa-pen"></i>
-                                        <span>Editar programa</span>
-                                    </button>
-                                </div>
-                            </article>
-                        @endforeach
-                    </div>
-
-                    <dialog class="training-program-modal" data-program-modal aria-labelledby="training-program-modal-title">
-                        <form data-program-form>
-                            <header>
-                                <div>
-                                    <span>Programa de capacitacion</span>
-                                    <h3 id="training-program-modal-title">Editar programa</h3>
-                                </div>
-                                <button type="button" class="training-modal-close" data-close-program-modal
-                                    title="Cerrar" aria-label="Cerrar ventana de edicion">
-                                    <i class="fa-solid fa-xmark"></i>
-                                </button>
-                            </header>
-
-                            <div class="training-program-modal-body">
-                                <input type="hidden" name="program_id">
-
-                                <label class="is-wide">
-                                    <span>Nombre del programa</span>
-                                    <input name="title" required maxlength="150">
-                                </label>
-
-                                <label class="is-wide">
-                                    <span>Descripcion</span>
-                                    <textarea name="description" rows="4" maxlength="1000"></textarea>
-                                </label>
-
-                                <label>
-                                    <span>Responsable</span>
-                                    <input name="owner" required maxlength="100">
-                                </label>
-
-                                <label>
-                                    <span>Estatus</span>
-                                    <select name="status" required>
-                                        <option value="Activo">Activo</option>
-                                        <option value="Borrador">Borrador</option>
-                                        <option value="Inactivo">Inactivo</option>
-                                    </select>
-                                </label>
-                            </div>
-
-                            <footer>
-                                <button type="button" class="training-secondary-button" data-close-program-modal>Cancelar</button>
-                                <button type="submit" class="training-primary-button">
-                                    <i class="fa-solid fa-check"></i>
-                                    <span>Guardar cambios</span>
-                                </button>
-                            </footer>
-                        </form>
-                    </dialog>
-                </div>
-
-                <div data-program-panel="modules" hidden>
+                <div data-program-panel="modules">
                     <div class="training-section-heading">
                         <div>
                             <h2>Modulos y capitulos</h2>
@@ -594,10 +722,13 @@
                             </button>
                         </div>
 
+                        <div class="training-exam-save-feedback" data-exam-save-feedback role="status" aria-live="polite" hidden></div>
+
                         <div class="training-table training-program-table" role="region" aria-label="Examenes de programas" tabindex="0">
                             <table>
                                 <thead>
                                     <tr>
+                                        <th>Examen</th>
                                         <th>Modulo</th>
                                         <th>Preguntas</th>
                                         <th>Minimo</th>
@@ -609,26 +740,27 @@
                                 <tbody data-exam-table-body>
                                     @foreach ($exams as $exam)
                                         <tr data-program-row="{{ $exam['projectId'] }}" data-exam-id="{{ $exam['id'] }}">
+                                            <td data-exam-name>{{ $exam['name'] ?? ('Evaluacion de ' . strtolower($exam['module'])) }}</td>
                                             <td data-exam-module>{{ $exam['module'] }}</td>
                                             <td data-exam-question-count>{{ $exam['questions'] }}</td>
                                             <td data-exam-minimum>{{ $exam['minimum'] }}%</td>
                                             <td><span class="training-program-status is-{{ $exam['tone'] }}" data-exam-status>{{ $exam['status'] }}</span></td>
                                             <td>
                                                 <button type="button" class="training-icon-button" data-edit-exam="{{ $exam['id'] }}"
-                                                    title="Editar examen" aria-label="Editar examen de {{ $exam['module'] }}">
+                                                    title="Editar examen" aria-label="Editar {{ $exam['name'] ?? $exam['module'] }}">
                                                     <i class="fa-solid fa-pen"></i>
                                                 </button>
                                             </td>
                                             <td>
                                                 <button type="button" class="training-icon-button" data-view-exam="{{ $exam['id'] }}"
-                                                    title="Ver examen" aria-label="Ver examen de {{ $exam['module'] }}">
+                                                    title="Ver examen" aria-label="Ver {{ $exam['name'] ?? $exam['module'] }}">
                                                     <i class="fa-regular fa-eye"></i>
                                                 </button>
                                             </td>
                                         </tr>
                                     @endforeach
                                     <tr data-program-empty-row hidden>
-                                        <td colspan="6">Este programa aun no tiene examenes registrados.</td>
+                                        <td colspan="7">Este programa aun no tiene examenes registrados.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -848,20 +980,28 @@
             @else
 
             @if ($isAlumnosPage)
-                <nav class="training-student-view-switch" aria-label="Filtrar alumnos por avance de capacitacion">
-                    <a href="{{ route('admin.capacitaciones.alumnos', ['training_view' => 'in_progress']) }}"
-                        class="{{ $studentProgressView === 'in_progress' ? 'is-active' : '' }}"
-                        @if ($studentProgressView === 'in_progress') aria-current="page" @endif>
-                        <i class="fa-regular fa-clock" aria-hidden="true"></i>
-                        <span>En curso</span>
-                    </a>
-                    <a href="{{ route('admin.capacitaciones.alumnos', ['training_view' => 'completed']) }}"
-                        class="{{ $studentProgressView === 'completed' ? 'is-active' : '' }}"
-                        @if ($studentProgressView === 'completed') aria-current="page" @endif>
-                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-                        <span>Concluidos</span>
-                    </a>
-                </nav>
+                <div class="training-student-toolbar">
+                    <button type="button" class="training-primary-button training-new-assignment-button"
+                        data-open-new-training @disabled(empty($assignmentPersonnel))>
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                        <span>Nueva Capacitaci&oacute;n</span>
+                    </button>
+
+                    <nav class="training-student-view-switch" aria-label="Filtrar alumnos por avance de capacitacion">
+                        <a href="{{ route('admin.capacitaciones.alumnos', ['training_view' => 'in_progress']) }}"
+                            class="{{ $studentProgressView === 'in_progress' ? 'is-active' : '' }}"
+                            @if ($studentProgressView === 'in_progress') aria-current="page" @endif>
+                            <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                            <span>En curso</span>
+                        </a>
+                        <a href="{{ route('admin.capacitaciones.alumnos', ['training_view' => 'completed']) }}"
+                            class="{{ $studentProgressView === 'completed' ? 'is-active' : '' }}"
+                            @if ($studentProgressView === 'completed') aria-current="page" @endif>
+                            <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                            <span>Concluidos</span>
+                        </a>
+                    </nav>
+                </div>
             @endif
 
             @unless ($isPersonnelPage)
@@ -987,6 +1127,7 @@
                         @if ($isPersonnelPage)
                             <tr>
                                 <th rowspan="2">Personal</th>
+                                <th rowspan="2">Editar</th>
                                 <th rowspan="2">Puesto(s)</th>
                                 <th rowspan="2">Fecha de ingreso</th>
                                 <th rowspan="2">Programas concluidos</th>
@@ -1011,7 +1152,7 @@
                                 </th>
                                 <th rowspan="2">Central</th>
                                 <th rowspan="2">Roles</th>
-                                <th rowspan="2">Editar</th>
+                                <th rowspan="2">Editar accesos</th>
                                 <th rowspan="2">Bloqueo</th>
                             </tr>
                             <tr class="training-user-subheading">
@@ -1025,6 +1166,7 @@
                                 <th>Alumno</th>
                                 <th>Programas concluidos</th>
                                 <th>Programas en curso</th>
+                                <th>Fecha de inicio</th>
                                 <th>Departamento</th>
                                 <th>Estatus</th>
                                 <th>Ultima actividad</th>
@@ -1036,8 +1178,12 @@
                         @foreach ($visiblePersonnel as $person)
                             @php
                                 $personUser = $person['user'] ?? null;
+                                $credentials = $personUser && auth()->user()->can('usuarios')
+                                    ? \App\Support\PersonnelCredentialDisplay::forUser($personUser)
+                                    : null;
                             @endphp
-                            <tr data-student-row data-student-name="{{ $person['name'] }}">
+                            <tr data-student-row data-student-name="{{ $person['name'] }}"
+                                data-student-index="{{ $loop->index }}">
                                 <td>
                                     <div class="training-person">
                                         <span class="training-avatar is-{{ $person['avatar'] }}">{{ $person['initials'] }}</span>
@@ -1045,6 +1191,17 @@
                                     </div>
                                 </td>
                                 @if ($isPersonnelPage)
+                                    <td class="training-user-action-cell">
+                                        @if ($personUser && (auth()->user()->hasAnyRole(['Super Admin', 'Admin']) || auth()->user()->can('menu.capacitaciones.personal')))
+                                            <button type="button" class="training-user-edit-button"
+                                                data-personnel-edit-url="{{ route('admin.capacitaciones.personal.edit', $personUser) }}"
+                                                aria-label="Editar datos de {{ $person['name'] }}">
+                                                <span>Editar</span>
+                                            </button>
+                                        @else
+                                            <span class="training-empty-program">-</span>
+                                        @endif
+                                    </td>
                                     <td class="training-position-cell">
                                         <div class="training-position-list">
                                             @forelse ($person['positions'] as $position)
@@ -1086,6 +1243,19 @@
                                         <span class="training-empty-program" data-empty-current-program>Ninguno</span>
                                     @endforelse
                                 </td>
+                                @if ($isAlumnosPage)
+                                    <td class="training-start-date-cell" data-training-start-dates>
+                                        <div class="training-start-date-list">
+                                            @forelse ($person['currentPrograms'] as $program)
+                                                <span data-start-date-program-id="{{ $program['id'] }}">
+                                                    {{ $program['startDate'] ?? 'Sin fecha' }}
+                                                </span>
+                                            @empty
+                                                <span class="training-empty-program" data-empty-start-date>Sin fecha</span>
+                                            @endforelse
+                                        </div>
+                                    </td>
+                                @endif
                                 @if ($isPersonnelPage)
                                     @php
                                         $scoreCount = count($person['examScores']);
@@ -1148,7 +1318,10 @@
                                     <td class="training-user-access-cell is-software">
                                         @if ($personUser)
                                             @can('usuarios')
-                                                <x-inline-user-credential-editor :user="$personUser" field="password" compact />
+                                                <x-inline-user-credential-editor :user="$personUser" field="password" compact
+                                                    :display-value="$credentials['software']['value']"
+                                                    :empty-label="$credentials['software']['empty_label']"
+                                                    :empty-hint="$credentials['software']['empty_hint']" />
                                             @else
                                                 <span class="training-restricted-value">Restringido</span>
                                             @endcan
@@ -1170,7 +1343,10 @@
                                     <td class="training-user-access-cell is-training">
                                         @if ($personUser)
                                             @can('usuarios')
-                                                <x-inline-user-credential-editor :user="$personUser" field="training_password" compact />
+                                                <x-inline-user-credential-editor :user="$personUser" field="training_password" compact
+                                                    :display-value="$credentials['training']['value']"
+                                                    :empty-label="$credentials['training']['empty_label']"
+                                                    :empty-hint="$credentials['training']['empty_hint']" />
                                             @else
                                                 <span class="training-restricted-value">Restringido</span>
                                             @endcan
@@ -1222,7 +1398,7 @@
                         @endforeach
                         @if ($visiblePersonnel === [])
                             <tr>
-                                <td colspan="{{ $isPersonnelPage ? 19 : 7 }}" class="training-table-empty">
+                                <td colspan="{{ $isPersonnelPage ? 20 : ($isAlumnosPage ? 8 : 7) }}" class="training-table-empty">
                                     @if ($isPersonnelPage)
                                         No hay personal registrado.
                                     @else
@@ -1261,6 +1437,7 @@
 
             @if ($isPersonnelPage)
                 @include('admin.capacitaciones.partials.personnel-create-modal')
+                @include('admin.capacitaciones.partials.personnel-edit-modal')
                 @include('admin.capacitaciones.partials.personnel-user-management')
             @endif
 
@@ -1271,7 +1448,7 @@
                         <div>
                             <span>Nueva capacitacion</span>
                             <h3 id="training-assignment-title">Seleccionar programa o modulos</h3>
-                            <p>Alumno: <strong data-assignment-student></strong></p>
+                            <p data-assignment-student-summary>Alumno: <strong data-assignment-student></strong></p>
                         </div>
                         <button type="button" class="training-modal-close" data-close-training-assignment
                             title="Cerrar" aria-label="Cerrar seleccion de capacitacion">
@@ -1280,6 +1457,26 @@
                     </header>
 
                     <div class="training-assignment-body">
+                        <label class="training-assignment-student-picker" data-assignment-student-picker hidden>
+                            <span>Alumno <b>*</b></span>
+                            <span class="training-assignment-student-control">
+                                <select data-assignment-student-select aria-label="Seleccionar alumno para la capacitacion">
+                                    <option value="">Selecciona un alumno</option>
+                                    @foreach ($assignmentPersonnel as $person)
+                                        <option value="{{ $person['id'] }}" data-student-name="{{ $person['name'] }}">
+                                            {{ $person['name'] }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                            </span>
+                        </label>
+
+                        <label class="training-assignment-start-date">
+                            <span>Fecha de inicio <b>*</b></span>
+                            <input type="date" required data-assignment-start-date>
+                        </label>
+
                         <label class="training-assignment-select-all">
                             <input type="checkbox" data-assignment-select-all>
                             <span>
@@ -1339,93 +1536,505 @@
         </section>
 
         <section data-role-panel="learner" hidden>
-            <nav class="training-tabs" aria-label="Secciones de usuario">
+            @if ($isAlumnosPage)
+                <div class="training-learner-access">
+                    <label>
+                        <span>Seleccionar usuario en capacitaci&oacute;n</span>
+                        <span class="training-learner-select-control">
+                            <select data-learner-selector aria-label="Seleccionar usuario en capacitacion">
+                                @foreach ($learnerProfiles as $learnerProfile)
+                                    <option value="{{ $learnerProfile['id'] }}"
+                                        data-learner-name="{{ $learnerProfile['name'] }}"
+                                        data-program-id="{{ $learnerProfile['programId'] }}"
+                                        data-program-name="{{ $learnerProfile['programName'] }}"
+                                        data-progress="{{ $learnerProfile['progress'] }}">
+                                        {{ $learnerProfile['name'] }} - {{ $learnerProfile['programName'] }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                        </span>
+                    </label>
+
+                    <button type="button" class="training-primary-button" data-open-learner-panel
+                        @disabled(empty($learnerProfiles))>
+                        <i class="fa-solid fa-user" aria-hidden="true"></i>
+                        <span>Abrir panel</span>
+                    </button>
+                </div>
+            @endif
+
+            <nav class="training-tabs training-learner-tabs" aria-label="Secciones de usuario" role="tablist">
                 @foreach ($learnerTabs as $tab)
-                    <button type="button" class="{{ ! empty($tab['active']) ? 'is-active' : '' }}">
-                        <i class="{{ $tab['icon'] }}"></i>
+                    <button type="button" id="learner-tab-{{ $tab['id'] }}"
+                        data-learner-tab="{{ $tab['id'] }}" role="tab"
+                        aria-controls="learner-panel-{{ $tab['id'] }}"
+                        aria-selected="{{ ! empty($tab['active']) ? 'true' : 'false' }}"
+                        tabindex="{{ ! empty($tab['active']) ? '0' : '-1' }}"
+                        class="{{ ! empty($tab['active']) ? 'is-active' : '' }}">
+                        <i class="{{ $tab['icon'] }}" aria-hidden="true"></i>
                         <span>{{ $tab['label'] }}</span>
                     </button>
                 @endforeach
             </nav>
 
-            <div class="training-learner-hero">
-                <div>
-                    <span>Panel del participante</span>
-                    <h2>Buenos dias, Mariana</h2>
-                    <p>Continua la ruta de Induccion y seguridad operativa.</p>
+            <div class="training-obligation-flow" aria-label="Flujo obligatorio de capacitacion">
+                <div class="training-obligation-stage is-active" data-obligation-stage="content">
+                    <span><i class="fa-solid fa-book-open" aria-hidden="true"></i></span>
+                    <strong>Contenido</strong>
+                    <small>Videos por capitulo</small>
+                </div>
+                <i class="fa-solid fa-arrow-right training-obligation-arrow" aria-hidden="true"></i>
+                <div class="training-obligation-stage" data-obligation-stage="task">
+                    <span><i class="fa-regular fa-clipboard" aria-hidden="true"></i></span>
+                    <strong>Tarea</strong>
+                    <small>Entrega obligatoria</small>
+                </div>
+                <i class="fa-solid fa-arrow-right training-obligation-arrow" aria-hidden="true"></i>
+                <div class="training-obligation-stage" data-obligation-stage="exam">
+                    <span><i class="fa-regular fa-file-lines" aria-hidden="true"></i></span>
+                    <strong>Examen</strong>
+                    <small>Calificacion minima 80%</small>
+                </div>
+                <i class="fa-solid fa-arrow-right training-obligation-arrow" aria-hidden="true"></i>
+                <div class="training-obligation-stage" data-obligation-stage="next">
+                    <span><i class="fa-solid fa-lock" aria-hidden="true"></i></span>
+                    <strong>Siguiente modulo</strong>
+                    <small>Se habilita al aprobar</small>
+                </div>
+            </div>
+
+            <div id="learner-panel-home" class="training-learner-view" data-learner-panel="home"
+                role="tabpanel" aria-labelledby="learner-tab-home">
+                <div class="training-learner-hero">
+                    <div>
+                        <span data-next-obligation-eyebrow>Siguiente obligacion</span>
+                        <h2>Buenos dias, <span data-active-learner-name>{{ $learnerProfiles[0]['name'] ?? 'Alumno' }}</span></h2>
+                        <p data-next-obligation-summary>Continua con el siguiente video de Seguridad operativa.</p>
+                    </div>
+
+                    <button type="button" class="training-primary-button" data-next-obligation-action>
+                        <i class="fa-solid fa-play" aria-hidden="true"></i>
+                        <span data-next-obligation-label>Continuar video</span>
+                    </button>
                 </div>
 
-                <button type="button" class="training-primary-button">
-                    <i class="fa-solid fa-play"></i>
-                    <span>Continuar capacitacion</span>
-                </button>
+                <div class="training-learner-metrics">
+                    <article>
+                        <span>Progreso general</span>
+                        <strong data-overall-progress>33%</strong>
+                        <div class="training-progress-track" aria-label="Progreso general">
+                            <span style="width: 33%" data-overall-progress-fill></span>
+                        </div>
+                    </article>
+                    <article>
+                        <span>Modulos aprobados</span>
+                        <strong data-approved-module-count>1/4</strong>
+                    </article>
+                    <article>
+                        <span>Tareas abiertas</span>
+                        <strong data-learner-open-task-count>1</strong>
+                    </article>
+                    <article>
+                        <span>Ultima calificacion</span>
+                        <strong data-latest-exam-score>88%</strong>
+                    </article>
+                </div>
+
+                <div class="training-learner-grid is-outline-only">
+                    <aside class="training-route-panel">
+                        <div class="training-route-heading">
+                            <span>Contenido del modulo</span>
+                            <strong>Avance obligatorio</strong>
+                        </div>
+                        <div class="training-content-outline" data-content-outline></div>
+                    </aside>
+                </div>
             </div>
 
-            <div class="training-learner-metrics">
-                <article>
-                    <span>Progreso general</span>
-                    <strong>50%</strong>
-                    <div class="training-progress-track">
-                        <span style="width: 50%"></span>
-                    </div>
-                </article>
-                <article>
-                    <span>Modulos aprobados</span>
-                    <strong>1/4</strong>
-                </article>
-                <article>
-                    <span>Tareas abiertas</span>
-                    <strong>3</strong>
-                </article>
-                <article>
-                    <span>Ultima calificacion</span>
-                    <strong>88%</strong>
-                </article>
-            </div>
-
-            <div class="training-learner-grid">
-                <article class="training-video-panel">
-                    <div class="training-video-heading">
+            <div id="learner-panel-training" class="training-learner-view" data-learner-panel="training"
+                role="tabpanel" aria-labelledby="learner-tab-training" hidden>
+                <section class="training-learner-section">
+                    <header class="training-learner-section-heading">
                         <div>
-                            <span>Modulo 2</span>
-                            <h3>Seguridad operativa</h3>
+                            <h2>Mi capacitaci&oacute;n</h2>
+                            <p>Ruta obligatoria: completa cada m&oacute;dulo para desbloquear el siguiente.</p>
                         </div>
-                        <b>50% del modulo</b>
-                    </div>
+                    </header>
 
-                    <div class="training-video-frame" aria-label="Video de capacitacion">
-                        <i class="fa-solid fa-play"></i>
-                        <strong>Video de capacitacion</strong>
-                    </div>
-
-                    <div class="training-chapter-detail">
-                        <div>
-                            <span>Capitulo 1 de 2</span>
-                            <h4>Buenas practicas en area esteril</h4>
-                            <p>Revisa los puntos criticos antes de avanzar al examen del modulo.</p>
-                        </div>
-                        <button type="button" class="training-primary-button">Marcar capitulo y continuar</button>
-                    </div>
-                </article>
-
-                <aside class="training-route-panel">
-                    <div class="training-route-heading">
-                        <span>Ruta de capacitacion</span>
-                        <strong>Avanza por capitulos</strong>
-                    </div>
-
-                    @foreach ($routeSteps as $index => $step)
-                        <button type="button" class="training-route-step {{ $step['progress'] === 100 ? 'is-done' : ($step['progress'] > 0 ? 'is-current' : '') }}">
-                            <span>{{ $index + 1 }}</span>
-                            <div>
-                                <strong>{{ $step['title'] }}</strong>
-                                <small>{{ $step['meta'] }}</small>
+                    <div class="training-learning-path" aria-label="Avance por modulos">
+                        @foreach ($learnerModules as $module)
+                            <div class="training-learning-path-step is-{{ $module['status'] }}"
+                                data-learning-path-step="{{ $module['number'] }}">
+                                <span>{{ $module['number'] }}</span>
+                                <strong>{{ $module['status'] === 'approved' ? 'Aprobado' : ($module['status'] === 'current' ? 'En curso' : 'Bloqueado') }}</strong>
                             </div>
-                            <em>{{ $step['status'] }}</em>
-                        </button>
-                    @endforeach
-                </aside>
+                        @endforeach
+                    </div>
+
+                    <div class="training-module-route" data-learner-module-route>
+                        @foreach ($learnerModules as $module)
+                            <article class="training-learner-module is-{{ $module['status'] }}"
+                                data-learner-module="{{ $module['number'] }}" data-module-status="{{ $module['status'] }}">
+                                <div class="training-learner-module-marker">
+                                    @if ($module['status'] === 'approved')
+                                        <i class="fa-solid fa-check" aria-hidden="true"></i>
+                                    @elseif ($module['status'] === 'locked')
+                                        <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                                    @else
+                                        <span>{{ $module['number'] }}</span>
+                                    @endif
+                                </div>
+
+                                <div class="training-learner-module-content">
+                                    <h3>Modulo {{ $module['number'] }} &middot; {{ $module['title'] }}</h3>
+
+                                    <div data-module-detail>
+                                        @if ($module['status'] === 'approved')
+                                            <div class="training-module-meta">
+                                                <span><i class="fa-regular fa-book-open" aria-hidden="true"></i> {{ $module['chapters'] }} capitulos</span>
+                                                <span><i class="fa-regular fa-clipboard" aria-hidden="true"></i> {{ $module['tasks'] }} tarea</span>
+                                                <span><i class="fa-regular fa-chart-pie" aria-hidden="true"></i> Examen <strong>{{ $module['score'] }}%</strong></span>
+                                            </div>
+                                        @elseif ($module['status'] === 'current')
+                                            <div class="training-module-progress">
+                                                <strong>{{ $module['progress'] }}%</strong>
+                                                <div class="training-progress-track" aria-label="Progreso del modulo: {{ $module['progress'] }}%">
+                                                    <span style="width: {{ $module['progress'] }}%"></span>
+                                                </div>
+                                            </div>
+                                        @else
+                                            <p><strong>Bloqueado</strong> &middot; {{ $module['requirement'] }}</p>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div class="training-learner-module-actions">
+                                    @if ($module['status'] === 'approved')
+                                        <span class="training-state-pill is-approved"><i class="fa-solid fa-check" aria-hidden="true"></i> Aprobado</span>
+                                        <button type="button" class="training-secondary-button" data-learner-go-to="home">Consultar</button>
+                                    @elseif ($module['status'] === 'current')
+                                        <span class="training-state-pill is-current">En curso</span>
+                                        <button type="button" class="training-primary-button" data-learner-go-to="home">Continuar modulo</button>
+                                    @else
+                                        <span class="training-state-pill is-locked">Bloqueado</span>
+                                    @endif
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+
+                    <div class="training-information-note">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                        <p><strong>Importante:</strong> una vez aprobado un modulo, su contenido queda disponible en modo de consulta.</p>
+                    </div>
+                </section>
             </div>
+
+            <div id="learner-panel-tasks" class="training-learner-view" data-learner-panel="tasks"
+                role="tabpanel" aria-labelledby="learner-tab-tasks" hidden>
+                <section class="training-learner-section">
+                    <header class="training-learner-section-heading">
+                        <div>
+                            <h2>Mis tareas</h2>
+                            <p>Las tareas aparecen conforme avanzas en los modulos.</p>
+                        </div>
+                    </header>
+
+                    <div class="training-active-task-summary">
+                        <span><i aria-hidden="true"></i> <b data-active-task-summary>1 tarea activa</b></span>
+                    </div>
+
+                    <div class="training-task-filters" role="group" aria-label="Filtrar tareas por estado">
+                        <button type="button" class="is-active" data-task-filter="all">Todas</button>
+                        <button type="button" data-task-filter="pending">Pendientes</button>
+                        <button type="button" data-task-filter="review">En revision</button>
+                        <button type="button" data-task-filter="corrections">Correcciones</button>
+                        <button type="button" data-task-filter="approved">Aprobadas</button>
+                    </div>
+
+                    <div class="training-task-table-wrap">
+                        <table class="training-task-table">
+                            <thead>
+                                <tr>
+                                    <th>Tarea</th>
+                                    <th>Modulo</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($learnerTasks as $task)
+                                    <tr class="is-{{ $task['status'] }}" data-learner-task="{{ $task['id'] }}"
+                                        data-task-status="{{ $task['status'] }}" data-task-title="{{ $task['title'] }}"
+                                        data-task-module="{{ $task['module'] }} - {{ $task['moduleName'] }}">
+                                        <td>
+                                            <div class="training-task-name">
+                                                <span>{{ $task['id'] }}</span>
+                                                <strong>{{ $task['title'] }}</strong>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span>{{ $task['module'] }}</span>
+                                            <strong>{{ $task['moduleName'] }}</strong>
+                                        </td>
+                                        <td data-task-status-cell>
+                                            @if ($task['status'] === 'approved')
+                                                <span class="training-state-pill is-approved"><i class="fa-regular fa-circle-check" aria-hidden="true"></i> Aprobada</span>
+                                            @elseif ($task['status'] === 'pending')
+                                                <span class="training-state-pill is-pending"><i class="fa-regular fa-clock" aria-hidden="true"></i> Vence {{ $task['due'] }}</span>
+                                            @else
+                                                <span class="training-state-pill is-locked"><i class="fa-solid fa-lock" aria-hidden="true"></i> Bloqueada</span>
+                                            @endif
+                                        </td>
+                                        <td data-task-action-cell>
+                                            @if ($task['status'] === 'approved')
+                                                <button type="button" class="training-secondary-button" data-view-task>Ver entrega</button>
+                                            @elseif ($task['status'] === 'pending')
+                                                <button type="button" class="training-primary-button" data-open-task>Realizar tarea</button>
+                                            @else
+                                                <button type="button" class="training-secondary-button" disabled>No disponible</button>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                                <tr data-task-empty-row hidden>
+                                    <td colspan="4">No hay tareas en este estado.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="training-information-note">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                        <p><strong>Ten en cuenta:</strong> las tareas de modulos futuros se desbloquean conforme progresas.</p>
+                    </div>
+                </section>
+            </div>
+
+            <div id="learner-panel-results" class="training-learner-view" data-learner-panel="results"
+                role="tabpanel" aria-labelledby="learner-tab-results" hidden>
+                <section class="training-results-section">
+                    <header class="training-learner-section-heading">
+                        <div>
+                            <h2>Resultados</h2>
+                            <p>Consulta tus calificaciones y el avance desbloqueado.</p>
+                        </div>
+                    </header>
+
+                    <article class="training-result-hero" data-result-hero>
+                        <div class="training-score-ring" style="--score: 88" data-result-ring>
+                            <strong data-result-score>88%</strong>
+                        </div>
+                        <div class="training-result-summary">
+                            <span class="training-state-pill is-approved" data-result-status><i class="fa-solid fa-check" aria-hidden="true"></i> Modulo aprobado</span>
+                            <h3 data-result-module>Bienvenida e induccion</h3>
+                            <p data-result-message-primary>Superaste el minimo aprobatorio de 80%.</p>
+                            <p data-result-message-secondary>El modulo 2 ya esta disponible.</p>
+                        </div>
+                        <div class="training-result-actions">
+                            <button type="button" class="training-primary-button" data-result-primary-action>Continuar modulo 2</button>
+                            <button type="button" class="training-secondary-button" data-review-results>Revisar respuestas</button>
+                        </div>
+                    </article>
+
+                    <div class="training-result-grid">
+                        <article class="training-result-card">
+                            <h3>Desglose de evaluacion</h3>
+                            <div class="training-score-breakdown">
+                                <div><span>Comprension</span><div class="training-progress-track"><span style="width: 88%" data-result-breakdown-fill></span></div><strong data-result-breakdown-score>88%</strong></div>
+                                <div><span>Aplicacion</span><div class="training-progress-track"><span style="width: 88%" data-result-breakdown-fill></span></div><strong data-result-breakdown-score>88%</strong></div>
+                                <div><span>Criterios</span><div class="training-progress-track"><span style="width: 88%" data-result-breakdown-fill></span></div><strong data-result-breakdown-score>88%</strong></div>
+                            </div>
+                            <div class="training-result-metrics">
+                                <div><i class="fa-regular fa-clipboard" aria-hidden="true"></i><span>Intento<strong data-result-attempt>1</strong></span></div>
+                                <div><i class="fa-regular fa-clock" aria-hidden="true"></i><span>Estado<strong data-result-pass-state>Aprobado</strong></span></div>
+                                <div><i class="fa-regular fa-circle-check" aria-hidden="true"></i><span>Correctas<strong data-result-correct-answers>3/3</strong></span></div>
+                            </div>
+                        </article>
+
+                        <article class="training-result-card">
+                            <h3>Historial por modulo</h3>
+                            <div class="training-result-history" data-result-history></div>
+                        </article>
+                    </div>
+                </section>
+            </div>
+
+            <div id="learner-panel-certificates" class="training-learner-view" data-learner-panel="certificates"
+                role="tabpanel" aria-labelledby="learner-tab-certificates" hidden>
+                <section class="training-learner-section">
+                    <header class="training-learner-section-heading">
+                        <div>
+                            <h2>Certificados</h2>
+                            <p>Consulta la disponibilidad de tus constancias de capacitacion.</p>
+                        </div>
+                    </header>
+
+                    <article class="training-certificate-card" data-certificate-card>
+                        <div class="training-certificate-icon"><i class="fa-solid fa-award" aria-hidden="true"></i></div>
+                        <div class="training-certificate-content">
+                            <span>Programa obligatorio</span>
+                            <h3>Induccion y seguridad operativa</h3>
+                            <p data-certificate-message>Completa los cuatro modulos y la evaluacion final para emitir el certificado.</p>
+                            <div class="training-certificate-progress">
+                                <div class="training-progress-track" aria-label="Progreso del certificado: 25%" data-certificate-progress-track><span style="width: 25%" data-certificate-progress-fill></span></div>
+                                <strong data-certificate-progress-label>1 de 4 modulos</strong>
+                            </div>
+                        </div>
+                        <div class="training-certificate-actions">
+                            <span class="training-state-pill is-locked" data-certificate-status><i class="fa-solid fa-lock" aria-hidden="true"></i> Pendiente</span>
+                            <button type="button" class="training-secondary-button" data-certificate-action>Ver requisitos</button>
+                        </div>
+                    </article>
+
+                    <div class="training-information-note">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                        <p>El certificado se habilitara automaticamente cuando completes y apruebes todo el programa.</p>
+                    </div>
+                </section>
+            </div>
+
+            <dialog class="training-learner-dialog training-video-dialog" data-learner-video-dialog
+                aria-labelledby="learner-video-dialog-title">
+                <div class="training-learner-dialog-shell">
+                    <header>
+                        <div>
+                            <span data-current-module-label>Modulo 2</span>
+                            <h3 id="learner-video-dialog-title" data-current-module-title>Seguridad operativa</h3>
+                            <p><span data-current-chapter-label>Capitulo 1 de 2</span> &middot; <b data-current-module-progress>33% del modulo</b></p>
+                        </div>
+                        <button type="button" class="training-icon-button" data-close-learner-video
+                            title="Cerrar video" aria-label="Cerrar video">
+                            <span class="training-close-glyph" aria-hidden="true">&times;</span>
+                        </button>
+                    </header>
+
+                    <article class="training-video-panel" data-current-content-panel>
+                        <button type="button" class="training-video-frame" aria-label="Reproducir video de capacitacion"
+                            data-training-video-play>
+                            <i class="fa-solid fa-play" aria-hidden="true"></i>
+                            <strong data-current-video-title>Buenas practicas en area esteril</strong>
+                            <span data-video-playback-status>Listo para reproducir</span>
+                            <span class="training-video-playback-track" aria-hidden="true">
+                                <span data-video-playback-fill></span>
+                            </span>
+                        </button>
+
+                        <div class="training-chapter-detail">
+                            <div>
+                                <span>Video de capacitacion</span>
+                                <h4 data-current-chapter-title>Prevencion y proteccion</h4>
+                                <p data-current-video-description>Reconoce los puntos criticos antes de ingresar y trabajar en el area.</p>
+                            </div>
+                            <button type="button" class="training-primary-button" data-complete-training-video disabled>
+                                Finalizar video y continuar
+                            </button>
+                        </div>
+                    </article>
+                </div>
+            </dialog>
+
+            <dialog class="training-learner-dialog" data-task-dialog aria-labelledby="learner-task-dialog-title">
+                <div class="training-learner-dialog-shell">
+                    <header>
+                        <div>
+                            <span data-task-dialog-eyebrow>Tarea del modulo</span>
+                            <h3 id="learner-task-dialog-title" data-task-dialog-title>Realizar tarea</h3>
+                            <p data-task-dialog-module></p>
+                        </div>
+                        <button type="button" class="training-icon-button" data-close-task-dialog aria-label="Cerrar tarea">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </header>
+
+                    <form data-task-submission-form>
+                        <input type="hidden" name="task_id" data-task-dialog-id>
+                        <div class="training-task-instructions">
+                            <i class="fa-regular fa-clipboard" aria-hidden="true"></i>
+                            <p>Describe los riesgos identificados y las medidas preventivas que aplicarias en el area esteril.</p>
+                        </div>
+                        <label>
+                            <span>Respuesta <b>*</b></span>
+                            <textarea name="response" rows="6" required data-task-response placeholder="Escribe aqui tu respuesta..."></textarea>
+                        </label>
+                        <label class="training-task-file-field">
+                            <span>Evidencia adjunta</span>
+                            <input type="file" name="evidence" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" data-task-evidence>
+                            <small>PDF, Word o imagen. Maximo 10 MB.</small>
+                        </label>
+                        <footer>
+                            <button type="button" class="training-secondary-button" data-close-task-dialog>Cancelar</button>
+                            <button type="submit" class="training-primary-button"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Enviar tarea</button>
+                        </footer>
+                    </form>
+
+                    <div class="training-task-submission-view" data-task-submission-view hidden>
+                        <div>
+                            <span>Respuesta enviada</span>
+                            <p data-task-submitted-response></p>
+                        </div>
+                        <div>
+                            <span>Evidencia</span>
+                            <p data-task-submitted-file>Sin archivo adjunto</p>
+                        </div>
+                        <footer>
+                            <button type="button" class="training-primary-button" data-close-task-dialog>Cerrar</button>
+                        </footer>
+                    </div>
+                </div>
+            </dialog>
+
+            <dialog class="training-learner-dialog training-exam-dialog" data-learner-exam-dialog
+                aria-labelledby="learner-exam-dialog-title">
+                <div class="training-learner-dialog-shell">
+                    <header>
+                        <div>
+                            <span>Evaluacion obligatoria</span>
+                            <h3 id="learner-exam-dialog-title" data-learner-exam-title>Examen del modulo</h3>
+                            <p><span data-learner-exam-module></span> &middot; Minimo aprobatorio <strong data-learner-exam-minimum>80%</strong></p>
+                        </div>
+                        <button type="button" class="training-icon-button" data-close-learner-exam aria-label="Cerrar examen">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </header>
+
+                    <form data-learner-exam-form>
+                        <div class="training-exam-intro">
+                            <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                            <p>Responde todas las preguntas. Debes alcanzar el minimo indicado para habilitar el siguiente modulo.</p>
+                        </div>
+                        <div class="training-learner-exam-questions" data-learner-exam-questions></div>
+                        <p class="training-exam-validation" data-learner-exam-validation hidden>Responde todas las preguntas antes de continuar.</p>
+                        <footer>
+                            <button type="button" class="training-secondary-button" data-close-learner-exam>Cancelar</button>
+                            <button type="submit" class="training-primary-button">
+                                <i class="fa-solid fa-check" aria-hidden="true"></i>
+                                Calificar examen
+                            </button>
+                        </footer>
+                    </form>
+                </div>
+            </dialog>
+
+            <dialog class="training-learner-dialog" data-result-review-dialog aria-labelledby="result-review-title">
+                <div class="training-learner-dialog-shell">
+                    <header>
+                        <div>
+                            <span data-review-result-eyebrow>Resultado del modulo</span>
+                            <h3 id="result-review-title">Revision de respuestas</h3>
+                            <p data-review-result-summary></p>
+                        </div>
+                        <button type="button" class="training-icon-button" data-close-result-review aria-label="Cerrar revision">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </header>
+                    <div class="training-answer-review-list" data-review-result-list></div>
+                    <footer>
+                        <button type="button" class="training-primary-button" data-close-result-review>Cerrar revision</button>
+                    </footer>
+                </div>
+            </dialog>
         </section>
     </div>
 
@@ -1558,8 +2167,232 @@
                 background: #fbfdff;
             }
 
+            .training-tabs button:focus,
+            .training-task-filters button:focus {
+                outline: 0;
+            }
+
+            .training-tabs button:focus-visible,
+            .training-task-filters button:focus-visible,
+            .training-program-carousel-arrow:focus-visible,
+            .training-program-new-tile:focus-visible,
+            .training-program-carousel-select:focus-visible,
+            .training-program-carousel-edit:focus-visible {
+                outline: 2px solid rgba(29, 112, 216, 0.42);
+                outline-offset: -3px;
+            }
+
             .training-tabs.is-programs {
-                grid-template-columns: repeat(4, minmax(0, 1fr));
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .training-program-carousel {
+                display: flex;
+                align-items: center;
+                gap: 0.65rem;
+                margin: 1rem 0 0.9rem;
+            }
+
+            .training-program-carousel-viewport {
+                min-width: 0;
+                flex: 1;
+                overflow-x: auto;
+                padding: 0.15rem 0 0.4rem;
+                scroll-behavior: smooth;
+                scroll-snap-type: x proximity;
+                scrollbar-color: #aebed2 transparent;
+                scrollbar-width: thin;
+            }
+
+            .training-program-carousel-track {
+                display: flex;
+                width: max-content;
+                min-width: 100%;
+                gap: 0.7rem;
+            }
+
+            .training-program-carousel-arrow {
+                display: grid;
+                width: 2.35rem;
+                height: 2.35rem;
+                flex: 0 0 2.35rem;
+                place-items: center;
+                border: 1px solid #c8d7e8;
+                border-radius: 999px;
+                color: #174c97;
+                background: #ffffff;
+                cursor: pointer;
+                box-shadow: 0 6px 14px rgba(16, 42, 67, 0.08);
+                font-size: 1.35rem;
+                line-height: 1;
+            }
+
+            .training-program-carousel-arrow:hover:not(:disabled) {
+                border-color: #73a9ed;
+                background: #eef6ff;
+            }
+
+            .training-program-carousel-arrow:disabled {
+                color: #9eacbc;
+                background: #f5f7fa;
+                cursor: not-allowed;
+                opacity: 0.65;
+            }
+
+            .training-program-new-tile,
+            .training-program-carousel-card {
+                flex: 0 0 18rem;
+                min-height: 9rem;
+                scroll-snap-align: start;
+                border-radius: 8px;
+            }
+
+            .training-program-new-tile {
+                display: flex;
+                flex-basis: 11rem;
+                align-items: center;
+                justify-content: center;
+                gap: 0.7rem;
+                border: 1px dashed #15a889;
+                padding: 0.9rem;
+                color: #087b67;
+                background: #f1fcf8;
+                cursor: pointer;
+                text-align: left;
+            }
+
+            .training-program-new-tile:hover {
+                border-style: solid;
+                background: #e4f9f2;
+            }
+
+            .training-program-new-icon,
+            .training-program-carousel-icon {
+                display: grid;
+                width: 2.25rem;
+                height: 2.25rem;
+                flex: 0 0 auto;
+                place-items: center;
+                border-radius: 8px;
+                color: #0b6f5d;
+                background: #d8f6ec;
+            }
+
+            .training-program-new-tile span:last-child,
+            .training-program-carousel-meta span {
+                display: grid;
+                gap: 0.12rem;
+            }
+
+            .training-program-new-tile strong {
+                font-size: 0.88rem;
+            }
+
+            .training-program-new-tile small {
+                color: #4c6b68;
+                font-size: 0.7rem;
+            }
+
+            .training-program-carousel-card {
+                position: relative;
+                overflow: hidden;
+                border: 1px solid #d5dfeb;
+                background: #ffffff;
+                transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+            }
+
+            .training-program-carousel-card.is-active {
+                border-color: #2c8de0;
+                background: #eef8ff;
+                box-shadow: inset 0 -3px 0 #1e70d8, 0 6px 16px rgba(18, 78, 145, 0.1);
+            }
+
+            .training-program-carousel-select {
+                display: grid;
+                width: 100%;
+                min-height: 9rem;
+                gap: 0.45rem;
+                border: 0;
+                padding: 0.75rem 3rem 0.75rem 0.8rem;
+                color: var(--training-ink);
+                background: transparent;
+                cursor: pointer;
+                text-align: left;
+            }
+
+            .training-program-carousel-card-header,
+            .training-program-carousel-meta {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.6rem;
+            }
+
+            .training-program-carousel-select > strong {
+                display: -webkit-box;
+                overflow: hidden;
+                min-height: 2.15rem;
+                font-size: 0.86rem;
+                line-height: 1.25;
+                white-space: normal;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+            }
+
+            .training-program-carousel-description {
+                display: -webkit-box;
+                overflow: hidden;
+                color: var(--training-soft);
+                font-size: 0.7rem;
+                line-height: 1.35;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+            }
+
+            .training-program-carousel-meta {
+                align-items: end;
+                padding-top: 0.25rem;
+            }
+
+            .training-program-carousel-meta small {
+                color: var(--training-soft);
+                font-size: 0.62rem;
+            }
+
+            .training-program-carousel-meta b {
+                overflow: hidden;
+                max-width: 8rem;
+                font-size: 0.7rem;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .training-program-carousel-edit {
+                position: absolute;
+                right: 0.65rem;
+                bottom: 0.65rem;
+                display: grid;
+                width: 2rem;
+                height: 2rem;
+                place-items: center;
+                border: 1px solid #b9cce4;
+                border-radius: 6px;
+                color: #174c97;
+                background: #ffffff;
+                cursor: pointer;
+            }
+
+            .training-program-carousel-edit:hover {
+                border-color: #70a6e9;
+                background: #eaf3ff;
+            }
+
+            .training-program-edit-glyph {
+                display: block;
+                font-family: "Segoe UI Symbol", sans-serif;
+                font-size: 1rem;
+                line-height: 1;
+                transform: translateY(-1px);
             }
 
             .training-program-context {
@@ -1634,6 +2467,24 @@
                 margin: 0.25rem 0 0;
                 color: var(--training-soft);
                 font-size: 0.82rem;
+            }
+
+            .training-exam-save-feedback {
+                display: flex;
+                align-items: center;
+                gap: 0.55rem;
+                margin-top: 0.85rem;
+                border: 1px solid #9adfc8;
+                border-radius: 6px;
+                padding: 0.7rem 0.85rem;
+                color: #08634b;
+                background: #eefbf6;
+                font-size: 0.84rem;
+                font-weight: 700;
+            }
+
+            .training-exam-save-feedback[hidden] {
+                display: none;
             }
 
             .training-project-grid {
@@ -1845,6 +2696,82 @@
 
             .training-assignment-modal header p strong {
                 color: var(--training-ink);
+            }
+
+            .training-assignment-student-picker {
+                display: grid;
+                gap: 0.4rem;
+                color: var(--training-soft);
+                font-size: 0.78rem;
+                font-weight: 750;
+            }
+
+            .training-assignment-student-picker[hidden] {
+                display: none;
+            }
+
+            .training-assignment-student-picker b {
+                color: #d14343;
+            }
+
+            .training-assignment-start-date {
+                display: grid;
+                width: min(100%, 14rem);
+                gap: 0.4rem;
+                color: var(--training-soft);
+                font-size: 0.78rem;
+                font-weight: 750;
+            }
+
+            .training-assignment-start-date b {
+                color: #d14343;
+            }
+
+            .training-assignment-start-date input {
+                width: 100%;
+                min-height: 2.65rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.65rem 0.8rem;
+                color: var(--training-ink);
+                background: #ffffff;
+                font: inherit;
+            }
+
+            .training-assignment-start-date input:focus {
+                border-color: #67c8d8;
+                outline: 2px solid rgba(6, 182, 212, 0.14);
+            }
+
+            .training-assignment-student-control {
+                position: relative;
+                display: block;
+            }
+
+            .training-assignment-student-control select {
+                width: 100%;
+                min-height: 2.65rem;
+                appearance: none;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0 2.5rem 0 0.8rem;
+                color: var(--training-ink);
+                background: #ffffff;
+                font-size: 0.86rem;
+            }
+
+            .training-assignment-student-control select:focus {
+                border-color: #67c8d8;
+                outline: 2px solid rgba(6, 182, 212, 0.14);
+            }
+
+            .training-assignment-student-control i {
+                position: absolute;
+                top: 50%;
+                right: 0.85rem;
+                color: var(--training-soft);
+                pointer-events: none;
+                transform: translateY(-50%);
             }
 
             .training-assignment-body {
@@ -2768,11 +3695,24 @@
                 text-align: center;
             }
 
+            .training-student-toolbar {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 0.65rem;
+                margin-top: 0.2rem;
+            }
+
+            .training-new-assignment-button {
+                min-height: 3rem;
+                padding-inline: 1.15rem;
+                font-weight: 800;
+            }
+
             .training-student-view-switch {
                 display: inline-grid;
                 grid-template-columns: repeat(2, minmax(8.5rem, 1fr));
                 gap: 0.55rem;
-                margin-top: 0.2rem;
             }
 
             .training-student-view-switch a {
@@ -3415,6 +4355,24 @@
                 margin-top: 0.45rem;
             }
 
+            .training-start-date-cell {
+                min-width: 8.5rem;
+            }
+
+            .training-start-date-list {
+                display: grid;
+                gap: 1rem;
+                color: #36516d;
+                font-variant-numeric: tabular-nums;
+                white-space: nowrap;
+            }
+
+            .training-start-date-list > span {
+                display: flex;
+                min-height: 1.45rem;
+                align-items: center;
+            }
+
             .training-completed-program {
                 display: flex;
                 align-items: flex-start;
@@ -3597,6 +4555,138 @@
                 background: #f8fafc;
             }
 
+            .training-obligation-flow {
+                display: grid;
+                grid-template-columns: minmax(8rem, 1fr) auto minmax(8rem, 1fr) auto minmax(8rem, 1fr) auto minmax(9rem, 1fr);
+                align-items: center;
+                gap: 0.7rem;
+                margin-top: 1rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.85rem 1rem;
+                background: #ffffff;
+            }
+
+            .training-obligation-stage {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                align-items: center;
+                column-gap: 0.65rem;
+                color: #60758a;
+            }
+
+            .training-obligation-stage > span {
+                display: grid;
+                grid-row: 1 / span 2;
+                width: 2.25rem;
+                height: 2.25rem;
+                place-items: center;
+                border-radius: 999px;
+                color: #60758a;
+                background: #e9eef4;
+            }
+
+            .training-obligation-stage strong,
+            .training-obligation-stage small {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .training-obligation-stage strong {
+                font-size: 0.82rem;
+            }
+
+            .training-obligation-stage small {
+                color: #7b8fa2;
+                font-size: 0.7rem;
+                font-weight: 650;
+            }
+
+            .training-obligation-stage.is-complete > span {
+                color: #ffffff;
+                background: var(--training-teal);
+            }
+
+            .training-obligation-stage.is-complete strong {
+                color: var(--training-teal-dark);
+            }
+
+            .training-obligation-stage.is-active {
+                color: #1958bb;
+            }
+
+            .training-obligation-stage.is-active > span {
+                color: #ffffff;
+                background: var(--training-blue);
+                box-shadow: 0 0 0 0.3rem #e8f1ff;
+            }
+
+            .training-obligation-stage.is-active small {
+                color: #315b94;
+            }
+
+            .training-obligation-arrow {
+                color: #9aabba;
+                font-size: 0.72rem;
+            }
+
+            .training-learner-access {
+                display: flex;
+                align-items: flex-end;
+                justify-content: flex-start;
+                gap: 0.75rem;
+                margin-bottom: 0.85rem;
+            }
+
+            .training-learner-access label {
+                display: grid;
+                width: min(100%, 32rem);
+                gap: 0.4rem;
+                color: var(--training-soft);
+                font-size: 0.78rem;
+                font-weight: 750;
+            }
+
+            .training-learner-select-control {
+                position: relative;
+                display: block;
+            }
+
+            .training-learner-select-control select {
+                width: 100%;
+                min-height: 2.65rem;
+                appearance: none;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.65rem 2.5rem 0.65rem 0.8rem;
+                color: var(--training-ink);
+                background: #ffffff;
+                font: inherit;
+                font-size: 0.88rem;
+                font-weight: 600;
+            }
+
+            .training-learner-select-control select:focus {
+                border-color: var(--training-blue);
+                outline: 3px solid rgba(29, 112, 216, 0.14);
+            }
+
+            .training-learner-select-control i {
+                position: absolute;
+                top: 50%;
+                right: 0.85rem;
+                color: var(--training-soft);
+                pointer-events: none;
+                transform: translateY(-50%);
+            }
+
+            .training-learner-access > .training-primary-button {
+                flex: 0 0 auto;
+                min-width: 8.75rem;
+                min-height: 2.65rem;
+            }
+
             .training-learner-hero {
                 display: flex;
                 align-items: center;
@@ -3613,6 +4703,21 @@
                 margin: 0.15rem 0 0;
                 font-size: 1.65rem;
                 font-weight: 800;
+            }
+
+            .training-learner-hero > .training-primary-button {
+                flex: 0 0 auto;
+                min-width: 12.5rem;
+                min-height: 2.75rem;
+                padding-inline: 1.25rem;
+                color: #ffffff;
+            }
+
+            .training-learner-hero > .training-primary-button span,
+            .training-learner-hero > .training-primary-button i {
+                color: inherit;
+                font-size: 0.9rem;
+                line-height: 1;
             }
 
             .training-learner-metrics {
@@ -3642,6 +4747,10 @@
                 gap: 1rem;
                 align-items: start;
                 margin-top: 0.9rem;
+            }
+
+            .training-learner-grid.is-outline-only {
+                grid-template-columns: 1fr;
             }
 
             .training-video-panel {
@@ -3691,6 +4800,34 @@
                 font-size: 1.4rem;
             }
 
+            .training-video-frame > strong {
+                font-size: 1.05rem;
+            }
+
+            .training-video-frame > [data-video-playback-status] {
+                color: rgba(255, 255, 255, 0.85);
+                font-size: 0.8rem;
+                font-weight: 700;
+            }
+
+            .training-video-playback-track {
+                display: block;
+                width: min(24rem, 70%);
+                height: 0.38rem;
+                overflow: hidden;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.28);
+            }
+
+            .training-video-playback-track > span {
+                display: block;
+                width: 0;
+                height: 100%;
+                border-radius: inherit;
+                background: #ffffff;
+                transition: width 180ms linear;
+            }
+
             .training-chapter-detail {
                 justify-content: space-between;
                 gap: 1rem;
@@ -3712,6 +4849,111 @@
                 display: grid;
                 gap: 0.8rem;
                 padding: 1rem;
+            }
+
+            .training-content-outline {
+                display: grid;
+                gap: 0.75rem;
+            }
+
+            .training-content-chapter {
+                overflow: hidden;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                background: #ffffff;
+            }
+
+            .training-content-chapter > header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.75rem;
+                padding: 0.65rem 0.75rem;
+                color: #31516f;
+                background: #f8fafc;
+            }
+
+            .training-content-chapter > header strong {
+                font-size: 0.8rem;
+            }
+
+            .training-content-chapter > header small {
+                color: var(--training-soft);
+                font-size: 0.7rem;
+                font-weight: 700;
+            }
+
+            .training-content-video {
+                display: grid;
+                width: 100%;
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 0.65rem;
+                min-height: 3.2rem;
+                border: 0;
+                border-top: 1px solid var(--training-line);
+                padding: 0.55rem 0.7rem;
+                color: var(--training-ink);
+                background: #ffffff;
+                text-align: left;
+            }
+
+            .training-content-video > span:first-child {
+                display: grid;
+                width: 1.7rem;
+                height: 1.7rem;
+                place-items: center;
+                border-radius: 999px;
+                color: #60758a;
+                background: #e9eef4;
+                font-size: 0.68rem;
+            }
+
+            .training-content-video strong,
+            .training-content-video small {
+                display: block;
+            }
+
+            .training-content-video strong {
+                overflow: hidden;
+                font-size: 0.76rem;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .training-content-video small {
+                color: var(--training-soft);
+                font-size: 0.68rem;
+                font-weight: 650;
+            }
+
+            .training-content-video > em {
+                color: #60758a;
+                font-size: 0.66rem;
+                font-style: normal;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+
+            .training-content-video.is-complete > span:first-child {
+                color: #ffffff;
+                background: var(--training-teal);
+            }
+
+            .training-content-video.is-current {
+                color: #1958bb;
+                background: #f4f8ff;
+                box-shadow: inset 3px 0 0 var(--training-blue);
+                cursor: pointer;
+            }
+
+            .training-content-video.is-current > span:first-child {
+                color: #ffffff;
+                background: var(--training-blue);
+            }
+
+            .training-content-video:disabled {
+                cursor: not-allowed;
             }
 
             .training-route-heading {
@@ -3774,6 +5016,1101 @@
             .training-route-step.is-current {
                 border-color: rgba(29, 112, 216, 0.45);
                 background: #f4f8ff;
+            }
+
+            .training-route-step:disabled {
+                cursor: not-allowed;
+            }
+
+            .training-learner-view[hidden],
+            .training-learner-dialog [hidden] {
+                display: none;
+            }
+
+            .training-learner-tabs button {
+                cursor: pointer;
+            }
+
+            .training-learner-section,
+            .training-results-section {
+                min-height: 32rem;
+                margin-top: 1rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 1.35rem;
+                background: #ffffff;
+            }
+
+            .training-learner-section-heading {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 1rem;
+            }
+
+            .training-learner-section-heading h2 {
+                margin: 0;
+                color: #0f172a;
+                font-size: 1.55rem;
+                font-weight: 800;
+            }
+
+            .training-learner-section-heading p {
+                margin: 0.35rem 0 0;
+                color: var(--training-soft);
+                font-size: 0.92rem;
+            }
+
+            .training-learning-path {
+                position: relative;
+                display: grid;
+                grid-template-columns: repeat(4, minmax(8rem, 1fr));
+                gap: 0;
+                margin-top: 1.2rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 1rem 2rem;
+                background: #ffffff;
+            }
+
+            .training-learning-path-step {
+                position: relative;
+                display: grid;
+                justify-items: center;
+                gap: 0.45rem;
+                color: #52687f;
+                text-align: center;
+            }
+
+            .training-learning-path-step:not(:last-child)::after {
+                position: absolute;
+                z-index: 0;
+                top: 1.2rem;
+                left: calc(50% + 1.55rem);
+                width: calc(100% - 3.1rem);
+                height: 3px;
+                border-radius: 999px;
+                background: #e5ebf1;
+                content: '';
+            }
+
+            .training-learning-path-step.is-approved:not(:last-child)::after {
+                background: var(--training-teal);
+            }
+
+            .training-learning-path-step > span {
+                position: relative;
+                z-index: 1;
+                display: grid;
+                width: 2.45rem;
+                height: 2.45rem;
+                place-items: center;
+                border-radius: 999px;
+                color: #52687f;
+                background: #e8edf3;
+                font-size: 1rem;
+                font-weight: 850;
+            }
+
+            .training-learning-path-step > strong {
+                font-size: 0.84rem;
+            }
+
+            .training-learning-path-step.is-approved,
+            .training-learning-path-step.is-approved > span {
+                color: var(--training-teal-dark);
+            }
+
+            .training-learning-path-step.is-approved > span {
+                color: #ffffff;
+                background: var(--training-teal);
+            }
+
+            .training-learning-path-step.is-current,
+            .training-learning-path-step.is-current > span {
+                color: var(--training-blue);
+            }
+
+            .training-learning-path-step.is-current > span {
+                color: #ffffff;
+                background: var(--training-blue);
+            }
+
+            .training-module-route {
+                display: grid;
+                gap: 0.8rem;
+                margin-top: 1rem;
+            }
+
+            .training-learner-module {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 1rem;
+                min-height: 6.5rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 1rem 1.25rem;
+                background: #ffffff;
+            }
+
+            .training-learner-module.is-approved {
+                border-color: rgba(15, 169, 143, 0.4);
+                background: #f3fffb;
+            }
+
+            .training-learner-module.is-current {
+                border-color: rgba(29, 112, 216, 0.45);
+                background: #f7faff;
+            }
+
+            .training-learner-module-marker {
+                display: grid;
+                width: 3.75rem;
+                height: 3.75rem;
+                place-items: center;
+                border-radius: 999px;
+                color: #60758a;
+                background: #edf2f7;
+                font-size: 1.45rem;
+                font-weight: 850;
+            }
+
+            .training-learner-module.is-approved .training-learner-module-marker {
+                border: 0.65rem solid #d9f8ef;
+                color: #ffffff;
+                background: var(--training-teal);
+            }
+
+            .training-learner-module.is-approved .training-learner-module-marker i {
+                display: none;
+            }
+
+            .training-learner-module.is-approved .training-learner-module-marker::after {
+                content: '\2713';
+                font-size: 1.15rem;
+                line-height: 1;
+            }
+
+            .training-learner-module.is-current .training-learner-module-marker {
+                color: var(--training-blue);
+                background: #e2edff;
+            }
+
+            .training-learner-module-content {
+                min-width: 0;
+                border-left: 1px solid var(--training-line);
+                padding-left: 1rem;
+            }
+
+            .training-learner-module-content h3 {
+                margin: 0;
+                color: #102a43;
+                font-size: 1.1rem;
+                font-weight: 800;
+            }
+
+            .training-learner-module-content p {
+                margin: 0.45rem 0 0;
+                color: var(--training-soft);
+                font-size: 0.86rem;
+            }
+
+            .training-module-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1rem;
+                margin-top: 0.65rem;
+                color: var(--training-soft);
+                font-size: 0.85rem;
+            }
+
+            .training-module-meta span,
+            .training-module-meta strong {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+            }
+
+            .training-module-meta strong {
+                color: var(--training-teal-dark);
+            }
+
+            .training-module-progress {
+                display: grid;
+                grid-template-columns: auto minmax(8rem, 18rem);
+                align-items: center;
+                gap: 0.75rem;
+                margin-top: 0.65rem;
+            }
+
+            .training-module-progress > strong {
+                color: var(--training-blue);
+                font-size: 1.45rem;
+            }
+
+            .training-learner-module-actions {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+            }
+
+            .training-state-pill {
+                display: inline-flex;
+                width: max-content;
+                min-height: 2rem;
+                align-items: center;
+                justify-content: center;
+                gap: 0.4rem;
+                border-radius: 999px;
+                padding: 0.3rem 0.75rem;
+                font-size: 0.78rem;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+
+            .training-state-pill.is-approved {
+                color: var(--training-teal-dark);
+                background: #dcf8ef;
+            }
+
+            .training-state-pill.is-current {
+                color: #1958bb;
+                background: #eaf2ff;
+            }
+
+            .training-state-pill.is-pending {
+                border: 1px solid #f5d56c;
+                color: #9b6500;
+                background: #fff9dc;
+            }
+
+            .training-state-pill.is-review {
+                color: #075985;
+                background: #e0f2fe;
+            }
+
+            .training-state-pill.is-corrections {
+                color: #b45309;
+                background: #fff0dc;
+            }
+
+            .training-state-pill.is-locked {
+                color: #60758a;
+                background: #edf1f5;
+            }
+
+            .training-information-note {
+                display: flex;
+                align-items: flex-start;
+                gap: 0.8rem;
+                margin-top: 1rem;
+                border: 1px solid #a9cdfd;
+                border-radius: 8px;
+                padding: 0.9rem 1rem;
+                color: #1958bb;
+                background: #f4f8ff;
+            }
+
+            .training-information-note > i {
+                margin-top: 0.1rem;
+                font-size: 1.2rem;
+            }
+
+            .training-information-note p {
+                margin: 0;
+                color: #315b94;
+                font-size: 0.85rem;
+            }
+
+            .training-active-task-summary {
+                margin-top: 1rem;
+            }
+
+            .training-active-task-summary > span {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                border-radius: 999px;
+                padding: 0.45rem 0.7rem;
+                color: var(--training-teal-dark);
+                background: var(--training-mint);
+                font-size: 0.8rem;
+            }
+
+            .training-active-task-summary i {
+                width: 0.55rem;
+                height: 0.55rem;
+                border-radius: 999px;
+                background: var(--training-teal);
+            }
+
+            .training-task-filters {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.65rem;
+                margin-top: 1.2rem;
+            }
+
+            .training-task-filters button {
+                min-height: 2.45rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.4rem 1rem;
+                color: #31516f;
+                background: #ffffff;
+                font-size: 0.82rem;
+                font-weight: 750;
+            }
+
+            .training-task-filters button.is-active {
+                border-color: #5ea0f4;
+                color: #1958bb;
+                background: #f7faff;
+                box-shadow: inset 0 -2px 0 var(--training-blue);
+            }
+
+            .training-task-table-wrap {
+                overflow-x: auto;
+                margin-top: 0.9rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+            }
+
+            .training-task-table {
+                width: 100%;
+                min-width: 58rem;
+                border-collapse: separate;
+                border-spacing: 0;
+                color: var(--training-ink);
+                font-size: 0.86rem;
+            }
+
+            .training-task-table th {
+                height: 3rem;
+                padding: 0.75rem 1rem;
+                color: var(--training-soft);
+                background: #fbfcfd;
+                text-align: left;
+                font-size: 0.78rem;
+                font-weight: 800;
+            }
+
+            .training-task-table td {
+                height: 4.6rem;
+                border-top: 1px solid var(--training-line);
+                padding: 0.7rem 1rem;
+                background: #ffffff;
+                vertical-align: middle;
+            }
+
+            .training-task-table tr.is-pending td {
+                background: #f7faff;
+            }
+
+            .training-task-table tr.is-locked td {
+                color: #52687f;
+            }
+
+            .training-task-table td:nth-child(1) {
+                width: 38%;
+            }
+
+            .training-task-table td:nth-child(2) {
+                width: 27%;
+            }
+
+            .training-task-table td:nth-child(3) {
+                width: 20%;
+            }
+
+            .training-task-table td:last-child {
+                width: 15%;
+            }
+
+            .training-task-table td > span,
+            .training-task-table td > strong {
+                display: block;
+            }
+
+            .training-task-table td > span {
+                color: var(--training-soft);
+            }
+
+            .training-task-table td > strong {
+                margin-top: 0.2rem;
+            }
+
+            .training-task-name {
+                display: flex;
+                align-items: center;
+                gap: 0.85rem;
+            }
+
+            .training-task-name > span {
+                display: grid;
+                width: 2rem;
+                height: 2rem;
+                flex: 0 0 2rem;
+                place-items: center;
+                border-radius: 999px;
+                color: #52687f;
+                background: #edf2f7;
+                font-weight: 850;
+            }
+
+            tr.is-approved .training-task-name > span {
+                color: #ffffff;
+                background: var(--training-teal);
+            }
+
+            tr.is-pending .training-task-name > span,
+            tr.is-review .training-task-name > span {
+                color: #ffffff;
+                background: var(--training-blue);
+            }
+
+            [data-task-empty-row] td {
+                height: 8rem;
+                color: var(--training-soft);
+                text-align: center;
+            }
+
+            .training-result-hero {
+                display: grid;
+                grid-template-columns: auto minmax(16rem, 1fr) auto;
+                align-items: center;
+                gap: 1.5rem;
+                margin-top: 1rem;
+                border: 1px solid rgba(15, 169, 143, 0.45);
+                border-radius: 8px;
+                padding: 1.2rem 1.5rem;
+                background: #f5fffc;
+            }
+
+            .training-result-hero.is-failed {
+                border-color: rgba(220, 90, 90, 0.45);
+                background: #fff8f8;
+            }
+
+            .training-score-ring {
+                position: relative;
+                display: grid;
+                width: 8.5rem;
+                height: 8.5rem;
+                flex: 0 0 8.5rem;
+                place-items: center;
+                border-radius: 999px;
+                background: conic-gradient(var(--training-teal) calc(var(--score) * 1%), #e7edf2 0);
+            }
+
+            .training-score-ring::before {
+                position: absolute;
+                width: 6.7rem;
+                height: 6.7rem;
+                border-radius: inherit;
+                background: #ffffff;
+                content: '';
+            }
+
+            .training-score-ring strong {
+                position: relative;
+                color: var(--training-teal-dark);
+                font-size: 2.5rem;
+            }
+
+            .training-result-hero.is-failed .training-score-ring {
+                background: conic-gradient(#dc5a5a calc(var(--score) * 1%), #f1e7e7 0);
+            }
+
+            .training-result-hero.is-failed .training-score-ring strong {
+                color: #b42323;
+            }
+
+            .training-result-summary h3 {
+                margin: 0.75rem 0 0.5rem;
+                font-size: 1.45rem;
+                font-weight: 800;
+            }
+
+            .training-result-summary p {
+                margin: 0.2rem 0;
+                color: var(--training-soft);
+                font-size: 0.9rem;
+            }
+
+            .training-result-actions {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 0.75rem;
+            }
+
+            .training-result-actions button {
+                min-width: 10.5rem;
+            }
+
+            .training-result-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 1rem;
+                margin-top: 1rem;
+            }
+
+            .training-result-card {
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 1.1rem;
+                background: #ffffff;
+            }
+
+            .training-result-card > h3 {
+                margin: 0 0 1rem;
+                font-size: 1rem;
+                font-weight: 800;
+            }
+
+            .training-score-breakdown {
+                display: grid;
+                gap: 1.1rem;
+            }
+
+            .training-score-breakdown > div {
+                display: grid;
+                grid-template-columns: 6.5rem minmax(6rem, 1fr) 3rem;
+                align-items: center;
+                gap: 0.75rem;
+                color: #31516f;
+                font-size: 0.85rem;
+            }
+
+            .training-score-breakdown > div > strong {
+                text-align: right;
+            }
+
+            .training-result-metrics {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.75rem;
+                margin-top: 1.4rem;
+                border-top: 1px solid var(--training-line);
+                padding-top: 1rem;
+            }
+
+            .training-result-metrics > div {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+            }
+
+            .training-result-metrics i {
+                display: grid;
+                width: 2.8rem;
+                height: 2.8rem;
+                flex: 0 0 2.8rem;
+                place-items: center;
+                border-radius: 8px;
+                color: var(--training-teal-dark);
+                background: var(--training-mint);
+                font-size: 1.2rem;
+            }
+
+            .training-result-metrics span,
+            .training-result-metrics strong {
+                display: block;
+            }
+
+            .training-result-metrics span {
+                color: var(--training-soft);
+                font-size: 0.8rem;
+            }
+
+            .training-result-metrics strong {
+                margin-top: 0.2rem;
+                color: var(--training-ink);
+                font-size: 1.25rem;
+            }
+
+            .training-result-history {
+                overflow: hidden;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+            }
+
+            .training-result-history > div {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr) auto auto;
+                align-items: center;
+                gap: 0.75rem;
+                min-height: 3.8rem;
+                padding: 0.65rem 0.8rem;
+            }
+
+            .training-result-history > div + div {
+                border-top: 1px solid var(--training-line);
+            }
+
+            .training-result-history > div > span,
+            .training-result-history > div > i {
+                display: grid;
+                width: 2rem;
+                height: 2rem;
+                place-items: center;
+                border-radius: 999px;
+                color: #52687f;
+                background: #e9eef4;
+                font-weight: 850;
+            }
+
+            .training-result-history .is-approved > span,
+            .training-result-history .is-approved > i {
+                color: #ffffff;
+                background: var(--training-teal);
+            }
+
+            .training-result-history .is-current > span {
+                color: #ffffff;
+                background: var(--training-blue);
+            }
+
+            .training-result-history .is-failed > span,
+            .training-result-history .is-failed > i {
+                color: #ffffff;
+                background: #dc5a5a;
+            }
+
+            .training-result-history p,
+            .training-result-history b,
+            .training-result-history small {
+                display: block;
+                margin: 0;
+            }
+
+            .training-result-history b {
+                color: #31516f;
+                text-align: right;
+            }
+
+            .training-result-history small {
+                margin-top: 0.1rem;
+                color: var(--training-soft);
+                font-size: 0.76rem;
+                font-weight: 650;
+            }
+
+            .training-result-history .is-current b {
+                border-radius: 999px;
+                padding: 0.35rem 0.7rem;
+                color: #1958bb;
+                background: #eaf2ff;
+                font-size: 0.76rem;
+            }
+
+            .training-result-history .is-failed b {
+                color: #b42323;
+            }
+
+            .training-result-history .is-locked b {
+                color: #60758a;
+                font-size: 0.76rem;
+            }
+
+            .training-certificate-card {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 1.25rem;
+                margin-top: 1.2rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 1.25rem;
+                background: #fbfcfe;
+            }
+
+            .training-certificate-card.is-available {
+                border-color: rgba(15, 169, 143, 0.45);
+                background: #f3fffb;
+            }
+
+            .training-certificate-icon {
+                display: grid;
+                width: 4rem;
+                height: 4rem;
+                place-items: center;
+                border-radius: 8px;
+                color: #9b6500;
+                background: #fff5c7;
+                font-size: 1.6rem;
+            }
+
+            .training-certificate-content > span {
+                color: var(--training-soft);
+                font-size: 0.78rem;
+                font-weight: 750;
+            }
+
+            .training-certificate-content h3 {
+                margin: 0.2rem 0 0.35rem;
+                font-size: 1.1rem;
+                font-weight: 800;
+            }
+
+            .training-certificate-content p {
+                margin: 0;
+                color: var(--training-soft);
+                font-size: 0.86rem;
+            }
+
+            .training-certificate-progress {
+                display: grid;
+                grid-template-columns: minmax(8rem, 18rem) auto;
+                align-items: center;
+                gap: 0.7rem;
+                margin-top: 0.8rem;
+            }
+
+            .training-certificate-progress > strong {
+                color: var(--training-teal-dark);
+                font-size: 0.8rem;
+            }
+
+            .training-certificate-actions {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 0.75rem;
+            }
+
+            .training-video-frame {
+                width: calc(100% - 2.3rem);
+                border: 0;
+                cursor: pointer;
+            }
+
+            .training-video-frame.is-playing i {
+                animation: training-video-pulse 1.25s ease-in-out infinite alternate;
+            }
+
+            .training-video-frame:disabled {
+                cursor: default;
+                opacity: 1;
+            }
+
+            @keyframes training-video-pulse {
+                from { transform: scale(0.95); opacity: 0.72; }
+                to { transform: scale(1.05); opacity: 1; }
+            }
+
+            .training-learner-dialog {
+                width: min(42rem, calc(100vw - 2rem));
+                max-width: none;
+                max-height: calc(100vh - 2rem);
+                overflow: auto;
+                border: 0;
+                border-radius: 8px;
+                padding: 0;
+                color: var(--training-ink);
+                background: transparent;
+                box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+            }
+
+            .training-video-dialog {
+                width: min(68rem, calc(100vw - 2rem));
+            }
+
+            .training-video-dialog .training-video-panel {
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+
+            .training-video-dialog .training-video-frame {
+                min-height: min(32rem, calc(100vh - 18rem));
+                margin-top: 1.15rem;
+            }
+
+            .training-video-dialog .training-learner-dialog-shell > header b {
+                color: var(--training-teal-dark);
+            }
+
+            .training-video-dialog [data-close-learner-video] {
+                width: 2.25rem;
+                height: 2.25rem;
+                flex: 0 0 2.25rem;
+                border: 1px solid var(--training-line);
+                color: #334e68;
+                background: #ffffff;
+                box-shadow: 0 1px 2px rgba(16, 42, 67, 0.08);
+            }
+
+            .training-video-dialog [data-close-learner-video]:hover {
+                border-color: #b8c6d3;
+                color: #102a43;
+                background: #f2f6fb;
+            }
+
+            .training-video-dialog [data-close-learner-video]:focus-visible {
+                outline: 3px solid rgba(29, 112, 216, 0.2);
+                outline-offset: 2px;
+            }
+
+            .training-video-dialog [data-close-learner-video] .training-close-glyph {
+                color: inherit;
+                font-size: 1.55rem;
+                font-weight: 500;
+                line-height: 1;
+                text-transform: none;
+            }
+
+            .training-learner-dialog::backdrop {
+                background: rgba(15, 23, 42, 0.58);
+            }
+
+            .training-learner-dialog-shell {
+                overflow: hidden;
+                border-radius: 8px;
+                background: #ffffff;
+            }
+
+            .training-learner-dialog-shell > header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 1rem;
+                border-bottom: 1px solid var(--training-line);
+                padding: 1rem 1.15rem;
+            }
+
+            .training-learner-dialog-shell > header span {
+                color: var(--training-blue);
+                font-size: 0.72rem;
+                font-weight: 850;
+                text-transform: uppercase;
+            }
+
+            .training-learner-dialog-shell > header h3 {
+                margin: 0.2rem 0 0;
+                font-size: 1.25rem;
+                font-weight: 800;
+            }
+
+            .training-learner-dialog-shell > header p {
+                margin: 0.2rem 0 0;
+                color: var(--training-soft);
+                font-size: 0.82rem;
+            }
+
+            .training-learner-dialog form {
+                display: grid;
+                gap: 1rem;
+                padding: 1.15rem;
+            }
+
+            .training-learner-dialog form label {
+                display: grid;
+                gap: 0.45rem;
+                color: #31516f;
+                font-size: 0.82rem;
+                font-weight: 750;
+            }
+
+            .training-learner-dialog form label b {
+                color: #dc2626;
+            }
+
+            .training-learner-dialog textarea,
+            .training-learner-dialog input[type='file'] {
+                width: 100%;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.75rem;
+                color: var(--training-ink);
+                background: #ffffff;
+                font: inherit;
+            }
+
+            .training-learner-dialog textarea:focus,
+            .training-learner-dialog input[type='file']:focus {
+                border-color: #5ea0f4;
+                outline: 2px solid rgba(29, 112, 216, 0.12);
+            }
+
+            .training-task-file-field small {
+                color: var(--training-soft);
+                font-weight: 650;
+            }
+
+            .training-task-instructions {
+                display: flex;
+                gap: 0.75rem;
+                border: 1px solid #bfd8fa;
+                border-radius: 8px;
+                padding: 0.85rem;
+                color: #315b94;
+                background: #f5f9ff;
+            }
+
+            .training-exam-dialog {
+                width: min(50rem, calc(100vw - 2rem));
+            }
+
+            .training-exam-intro {
+                display: flex;
+                align-items: flex-start;
+                gap: 0.75rem;
+                border: 1px solid #bfd8fa;
+                border-radius: 8px;
+                padding: 0.85rem;
+                color: #315b94;
+                background: #f5f9ff;
+            }
+
+            .training-exam-intro > i {
+                margin-top: 0.1rem;
+                color: var(--training-blue);
+            }
+
+            .training-exam-intro p {
+                margin: 0;
+                font-size: 0.84rem;
+            }
+
+            .training-learner-exam-questions {
+                display: grid;
+                gap: 0.85rem;
+            }
+
+            .training-exam-question {
+                margin: 0;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.9rem;
+            }
+
+            .training-exam-question legend {
+                width: 100%;
+                padding: 0 0 0.7rem;
+                color: var(--training-ink);
+                font-size: 0.9rem;
+                font-weight: 800;
+            }
+
+            .training-exam-question > label {
+                display: flex !important;
+                grid-template-columns: none;
+                align-items: flex-start;
+                gap: 0.65rem !important;
+                min-height: 2.45rem;
+                border: 1px solid transparent;
+                border-radius: 8px;
+                padding: 0.55rem 0.65rem;
+                cursor: pointer;
+            }
+
+            .training-exam-question > label:hover {
+                border-color: #bfd8fa;
+                background: #f7faff;
+            }
+
+            .training-exam-question input {
+                width: 1rem;
+                height: 1rem;
+                flex: 0 0 1rem;
+                margin-top: 0.12rem;
+                accent-color: var(--training-blue);
+            }
+
+            .training-exam-validation {
+                margin: 0;
+                border: 1px solid #fecaca;
+                border-radius: 8px;
+                padding: 0.7rem 0.8rem;
+                color: #b42323;
+                background: #fff7f7;
+                font-size: 0.82rem;
+                font-weight: 750;
+            }
+
+            .training-task-instructions p {
+                margin: 0;
+                font-size: 0.84rem;
+            }
+
+            .training-learner-dialog footer {
+                display: flex;
+                justify-content: flex-end;
+                gap: 0.65rem;
+            }
+
+            .training-task-submission-view {
+                display: grid;
+                gap: 0.8rem;
+                padding: 1.15rem;
+            }
+
+            .training-task-submission-view > div {
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.85rem;
+                background: #fbfcfd;
+            }
+
+            .training-task-submission-view span {
+                color: var(--training-soft);
+                font-size: 0.76rem;
+                font-weight: 800;
+            }
+
+            .training-task-submission-view p {
+                margin: 0.35rem 0 0;
+                white-space: pre-wrap;
+            }
+
+            .training-answer-review-list {
+                display: grid;
+                gap: 0.65rem;
+                padding: 1.15rem;
+            }
+
+            .training-answer-review-list article {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 0.75rem;
+                border: 1px solid var(--training-line);
+                border-radius: 8px;
+                padding: 0.85rem;
+            }
+
+            .training-answer-review-list article > span,
+            .training-answer-review-list article > i {
+                display: grid;
+                width: 2rem;
+                height: 2rem;
+                place-items: center;
+                border-radius: 999px;
+                color: #ffffff;
+            }
+
+            .training-answer-review-list .is-correct > span,
+            .training-answer-review-list .is-correct > i {
+                background: var(--training-teal);
+            }
+
+            .training-answer-review-list .is-incorrect > span,
+            .training-answer-review-list .is-incorrect > i {
+                background: #dc5a5a;
+            }
+
+            .training-answer-review-list p {
+                margin: 0.25rem 0 0;
+                color: var(--training-soft);
+                font-size: 0.82rem;
+            }
+
+            .training-learner-dialog-shell > footer {
+                border-top: 1px solid var(--training-line);
+                padding: 1rem 1.15rem;
             }
 
             .training-personnel-table table {
@@ -3923,9 +6260,27 @@
                 .training-learner-grid {
                     grid-template-columns: 1fr;
                 }
+
+                .training-result-hero {
+                    grid-template-columns: auto minmax(0, 1fr);
+                }
+
+                .training-result-actions {
+                    grid-column: 1 / -1;
+                }
             }
 
             @media (max-width: 900px) {
+                .training-obligation-flow {
+                    grid-template-columns: repeat(7, max-content);
+                    overflow-x: auto;
+                    padding-bottom: 1rem;
+                }
+
+                .training-obligation-stage {
+                    min-width: 9rem;
+                }
+
                 .training-page-header,
                 .training-section-heading,
                 .training-learner-hero,
@@ -3951,6 +6306,24 @@
 
                 .training-tabs.is-programs {
                     grid-template-columns: 1fr;
+                }
+
+                .training-program-carousel {
+                    gap: 0.45rem;
+                }
+
+                .training-program-carousel-arrow {
+                    width: 2.15rem;
+                    height: 2.15rem;
+                    flex-basis: 2.15rem;
+                }
+
+                .training-program-new-tile {
+                    flex-basis: 9.75rem;
+                }
+
+                .training-program-carousel-card {
+                    flex-basis: min(16rem, calc(100vw - 8.5rem));
                 }
 
                 .training-card-actions {
@@ -4020,6 +6393,89 @@
                     flex-direction: column-reverse;
                 }
 
+                .training-learner-tabs {
+                    grid-template-columns: repeat(5, minmax(8.5rem, 1fr));
+                    overflow-x: auto;
+                }
+
+                .training-tabs.training-learner-tabs button {
+                    justify-content: center;
+                }
+
+                .training-learner-access {
+                    align-items: stretch;
+                    flex-direction: column;
+                }
+
+                .training-learner-access label {
+                    width: 100%;
+                }
+
+                .training-learner-section,
+                .training-results-section {
+                    min-height: 28rem;
+                    padding: 1rem;
+                }
+
+                .training-learning-path {
+                    grid-template-columns: repeat(4, minmax(7rem, 1fr));
+                    overflow-x: auto;
+                    padding-inline: 1rem;
+                }
+
+                .training-learner-module,
+                .training-certificate-card {
+                    grid-template-columns: auto minmax(0, 1fr);
+                }
+
+                .training-learner-module-actions,
+                .training-certificate-actions {
+                    grid-column: 1 / -1;
+                    align-items: stretch;
+                    justify-content: flex-end;
+                    flex-direction: row;
+                    flex-wrap: wrap;
+                }
+
+                .training-result-hero,
+                .training-result-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .training-score-ring {
+                    justify-self: center;
+                }
+
+                .training-result-summary {
+                    text-align: center;
+                }
+
+                .training-result-summary .training-state-pill {
+                    margin-inline: auto;
+                }
+
+                .training-result-actions {
+                    grid-column: auto;
+                    justify-content: stretch;
+                }
+
+                .training-result-actions button {
+                    min-width: 0;
+                }
+
+                .training-certificate-actions {
+                    align-items: center;
+                }
+
+                .training-learner-dialog footer {
+                    align-items: stretch;
+                    flex-direction: column-reverse;
+                }
+
+                .training-video-dialog .training-video-frame {
+                    min-height: 18rem;
+                }
+
                 .training-tabs button {
                     justify-content: flex-start;
                     padding-inline: 1rem;
@@ -4047,16 +6503,27 @@
                 const panels = root.querySelectorAll('[data-role-panel]');
                 const programButtons = root.querySelectorAll('[data-program-tab]');
                 const programPanels = root.querySelectorAll('[data-program-panel]');
-                const programContext = root.querySelector('[data-program-context]');
                 const programSelector = root.querySelector('[data-program-selector]');
+                const programCarouselViewport = root.querySelector('[data-program-carousel-viewport]');
+                const programCarouselTrack = root.querySelector('.training-program-carousel-track');
+                const programCarouselPrevious = root.querySelector('[data-program-carousel-previous]');
+                const programCarouselNext = root.querySelector('[data-program-carousel-next]');
+                const newProgramButton = root.querySelector('[data-new-program]');
                 const moduleItems = root.querySelectorAll('[data-module-item]');
                 const moduleCount = root.querySelector('[data-module-count]');
+                const moduleEditor = root.querySelector('.training-module-editor');
                 const chapterVideoInputs = root.querySelectorAll('[data-chapter-video]');
                 const programModal = root.querySelector('[data-program-modal]');
                 const programForm = root.querySelector('[data-program-form]');
+                const programModalTitle = root.querySelector('[data-program-modal-title]');
+                const programSubmitLabel = root.querySelector('[data-program-submit-label]');
                 const trainingAssignmentModal = root.querySelector('[data-training-assignment-modal]');
                 const trainingAssignmentForm = root.querySelector('[data-training-assignment-form]');
                 const assignmentStudent = root.querySelector('[data-assignment-student]');
+                const assignmentStudentSummary = root.querySelector('[data-assignment-student-summary]');
+                const assignmentStudentPicker = root.querySelector('[data-assignment-student-picker]');
+                const assignmentStudentSelect = root.querySelector('[data-assignment-student-select]');
+                const assignmentStartDate = root.querySelector('[data-assignment-start-date]');
                 const assignmentSelectAll = root.querySelector('[data-assignment-select-all]');
                 const assignmentPrograms = root.querySelectorAll('[data-assignment-program]');
                 const assignmentCount = root.querySelector('[data-assignment-count]');
@@ -4075,17 +6542,97 @@
                 const newExamQuestions = root.querySelector('[data-new-exam-questions]');
                 const newExamSummary = root.querySelector('[data-new-exam-summary]');
                 const examTableBody = root.querySelector('[data-exam-table-body]');
+                const examSaveFeedback = root.querySelector('[data-exam-save-feedback]');
+                const learnerTabButtons = root.querySelectorAll('[data-learner-tab]');
+                const learnerPanels = root.querySelectorAll('[data-learner-panel]');
+                const learnerTaskRows = root.querySelectorAll('[data-learner-task]');
+                const learnerTaskFilters = root.querySelectorAll('[data-task-filter]');
+                const learnerTaskEmptyRow = root.querySelector('[data-task-empty-row]');
+                const learnerTaskDialog = root.querySelector('[data-task-dialog]');
+                const learnerTaskForm = root.querySelector('[data-task-submission-form]');
+                const learnerTaskSubmissionView = root.querySelector('[data-task-submission-view]');
+                const learnerVideoDialog = root.querySelector('[data-learner-video-dialog]');
+                const learnerExamDialog = root.querySelector('[data-learner-exam-dialog]');
+                const learnerExamForm = root.querySelector('[data-learner-exam-form]');
+                const learnerExamQuestions = root.querySelector('[data-learner-exam-questions]');
+                const learnerExamValidation = root.querySelector('[data-learner-exam-validation]');
+                const resultReviewDialog = root.querySelector('[data-result-review-dialog]');
+                const learnerSelector = root.querySelector('[data-learner-selector]');
+                const openLearnerPanelButton = root.querySelector('[data-open-learner-panel]');
+                const activeLearnerNameElements = root.querySelectorAll('[data-active-learner-name]');
                 const programStorageKey = 'mezclaspro.training.programs.v1';
                 const selectedProgramStorageKey = 'mezclaspro.training.selected-program.v1';
                 const examStorageKey = 'mezclaspro.training.exams.v1';
                 const assignmentStorageKey = 'mezclaspro.training.assignments.v1';
                 const employmentStatusStorageKey = 'mezclaspro.training.employment-statuses.v1';
+                const learnerStateStorageKey = 'mezclaspro.training.learner-state.v3';
+                const learnerSelectionStorageKey = 'mezclaspro.training.selected-learner.v1';
                 const examDefaults = @json(collect($exams)->keyBy('id')->all());
                 const moduleDefaults = @json($modules);
+                const learnerCurriculum = @json($learnerCurriculum);
+                const defaultLearnerProfile = @json($defaultLearnerProfile);
+                const learnerExamFallbacks = {
+                    'induccion-procesos': {
+                        id: 'induccion-procesos',
+                        module: 'Procesos esenciales',
+                        name: 'Evaluacion de procesos esenciales',
+                        minimum: 80,
+                        items: [
+                            {
+                                text: 'Que permite asegurar la trazabilidad de un proceso critico?',
+                                options: ['Registrar cada control y su responsable.', 'Conservar solo el resultado final.', 'Omitir incidencias ya corregidas.'],
+                                correct: 0,
+                            },
+                            {
+                                text: 'Como debe ejecutarse una secuencia critica de preparacion?',
+                                options: ['En el orden definido por el procedimiento.', 'En el orden que prefiera cada operador.', 'Sin documentar los controles intermedios.'],
+                                correct: 0,
+                            },
+                            {
+                                text: 'Que evidencia respalda el cumplimiento de una etapa?',
+                                options: ['Un comentario verbal del operador.', 'El registro completo, fechado y verificable.', 'Una nota sin identificacion.'],
+                                correct: 1,
+                            },
+                        ],
+                    },
+                    'induccion-certificacion': {
+                        id: 'induccion-certificacion',
+                        module: 'Cierre y certificacion',
+                        name: 'Evaluacion final de certificacion',
+                        minimum: 80,
+                        items: [
+                            {
+                                text: 'Que debe comprobarse antes de cerrar el programa?',
+                                options: ['Que todos los requisitos y evidencias esten completos.', 'Que exista al menos un video abierto.', 'Que el alumno haya solicitado una excepcion.'],
+                                correct: 0,
+                            },
+                            {
+                                text: 'Cuando se habilita el certificado?',
+                                options: ['Al iniciar el ultimo modulo.', 'Al completar tareas y aprobar todos los examenes.', 'Al registrar al alumno.'],
+                                correct: 1,
+                            },
+                            {
+                                text: 'Cual es el objetivo del expediente final?',
+                                options: ['Respaldar de forma verificable la terminacion del programa.', 'Reemplazar los resultados de los examenes.', 'Eliminar el historial de avance.'],
+                                correct: 0,
+                            },
+                        ],
+                    },
+                };
                 let examRecords = readStoredExams();
                 let editingExam = null;
                 let creatingExam = null;
                 let assignmentTargetRow = null;
+                let activeLearnerTaskRow = null;
+                let activeLearnerExamModule = null;
+                let currentLearnerObligation = null;
+                let learnerPlaybackTimer = null;
+                let learnerPlaybackProgress = 0;
+                hydrateLearnerSelectorFromAssignments();
+                restoreLearnerSelection();
+                let activeLearnerId = learnerSelector?.value || defaultLearnerProfile.id || 'default';
+                let activeLearnerProfile = readSelectedLearnerProfile();
+                let learnerState = readLearnerState();
 
                 const laboratoryCarousel = root.querySelector('[data-personnel-laboratory-carousel]');
                 const laboratoryPrevious = root.querySelector('[data-personnel-laboratory-previous]');
@@ -4111,6 +6658,56 @@
                         .querySelector('[data-selected-laboratory]')
                         ?.scrollIntoView({ block: 'nearest', inline: 'center' });
                     requestAnimationFrame(updateLaboratoryNavigation);
+                }
+
+                function updateProgramCarouselNavigation() {
+                    if (!programCarouselViewport || !programCarouselPrevious || !programCarouselNext) {
+                        return;
+                    }
+
+                    const maximumScroll = Math.max(0, programCarouselViewport.scrollWidth - programCarouselViewport.clientWidth);
+
+                    programCarouselPrevious.disabled = programCarouselViewport.scrollLeft <= 1;
+                    programCarouselNext.disabled = programCarouselViewport.scrollLeft >= maximumScroll - 1;
+                }
+
+                function moveProgramCarousel(direction) {
+                    if (!programCarouselViewport) {
+                        return;
+                    }
+
+                    const distance = Math.max(280, Math.round(programCarouselViewport.clientWidth * 0.72));
+
+                    programCarouselViewport.scrollBy({ left: direction * distance, behavior: 'smooth' });
+                }
+
+                function revealProgramCard(card) {
+                    if (!programCarouselViewport || !card) {
+                        return;
+                    }
+
+                    const cardStart = card.offsetLeft;
+                    const cardEnd = cardStart + card.offsetWidth;
+                    const viewportStart = programCarouselViewport.scrollLeft;
+                    const viewportEnd = viewportStart + programCarouselViewport.clientWidth;
+
+                    if (cardStart < viewportStart) {
+                        programCarouselViewport.scrollTo({ left: cardStart, behavior: 'smooth' });
+                    } else if (cardEnd > viewportEnd) {
+                        programCarouselViewport.scrollTo({ left: cardEnd - programCarouselViewport.clientWidth, behavior: 'smooth' });
+                    }
+                }
+
+                if (programCarouselViewport && programCarouselPrevious && programCarouselNext) {
+                    programCarouselPrevious.addEventListener('click', function() {
+                        moveProgramCarousel(-1);
+                    });
+                    programCarouselNext.addEventListener('click', function() {
+                        moveProgramCarousel(1);
+                    });
+                    programCarouselViewport.addEventListener('scroll', updateProgramCarouselNavigation, { passive: true });
+                    window.addEventListener('resize', updateProgramCarouselNavigation);
+                    requestAnimationFrame(updateProgramCarouselNavigation);
                 }
 
                 function readStoredPrograms() {
@@ -4212,6 +6809,7 @@
                             (existingAssignment.modules || []).concat(newAssignment.modules || [])
                         ));
                         existingAssignment.allModules = existingAssignment.allModules || newAssignment.allModules;
+                        existingAssignment.startDate = existingAssignment.startDate || newAssignment.startDate;
                     });
 
                     return mergedAssignments;
@@ -4249,8 +6847,27 @@
                     return program;
                 }
 
+                function formatAssignmentStartDate(value) {
+                    const parts = String(value || '').split('-');
+
+                    return parts.length === 3
+                        ? parts[2] + '/' + parts[1] + '/' + parts[0]
+                        : (value || 'Sin fecha');
+                }
+
+                function createAssignedStartDateElement(assignment) {
+                    const startDate = document.createElement('span');
+
+                    startDate.dataset.startDateProgramId = assignment.programId;
+                    startDate.dataset.addedStartDate = '';
+                    startDate.textContent = formatAssignmentStartDate(assignment.startDate);
+
+                    return startDate;
+                }
+
                 function renderAssignmentsForRow(row, assignments) {
                     const currentPrograms = row ? row.querySelector('[data-current-programs]') : null;
+                    const startDates = row ? row.querySelector('[data-training-start-dates]') : null;
 
                     if (!currentPrograms) {
                         return;
@@ -4258,6 +6875,10 @@
 
                     currentPrograms.querySelectorAll('[data-added-assignment]').forEach(function(program) {
                         program.remove();
+                    });
+
+                    startDates?.querySelectorAll('[data-added-start-date]').forEach(function(startDate) {
+                        startDate.remove();
                     });
 
                     (assignments || []).forEach(function(assignment) {
@@ -4270,6 +6891,18 @@
                         if (!alreadyAssigned) {
                             currentPrograms.append(createAssignedProgramElement(assignment));
                         }
+
+                        const alreadyHasStartDate = startDates && Array.from(
+                            startDates.querySelectorAll('[data-start-date-program-id]')
+                        ).some(function(startDate) {
+                            return startDate.dataset.startDateProgramId === assignment.programId;
+                        });
+
+                        if (startDates && !alreadyHasStartDate) {
+                            startDates.querySelector('.training-start-date-list')?.append(
+                                createAssignedStartDateElement(assignment)
+                            );
+                        }
                     });
 
                     const hasPrograms = currentPrograms.querySelector('[data-current-program-id]');
@@ -4277,6 +6910,10 @@
 
                     if (hasPrograms && emptyProgram) {
                         emptyProgram.remove();
+                    }
+
+                    if (startDates?.querySelector('[data-start-date-program-id]')) {
+                        startDates.querySelector('[data-empty-start-date]')?.remove();
                     }
 
                 }
@@ -4318,8 +6955,18 @@
                     }
 
                     if (assignmentConfirm) {
-                        assignmentConfirm.disabled = checkedModules === 0;
+                        assignmentConfirm.disabled = checkedModules === 0
+                            || !assignmentTargetRow
+                            || !assignmentStartDate?.value;
                     }
+                }
+
+                function currentAssignmentDate() {
+                    const currentDate = new Date();
+
+                    currentDate.setMinutes(currentDate.getMinutes() - currentDate.getTimezoneOffset());
+
+                    return currentDate.toISOString().slice(0, 10);
                 }
 
                 function resetAssignmentSelection() {
@@ -4355,6 +7002,7 @@
                             modules: selectedModules,
                             allModules: selectedModules.length === moduleCheckboxes.length,
                             progress: 0,
+                            startDate: assignmentStartDate?.value || currentAssignmentDate(),
                         });
 
                         return assignments;
@@ -4379,8 +7027,24 @@
                     assignmentTargetRow = row;
                     resetAssignmentSelection();
 
+                    if (assignmentStudentSummary) {
+                        assignmentStudentSummary.hidden = false;
+                    }
+
+                    if (assignmentStudentPicker) {
+                        assignmentStudentPicker.hidden = true;
+                    }
+
+                    if (assignmentStudentSelect) {
+                        assignmentStudentSelect.value = row.dataset.studentIndex || '';
+                    }
+
                     if (assignmentStudent) {
                         assignmentStudent.textContent = row.dataset.studentName;
+                    }
+
+                    if (assignmentStartDate) {
+                        assignmentStartDate.value = currentAssignmentDate();
                     }
 
                     trainingAssignmentModal.showModal();
@@ -4388,6 +7052,36 @@
                     if (assignmentSelectAll) {
                         assignmentSelectAll.focus();
                     }
+                }
+
+                function openNewTrainingAssignment() {
+                    if (!trainingAssignmentModal || !assignmentStudentSelect) {
+                        return;
+                    }
+
+                    assignmentTargetRow = null;
+                    assignmentStudentSelect.value = '';
+
+                    if (assignmentStartDate) {
+                        assignmentStartDate.value = currentAssignmentDate();
+                    }
+
+                    resetAssignmentSelection();
+
+                    if (assignmentStudent) {
+                        assignmentStudent.textContent = '';
+                    }
+
+                    if (assignmentStudentSummary) {
+                        assignmentStudentSummary.hidden = true;
+                    }
+
+                    if (assignmentStudentPicker) {
+                        assignmentStudentPicker.hidden = false;
+                    }
+
+                    trainingAssignmentModal.showModal();
+                    assignmentStudentSelect.focus();
                 }
 
                 function cloneExam(exam) {
@@ -4523,7 +7217,7 @@
                     button.type = 'button';
                     button.dataset[isEdit ? 'editExam' : 'viewExam'] = exam.id;
                     button.title = isEdit ? 'Editar examen' : 'Ver examen';
-                    button.setAttribute('aria-label', (isEdit ? 'Editar examen de ' : 'Ver examen de ') + exam.module);
+                    button.setAttribute('aria-label', (isEdit ? 'Editar ' : 'Ver ') + exam.name);
                     button.appendChild(createExamElement('i', isEdit ? 'fa-solid fa-pen' : 'fa-regular fa-eye'));
 
                     return button;
@@ -4537,6 +7231,7 @@
                     }
 
                     const row = createExamElement('tr');
+                    const nameCell = createExamElement('td', '', exam.name);
                     const moduleCell = createExamElement('td', '', exam.module);
                     const countCell = createExamElement('td', '', String(exam.items.length));
                     const minimumCell = createExamElement('td', '', exam.minimum + '%');
@@ -4548,6 +7243,7 @@
 
                     row.dataset.programRow = exam.projectId;
                     row.dataset.examId = exam.id;
+                    nameCell.dataset.examName = '';
                     moduleCell.dataset.examModule = '';
                     countCell.dataset.examQuestionCount = '';
                     minimumCell.dataset.examMinimum = '';
@@ -4555,7 +7251,7 @@
                     statusCell.appendChild(status);
                     editCell.appendChild(createExamActionButton('edit', exam));
                     viewCell.appendChild(createExamActionButton('view', exam));
-                    row.append(moduleCell, countCell, minimumCell, statusCell, editCell, viewCell);
+                    row.append(nameCell, moduleCell, countCell, minimumCell, statusCell, editCell, viewCell);
                     examTableBody.insertBefore(row, emptyRow || null);
 
                     return row;
@@ -4567,9 +7263,11 @@
                     });
 
                     if (!row) {
-                        return;
+                        return null;
                     }
 
+                    row.dataset.programRow = exam.projectId;
+                    row.querySelector('[data-exam-name]').textContent = exam.name;
                     row.querySelector('[data-exam-module]').textContent = exam.module;
                     row.querySelector('[data-exam-question-count]').textContent = exam.items.length;
                     row.querySelector('[data-exam-minimum]').textContent = exam.minimum + '%';
@@ -4583,8 +7281,26 @@
                     const editButton = row.querySelector('[data-edit-exam]');
                     const viewButton = row.querySelector('[data-view-exam]');
 
-                    editButton.setAttribute('aria-label', 'Editar examen de ' + exam.module);
-                    viewButton.setAttribute('aria-label', 'Ver examen de ' + exam.module);
+                    editButton.setAttribute('aria-label', 'Editar ' + exam.name);
+                    viewButton.setAttribute('aria-label', 'Ver ' + exam.name);
+
+                    return row;
+                }
+
+                function showExamSaveFeedback(exam, saveMode) {
+                    if (!examSaveFeedback) {
+                        return;
+                    }
+
+                    const message = saveMode === 'published'
+                        ? 'El examen "' + exam.name + '" se publico y se agrego a Examenes.'
+                        : 'El borrador "' + exam.name + '" se agrego a Examenes.';
+
+                    examSaveFeedback.replaceChildren(
+                        createExamElement('i', 'fa-solid fa-circle-check'),
+                        createExamElement('span', '', message)
+                    );
+                    examSaveFeedback.hidden = false;
                 }
 
                 function buildExamQuestionEditor(question, questionIndex) {
@@ -5011,6 +7727,10 @@
                         return;
                     }
 
+                    if (examSaveFeedback) {
+                        examSaveFeedback.hidden = true;
+                    }
+
                     const projectId = programSelector.value;
                     const selectedProgram = programSelector.options[programSelector.selectedIndex];
                     const moduleName = populateNewExamModules(projectId);
@@ -5040,10 +7760,6 @@
                     examIndexView.hidden = true;
                     examCreateView.hidden = false;
 
-                    if (programContext) {
-                        programContext.hidden = true;
-                    }
-
                     renderNewExamQuestions();
                     newExamModule.focus();
                 }
@@ -5057,12 +7773,6 @@
                         examCreateView.hidden = true;
                     }
 
-                    if (programContext) {
-                        const activeProgramTab = root.querySelector('[data-program-tab].is-active');
-
-                        programContext.hidden = !activeProgramTab || activeProgramTab.dataset.programTab === 'projects';
-                    }
-
                     creatingExam = null;
                 }
 
@@ -5074,6 +7784,94 @@
                     root.querySelectorAll('[data-selected-program-name]').forEach(function(element) {
                         element.textContent = programName;
                     });
+                }
+
+                function createProgramId(title) {
+                    const slug = title.toLowerCase()
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-|-$/g, '')
+                        .slice(0, 48) || 'programa';
+
+                    return slug + '-' + Date.now().toString(36);
+                }
+
+                function ensureProgramOption(programId, title) {
+                    if (!programSelector) {
+                        return null;
+                    }
+
+                    let option = Array.from(programSelector.options).find(function(item) {
+                        return item.value === programId;
+                    });
+
+                    if (!option) {
+                        option = createExamElement('option', '', title);
+                        option.value = programId;
+                        programSelector.appendChild(option);
+                    }
+
+                    option.textContent = title;
+
+                    return option;
+                }
+
+                function createProgramCarouselCard(programId, data) {
+                    if (!programCarouselTrack) {
+                        return null;
+                    }
+
+                    const card = createExamElement('article', 'training-program-carousel-card');
+                    const selectButton = createExamElement('button', 'training-program-carousel-select');
+                    const header = createExamElement('span', 'training-program-carousel-card-header');
+                    const icon = createExamElement('span', 'training-program-carousel-icon');
+                    const status = createExamElement('span', 'training-program-status');
+                    const title = createExamElement('strong', '', data.title);
+                    const description = createExamElement('span', 'training-program-carousel-description', data.description);
+                    const meta = createExamElement('span', 'training-program-carousel-meta');
+                    const owner = createExamElement('span');
+                    const modules = createExamElement('span');
+                    const editButton = createExamElement('button', 'training-program-carousel-edit');
+
+                    card.dataset.programCard = '';
+                    card.dataset.programId = programId;
+                    selectButton.type = 'button';
+                    selectButton.dataset.programCarouselItem = '';
+                    selectButton.dataset.programId = programId;
+                    selectButton.setAttribute('aria-pressed', 'false');
+                    icon.appendChild(createExamElement('i', 'fa-regular fa-folder-open'));
+                    status.dataset.programStatus = '';
+                    title.dataset.programTitle = '';
+                    description.dataset.programDescription = '';
+                    owner.append(
+                        createExamElement('small', '', 'Responsable'),
+                        createExamElement('b', '', data.owner)
+                    );
+                    owner.querySelector('b').dataset.programOwner = '';
+                    modules.append(
+                        createExamElement('small', '', 'Modulos'),
+                        createExamElement('b', '', String(data.modules || 0))
+                    );
+                    header.append(icon, status);
+                    meta.append(owner, modules);
+                    selectButton.append(header, title, description, meta);
+                    editButton.type = 'button';
+                    editButton.dataset.editProgram = '';
+                    editButton.title = 'Editar programa';
+                    editButton.setAttribute('aria-label', 'Editar ' + data.title);
+                    editButton.appendChild(createExamElement(
+                        'span',
+                        'training-program-edit-glyph',
+                        String.fromCharCode(9998)
+                    ));
+                    editButton.firstElementChild.setAttribute('aria-hidden', 'true');
+                    card.append(selectButton, editButton);
+                    programCarouselTrack.appendChild(card);
+                    applyProgramData(card, data);
+                    requestAnimationFrame(updateProgramCarouselNavigation);
+
+                    return card;
                 }
 
                 function applyProgramData(card, data) {
@@ -5096,6 +7894,12 @@
                     status.classList.remove('is-active', 'is-draft', 'is-inactive');
                     status.classList.add('is-' + statusTone);
 
+                    const editButton = card.querySelector('[data-edit-program]');
+
+                    if (editButton) {
+                        editButton.setAttribute('aria-label', 'Editar ' + data.title);
+                    }
+
                     if (programSelector) {
                         const option = Array.from(programSelector.options).find(function(item) {
                             return item.value === card.dataset.programId;
@@ -5111,6 +7915,50 @@
                     }
                 }
 
+                function openProgramEditor(card) {
+                    if (!card || !programModal || !programForm) {
+                        return;
+                    }
+
+                    programForm.elements.program_id.value = card.dataset.programId;
+                    programForm.elements.title.value = card.querySelector('[data-program-title]').textContent.trim();
+                    programForm.elements.description.value = card.querySelector('[data-program-description]').textContent.trim();
+                    programForm.elements.owner.value = card.querySelector('[data-program-owner]').textContent.trim();
+                    programForm.elements.status.value = card.querySelector('[data-program-status]').textContent.trim();
+
+                    if (programModalTitle) {
+                        programModalTitle.textContent = 'Editar programa';
+                    }
+
+                    if (programSubmitLabel) {
+                        programSubmitLabel.textContent = 'Guardar cambios';
+                    }
+
+                    programModal.showModal();
+                    programForm.elements.title.focus();
+                }
+
+                function openNewProgramModal() {
+                    if (!programModal || !programForm) {
+                        return;
+                    }
+
+                    programForm.reset();
+                    programForm.elements.program_id.value = '';
+                    programForm.elements.status.value = 'Borrador';
+
+                    if (programModalTitle) {
+                        programModalTitle.textContent = 'Nuevo programa';
+                    }
+
+                    if (programSubmitLabel) {
+                        programSubmitLabel.textContent = 'Crear programa';
+                    }
+
+                    programModal.showModal();
+                    programForm.elements.title.focus();
+                }
+
                 function closeProgramModal() {
                     if (programModal && programModal.open) {
                         programModal.close();
@@ -5122,6 +7970,33 @@
                         openTrainingAssignment(button);
                     });
                 });
+
+                root.querySelector('[data-open-new-training]')?.addEventListener('click', openNewTrainingAssignment);
+
+                assignmentStudentSelect?.addEventListener('change', function() {
+                    const selectedOption = assignmentStudentSelect.options[assignmentStudentSelect.selectedIndex];
+                    const studentId = selectedOption?.value || '';
+                    const studentName = selectedOption?.dataset.studentName || '';
+
+                    assignmentTargetRow = studentId
+                        ? Array.from(root.querySelectorAll('[data-student-row]')).find(function(row) {
+                            return row.dataset.studentId === studentId;
+                        }) || {
+                            dataset: {
+                                studentId: studentId,
+                                studentName: studentName,
+                            },
+                        }
+                        : null;
+
+                    if (assignmentStudent) {
+                        assignmentStudent.textContent = studentName;
+                    }
+
+                    updateAssignmentSelection();
+                });
+
+                assignmentStartDate?.addEventListener('change', updateAssignmentSelection);
 
                 root.querySelectorAll('[data-close-training-assignment]').forEach(function(button) {
                     button.addEventListener('click', closeTrainingAssignment);
@@ -5204,7 +8079,12 @@
 
                         storedAssignments[studentName] = mergedAssignments;
                         persistAssignments(storedAssignments);
-                        renderAssignmentsForRow(assignmentTargetRow, mergedAssignments);
+                        hydrateLearnerSelectorFromAssignments();
+
+                        if (typeof assignmentTargetRow.querySelector === 'function') {
+                            renderAssignmentsForRow(assignmentTargetRow, mergedAssignments);
+                        }
+
                         closeTrainingAssignment();
                     });
                 }
@@ -5234,6 +8114,1672 @@
                 applyStoredAssignments();
                 applyStoredEmploymentStatuses();
 
+                function normaliseLearnerIdentity(value) {
+                    return String(value || '')
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-|-$/g, '');
+                }
+
+                function learnerProfileId(name) {
+                    return 'assigned-' + (normaliseLearnerIdentity(name) || 'learner');
+                }
+
+                // Existing training records in this browser are indexed by the displayed name.
+                document.addEventListener('personnel-general-updated', function(event) {
+                    const previousName = event.detail.previous_name;
+                    const name = event.detail.name;
+                    if (!previousName || previousName === name) return;
+                    const hasNamesake = Array.from(root.querySelectorAll('[data-student-row]'))
+                        .filter(row => row.dataset.studentName === previousName).length > 1;
+
+                    const assignments = readStoredAssignments();
+                    if (Array.isArray(assignments[previousName])) {
+                        assignments[name] = mergeAssignments(assignments[name] || [], assignments[previousName]);
+                        if (!hasNamesake) delete assignments[previousName];
+                        persistAssignments(assignments);
+                    }
+                    const statuses = readStoredEmploymentStatuses();
+                    if (statuses[previousName]) {
+                        statuses[name] = statuses[name] || statuses[previousName];
+                        if (!hasNamesake) delete statuses[previousName];
+                        persistEmploymentStatuses(statuses);
+                    }
+                    try {
+                        const oldId = learnerProfileId(previousName);
+                        const newId = learnerProfileId(name);
+                        const oldState = window.localStorage.getItem(learnerStateStorageKey + '.' + oldId);
+                        if (oldState && !window.localStorage.getItem(learnerStateStorageKey + '.' + newId)) {
+                            window.localStorage.setItem(learnerStateStorageKey + '.' + newId, oldState);
+                        }
+                        if (window.localStorage.getItem(learnerSelectionStorageKey) === oldId) {
+                            window.localStorage.setItem(learnerSelectionStorageKey, newId);
+                        }
+                    } catch (error) {
+                        // A storage restriction must not interrupt a completed personnel update.
+                    }
+                });
+
+                function hydrateLearnerSelectorFromAssignments() {
+                    if (!learnerSelector) {
+                        return;
+                    }
+
+                    const selectedValue = learnerSelector.value;
+                    const storedAssignments = readStoredAssignments();
+
+                    Object.entries(storedAssignments).forEach(function(entry) {
+                        const studentName = entry[0];
+                        const assignments = entry[1];
+
+                        if (!Array.isArray(assignments) || !assignments.length) {
+                            return;
+                        }
+
+                        const identity = normaliseLearnerIdentity(studentName);
+                        const alreadyListed = Array.from(learnerSelector.options).some(function(option) {
+                            return normaliseLearnerIdentity(option.dataset.learnerName) === identity;
+                        });
+
+                        if (alreadyListed) {
+                            return;
+                        }
+
+                        const firstAssignment = assignments[0] || {};
+                        const option = document.createElement('option');
+
+                        option.value = learnerProfileId(studentName);
+                        option.dataset.learnerName = studentName;
+                        option.dataset.programId = firstAssignment.programId || '';
+                        option.dataset.programName = firstAssignment.programName || 'Capacitacion asignada';
+                        option.dataset.progress = String(firstAssignment.progress || 0);
+                        option.textContent = studentName + ' - ' + option.dataset.programName;
+                        learnerSelector.append(option);
+                    });
+
+                    Array.from(learnerSelector.options)
+                        .sort(function(left, right) {
+                            return (left.dataset.learnerName || '').localeCompare(
+                                right.dataset.learnerName || '',
+                                'es',
+                                { sensitivity: 'base' }
+                            );
+                        })
+                        .forEach(function(option) {
+                            learnerSelector.append(option);
+                        });
+
+                    if (selectedValue && Array.from(learnerSelector.options).some(function(option) {
+                        return option.value === selectedValue;
+                    })) {
+                        learnerSelector.value = selectedValue;
+                    }
+
+                    if (openLearnerPanelButton) {
+                        openLearnerPanelButton.disabled = learnerSelector.options.length === 0;
+                    }
+                }
+
+                function restoreLearnerSelection() {
+                    if (!learnerSelector) {
+                        return;
+                    }
+
+                    try {
+                        const storedSelection = window.localStorage.getItem(learnerSelectionStorageKey);
+                        const optionExists = Array.from(learnerSelector.options).some(function(option) {
+                            return option.value === storedSelection;
+                        });
+
+                        if (optionExists) {
+                            learnerSelector.value = storedSelection;
+                        }
+                    } catch (error) {
+                        // Keep the first available learner selected when storage is unavailable.
+                    }
+                }
+
+                function readSelectedLearnerProfile() {
+                    const selectedOption = learnerSelector?.options[learnerSelector.selectedIndex];
+
+                    if (!selectedOption) {
+                        return Object.assign({}, defaultLearnerProfile);
+                    }
+
+                    return {
+                        id: selectedOption.value,
+                        name: selectedOption.dataset.learnerName || selectedOption.textContent.trim(),
+                        programId: selectedOption.dataset.programId || '',
+                        programName: selectedOption.dataset.programName || '',
+                        progress: Math.min(100, Math.max(0, Number(selectedOption.dataset.progress) || 0)),
+                    };
+                }
+
+                function learnerStateKey() {
+                    return learnerStateStorageKey + '.' + activeLearnerId;
+                }
+
+                function readLearnerState() {
+                    const defaultState = createDefaultLearnerState();
+
+                    try {
+                        const storedState = JSON.parse(window.localStorage.getItem(learnerStateKey()) || '{}');
+
+                        if (!storedState || typeof storedState !== 'object' || Array.isArray(storedState)) {
+                            return defaultState;
+                        }
+
+                        return {
+                            completedVideos: Array.isArray(storedState.completedVideos)
+                                ? Array.from(new Set(storedState.completedVideos.map(String)))
+                                : defaultState.completedVideos,
+                            videoProgress: Object.assign(
+                                {},
+                                defaultState.videoProgress,
+                                storedState.videoProgress && typeof storedState.videoProgress === 'object' && !Array.isArray(storedState.videoProgress)
+                                    ? storedState.videoProgress
+                                    : {}
+                            ),
+                            tasks: Object.assign({}, defaultState.tasks, storedState.tasks || {}),
+                            exams: Object.assign({}, defaultState.exams, storedState.exams || {}),
+                        };
+                    } catch (error) {
+                        return defaultState;
+                    }
+                }
+
+                function createDefaultLearnerState() {
+                    const completedVideos = [];
+                    const videoProgress = {};
+                    const tasks = learnerCurriculum.reduce(function(records, module) {
+                        records[String(module.taskId)] = { status: 'locked' };
+                        return records;
+                    }, {});
+                    const exams = learnerCurriculum.reduce(function(records, module) {
+                        records[module.examId] = { status: 'locked', attempts: 0, answers: [] };
+                        return records;
+                    }, {});
+                    const totalSteps = learnerCurriculum.reduce(function(total, module) {
+                        return total + getModuleVideos(module).length + 2;
+                    }, 0);
+                    const targetProgress = Math.min(100, Math.max(0, Number(activeLearnerProfile?.progress) || 0));
+                    let remainingSteps = Math.round((totalSteps * targetProgress) / 100);
+
+                    learnerCurriculum.forEach(function(module) {
+                        if (remainingSteps <= 0) {
+                            return;
+                        }
+
+                        const moduleVideos = getModuleVideos(module);
+
+                        moduleVideos.forEach(function(video) {
+                            if (remainingSteps <= 0) {
+                                return;
+                            }
+
+                            completedVideos.push(video.id);
+                            videoProgress[video.id] = 100;
+                            remainingSteps -= 1;
+                        });
+
+                        if (remainingSteps <= 0 || moduleVideos.some(function(video) {
+                            return !completedVideos.includes(video.id);
+                        })) {
+                            return;
+                        }
+
+                        tasks[String(module.taskId)] = {
+                            status: 'approved',
+                            response: 'Actividad completada y validada por el responsable de capacitacion.',
+                            fileName: 'evidencia_capacitacion.pdf',
+                        };
+                        remainingSteps -= 1;
+
+                        if (remainingSteps <= 0) {
+                            return;
+                        }
+
+                        const exam = getLearnerExam(module);
+
+                        exams[module.examId] = {
+                            status: 'passed',
+                            score: 88,
+                            correct: exam.items.length,
+                            total: exam.items.length,
+                            attempts: 1,
+                            answers: exam.items.map(function(question) {
+                                return Array.isArray(question.correct)
+                                    ? question.correct.slice()
+                                    : question.correct;
+                            }),
+                        };
+                        remainingSteps -= 1;
+                    });
+
+                    return {
+                        completedVideos: completedVideos,
+                        videoProgress: videoProgress,
+                        tasks: tasks,
+                        exams: exams,
+                    };
+                }
+
+                function persistLearnerState() {
+                    try {
+                        window.localStorage.setItem(learnerStateKey(), JSON.stringify(learnerState));
+                    } catch (error) {
+                        // Keep the learner workflow available for the current session.
+                    }
+                }
+
+                function getStoredVideoProgress(videoId) {
+                    if (!videoId) {
+                        return 0;
+                    }
+
+                    if ((learnerState.completedVideos || []).includes(videoId)) {
+                        return 100;
+                    }
+
+                    return Math.min(100, Math.max(0, Number(learnerState.videoProgress?.[videoId]) || 0));
+                }
+
+                function persistCurrentVideoProgress() {
+                    const videoId = root.querySelector('[data-training-video-play]')?.dataset.videoId;
+
+                    if (!videoId || !learnerState) {
+                        return;
+                    }
+
+                    learnerState.videoProgress = learnerState.videoProgress || {};
+                    learnerState.videoProgress[videoId] = Math.min(
+                        100,
+                        Math.max(0, Math.round(learnerPlaybackProgress))
+                    );
+                    persistLearnerState();
+                }
+
+                function closeLearnerVideoDialog() {
+                    persistCurrentVideoProgress();
+                    stopLearnerPlayback(false);
+                    updateLearnerPlaybackControls();
+                    closeLearnerDialog(learnerVideoDialog);
+                }
+
+                function openLearnerVideoDialog(autoPlay) {
+                    if (currentLearnerObligation?.type !== 'content' || !learnerVideoDialog) {
+                        return;
+                    }
+
+                    learnerPlaybackProgress = getStoredVideoProgress(currentLearnerObligation.video.id);
+                    updateLearnerPlaybackControls();
+                    openLearnerDialog(learnerVideoDialog);
+
+                    window.requestAnimationFrame(function() {
+                        const videoButton = root.querySelector('[data-training-video-play]');
+
+                        videoButton?.focus();
+
+                        if (autoPlay && videoButton && !learnerPlaybackTimer && learnerPlaybackProgress < 100) {
+                            videoButton.click();
+                        }
+                    });
+                }
+
+                function renderActiveLearnerIdentity() {
+                    activeLearnerNameElements.forEach(function(element) {
+                        element.textContent = activeLearnerProfile?.name || 'Alumno';
+                    });
+                }
+
+                function openSelectedLearnerPanel() {
+                    if (!learnerSelector?.value) {
+                        return;
+                    }
+
+                    closeLearnerVideoDialog();
+                    stopLearnerPlayback(true);
+                    closeLearnerDialog(learnerTaskDialog);
+                    closeLearnerDialog(learnerExamDialog);
+                    closeLearnerDialog(resultReviewDialog);
+                    const learnerVideoButton = root.querySelector('[data-training-video-play]');
+
+                    if (learnerVideoButton) {
+                        learnerVideoButton.dataset.videoId = '';
+                    }
+
+                    activeLearnerTaskRow = null;
+                    activeLearnerExamModule = null;
+                    activeLearnerId = learnerSelector.value;
+                    activeLearnerProfile = readSelectedLearnerProfile();
+                    learnerState = readLearnerState();
+
+                    try {
+                        window.localStorage.setItem(learnerSelectionStorageKey, activeLearnerId);
+                    } catch (error) {
+                        // Keep the selected learner for the current session.
+                    }
+
+                    renderActiveLearnerIdentity();
+                    renderLearnerExperience();
+                    activateLearnerTab('home', false);
+                }
+
+                function createLearnerElement(tagName, className, textContent) {
+                    const element = document.createElement(tagName);
+
+                    if (className) {
+                        element.className = className;
+                    }
+
+                    if (typeof textContent === 'string') {
+                        element.textContent = textContent;
+                    }
+
+                    return element;
+                }
+
+                function getModuleVideos(module) {
+                    const chapters = Array.isArray(module?.chapters) ? module.chapters : [];
+
+                    return chapters.reduce(function(videos, chapter, chapterIndex) {
+                        const chapterVideos = Array.isArray(chapter.videos) ? chapter.videos : [];
+
+                        chapterVideos.forEach(function(video, videoIndex) {
+                            videos.push(Object.assign({}, video, {
+                                chapterTitle: chapter.title,
+                                chapterNumber: chapterIndex + 1,
+                                chapterTotal: chapters.length,
+                                videoNumber: videoIndex + 1,
+                            }));
+                        });
+
+                        return videos;
+                    }, []);
+                }
+
+                function getLearnerExam(module) {
+                    const sourceExam = examRecords[module.examId]
+                        || examDefaults[module.examId]
+                        || learnerExamFallbacks[module.examId]
+                        || {};
+
+                    return normaliseExam(Object.assign({}, sourceExam, {
+                        id: module.examId,
+                        module: module.title,
+                        minimum: sourceExam.minimum ?? module.minimum,
+                    }));
+                }
+
+                function isTaskCompleted(status) {
+                    return status === 'review' || status === 'approved';
+                }
+
+                function areModuleVideosComplete(module) {
+                    const completedVideos = new Set(learnerState.completedVideos || []);
+
+                    return getModuleVideos(module).every(function(video) {
+                        return completedVideos.has(video.id);
+                    });
+                }
+
+                function isModulePassed(module) {
+                    const task = learnerState.tasks?.[String(module.taskId)] || {};
+                    const exam = learnerState.exams?.[module.examId] || {};
+
+                    return areModuleVideosComplete(module)
+                        && isTaskCompleted(task.status)
+                        && exam.status === 'passed';
+                }
+
+                function synchronizeLearnerState() {
+                    learnerState.completedVideos = Array.from(new Set(learnerState.completedVideos || []));
+                    learnerState.videoProgress = learnerState.videoProgress && typeof learnerState.videoProgress === 'object'
+                        ? learnerState.videoProgress
+                        : {};
+                    learnerState.tasks = learnerState.tasks || {};
+                    learnerState.exams = learnerState.exams || {};
+
+                    Object.keys(learnerState.videoProgress).forEach(function(videoId) {
+                        learnerState.videoProgress[videoId] = Math.min(
+                            100,
+                            Math.max(0, Number(learnerState.videoProgress[videoId]) || 0)
+                        );
+                    });
+                    learnerState.completedVideos.forEach(function(videoId) {
+                        learnerState.videoProgress[videoId] = 100;
+                    });
+
+                    let previousModulePassed = true;
+
+                    learnerCurriculum.forEach(function(module) {
+                        const taskId = String(module.taskId);
+                        const task = learnerState.tasks[taskId] || { status: 'locked' };
+                        const exam = learnerState.exams[module.examId] || { status: 'locked', attempts: 0, answers: [] };
+                        const videosComplete = areModuleVideosComplete(module);
+
+                        learnerState.tasks[taskId] = task;
+                        learnerState.exams[module.examId] = exam;
+
+                        if (!previousModulePassed) {
+                            task.status = 'locked';
+                            exam.status = 'locked';
+                            previousModulePassed = false;
+                            return;
+                        }
+
+                        if (!videosComplete) {
+                            if (!isTaskCompleted(task.status)) {
+                                task.status = 'locked';
+                            }
+
+                            if (exam.status !== 'passed') {
+                                exam.status = 'locked';
+                            }
+                        } else if (!isTaskCompleted(task.status)) {
+                            if (task.status !== 'corrections') {
+                                task.status = 'pending';
+                            }
+
+                            if (exam.status !== 'passed') {
+                                exam.status = 'locked';
+                            }
+                        } else if (!['available', 'failed', 'passed'].includes(exam.status)) {
+                            exam.status = 'available';
+                        }
+
+                        previousModulePassed = isModulePassed(module);
+                    });
+                }
+
+                function getModuleProgress(module) {
+                    const videos = getModuleVideos(module);
+                    const completedVideos = new Set(learnerState.completedVideos || []);
+                    const completedVideoCount = videos.filter(function(video) {
+                        return completedVideos.has(video.id);
+                    }).length;
+                    const task = learnerState.tasks?.[String(module.taskId)] || {};
+                    const exam = learnerState.exams?.[module.examId] || {};
+                    const totalSteps = videos.length + 2;
+                    const completedSteps = completedVideoCount
+                        + (isTaskCompleted(task.status) ? 1 : 0)
+                        + (exam.status === 'passed' ? 1 : 0);
+
+                    return totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0;
+                }
+
+                function getOverallLearnerProgress() {
+                    let totalSteps = 0;
+                    let completedSteps = 0;
+                    const completedVideos = new Set(learnerState.completedVideos || []);
+
+                    learnerCurriculum.forEach(function(module) {
+                        const videos = getModuleVideos(module);
+                        const task = learnerState.tasks?.[String(module.taskId)] || {};
+                        const exam = learnerState.exams?.[module.examId] || {};
+
+                        totalSteps += videos.length + 2;
+                        completedSteps += videos.filter(function(video) {
+                            return completedVideos.has(video.id);
+                        }).length;
+                        completedSteps += isTaskCompleted(task.status) ? 1 : 0;
+                        completedSteps += exam.status === 'passed' ? 1 : 0;
+                    });
+
+                    return totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0;
+                }
+
+                function getNextLearnerObligation() {
+                    const completedVideos = new Set(learnerState.completedVideos || []);
+
+                    for (const module of learnerCurriculum) {
+                        if (isModulePassed(module)) {
+                            continue;
+                        }
+
+                        const nextVideo = getModuleVideos(module).find(function(video) {
+                            return !completedVideos.has(video.id);
+                        });
+
+                        if (nextVideo) {
+                            return { type: 'content', module: module, video: nextVideo };
+                        }
+
+                        const task = learnerState.tasks?.[String(module.taskId)] || {};
+
+                        if (!isTaskCompleted(task.status)) {
+                            return { type: 'task', module: module, taskId: String(module.taskId) };
+                        }
+
+                        return { type: 'exam', module: module, exam: getLearnerExam(module) };
+                    }
+
+                    return { type: 'certificate', module: learnerCurriculum[learnerCurriculum.length - 1] || null };
+                }
+
+                function getObligationActionLabel(obligation) {
+                    return {
+                        content: 'Continuar video',
+                        task: 'Realizar tarea',
+                        exam: learnerState.exams?.[obligation?.module?.examId]?.status === 'failed'
+                            ? 'Reintentar examen'
+                            : 'Presentar examen',
+                        certificate: 'Ver certificado',
+                    }[obligation?.type] || 'Continuar';
+                }
+
+                function updateLearnerFlow(obligation) {
+                    const stageOrder = ['content', 'task', 'exam', 'next'];
+                    const activeStage = obligation.type === 'certificate' ? 'next' : obligation.type;
+                    const activeIndex = stageOrder.indexOf(activeStage);
+                    const moduleNumber = obligation.module?.number || learnerCurriculum.length;
+                    const stageDetails = {
+                        content: 'Modulo ' + moduleNumber,
+                        task: activeIndex > 1 ? 'Tarea entregada' : 'Entrega obligatoria',
+                        exam: activeIndex > 2 ? 'Examen aprobado' : 'Minimo 80%',
+                        next: obligation.type === 'certificate' ? 'Programa terminado' : 'Al aprobar el modulo',
+                    };
+
+                    root.querySelectorAll('[data-obligation-stage]').forEach(function(stage) {
+                        const stageIndex = stageOrder.indexOf(stage.dataset.obligationStage);
+
+                        stage.classList.toggle('is-complete', stageIndex < activeIndex);
+                        stage.classList.toggle('is-active', stageIndex === activeIndex);
+                        stage.classList.toggle('is-locked', stageIndex > activeIndex);
+
+                        const detail = stage.querySelector('small');
+                        if (detail) {
+                            detail.textContent = stageDetails[stage.dataset.obligationStage];
+                        }
+                    });
+                }
+
+                function stopLearnerPlayback(resetProgress) {
+                    if (learnerPlaybackTimer) {
+                        window.clearInterval(learnerPlaybackTimer);
+                        learnerPlaybackTimer = null;
+                    }
+
+                    if (resetProgress) {
+                        learnerPlaybackProgress = 0;
+                    }
+                }
+
+                function updateLearnerPlaybackControls() {
+                    const videoButton = root.querySelector('[data-training-video-play]');
+                    const playbackStatus = root.querySelector('[data-video-playback-status]');
+                    const playbackFill = root.querySelector('[data-video-playback-fill]');
+                    const completeButton = root.querySelector('[data-complete-training-video]');
+                    const icon = videoButton?.querySelector('i');
+                    const isContentStep = currentLearnerObligation?.type === 'content';
+                    const roundedProgress = Math.min(100, Math.round(learnerPlaybackProgress));
+                    const isComplete = roundedProgress >= 100;
+                    const isPlaying = Boolean(learnerPlaybackTimer);
+
+                    if (!videoButton || !playbackStatus || !playbackFill || !completeButton || !icon) {
+                        return;
+                    }
+
+                    videoButton.classList.toggle('is-playing', isPlaying);
+                    videoButton.disabled = !isContentStep || isComplete;
+                    icon.className = isComplete
+                        ? 'fa-solid fa-check'
+                        : (isPlaying ? 'fa-solid fa-pause' : 'fa-solid fa-play');
+                    playbackFill.style.width = roundedProgress + '%';
+
+                    if (!isContentStep) {
+                        playbackStatus.textContent = 'Contenido del modulo completado';
+                        completeButton.textContent = 'Contenido completado';
+                        completeButton.disabled = true;
+                    } else if (isComplete) {
+                        playbackStatus.textContent = 'Video visto al 100%';
+                        completeButton.textContent = 'Finalizar video y continuar';
+                        completeButton.disabled = false;
+                    } else if (isPlaying) {
+                        playbackStatus.textContent = 'Reproduciendo ' + roundedProgress + '%';
+                        completeButton.textContent = 'Termina el video para continuar';
+                        completeButton.disabled = true;
+                    } else if (roundedProgress > 0) {
+                        playbackStatus.textContent = 'Pausado en ' + roundedProgress + '%';
+                        completeButton.textContent = 'Termina el video para continuar';
+                        completeButton.disabled = true;
+                    } else {
+                        playbackStatus.textContent = 'Listo para reproducir';
+                        completeButton.textContent = 'Termina el video para continuar';
+                        completeButton.disabled = true;
+                    }
+
+                    videoButton.setAttribute('aria-label', isPlaying
+                        ? 'Pausar video de capacitacion'
+                        : 'Reproducir video de capacitacion');
+                }
+
+                function renderLearnerContentOutline(module, currentVideoId) {
+                    const outline = root.querySelector('[data-content-outline]');
+                    const completedVideos = new Set(learnerState.completedVideos || []);
+
+                    if (!outline || !module) {
+                        return;
+                    }
+
+                    outline.replaceChildren();
+
+                    (module.chapters || []).forEach(function(chapter, chapterIndex) {
+                        const chapterElement = createLearnerElement('section', 'training-content-chapter');
+                        const chapterHeader = createLearnerElement('header');
+                        const chapterTitle = createLearnerElement('strong', '', 'Capitulo ' + (chapterIndex + 1) + ' · ' + chapter.title);
+                        const chapterVideos = Array.isArray(chapter.videos) ? chapter.videos : [];
+                        const completedCount = chapterVideos.filter(function(video) {
+                            return completedVideos.has(video.id);
+                        }).length;
+                        const chapterCount = createLearnerElement('small', '', completedCount + ' de ' + chapterVideos.length + ' vistos');
+
+                        chapterHeader.append(chapterTitle, chapterCount);
+                        chapterElement.appendChild(chapterHeader);
+
+                        chapterVideos.forEach(function(video) {
+                            const isComplete = completedVideos.has(video.id);
+                            const isCurrent = video.id === currentVideoId;
+                            const videoRow = createLearnerElement('button', 'training-content-video');
+                            const marker = createLearnerElement('span');
+                            const markerIcon = createLearnerElement('i', isComplete
+                                ? 'fa-solid fa-check'
+                                : (isCurrent ? 'fa-solid fa-play' : 'fa-solid fa-lock'));
+                            const copy = createLearnerElement('span');
+                            const title = createLearnerElement('strong', '', video.title);
+                            const duration = createLearnerElement('small', '', video.duration);
+                            const status = createLearnerElement('em', '', isComplete ? 'Visto' : (isCurrent ? 'Continuar' : 'Pendiente'));
+
+                            videoRow.type = 'button';
+                            videoRow.classList.add(isComplete ? 'is-complete' : (isCurrent ? 'is-current' : 'is-locked'));
+                            videoRow.disabled = !isCurrent;
+                            videoRow.dataset.outlineVideo = video.id;
+                            markerIcon.setAttribute('aria-hidden', 'true');
+                            marker.appendChild(markerIcon);
+                            copy.append(title, duration);
+                            videoRow.append(marker, copy, status);
+                            chapterElement.appendChild(videoRow);
+                        });
+
+                        outline.appendChild(chapterElement);
+                    });
+                }
+
+                function renderLearnerHome(obligation) {
+                    const eyebrow = root.querySelector('[data-next-obligation-eyebrow]');
+                    const summary = root.querySelector('[data-next-obligation-summary]');
+                    const action = root.querySelector('[data-next-obligation-action]');
+                    const actionLabel = root.querySelector('[data-next-obligation-label]');
+                    const actionIcon = action?.querySelector('i');
+                    const module = obligation.module || learnerCurriculum[learnerCurriculum.length - 1];
+                    const moduleVideos = module ? getModuleVideos(module) : [];
+                    const video = obligation.type === 'content' ? obligation.video : moduleVideos[moduleVideos.length - 1];
+                    const videoButton = root.querySelector('[data-training-video-play]');
+                    const progress = module ? getModuleProgress(module) : 100;
+                    const typeCopy = {
+                        content: {
+                            eyebrow: 'Modulo ' + module.number + ' · Contenido obligatorio',
+                            summary: 'Mira "' + video.title + '" para continuar el recorrido.',
+                            icon: 'fa-solid fa-play',
+                        },
+                        task: {
+                            eyebrow: 'Modulo ' + module.number + ' · Tarea obligatoria',
+                            summary: 'Terminaste todos los videos. Entrega la tarea del modulo para habilitar el examen.',
+                            icon: 'fa-regular fa-clipboard',
+                        },
+                        exam: {
+                            eyebrow: 'Modulo ' + module.number + ' · Examen obligatorio',
+                            summary: 'La tarea esta entregada. Aprueba el examen para desbloquear el siguiente modulo.',
+                            icon: 'fa-regular fa-file-lines',
+                        },
+                        certificate: {
+                            eyebrow: 'Programa completado',
+                            summary: 'Aprobaste todos los modulos. Tu certificado ya esta disponible.',
+                            icon: 'fa-solid fa-award',
+                        },
+                    }[obligation.type];
+
+                    if (!module || !video || !typeCopy) {
+                        return;
+                    }
+
+                    eyebrow.textContent = typeCopy.eyebrow;
+                    summary.textContent = typeCopy.summary;
+                    actionLabel.textContent = getObligationActionLabel(obligation);
+                    actionIcon.className = typeCopy.icon;
+
+                    root.querySelector('[data-current-module-label]').textContent = 'Modulo ' + module.number;
+                    root.querySelector('[data-current-module-title]').textContent = module.title;
+                    root.querySelector('[data-current-module-progress]').textContent = progress + '% del modulo';
+                    root.querySelector('[data-current-video-title]').textContent = video.title;
+                    root.querySelector('[data-current-chapter-label]').textContent = 'Capitulo ' + video.chapterNumber + ' de ' + video.chapterTotal;
+                    root.querySelector('[data-current-chapter-title]').textContent = video.chapterTitle;
+                    root.querySelector('[data-current-video-description]').textContent = video.description;
+
+                    if (videoButton.dataset.videoId !== video.id) {
+                        persistCurrentVideoProgress();
+                        stopLearnerPlayback(false);
+                        videoButton.dataset.videoId = video.id;
+                        learnerPlaybackProgress = getStoredVideoProgress(video.id);
+                    }
+
+                    if (obligation.type !== 'content') {
+                        stopLearnerPlayback(false);
+                        learnerPlaybackProgress = 100;
+                        closeLearnerVideoDialog();
+                    }
+
+                    renderLearnerContentOutline(module, obligation.type === 'content' ? video.id : null);
+                    updateLearnerPlaybackControls();
+                }
+
+                function renderLearnerModules(obligation) {
+                    learnerCurriculum.forEach(function(module, moduleIndex) {
+                        const moduleElement = root.querySelector('[data-learner-module="' + module.number + '"]');
+                        const pathStep = root.querySelector('[data-learning-path-step="' + module.number + '"]');
+                        const previousModule = learnerCurriculum[moduleIndex - 1];
+                        const isPassed = isModulePassed(module);
+                        const isUnlocked = moduleIndex === 0 || isModulePassed(previousModule);
+                        const status = isPassed ? 'approved' : (isUnlocked ? 'current' : 'locked');
+                        const statusLabel = status === 'approved' ? 'Aprobado' : (status === 'current' ? 'En curso' : 'Bloqueado');
+
+                        if (!moduleElement || !pathStep) {
+                            return;
+                        }
+
+                        pathStep.className = 'training-learning-path-step is-' + status;
+                        pathStep.querySelector('strong').textContent = statusLabel;
+
+                        moduleElement.className = 'training-learner-module is-' + status;
+                        moduleElement.dataset.moduleStatus = status;
+
+                        const marker = moduleElement.querySelector('.training-learner-module-marker');
+                        const detail = moduleElement.querySelector('[data-module-detail]');
+                        const actions = moduleElement.querySelector('.training-learner-module-actions');
+
+                        if (status === 'approved') {
+                            const markerIcon = createLearnerElement('i', 'fa-solid fa-check');
+                            const meta = createLearnerElement('div', 'training-module-meta');
+                            const chapterMeta = createLearnerElement('span');
+                            const taskMeta = createLearnerElement('span');
+                            const examMeta = createLearnerElement('span');
+                            const chapterIcon = createLearnerElement('i', 'fa-regular fa-book-open');
+                            const taskIcon = createLearnerElement('i', 'fa-regular fa-clipboard');
+                            const examIcon = createLearnerElement('i', 'fa-regular fa-chart-pie');
+                            const examScore = learnerState.exams?.[module.examId]?.score ?? 0;
+                            const examScoreLabel = createLearnerElement('strong', '', examScore + '%');
+                            const resultButton = createLearnerElement('button', 'training-secondary-button', 'Ver resultado');
+
+                            markerIcon.setAttribute('aria-hidden', 'true');
+                            chapterIcon.setAttribute('aria-hidden', 'true');
+                            taskIcon.setAttribute('aria-hidden', 'true');
+                            examIcon.setAttribute('aria-hidden', 'true');
+                            marker.replaceChildren(markerIcon);
+                            chapterMeta.append(chapterIcon, document.createTextNode(module.chapters.length + ' capitulos'));
+                            taskMeta.append(taskIcon, document.createTextNode('Tarea entregada'));
+                            examMeta.append(examIcon, document.createTextNode('Examen '), examScoreLabel);
+                            meta.append(chapterMeta, taskMeta, examMeta);
+                            detail.replaceChildren(meta);
+
+                            resultButton.type = 'button';
+                            resultButton.dataset.learnerGoTo = 'results';
+                            actions.replaceChildren(createModuleStatePill('approved'), resultButton);
+                            return;
+                        }
+
+                        if (status === 'current') {
+                            const markerNumber = createLearnerElement('span', '', String(module.number));
+                            const moduleProgress = createLearnerElement('div', 'training-module-progress');
+                            const percentage = createLearnerElement('strong', '', getModuleProgress(module) + '%');
+                            const track = createLearnerElement('div', 'training-progress-track');
+                            const fill = createLearnerElement('span');
+                            const actionButton = createLearnerElement('button', 'training-primary-button', getObligationActionLabel(obligation));
+
+                            marker.replaceChildren(markerNumber);
+                            track.setAttribute('aria-label', 'Progreso del modulo: ' + getModuleProgress(module) + '%');
+                            fill.style.width = getModuleProgress(module) + '%';
+                            track.appendChild(fill);
+                            moduleProgress.append(percentage, track);
+                            detail.replaceChildren(moduleProgress);
+                            actionButton.type = 'button';
+                            actionButton.dataset.modulePrimaryAction = '';
+                            actions.replaceChildren(createModuleStatePill('current'), actionButton);
+                            return;
+                        }
+
+                        const lockIcon = createLearnerElement('i', 'fa-solid fa-lock');
+                        const requirement = createLearnerElement('p');
+                        const requiredModuleNumber = Math.max(1, module.number - 1);
+
+                        lockIcon.setAttribute('aria-hidden', 'true');
+                        marker.replaceChildren(lockIcon);
+                        requirement.append(
+                            createLearnerElement('strong', '', 'Bloqueado'),
+                            document.createTextNode(' · Debes aprobar el modulo ' + requiredModuleNumber + ' para desbloquear este contenido.')
+                        );
+                        detail.replaceChildren(requirement);
+                        actions.replaceChildren(createModuleStatePill('locked'));
+                    });
+                }
+
+                function getLatestLearnerResult() {
+                    return learnerCurriculum.reduce(function(latest, module) {
+                        const examState = learnerState.exams?.[module.examId] || {};
+
+                        return ['passed', 'failed'].includes(examState.status)
+                            ? { module: module, state: examState, exam: getLearnerExam(module) }
+                            : latest;
+                    }, null);
+                }
+
+                function renderLearnerResultHistory() {
+                    const history = root.querySelector('[data-result-history]');
+
+                    if (!history) {
+                        return;
+                    }
+
+                    history.replaceChildren();
+
+                    learnerCurriculum.forEach(function(module, moduleIndex) {
+                        const examState = learnerState.exams?.[module.examId] || {};
+                        const previousModule = learnerCurriculum[moduleIndex - 1];
+                        const isUnlocked = moduleIndex === 0 || isModulePassed(previousModule);
+                        const status = examState.status === 'passed'
+                            ? 'approved'
+                            : (examState.status === 'failed' ? 'failed' : (isUnlocked ? 'current' : 'locked'));
+                        const row = createLearnerElement('div', 'is-' + status);
+                        const marker = createLearnerElement('span');
+                        const copy = createLearnerElement('p');
+                        const title = createLearnerElement('strong', '', 'Modulo ' + module.number);
+                        const subtitle = createLearnerElement('small', '', module.title);
+                        const result = createLearnerElement('b');
+                        const resultDetail = createLearnerElement('small');
+                        const statusIcon = createLearnerElement('i');
+
+                        if (status === 'locked') {
+                            const markerIcon = createLearnerElement('i', 'fa-solid fa-lock');
+                            markerIcon.setAttribute('aria-hidden', 'true');
+                            marker.appendChild(markerIcon);
+                        } else {
+                            marker.textContent = String(module.number);
+                        }
+
+                        copy.append(title, subtitle);
+
+                        if (status === 'approved') {
+                            result.append(document.createTextNode((examState.score ?? 0) + '%'), createLearnerElement('small', '', 'Completado'));
+                            statusIcon.className = 'fa-solid fa-check';
+                        } else if (status === 'failed') {
+                            result.append(document.createTextNode((examState.score ?? 0) + '%'), createLearnerElement('small', '', 'No aprobado'));
+                            statusIcon.className = 'fa-solid fa-xmark';
+                        } else if (status === 'current') {
+                            result.textContent = 'En curso';
+                            statusIcon.className = 'fa-solid fa-arrow-right';
+                        } else {
+                            result.textContent = 'Bloqueado';
+                            statusIcon.className = 'fa-solid fa-lock';
+                        }
+
+                        statusIcon.setAttribute('aria-hidden', 'true');
+                        row.append(marker, copy, result, statusIcon);
+                        history.appendChild(row);
+                    });
+
+                    const passedModules = learnerCurriculum.filter(isModulePassed).length;
+                    const certificateReady = passedModules === learnerCurriculum.length;
+                    const certificateRow = createLearnerElement('div', certificateReady ? 'is-approved' : 'is-locked');
+                    const certificateMarker = createLearnerElement('span');
+                    const certificateMarkerIcon = createLearnerElement('i', certificateReady ? 'fa-solid fa-award' : 'fa-solid fa-lock');
+                    const certificateCopy = createLearnerElement('p');
+                    const certificateResult = createLearnerElement('b', '', certificateReady ? 'Disponible' : 'Bloqueado');
+                    const certificateStatusIcon = createLearnerElement('i', certificateReady ? 'fa-solid fa-check' : 'fa-solid fa-lock');
+
+                    certificateMarkerIcon.setAttribute('aria-hidden', 'true');
+                    certificateStatusIcon.setAttribute('aria-hidden', 'true');
+                    certificateMarker.appendChild(certificateMarkerIcon);
+                    certificateCopy.append(
+                        createLearnerElement('strong', '', 'Resultado final'),
+                        createLearnerElement('small', '', 'Certificacion')
+                    );
+                    certificateRow.append(certificateMarker, certificateCopy, certificateResult, certificateStatusIcon);
+                    history.appendChild(certificateRow);
+                }
+
+                function renderLearnerResults(obligation) {
+                    const latestResult = getLatestLearnerResult();
+
+                    if (!latestResult) {
+                        return;
+                    }
+
+                    const score = Number(latestResult.state.score) || 0;
+                    const passed = latestResult.state.status === 'passed';
+                    const hero = root.querySelector('[data-result-hero]');
+                    const ring = root.querySelector('[data-result-ring]');
+                    const status = root.querySelector('[data-result-status]');
+                    const statusIcon = createLearnerElement('i', passed ? 'fa-solid fa-check' : 'fa-solid fa-xmark');
+                    const primaryAction = root.querySelector('[data-result-primary-action]');
+                    const reviewButton = root.querySelector('[data-review-results]');
+                    const answers = Array.isArray(latestResult.state.answers) ? latestResult.state.answers : [];
+                    const breakdownScores = [score, Math.max(0, score - 3), Math.min(100, score + 2)];
+
+                    hero.classList.toggle('is-failed', !passed);
+                    ring.style.setProperty('--score', String(score));
+                    root.querySelector('[data-result-score]').textContent = score + '%';
+                    statusIcon.setAttribute('aria-hidden', 'true');
+                    status.className = 'training-state-pill ' + (passed ? 'is-approved' : 'is-corrections');
+                    status.replaceChildren(statusIcon, document.createTextNode(passed ? ' Modulo aprobado' : ' Modulo no aprobado'));
+                    root.querySelector('[data-result-module]').textContent = latestResult.module.title;
+                    root.querySelector('[data-result-message-primary]').textContent = passed
+                        ? 'Superaste el minimo aprobatorio de ' + latestResult.exam.minimum + '%.'
+                        : 'Obtuviste ' + score + '%. Necesitas al menos ' + latestResult.exam.minimum + '% para aprobar.';
+                    root.querySelector('[data-result-message-secondary]').textContent = passed
+                        ? (obligation.type === 'certificate'
+                            ? 'Terminaste el programa y tu certificado esta disponible.'
+                            : 'El modulo ' + obligation.module.number + ' ya esta disponible.')
+                        : 'Revisa tus respuestas y vuelve a presentar el examen.';
+                    primaryAction.textContent = getObligationActionLabel(obligation);
+                    reviewButton.disabled = answers.length === 0;
+
+                    root.querySelectorAll('[data-result-breakdown-fill]').forEach(function(fill, index) {
+                        fill.style.width = breakdownScores[index] + '%';
+                    });
+                    root.querySelectorAll('[data-result-breakdown-score]').forEach(function(label, index) {
+                        label.textContent = breakdownScores[index] + '%';
+                    });
+                    root.querySelector('[data-result-attempt]').textContent = String(latestResult.state.attempts || 1);
+                    root.querySelector('[data-result-pass-state]').textContent = passed ? 'Aprobado' : 'No aprobado';
+                    root.querySelector('[data-result-correct-answers]').textContent = (latestResult.state.correct ?? 0)
+                        + '/' + (latestResult.state.total || latestResult.exam.items.length);
+
+                    renderLearnerResultHistory();
+                }
+
+                function renderLearnerCertificate(obligation) {
+                    const approvedModules = learnerCurriculum.filter(isModulePassed).length;
+                    const isAvailable = approvedModules === learnerCurriculum.length;
+                    const progress = learnerCurriculum.length
+                        ? Math.round((approvedModules / learnerCurriculum.length) * 100)
+                        : 0;
+                    const card = root.querySelector('[data-certificate-card]');
+                    const status = root.querySelector('[data-certificate-status]');
+                    const statusIcon = createLearnerElement('i', isAvailable ? 'fa-solid fa-check' : 'fa-solid fa-lock');
+                    const action = root.querySelector('[data-certificate-action]');
+
+                    card.classList.toggle('is-available', isAvailable);
+                    root.querySelector('[data-certificate-message]').textContent = isAvailable
+                        ? 'Completaste los contenidos, tareas y examenes de los cuatro modulos.'
+                        : 'Completa los cuatro modulos y sus evaluaciones para emitir el certificado.';
+                    root.querySelector('[data-certificate-progress-fill]').style.width = progress + '%';
+                    root.querySelector('[data-certificate-progress-track]').setAttribute('aria-label', 'Progreso del certificado: ' + progress + '%');
+                    root.querySelector('[data-certificate-progress-label]').textContent = approvedModules + ' de ' + learnerCurriculum.length + ' modulos';
+                    statusIcon.setAttribute('aria-hidden', 'true');
+                    status.className = 'training-state-pill ' + (isAvailable ? 'is-approved' : 'is-locked');
+                    status.replaceChildren(statusIcon, document.createTextNode(isAvailable ? ' Disponible' : ' Pendiente'));
+                    action.className = isAvailable ? 'training-primary-button' : 'training-secondary-button';
+                    action.textContent = isAvailable ? 'Ver resultado final' : getObligationActionLabel(obligation);
+                }
+
+                function renderLearnerExperience() {
+                    synchronizeLearnerState();
+                    currentLearnerObligation = getNextLearnerObligation();
+
+                    const overallProgress = getOverallLearnerProgress();
+                    const approvedModules = learnerCurriculum.filter(isModulePassed).length;
+                    const latestResult = getLatestLearnerResult();
+
+                    root.querySelector('[data-overall-progress]').textContent = overallProgress + '%';
+                    root.querySelector('[data-overall-progress-fill]').style.width = overallProgress + '%';
+                    root.querySelector('[data-approved-module-count]').textContent = approvedModules + '/' + learnerCurriculum.length;
+                    root.querySelector('[data-latest-exam-score]').textContent = latestResult ? latestResult.state.score + '%' : '-';
+
+                    updateLearnerFlow(currentLearnerObligation);
+                    renderLearnerHome(currentLearnerObligation);
+                    renderLearnerModules(currentLearnerObligation);
+
+                    learnerTaskRows.forEach(function(row) {
+                        const storedTask = learnerState.tasks?.[row.dataset.learnerTask] || { status: 'locked' };
+                        setTaskRowStatus(row, storedTask.status);
+                    });
+
+                    updateLearnerTasks();
+                    renderLearnerResults(currentLearnerObligation);
+                    renderLearnerCertificate(currentLearnerObligation);
+                }
+
+                function openLearnerExam(module) {
+                    if (!module || !learnerExamDialog || !learnerExamForm || !learnerExamQuestions) {
+                        return;
+                    }
+
+                    const examState = learnerState.exams?.[module.examId] || {};
+
+                    if (!['available', 'failed'].includes(examState.status)) {
+                        return;
+                    }
+
+                    const exam = getLearnerExam(module);
+                    activeLearnerExamModule = module;
+                    learnerExamForm.reset();
+                    learnerExamQuestions.replaceChildren();
+                    learnerExamValidation.hidden = true;
+                    root.querySelector('[data-learner-exam-title]').textContent = exam.name;
+                    root.querySelector('[data-learner-exam-module]').textContent = 'Modulo ' + module.number + ' · ' + module.title;
+                    root.querySelector('[data-learner-exam-minimum]').textContent = exam.minimum + '%';
+
+                    exam.items.forEach(function(question, questionIndex) {
+                        const fieldset = createLearnerElement('fieldset', 'training-exam-question');
+                        const legend = createLearnerElement('legend', '', (questionIndex + 1) + '. ' + question.text);
+                        const inputType = question.type === 'multiple' ? 'checkbox' : 'radio';
+
+                        fieldset.appendChild(legend);
+
+                        question.options.forEach(function(option, optionIndex) {
+                            const label = createLearnerElement('label');
+                            const input = createLearnerElement('input');
+                            const copy = createLearnerElement('span', '', option);
+
+                            input.type = inputType;
+                            input.name = 'learner-question-' + questionIndex;
+                            input.value = String(optionIndex);
+                            label.append(input, copy);
+                            fieldset.appendChild(label);
+                        });
+
+                        learnerExamQuestions.appendChild(fieldset);
+                    });
+
+                    openLearnerDialog(learnerExamDialog);
+                    learnerExamQuestions.querySelector('input')?.focus();
+                }
+
+                function normalizeAnswerIndexes(answer) {
+                    const values = Array.isArray(answer) ? answer : [answer];
+
+                    return values.map(function(value) {
+                        return Number.parseInt(value, 10);
+                    }).filter(Number.isInteger).sort(function(first, second) {
+                        return first - second;
+                    });
+                }
+
+                function answersMatch(answer, correctAnswer) {
+                    const selected = normalizeAnswerIndexes(answer);
+                    const correct = normalizeAnswerIndexes(correctAnswer);
+
+                    return selected.length === correct.length && selected.every(function(value, index) {
+                        return value === correct[index];
+                    });
+                }
+
+                function renderLearnerResultReview() {
+                    const latestResult = getLatestLearnerResult();
+                    const list = root.querySelector('[data-review-result-list]');
+
+                    if (!latestResult || !list) {
+                        return false;
+                    }
+
+                    const answers = Array.isArray(latestResult.state.answers) ? latestResult.state.answers : [];
+
+                    if (!answers.length) {
+                        return false;
+                    }
+
+                    root.querySelector('[data-review-result-eyebrow]').textContent = 'Resultado del modulo ' + latestResult.module.number;
+                    root.querySelector('[data-review-result-summary]').textContent = latestResult.module.title + ' · '
+                        + (latestResult.state.correct ?? 0) + ' de ' + (latestResult.state.total || latestResult.exam.items.length)
+                        + ' respuestas correctas';
+                    list.replaceChildren();
+
+                    latestResult.exam.items.forEach(function(question, questionIndex) {
+                        const answer = answers[questionIndex];
+                        const isCorrect = answersMatch(answer, question.correct);
+                        const selectedIndexes = normalizeAnswerIndexes(answer);
+                        const correctIndexes = normalizeAnswerIndexes(question.correct);
+                        const selectedCopy = selectedIndexes.map(function(index) {
+                            return question.options[index];
+                        }).filter(Boolean).join(', ').replace(/[.\s]+$/, '') || 'Sin respuesta';
+                        const correctCopy = correctIndexes.map(function(index) {
+                            return question.options[index];
+                        }).filter(Boolean).join(', ').replace(/[.\s]+$/, '');
+                        const item = createLearnerElement('article', isCorrect ? 'is-correct' : 'is-incorrect');
+                        const number = createLearnerElement('span', '', String(questionIndex + 1));
+                        const copy = createLearnerElement('div');
+                        const title = createLearnerElement('strong', '', question.text);
+                        const detail = createLearnerElement('p', '', 'Tu respuesta: ' + selectedCopy + '. Respuesta correcta: ' + correctCopy + '.');
+                        const icon = createLearnerElement('i', isCorrect ? 'fa-solid fa-check' : 'fa-solid fa-xmark');
+
+                        icon.setAttribute('aria-hidden', 'true');
+                        copy.append(title, detail);
+                        item.append(number, copy, icon);
+                        list.appendChild(item);
+                    });
+
+                    return true;
+                }
+
+                function dispatchLearnerObligation() {
+                    const obligation = currentLearnerObligation;
+
+                    if (!obligation) {
+                        return;
+                    }
+
+                    if (obligation.type === 'content') {
+                        openLearnerVideoDialog(true);
+                        return;
+                    }
+
+                    if (obligation.type === 'task') {
+                        activateLearnerTab('tasks', true);
+                        const allFilter = root.querySelector('[data-task-filter="all"]');
+                        learnerTaskFilters.forEach(function(button) {
+                            button.classList.toggle('is-active', button === allFilter);
+                        });
+                        updateLearnerTasks();
+
+                        const taskRow = Array.from(learnerTaskRows).find(function(row) {
+                            return row.dataset.learnerTask === obligation.taskId;
+                        });
+
+                        if (taskRow) {
+                            openLearnerTask(taskRow, false);
+                        }
+                        return;
+                    }
+
+                    if (obligation.type === 'exam') {
+                        openLearnerExam(obligation.module);
+                        return;
+                    }
+
+                    activateLearnerTab('certificates', true);
+                }
+
+                function openLearnerDialog(dialog) {
+                    if (!dialog || dialog.open) {
+                        return;
+                    }
+
+                    if (typeof dialog.showModal === 'function') {
+                        dialog.showModal();
+                    } else {
+                        dialog.setAttribute('open', '');
+                    }
+                }
+
+                function closeLearnerDialog(dialog) {
+                    if (!dialog || !dialog.open) {
+                        return;
+                    }
+
+                    if (typeof dialog.close === 'function') {
+                        dialog.close();
+                    } else {
+                        dialog.removeAttribute('open');
+                    }
+                }
+
+                function activateLearnerTab(tabId, moveFocus) {
+                    const requestedPanel = root.querySelector('[data-learner-panel="' + tabId + '"]');
+                    const activeId = requestedPanel ? tabId : 'home';
+
+                    learnerTabButtons.forEach(function(button) {
+                        const isActive = button.dataset.learnerTab === activeId;
+
+                        button.classList.toggle('is-active', isActive);
+                        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                        button.tabIndex = isActive ? 0 : -1;
+
+                        if (isActive && moveFocus) {
+                            button.focus();
+                        }
+                    });
+
+                    learnerPanels.forEach(function(panel) {
+                        panel.hidden = panel.dataset.learnerPanel !== activeId;
+                    });
+
+                    if (activeId === 'tasks') {
+                        updateLearnerTasks();
+                    }
+                }
+
+                function createTaskStatusPill(status) {
+                    const settings = {
+                        approved: ['is-approved', 'fa-regular fa-circle-check', 'Aprobada'],
+                        pending: ['is-pending', 'fa-regular fa-clock', 'Pendiente'],
+                        review: ['is-review', 'fa-regular fa-clock', 'En revision'],
+                        corrections: ['is-corrections', 'fa-solid fa-rotate-left', 'Correcciones'],
+                        locked: ['is-locked', 'fa-solid fa-lock', 'Bloqueada'],
+                    }[status] || ['is-locked', 'fa-solid fa-lock', 'Bloqueada'];
+                    const pill = createLearnerElement('span', 'training-state-pill ' + settings[0]);
+                    const icon = createLearnerElement('i', settings[1]);
+
+                    icon.setAttribute('aria-hidden', 'true');
+                    pill.append(icon, document.createTextNode(' ' + settings[2]));
+
+                    return pill;
+                }
+
+                function setTaskRowStatus(row, status) {
+                    const normalizedStatus = ['approved', 'pending', 'review', 'corrections', 'locked'].includes(status)
+                        ? status
+                        : 'locked';
+                    const statusCell = row.querySelector('[data-task-status-cell]');
+                    const actionCell = row.querySelector('[data-task-action-cell]');
+                    const action = createLearnerElement('button');
+
+                    row.dataset.taskStatus = normalizedStatus;
+                    row.classList.remove('is-approved', 'is-pending', 'is-review', 'is-corrections', 'is-locked');
+                    row.classList.add('is-' + normalizedStatus);
+                    statusCell?.replaceChildren(createTaskStatusPill(normalizedStatus));
+
+                    if (!actionCell) {
+                        return;
+                    }
+
+                    action.type = 'button';
+
+                    if (normalizedStatus === 'pending' || normalizedStatus === 'corrections') {
+                        action.className = 'training-primary-button';
+                        action.dataset.openTask = '';
+                        action.textContent = normalizedStatus === 'corrections' ? 'Corregir tarea' : 'Realizar tarea';
+                    } else if (normalizedStatus === 'review' || normalizedStatus === 'approved') {
+                        action.className = 'training-secondary-button';
+                        action.dataset.viewTask = '';
+                        action.textContent = 'Ver entrega';
+                    } else {
+                        action.className = 'training-secondary-button';
+                        action.disabled = true;
+                        action.textContent = 'No disponible';
+                    }
+
+                    actionCell.replaceChildren(action);
+                }
+
+                function updateLearnerTasks() {
+                    const activeFilter = root.querySelector('[data-task-filter].is-active')?.dataset.taskFilter || 'all';
+                    let visibleTasks = 0;
+                    let activeTasks = 0;
+
+                    learnerTaskRows.forEach(function(row) {
+                        const status = row.dataset.taskStatus;
+                        const isVisible = activeFilter === 'all' || status === activeFilter;
+
+                        row.hidden = !isVisible;
+
+                        if (isVisible) {
+                            visibleTasks += 1;
+                        }
+
+                        if (status === 'pending' || status === 'corrections') {
+                            activeTasks += 1;
+                        }
+                    });
+
+                    if (learnerTaskEmptyRow) {
+                        learnerTaskEmptyRow.hidden = visibleTasks !== 0;
+                    }
+
+                    root.querySelectorAll('[data-learner-open-task-count]').forEach(function(element) {
+                        element.textContent = String(activeTasks);
+                    });
+
+                    const summary = root.querySelector('[data-active-task-summary]');
+
+                    if (summary) {
+                        summary.textContent = activeTasks + (activeTasks === 1 ? ' tarea activa' : ' tareas activas');
+                    }
+                }
+
+                function openLearnerTask(row, readOnly) {
+                    if (!row || !learnerTaskDialog || !learnerTaskForm || !learnerTaskSubmissionView) {
+                        return;
+                    }
+
+                    activeLearnerTaskRow = row;
+                    const taskId = row.dataset.learnerTask;
+                    const savedTask = learnerState.tasks?.[taskId] || {};
+                    const title = learnerTaskDialog.querySelector('[data-task-dialog-title]');
+                    const eyebrow = learnerTaskDialog.querySelector('[data-task-dialog-eyebrow]');
+                    const module = learnerTaskDialog.querySelector('[data-task-dialog-module]');
+                    const taskIdInput = learnerTaskDialog.querySelector('[data-task-dialog-id]');
+                    const response = learnerTaskDialog.querySelector('[data-task-response]');
+                    const submittedResponse = learnerTaskDialog.querySelector('[data-task-submitted-response]');
+                    const submittedFile = learnerTaskDialog.querySelector('[data-task-submitted-file]');
+
+                    title.textContent = row.dataset.taskTitle;
+                    module.textContent = row.dataset.taskModule;
+
+                    if (readOnly) {
+                        eyebrow.textContent = 'Entrega de tarea';
+                        learnerTaskForm.hidden = true;
+                        learnerTaskSubmissionView.hidden = false;
+                        submittedResponse.textContent = savedTask.response || 'Actividad completada y validada por el responsable de capacitacion.';
+                        submittedFile.textContent = savedTask.fileName || (row.dataset.taskStatus === 'approved' ? 'lista_verificacion.pdf' : 'Sin archivo adjunto');
+                    } else {
+                        eyebrow.textContent = row.dataset.taskStatus === 'corrections' ? 'Corregir tarea' : 'Realizar tarea';
+                        learnerTaskForm.hidden = false;
+                        learnerTaskSubmissionView.hidden = true;
+                        learnerTaskForm.reset();
+                        taskIdInput.value = taskId;
+                        response.value = savedTask.response || '';
+                    }
+
+                    openLearnerDialog(learnerTaskDialog);
+
+                    if (!readOnly) {
+                        window.requestAnimationFrame(function() {
+                            response.focus();
+                        });
+                    }
+                }
+
+                function createModuleStatePill(status) {
+                    const settings = {
+                        approved: ['is-approved', 'fa-solid fa-check', 'Aprobado'],
+                        current: ['is-current', 'fa-solid fa-play', 'En curso'],
+                        locked: ['is-locked', 'fa-solid fa-lock', 'Bloqueado'],
+                    }[status] || ['is-locked', 'fa-solid fa-lock', 'Bloqueado'];
+                    const pill = createLearnerElement('span', 'training-state-pill ' + settings[0]);
+                    const icon = createLearnerElement('i', settings[1]);
+
+                    icon.setAttribute('aria-hidden', 'true');
+                    pill.append(icon, document.createTextNode(' ' + settings[2]));
+
+                    return pill;
+                }
+
+                learnerTabButtons.forEach(function(button, buttonIndex) {
+                    button.addEventListener('click', function() {
+                        activateLearnerTab(button.dataset.learnerTab, false);
+                    });
+
+                    button.addEventListener('keydown', function(event) {
+                        const supportedKeys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+
+                        if (!supportedKeys.includes(event.key)) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        let nextIndex = buttonIndex;
+
+                        if (event.key === 'Home') {
+                            nextIndex = 0;
+                        } else if (event.key === 'End') {
+                            nextIndex = learnerTabButtons.length - 1;
+                        } else {
+                            const direction = event.key === 'ArrowRight' ? 1 : -1;
+                            nextIndex = (buttonIndex + direction + learnerTabButtons.length) % learnerTabButtons.length;
+                        }
+
+                        activateLearnerTab(learnerTabButtons[nextIndex].dataset.learnerTab, true);
+                    });
+                });
+
+                openLearnerPanelButton?.addEventListener('click', openSelectedLearnerPanel);
+
+                learnerSelector?.addEventListener('change', function() {
+                    if (openLearnerPanelButton) {
+                        openLearnerPanelButton.disabled = !learnerSelector.value;
+                    }
+                });
+
+                root.querySelectorAll('[data-close-learner-video]').forEach(function(button) {
+                    button.addEventListener('click', closeLearnerVideoDialog);
+                });
+
+                learnerVideoDialog?.addEventListener('click', function(event) {
+                    if (event.target === learnerVideoDialog) {
+                        closeLearnerVideoDialog();
+                    }
+                });
+
+                learnerVideoDialog?.addEventListener('close', function() {
+                    persistCurrentVideoProgress();
+                    stopLearnerPlayback(false);
+                    updateLearnerPlaybackControls();
+                });
+
+                window.addEventListener('pagehide', persistCurrentVideoProgress);
+
+                learnerTaskFilters.forEach(function(button) {
+                    button.addEventListener('click', function() {
+                        learnerTaskFilters.forEach(function(filterButton) {
+                            filterButton.classList.toggle('is-active', filterButton === button);
+                        });
+                        updateLearnerTasks();
+                    });
+                });
+
+                root.addEventListener('click', function(event) {
+                    const goToButton = event.target.closest('[data-learner-go-to]');
+                    const openTaskButton = event.target.closest('[data-open-task]');
+                    const viewTaskButton = event.target.closest('[data-view-task]');
+                    const obligationButton = event.target.closest('[data-next-obligation-action], [data-result-primary-action], [data-module-primary-action]');
+                    const outlineVideo = event.target.closest('[data-outline-video].is-current');
+                    const certificateAction = event.target.closest('[data-certificate-action]');
+
+                    if (goToButton && root.contains(goToButton)) {
+                        activateLearnerTab(goToButton.dataset.learnerGoTo, true);
+                    }
+
+                    if (openTaskButton && root.contains(openTaskButton)) {
+                        openLearnerTask(openTaskButton.closest('[data-learner-task]'), false);
+                    }
+
+                    if (viewTaskButton && root.contains(viewTaskButton)) {
+                        openLearnerTask(viewTaskButton.closest('[data-learner-task]'), true);
+                    }
+
+                    if (obligationButton && root.contains(obligationButton)) {
+                        dispatchLearnerObligation();
+                    }
+
+                    if (outlineVideo && root.contains(outlineVideo)) {
+                        openLearnerVideoDialog(true);
+                    }
+
+                    if (certificateAction && root.contains(certificateAction)) {
+                        if (currentLearnerObligation?.type === 'certificate') {
+                            activateLearnerTab('results', true);
+                        } else {
+                            dispatchLearnerObligation();
+                        }
+                    }
+                });
+
+                root.querySelectorAll('[data-close-task-dialog]').forEach(function(button) {
+                    button.addEventListener('click', function() {
+                        closeLearnerDialog(learnerTaskDialog);
+                    });
+                });
+
+                if (learnerTaskDialog) {
+                    learnerTaskDialog.addEventListener('click', function(event) {
+                        if (event.target === learnerTaskDialog) {
+                            closeLearnerDialog(learnerTaskDialog);
+                        }
+                    });
+
+                    learnerTaskDialog.addEventListener('close', function() {
+                        activeLearnerTaskRow = null;
+                    });
+                }
+
+                learnerTaskForm?.addEventListener('submit', function(event) {
+                    event.preventDefault();
+
+                    if (!activeLearnerTaskRow) {
+                        return;
+                    }
+
+                    const taskId = activeLearnerTaskRow.dataset.learnerTask;
+                    const response = learnerTaskForm.querySelector('[data-task-response]').value.trim();
+                    const evidence = learnerTaskForm.querySelector('[data-task-evidence]');
+
+                    if (!response) {
+                        learnerTaskForm.querySelector('[data-task-response]').focus();
+                        return;
+                    }
+
+                    learnerState.tasks = learnerState.tasks || {};
+                    learnerState.tasks[taskId] = {
+                        status: 'review',
+                        response: response,
+                        fileName: evidence.files?.[0]?.name || '',
+                    };
+                    persistLearnerState();
+                    renderLearnerExperience();
+                    openLearnerTask(activeLearnerTaskRow, true);
+                });
+
+                root.querySelector('[data-training-video-play]')?.addEventListener('click', function(event) {
+                    if (currentLearnerObligation?.type !== 'content' || learnerPlaybackProgress >= 100) {
+                        return;
+                    }
+
+                    if (learnerPlaybackTimer) {
+                        stopLearnerPlayback(false);
+                        persistCurrentVideoProgress();
+                        updateLearnerPlaybackControls();
+                        return;
+                    }
+
+                    learnerPlaybackTimer = window.setInterval(function() {
+                        learnerPlaybackProgress = Math.min(100, learnerPlaybackProgress + 4);
+
+                        if (learnerPlaybackProgress >= 100) {
+                            stopLearnerPlayback(false);
+                            persistCurrentVideoProgress();
+                        }
+
+                        updateLearnerPlaybackControls();
+                    }, 120);
+                    updateLearnerPlaybackControls();
+                });
+
+                root.querySelector('[data-complete-training-video]')?.addEventListener('click', function() {
+                    if (currentLearnerObligation?.type !== 'content' || learnerPlaybackProgress < 100) {
+                        return;
+                    }
+
+                    learnerState.completedVideos = learnerState.completedVideos || [];
+                    learnerState.videoProgress = learnerState.videoProgress || {};
+                    learnerState.videoProgress[currentLearnerObligation.video.id] = 100;
+                    learnerState.completedVideos.push(currentLearnerObligation.video.id);
+                    learnerState.completedVideos = Array.from(new Set(learnerState.completedVideos));
+                    persistLearnerState();
+                    closeLearnerVideoDialog();
+                    renderLearnerExperience();
+                    activateLearnerTab('training', true);
+                });
+
+                root.querySelectorAll('[data-close-learner-exam]').forEach(function(button) {
+                    button.addEventListener('click', function() {
+                        closeLearnerDialog(learnerExamDialog);
+                    });
+                });
+
+                learnerExamDialog?.addEventListener('click', function(event) {
+                    if (event.target === learnerExamDialog) {
+                        closeLearnerDialog(learnerExamDialog);
+                    }
+                });
+
+                learnerExamDialog?.addEventListener('close', function() {
+                    activeLearnerExamModule = null;
+                });
+
+                learnerExamForm?.addEventListener('submit', function(event) {
+                    event.preventDefault();
+
+                    if (!activeLearnerExamModule) {
+                        return;
+                    }
+
+                    const module = activeLearnerExamModule;
+                    const exam = getLearnerExam(module);
+                    const answers = [];
+                    let correctAnswers = 0;
+                    let earnedPoints = 0;
+                    let totalPoints = 0;
+                    let firstIncompleteQuestion = null;
+
+                    exam.items.forEach(function(question, questionIndex) {
+                        const inputs = Array.from(learnerExamForm.querySelectorAll('[name="learner-question-' + questionIndex + '"]'));
+                        const selected = inputs.filter(function(input) {
+                            return input.checked;
+                        }).map(function(input) {
+                            return Number.parseInt(input.value, 10);
+                        });
+                        const answer = question.type === 'multiple' ? selected : selected[0];
+                        const points = Math.max(1, Number(question.points) || 1);
+
+                        if (!selected.length && !firstIncompleteQuestion) {
+                            firstIncompleteQuestion = inputs[0]?.closest('.training-exam-question') || null;
+                        }
+
+                        answers.push(answer);
+                        totalPoints += points;
+
+                        if (selected.length && answersMatch(answer, question.correct)) {
+                            correctAnswers += 1;
+                            earnedPoints += points;
+                        }
+                    });
+
+                    if (firstIncompleteQuestion) {
+                        learnerExamValidation.hidden = false;
+                        firstIncompleteQuestion.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        firstIncompleteQuestion.querySelector('input')?.focus();
+                        return;
+                    }
+
+                    const score = totalPoints ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+                    const previousExamState = learnerState.exams?.[module.examId] || {};
+
+                    learnerState.exams[module.examId] = {
+                        status: score >= exam.minimum ? 'passed' : 'failed',
+                        score: score,
+                        correct: correctAnswers,
+                        total: exam.items.length,
+                        attempts: (Number(previousExamState.attempts) || 0) + 1,
+                        answers: answers,
+                    };
+                    persistLearnerState();
+                    closeLearnerDialog(learnerExamDialog);
+                    renderLearnerExperience();
+                    activateLearnerTab('results', true);
+                });
+
+                root.querySelector('[data-review-results]')?.addEventListener('click', function() {
+                    if (renderLearnerResultReview()) {
+                        openLearnerDialog(resultReviewDialog);
+                    }
+                });
+
+                root.querySelectorAll('[data-close-result-review]').forEach(function(button) {
+                    button.addEventListener('click', function() {
+                        closeLearnerDialog(resultReviewDialog);
+                    });
+                });
+
+                resultReviewDialog?.addEventListener('click', function(event) {
+                    if (event.target === resultReviewDialog) {
+                        closeLearnerDialog(resultReviewDialog);
+                    }
+                });
+
+                renderActiveLearnerIdentity();
+                renderLearnerExperience();
+
                 function activateRole(role) {
                     buttons.forEach(function(button) {
                         button.classList.toggle('is-active', button.dataset.roleButton === role);
@@ -5262,10 +9808,6 @@
                     programPanels.forEach(function(panel) {
                         panel.hidden = panel.dataset.programPanel !== tab;
                     });
-
-                    if (programContext) {
-                        programContext.hidden = tab === 'projects' || (tab === 'exams' && examCreateView && !examCreateView.hidden);
-                    }
                 }
 
                 function formatVideoDuration(durationInSeconds) {
@@ -5397,6 +9939,10 @@
                         moduleItem.classList.toggle('is-active', moduleItem === item);
                     });
 
+                    if (moduleEditor) {
+                        moduleEditor.hidden = !item;
+                    }
+
                     if (!item) {
                         return;
                     }
@@ -5446,6 +9992,23 @@
                     programSelector.value = selectedOption.value;
                     updateSelectedProgramName(selectedOption.textContent.trim());
 
+                    let selectedProgramCard = null;
+
+                    root.querySelectorAll('[data-program-card]').forEach(function(card) {
+                        const isSelected = card.dataset.programId === selectedOption.value;
+                        const selectionButton = card.querySelector('[data-program-carousel-item]');
+
+                        card.classList.toggle('is-active', isSelected);
+
+                        if (selectionButton) {
+                            selectionButton.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+                        }
+
+                        if (isSelected) {
+                            selectedProgramCard = card;
+                        }
+                    });
+
                     const visibleModules = [];
 
                     moduleItems.forEach(function(item) {
@@ -5467,6 +10030,10 @@
                     filterProgramRows('exams', selectedOption.value);
                     filterProgramRows('tasks', selectedOption.value);
 
+                    if (selectedProgramCard) {
+                        revealProgramCard(selectedProgramCard);
+                    }
+
                     if (persistSelection !== false) {
                         try {
                             window.localStorage.setItem(selectedProgramStorageKey, selectedOption.value);
@@ -5481,6 +10048,34 @@
                         activateProgramTab(button.dataset.programTab);
                     });
                 });
+
+                if (programCarouselViewport) {
+                    programCarouselViewport.addEventListener('click', function(event) {
+                        const editButton = event.target.closest('[data-edit-program]');
+                        const programButton = event.target.closest('[data-program-carousel-item]');
+
+                        if (editButton) {
+                            openProgramEditor(editButton.closest('[data-program-card]'));
+
+                            return;
+                        }
+
+                        if (!programButton) {
+                            return;
+                        }
+
+                        if (examCreateView && !examCreateView.hidden) {
+                            closeNewExamBuilder();
+                            activateProgramTab('exams');
+                        }
+
+                        selectProgram(programButton.dataset.programId);
+                    });
+                }
+
+                if (newProgramButton) {
+                    newProgramButton.addEventListener('click', openNewProgramModal);
+                }
 
                 if (programSelector) {
                     programSelector.addEventListener('change', function() {
@@ -5509,31 +10104,18 @@
 
                 const storedPrograms = readStoredPrograms();
 
-                root.querySelectorAll('[data-program-card]').forEach(function(card) {
-                    const savedProgram = storedPrograms[card.dataset.programId];
+                Object.keys(storedPrograms).forEach(function(programId) {
+                    const savedProgram = storedPrograms[programId];
+                    let card = root.querySelector('[data-program-card][data-program-id="' + programId + '"]');
 
-                    if (savedProgram) {
+                    if (!card && savedProgram.isCustom) {
+                        ensureProgramOption(programId, savedProgram.title);
+                        card = createProgramCarouselCard(programId, savedProgram);
+                    }
+
+                    if (card) {
                         applyProgramData(card, savedProgram);
                     }
-                });
-
-                root.querySelectorAll('[data-edit-program]').forEach(function(button) {
-                    button.addEventListener('click', function() {
-                        const card = button.closest('[data-program-card]');
-
-                        if (!card || !programModal || !programForm) {
-                            return;
-                        }
-
-                        programForm.elements.program_id.value = card.dataset.programId;
-                        programForm.elements.title.value = card.querySelector('[data-program-title]').textContent.trim();
-                        programForm.elements.description.value = card.querySelector('[data-program-description]').textContent.trim();
-                        programForm.elements.owner.value = card.querySelector('[data-program-owner]').textContent.trim();
-                        programForm.elements.status.value = card.querySelector('[data-program-status]').textContent.trim();
-
-                        programModal.showModal();
-                        programForm.elements.title.focus();
-                    });
                 });
 
                 root.querySelectorAll('[data-close-program-modal]').forEach(function(button) {
@@ -5556,18 +10138,33 @@
                             return;
                         }
 
-                        const programId = programForm.elements.program_id.value;
-                        const card = root.querySelector('[data-program-card][data-program-id="' + programId + '"]');
-                        const programData = {
+                        let programId = programForm.elements.program_id.value;
+                        const programs = readStoredPrograms();
+                        const isNewProgram = !programId;
+
+                        if (isNewProgram) {
+                            programId = createProgramId(programForm.elements.title.value.trim());
+                        }
+
+                        const programData = Object.assign({}, programs[programId] || {}, {
+                            id: programId,
                             title: programForm.elements.title.value.trim(),
                             description: programForm.elements.description.value.trim(),
                             owner: programForm.elements.owner.value.trim(),
                             status: programForm.elements.status.value,
-                        };
+                            isCustom: isNewProgram || Boolean(programs[programId]?.isCustom),
+                            modules: programs[programId]?.modules || 0,
+                            students: programs[programId]?.students || 0,
+                        });
+                        let card = root.querySelector('[data-program-card][data-program-id="' + programId + '"]');
+
+                        ensureProgramOption(programId, programData.title);
+
+                        if (!card) {
+                            card = createProgramCarouselCard(programId, programData);
+                        }
 
                         applyProgramData(card, programData);
-
-                        const programs = readStoredPrograms();
                         programs[programId] = programData;
 
                         try {
@@ -5576,6 +10173,8 @@
                             // The card remains updated even when browser storage is unavailable.
                         }
 
+                        selectProgram(programId);
+                        activateProgramTab('modules');
                         closeProgramModal();
                     });
                 }
@@ -6104,9 +10703,16 @@
 
                         examRecords[savedExam.id] = savedExam;
                         persistExams();
-                        updateExamTableRow(savedExam);
+                        const savedRow = updateExamTableRow(savedExam);
+
                         closeNewExamBuilder();
-                        filterProgramRows('exams', programSelector.value);
+                        activateProgramTab('exams');
+                        selectProgram(savedExam.projectId, false);
+                        showExamSaveFeedback(savedExam, saveMode);
+
+                        if (savedRow) {
+                            savedRow.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                        }
                     });
                 }
 
@@ -6125,7 +10731,7 @@
                 }
 
                 if (programButtons.length) {
-                    activateProgramTab('projects');
+                    activateProgramTab('modules');
                 }
             });
         </script>

@@ -6,6 +6,7 @@
     $classes = match ($status) {
         'pendiente' => 'bg-yellow-100 text-yellow-700',
         'aprobada' => 'bg-green-100 text-green-700',
+        'dispensada' => 'bg-sky-100 text-sky-700',
         'enproceso', 'preparada' => 'bg-blue-100 text-blue-700',
         'revisada' => 'bg-purple-100 text-purple-700',
         'finalizada', 'entregada' => 'bg-gray-200 text-gray-700',
@@ -17,6 +18,7 @@
     $label = match ($status) {
         'pendiente' => 'Pendiente',
         'aprobada' => 'Aprobada',
+        'dispensada' => 'Dispensada',
         'enproceso', 'preparada' => 'Preparada',
         'revisada' => 'Inspeccionada',
         'finalizada', 'entregada' => 'Entregada',

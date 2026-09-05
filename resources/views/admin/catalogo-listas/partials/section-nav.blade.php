@@ -16,6 +16,10 @@
             ));
         }
 
+        if ($key === 'insumos') {
+            return route('admin.catalogo-listas.catalog', ['category' => $key]);
+        }
+
         if ($mode === 'catalogo') {
             return route('admin.catalogo-listas.catalog', ['category' => $key]);
         }
@@ -26,6 +30,8 @@
 
         return route('admin.catalogo-listas.index', ['category' => $key]);
     };
+
+    $supportsPriceLists = $category !== 'insumos';
 @endphp
 
 <div class="mb-5">
@@ -42,7 +48,7 @@
         moveCategories(direction) {
             this.$refs.categoryCarousel.scrollBy({ left: direction * 210, behavior: 'smooth' });
         }
-    }" class="flex max-w-4xl items-center gap-2">
+    }" class="flex w-full max-w-6xl items-center gap-2">
         <button type="button" x-on:click="moveCategories(-1)" title="Categorias anteriores"
             aria-label="Categorias anteriores"
             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-blue-900 shadow-sm transition hover:bg-gray-50">
@@ -94,10 +100,12 @@
                 <span>Catalogo</span>
             </a>
 
-            <a href="{{ route('admin.catalogo-listas.lists', ['category' => $category]) }}"
-                class="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-bold transition {{ $mode === 'listas' ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700' }}">
-                <span>Listas de precios</span>
-            </a>
+            @if ($supportsPriceLists)
+                <a href="{{ route('admin.catalogo-listas.lists', ['category' => $category]) }}"
+                    class="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-bold transition {{ $mode === 'listas' ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700' }}">
+                    <span>Listas de precios</span>
+                </a>
+            @endif
         </div>
     @endunless
 </div>

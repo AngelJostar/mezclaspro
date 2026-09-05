@@ -5,8 +5,8 @@
 
                 <div class="flex items-start justify-between border-b pb-4 mb-6">
                     <div>
-                        <h2 class="text-2xl font-semibold text-gray-800">
-                            Inspeccion de Nutricion Parenteral
+                        <h2 class="mixture-workflow-heading">
+                            Inspección nutricional | {{ $mixtureContext }}
                         </h2>
                         <p class="text-sm text-gray-500 mt-1">
                             Verificacion fisica del contenedor, contenido y liberacion de la solicitud nutricional.
@@ -15,6 +15,7 @@
 
                     <button type="button"
                         wire:click="$set('mostrarModalInspeccion', false)"
+                        aria-label="Cerrar inspección"
                         class="text-gray-400 hover:text-gray-700 text-2xl leading-none">
                         &times;
                     </button>

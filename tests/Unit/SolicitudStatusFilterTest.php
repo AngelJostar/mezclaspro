@@ -24,6 +24,7 @@ class SolicitudStatusFilterTest extends TestCase
             'all includes any state' => [SolicitudStatusFilter::ALL, 'cancelada', false, true],
             'null state is pending' => [SolicitudStatusFilter::PENDING, null, false, true],
             'approved request is in preparation' => [SolicitudStatusFilter::PREPARATION, 'aprobada', false, true],
+            'dispensed request is in preparation' => [SolicitudStatusFilter::PREPARATION, 'dispensada', false, true],
             'scheduled request leaves preparation' => [SolicitudStatusFilter::PREPARATION, 'preparada', true, false],
             'scheduled active request is in route' => [SolicitudStatusFilter::IN_ROUTE, 'revisada', true, true],
             'delivered request is no longer in route' => [SolicitudStatusFilter::IN_ROUTE, 'entregada', true, false],

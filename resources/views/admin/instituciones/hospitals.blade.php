@@ -44,6 +44,11 @@
                             {{ $totalHospitals }} {{ $totalHospitals === 1 ? 'hospital' : 'hospitales' }}
                         </p>
                     </div>
+                    <a href="{{ route('admin.instituciones.hospitals.export', $institucion) }}"
+                        class="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-emerald-600 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
+                        Descargar Excel
+                    </a>
                 </div>
 
                 <form method="GET" action="{{ route('admin.instituciones.hospitals', $institucion) }}"
@@ -152,9 +157,15 @@
                                 </td>
                                 <td class="min-w-72 px-4 py-3 align-top">
                                     @forelse ($hospital->users as $accessUser)
+                                        @php
+                                            $accessPassword = (string) ($accessUser->credential_password
+                                                ?: $accessUser->training_credential_password
+                                                ?: '');
+                                        @endphp
                                         <div class="{{ ! $loop->first ? 'mt-2 border-t border-gray-100 pt-2' : '' }}">
                                             @can('usuarios')
-                                                <x-inline-user-credential-editor :user="$accessUser" field="password" compact />
+                                                <x-inline-user-credential-editor :user="$accessUser" field="password" compact
+                                                    :display-value="$accessPassword" empty-label="Sin contrasena" />
                                             @else
                                                 <span aria-label="Contrase&ntilde;a protegida" class="text-gray-500">
                                                     &bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;
@@ -253,6 +264,8 @@
             @endif
         </div>
     </section>
+
+    @include('admin.instituciones.partials.hospital-map')
 
     @push('js')
         <script>

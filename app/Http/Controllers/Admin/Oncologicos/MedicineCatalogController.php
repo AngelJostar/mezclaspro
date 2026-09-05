@@ -122,7 +122,7 @@ class MedicineCatalogController extends Controller
             'presentations.*.cantidad_medicamento' => 'nullable|numeric|min:0',
             'presentations.*.volumen_diluyente' => 'nullable|numeric|min:0',
             'presentations.*.precio_frasco' => 'nullable|numeric|min:0',
-            'presentations.*.stability_hours' => 'nullable|integer|min:0|max:8760',
+            'presentations.*.stability_hours' => 'nullable|integer|min:1|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
         ]);
 

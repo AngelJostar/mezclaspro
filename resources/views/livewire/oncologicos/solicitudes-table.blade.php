@@ -22,10 +22,28 @@
                 @forelse ($mezclas as $mezcla)
                     @php
                         $solicitud = $mezcla->solicitud;
-                        $estado = $mezcla->operational_status;
+                        $estado = str_replace('-', '_', mb_strtolower(trim((string) $mezcla->operational_status)));
+                        $requestListUrl = route(
+                            ($solicitud->tipo_solicitud ?? 'oncologicos') === 'antibioticos'
+                                ? 'admin.antibioticos.solicitudes.index'
+                                : 'admin.oncologicos.solicitudes.index'
+                        );
+                        $approvalUrl = $estado === 'pendiente'
+                            ? route('admin.oncologicos.mezclas.edit', [
+                                'mezcla' => $mezcla->id,
+                                'approval' => 1,
+                                'approval_popup' => 1,
+                                'return_to' => $requestListUrl,
+                            ])
+                            : null;
+                        $approvalStateLabel = match (true) {
+                            in_array($estado, ['aprobada', 'dispensada', 'preparada', 'revisada', 'entregada'], true) => 'Aprobada',
+                            in_array($estado, ['cancelada', 'no_aprobada'], true) => 'Rechazada',
+                            default => 'Sin acción',
+                        };
                     @endphp
 
-                    <tr class="border-b">
+                    <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($mezcla->id, $solicitud->hospital) }}">
                         <td class="whitespace-nowrap px-2 py-2 text-center">
                             @include('admin.solicitudes._type-badge', ['type' => $solicitud->tipo_solicitud])
                         </td>
@@ -58,35 +76,31 @@
                         </td>
 
                         <td class="whitespace-nowrap px-2 py-2 text-center">
-                            <a href="{{ route('admin.oncologicos.mezclas.solicitudCompleta', $solicitud) }}"
-                                target="_blank" rel="noopener"
-                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
-                                Ver
-                            </a>
-                        </td>
-
-                        <td class="whitespace-nowrap px-2 py-2 text-center">
                             @hasanyrole('Admin|Super Admin')
-                                @if ($estado === 'pendiente')
-                                    <a href="{{ route('admin.oncologicos.mezclas.edit', $mezcla) }}"
+                                @if ($approvalUrl)
+                                    <a href="{{ $approvalUrl }}"
+                                        data-approval-popup="approval-{{ $solicitud->tipo_solicitud ?? 'oncologicos' }}-{{ $mezcla->id }}"
                                         class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
                                         Aprobar
                                     </a>
-                                @elseif (in_array($estado, ['aprobada', 'preparada', 'revisada'], true))
-                                    <a href="{{ route('admin.oncologicos.mezclas.edit', $mezcla) }}"
-                                        class="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200">
-                                        Editar
-                                    </a>
                                 @else
                                     <button type="button" disabled
-                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
-                                        Editar
+                                        @class([
+                                            'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                                            'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
+                                            'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
+                                        ])>
+                                        {{ $approvalStateLabel }}
                                     </button>
                                 @endif
                             @else
                                 <button type="button" disabled
-                                    class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
-                                    Editar
+                                    @class([
+                                        'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                                        'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
+                                        'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
+                                    ])>
+                                    {{ $approvalStateLabel }}
                                 </button>
                             @endhasanyrole
                         </td>
@@ -94,17 +108,30 @@
                         <td class="whitespace-nowrap px-2 py-2 text-center">
                             @hasanyrole('Admin|Super Admin')
                                 @if ($estado === 'aprobada')
+                                    <a href="{{ route('admin.oncologicos.mezclas.edit', [
+                                            'mezcla' => $mezcla->id,
+                                            'modo' => 'dispensacion',
+                                            'dispensing_popup' => 1,
+                                            'return_to' => $requestListUrl,
+                                        ]) }}"
+                                        data-dispensing-popup="dispensing-{{ $solicitud->tipo_solicitud ?? 'oncologicos' }}-{{ $mezcla->id }}"
+                                        class="inline-flex items-center justify-center rounded-full bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300">
+                                        Dispensar
+                                    </a>
+                                @elseif ($estado === 'dispensada')
                                     <form method="POST" action="{{ route('admin.oncologicos.mezclas.update', $mezcla) }}"
                                         class="inline-block" data-request-process-form
-                                        data-confirm-title="¿Marcar mezcla como preparada?"
-                                        data-confirm-text="La mezcla pasará al estado PREPARADA."
-                                        data-confirm-button="Sí, preparar">
+                                        data-confirm-title="Marcar como preparada?"
+                                        data-confirm-text=""
+                                        data-confirm-button="Si"
+                                        data-confirm-cancel="No">
                                         @csrf
                                         @method('PUT')
+                                        <input type="hidden" name="return_to" value="{{ $requestListUrl }}">
                                         <input type="hidden" name="accion" value="preparada">
                                         <button type="submit"
                                             class="inline-flex items-center justify-center rounded-full bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300">
-                                            Preparada
+                                            Preparar
                                         </button>
                                     </form>
                                 @elseif ($estado === 'preparada')
@@ -122,6 +149,7 @@
                                         data-confirm-button="Sí, entregar">
                                         @csrf
                                         @method('PUT')
+                                        <input type="hidden" name="return_to" value="{{ $requestListUrl }}">
                                         <input type="hidden" name="accion" value="entregada">
                                         <button type="submit"
                                             class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200">
@@ -190,7 +218,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="20" class="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colspan="19" class="px-4 py-10 text-center text-sm text-gray-500">
                             No se encontraron mezclas para esta vista.
                         </td>
                     </tr>
