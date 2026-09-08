@@ -31,6 +31,7 @@ class MezclaMedicamento extends Model
 
         'charge_by',
         'precio_mg_snapshot',
+        'precio_ml_snapshot',
     ];
 
     protected $casts = [
@@ -38,7 +39,8 @@ class MezclaMedicamento extends Model
         'dosis_ml'           => 'decimal:2',
         'precio_unitario'    => 'decimal:2',
         'precio_mg_snapshot' => 'decimal:4',
-        'charge_by'          => 'string', // 'mg' | 'frasco'
+        'precio_ml_snapshot' => 'decimal:4',
+        'charge_by'          => 'string', // 'mg' | 'ml' | 'frasco'
     ];
 
     public function mezcla()
@@ -74,6 +76,11 @@ class MezclaMedicamento extends Model
             $dosis = (float) ($this->dosis ?? 0);
             $precioMg = (float) ($this->precio_mg_snapshot ?? 0);
             return round($dosis * $precioMg, 4);
+        }
+
+        if ($this->charge_by === 'ml') {
+            $volume = (float) ($this->dosis_ml ?? $this->presentacionesUsadas()->sum('volumen_usado_ml'));
+            return round($volume * (float) ($this->precio_ml_snapshot ?? 0), 4);
         }
 
         // 'frasco': suma subtotales del detalle

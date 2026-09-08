@@ -2,6 +2,7 @@
 
 namespace App\Models\Nutricionales;
 
+use App\Models\MedicineRemainder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,11 +19,13 @@ class NutritionMedicinePresentation extends Model
         'fabricante',
         'presentacion',
         'presentacion_ml',
+        'stability_hours',
         'is_available',
     ];
 
     protected $casts = [
         'presentacion_ml' => 'decimal:4',
+        'stability_hours' => 'integer',
         'is_available' => 'boolean',
     ];
 
@@ -37,6 +40,11 @@ class NutritionMedicinePresentation extends Model
             MedicineLaboratoryStock::class,
             'nutrition_medicine_presentation_id'
         );
+    }
+
+    public function remainders()
+    {
+        return $this->hasMany(MedicineRemainder::class, 'nutrition_medicine_presentation_id');
     }
 
     public function listItems()

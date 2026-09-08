@@ -18,6 +18,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('integration:retry-webhooks --limit=50')
             ->everyMinute()
             ->withoutOverlapping();
+
+        $schedule->command('inventory:expire-remainders')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
     }
 
     /**

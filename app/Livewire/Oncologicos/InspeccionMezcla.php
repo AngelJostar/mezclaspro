@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Oncologicos;
 
+use App\Models\User;
 use App\Models\Oncologicos\InspeccionMezcla as OncologicosInspeccionMezcla;
 use App\Models\Oncologicos\Mezcla;
 use Livewire\Attributes\On;
@@ -10,10 +11,17 @@ use Illuminate\Support\Facades\Auth;
 
 class InspeccionMezcla extends Component
 {
+    private const APPROVER_POSITIONS = [
+        'Responsable sanitario',
+        'Auxiliar de responsable sanitario',
+    ];
+
     public $mostrarModalInspeccion = false;
 
     public $mezclaId;
     public $lote_mezcla = '';
+    #[\Livewire\Attributes\Locked]
+    public string $mixtureContext = '';
 
     // checks
     public $es_limpia = 0;
@@ -47,6 +55,7 @@ class InspeccionMezcla extends Component
     // firmas visibles en el modal
     public $reviso_nombre = '';
     public $aprobo_nombre = '';
+    public $aprobadores = [];
 
     private function nombreUsuarioActual(): string
     {
@@ -57,10 +66,46 @@ class InspeccionMezcla extends Component
             ?: ($nombreCompleto !== '' ? $nombreCompleto : '');
     }
 
+    private function cargarAprobadores(): void
+    {
+        $aprobadores = User::query()
+            ->whereHas('personnelProfile', function ($query) {
+                $query->where(function ($positionsQuery) {
+                    foreach (self::APPROVER_POSITIONS as $position) {
+                        $positionsQuery->orWhereJsonContains('positions', $position);
+                    }
+                });
+            })
+            ->orderBy('name')
+            ->orderBy('lastname')
+            ->get();
+
+        // Los perfiles de personal son la fuente oficial. Durante la transición,
+        // mantiene disponibles solo las dos personas sanitarias ya autorizadas.
+        if ($aprobadores->isEmpty()) {
+            $aprobadores = User::query()
+                ->whereIn('username', ['gcortes', 'hcarbajal'])
+                ->orderBy('name')
+                ->orderBy('lastname')
+                ->get();
+        }
+
+        $this->aprobadores = $aprobadores
+            ->mapWithKeys(function (User $usuario) {
+                $nombreCompleto = trim(($usuario->name ?? '') . ' ' . ($usuario->lastname ?? ''));
+                $valor = trim((string) ($usuario->username ?: $nombreCompleto));
+                $etiqueta = $nombreCompleto !== '' ? $nombreCompleto : $valor;
+
+                return [$valor => $valor !== '' ? "{$etiqueta} ({$valor})" : $etiqueta];
+            })
+            ->filter(fn ($etiqueta, $valor) => $valor !== '')
+            ->all();
+    }
+
     public function mount()
     {
+        $this->cargarAprobadores();
         $this->reviso_nombre = $this->nombreUsuarioActual();
-        $this->aprobo_nombre = $this->nombreUsuarioActual();
         $this->observaciones = 'N.A.';
     }
 
@@ -76,7 +121,9 @@ class InspeccionMezcla extends Component
 
         $this->mezclaId = (int) $mezclaId;
         $this->mostrarModalInspeccion = true;
-        $this->lote_mezcla = (string) (Mezcla::find($this->mezclaId)?->lote ?? '');
+        $mezcla = Mezcla::with('solicitud.hospital.instituciones')->find($this->mezclaId);
+        $this->lote_mezcla = (string) ($mezcla?->lote ?? '');
+        $this->mixtureContext = \App\Support\MixtureWorkflowContext::label($this->mezclaId, $mezcla?->solicitud?->hospital);
 
         // Hidratar con la inspección existente (creada en "Aprobar")
         $ins = OncologicosInspeccionMezcla::where('mezcla_id', $mezclaId)->first();
@@ -112,23 +159,26 @@ class InspeccionMezcla extends Component
 
             // No pisar si ya existen en BD
             $this->reviso_nombre = $ins->reviso_nombre ?: ($this->reviso_nombre ?: $this->nombreUsuarioActual());
-            $this->aprobo_nombre = $ins->aprobo_nombre ?: $this->nombreUsuarioActual();
+            $this->aprobo_nombre = $ins->aprobo_nombre ?: '';
         } else {
             // Defaults si por alguna razón aún no existe
             if (blank($this->reviso_nombre)) {
                 $this->reviso_nombre = $this->nombreUsuarioActual();
             }
-            if (blank($this->aprobo_nombre)) {
-                $this->aprobo_nombre = $this->nombreUsuarioActual();
-            }
+            $this->aprobo_nombre = '';
         }
     }
 
     public function guardarInspeccion()
     {
+        $mezcla = Mezcla::findOrFail($this->mezclaId);
+        if ($mezcla->estado !== 'preparada') {
+            $this->addError('mezclaId', 'Solo una mezcla preparada puede inspeccionarse.');
+            return;
+        }
+
         // Refuerza valores de nombres visibles (sin tocar preparo/libero)
         $this->reviso_nombre = $this->reviso_nombre ?: $this->nombreUsuarioActual();
-        $this->aprobo_nombre = $this->aprobo_nombre ?: $this->nombreUsuarioActual();
 
         $this->validate([
             'tipo_contenedor' => 'nullable|string|in:Frasco,Bolsa,Jeringa,Infusor,Otro',
@@ -154,7 +204,7 @@ class InspeccionMezcla extends Component
             'peso_mezcla' => 'required|numeric|gt:0',
             'observaciones' => 'nullable|string',
             'reviso_nombre' => 'required|string|max:255',
-            'aprobo_nombre' => 'required|string|max:255',
+            'aprobo_nombre' => 'nullable|required_if:mezcla_aprobada,1|string|max:255',
         ], [
             'dosis_volumen.required' => 'El campo dosis / volumen total es obligatorio.',
             'dosis_volumen.numeric' => 'El campo dosis / volumen total debe ser numerico.',
@@ -162,6 +212,7 @@ class InspeccionMezcla extends Component
             'peso_mezcla.required' => 'El campo peso de la mezcla es obligatorio.',
             'peso_mezcla.numeric' => 'El campo peso de la mezcla debe ser numerico.',
             'peso_mezcla.gt' => 'El campo peso de la mezcla debe ser mayor a 0.',
+            'aprobo_nombre.required_if' => 'Selecciona a la persona que aprobó la mezcla.',
         ]);
 
         // Cargar existente o crear en memoria.
@@ -216,7 +267,7 @@ class InspeccionMezcla extends Component
         $ins->save();
 
         // Guardar mediante el modelo mantiene sincronizado el estado de la solicitud.
-        Mezcla::findOrFail($this->mezclaId)->update(['estado' => 'revisada']);
+        $mezcla->update(['estado' => 'revisada']);
 
         $this->mostrarModalInspeccion = false;
         $this->dispatch('mezcla-inspeccionada');

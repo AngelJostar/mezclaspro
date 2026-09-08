@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>Orden de preparación</title>
+    <title>{{ ($soloInspeccion ?? false) ? 'Inspección' : 'Orden de preparación' }}</title>
 
     <style>
         @page {
@@ -189,6 +189,7 @@
 
 <body>
 
+    @unless ($soloInspeccion ?? false)
     <div class="contenedor">
         <!-- Contenedor principal con borde negro -->
         <div class="introduccion" style="border: 1px solid black; border-bottom: none; ">
@@ -575,8 +576,9 @@
             </div>
 
         </div>
+    @endunless
         {{-- separar hojas --}}
-        <div class="salto-pagina contenedor border-1">
+        <div class="{{ ($soloInspeccion ?? false) ? '' : 'salto-pagina' }} contenedor border-1">
             <div class="introduccion">
                 <table>
                     <tr>
@@ -801,4 +803,3 @@
 </body>
 
 </html>
-

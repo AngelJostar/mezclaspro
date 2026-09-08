@@ -2,6 +2,7 @@
 
 namespace App\Models\Oncologicos;
 
+use App\Models\MedicineRemainder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -53,6 +54,11 @@ class MedicinePresentation extends Model
     public function batches()
     {
         return $this->hasMany(MedicineBatch::class, 'medicine_presentation_id');
+    }
+
+    public function remainders()
+    {
+        return $this->hasMany(MedicineRemainder::class, 'medicine_presentation_id');
     }
 
     // Lote vigente (is_current=1)
@@ -115,6 +121,7 @@ class MedicinePresentation extends Model
             'charge_by',
             'precio',
             'precio_mg_override',
+            'precio_ml_override',
             'iva_desglosado',
             'descripcion_remision',
         ])->withTimestamps();

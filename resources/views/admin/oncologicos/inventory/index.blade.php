@@ -56,6 +56,18 @@
         </div>
     </div>
 
+    @if (session('success'))
+        <div role="status" class="mb-4 rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            {{ session('success') }}
+        </div>
+    @endif
+
+    @if ($errors->any())
+        <div role="alert" class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {{ $errors->first() }}
+        </div>
+    @endif
+
     <div class="bg-white rounded-lg shadow p-4 mb-4">
         <form method="GET" action="{{ route('admin.oncologicos.inventory.index') }}"
             class="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -144,6 +156,13 @@
                                 <th class="px-4 py-3">Detalle del lote</th>
                                 <th class="px-4 py-3 text-center">Stock lote seleccionado</th>
                                 <th class="px-4 py-3 text-center">Estado</th>
+                                @role('Super Admin')
+                                    <th class="px-4 py-3 text-center">Editar</th>
+                                @endrole
+                                <th class="px-4 py-3 text-center">Remanente</th>
+                                <th class="px-4 py-3 text-center">Merma remanente</th>
+                                <th class="px-4 py-3 text-center">Merma de frasco</th>
+                                <th class="px-4 py-3 text-center">Movimientos</th>
                                 <th class="px-4 py-3 text-center">Ingresar lote</th>
                             </tr>
                         </thead>
@@ -175,11 +194,17 @@
                                             <select class="lote-select w-full rounded border-gray-300 text-sm">
                                                 @foreach ($batches as $batch)
                                                     <option value="{{ $batch->batch_id }}"
+                                                        data-edit-url="{{ route('admin.oncologicos.inventory.editBatch', $batch->batch_id) }}"
+                                                        data-loss-url="{{ route('admin.oncologicos.inventory.registrarMerma', $batch->batch_id) }}"
+                                                        data-movimientos-url="{{ route('admin.oncologicos.inventory.movimientos', $batch->batch_id) }}"
                                                         data-caducidad="{{ $batch->caducidad ? \Carbon\Carbon::parse($batch->caducidad)->format('d/m/Y') : '—' }}"
                                                         data-fecha-ingreso="{{ $batch->fecha_ingreso ? \Carbon\Carbon::parse($batch->fecha_ingreso)->format('d/m/Y') : '—' }}"
                                                         data-stock-inicial="{{ number_format((float) $batch->stock_inicial, 2) }}"
-                                                        data-stock-actual="{{ number_format((float) $batch->stock_actual, 2) }}"
-                                                        data-stock-reservado="{{ number_format((float) $batch->stock_reservado, 2) }}">
+                                                        data-stock-actual="{{ number_format((float) $batch->stock_actual, 2, '.', '') }}"
+                                                        data-stock-reservado="{{ number_format((float) $batch->stock_reservado, 2, '.', '') }}"
+                                                        data-ml-per-bottle="{{ number_format((float) ($batch->volumen_diluyente ?? 0), 4, '.', '') }}"
+                                                        data-remanente-ml="{{ number_format((float) $batch->remanente_ml, 2, '.', '') }}"
+                                                        data-remanente-merma-url="{{ route('admin.oncologicos.inventory.descartarRemanente', $batch->batch_id) }}">
                                                         {{ $batch->lote }}
                                                     </option>
                                                 @endforeach
@@ -257,6 +282,66 @@
                                         @endif
                                     </td>
 
+                                    @role('Super Admin')
+                                        <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                            @if ($firstBatch)
+                                                <x-table-action-link href="{{ route('admin.oncologicos.inventory.editBatch', $firstBatch->batch_id) }}"
+                                                    class="edit-link">Editar</x-table-action-link>
+                                            @else
+                                                <span class="text-xs text-gray-400">-</span>
+                                            @endif
+                                        </td>
+                                    @endrole
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
+                                            <span class="font-semibold text-amber-700 selected-remainder">
+                                                {{ number_format((float) $firstBatch->remanente_ml, 2) }} mL
+                                            </span>
+                                        @else
+                                            <span class="text-xs text-gray-400">0.00 mL</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
+                                            @php($hasRemainder = (float) $firstBatch->remanente_ml > 0.0001)
+                                            <form method="POST" action="{{ route('admin.oncologicos.inventory.descartarRemanente', $firstBatch->batch_id) }}" class="remainder-waste-form inline">
+                                                @csrf
+                                                <button type="submit" class="remainder-waste-button inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold {{ $hasRemainder ? 'bg-red-600 text-white hover:bg-red-700' : 'cursor-not-allowed bg-gray-300 text-gray-600' }}" @disabled(! $hasRemainder)>
+                                                    Merma
+                                                </button>
+                                            </form>
+                                        @else
+                                            <span class="text-xs text-gray-400">-</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
+                                            <form method="POST" action="{{ route('admin.oncologicos.inventory.registrarMerma', $firstBatch->batch_id) }}" class="stock-loss-form inline">
+                                                @csrf
+                                                <input type="hidden" name="unit" value="frasco">
+                                                <input type="hidden" name="quantity">
+                                                <input type="hidden" name="notes">
+                                                <button type="submit" class="stock-loss-button inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700">
+                                                    Solicitar merma
+                                                </button>
+                                            </form>
+                                        @else
+                                            <span class="text-xs text-gray-400">-</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-3 text-center align-top whitespace-nowrap">
+                                        @if ($firstBatch)
+                                            <x-table-action-link href="{{ route('admin.oncologicos.inventory.movimientos', $firstBatch->batch_id) }}"
+                                                variant="gray" class="movimientos-link">Movimientos</x-table-action-link>
+                                        @else
+                                            <span class="text-xs text-gray-400">-</span>
+                                        @endif
+                                    </td>
+
                                     <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                         <a href="{{ route('admin.oncologicos.inventory.ingresoForm', [
                                             'laboratory_id' => $laboratoryId,
@@ -271,7 +356,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="px-6 py-6 text-center text-gray-500">
+                                    <td colspan="10" class="px-6 py-6 text-center text-gray-500">
                                         Este medicamento no tiene presentaciones disponibles.
                                     </td>
                                 </tr>
@@ -310,6 +395,97 @@
                     if (selectedStock) {
                         selectedStock.textContent = (option.dataset.stockActual || '0.00') + ' frascos';
                     }
+
+                    const movementsLink = row.querySelector('.movimientos-link');
+                    if (movementsLink && option.dataset.movimientosUrl) {
+                        movementsLink.href = option.dataset.movimientosUrl;
+                    }
+
+                    const editLink = row.querySelector('.edit-link');
+                    if (editLink && option.dataset.editUrl) editLink.href = option.dataset.editUrl;
+
+                    const lossForm = row.querySelector('.stock-loss-form');
+                    if (lossForm && option.dataset.lossUrl) lossForm.action = option.dataset.lossUrl;
+
+                    const remainderMl = Number(option.dataset.remainderMl || 0);
+                    const remainderLabel = row.querySelector('.selected-remainder');
+                    if (remainderLabel) remainderLabel.textContent = remainderMl.toFixed(2) + ' mL';
+
+                    const remainderForm = row.querySelector('.remainder-waste-form');
+                    const remainderButton = row.querySelector('.remainder-waste-button');
+                    if (remainderForm && option.dataset.remainderMermaUrl) remainderForm.action = option.dataset.remainderMermaUrl;
+                    if (remainderButton) {
+                        const enabled = remainderMl > 0.0001;
+                        remainderButton.disabled = !enabled;
+                        remainderButton.classList.toggle('bg-red-600', enabled);
+                        remainderButton.classList.toggle('text-white', enabled);
+                        remainderButton.classList.toggle('hover:bg-red-700', enabled);
+                        remainderButton.classList.toggle('cursor-not-allowed', !enabled);
+                        remainderButton.classList.toggle('bg-gray-300', !enabled);
+                        remainderButton.classList.toggle('text-gray-600', !enabled);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.remainder-waste-form').forEach(form => {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const button = form.querySelector('.remainder-waste-button');
+                    if (!button || button.disabled) return;
+
+                    Swal.fire({
+                        title: 'Enviar remanente a merma?',
+                        text: 'Esta accion dejara el remanente del lote en 0 mL.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Si, enviar a merma',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#dc2626',
+                    }).then((result) => {
+                        if (result.isConfirmed) form.submit();
+                    });
+                });
+            });
+
+            document.querySelectorAll('.stock-loss-form').forEach(form => {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const row = form.closest('.presentation-row');
+                    const option = row?.querySelector('.lote-select')?.selectedOptions[0];
+                    const stock = Number(option?.dataset.stockActual || 0);
+                    const reserved = Number(option?.dataset.stockReservado || 0);
+                    const available = Math.max(0, Math.floor(stock - reserved));
+
+                    Swal.fire({
+                        title: 'Solicitar merma de frascos',
+                        html: `
+                            <input id="loss-quantity" type="number" min="1" step="1" max="${available}" class="swal2-input" placeholder="Máximo: ${available} frascos">
+                            <textarea id="loss-notes" class="swal2-textarea" placeholder="Motivo de la merma"></textarea>
+                        `,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Enviar solicitud',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#dc2626',
+                        preConfirm: () => {
+                            const quantity = Number(document.getElementById('loss-quantity').value);
+                            const notes = document.getElementById('loss-notes').value.trim();
+                            if (!Number.isInteger(quantity) || quantity < 1 || quantity > available) {
+                                Swal.showValidationMessage('Captura un número entero dentro de los frascos disponibles.');
+                                return false;
+                            }
+                            if (!notes) {
+                                Swal.showValidationMessage('Indica el motivo de la merma.');
+                                return false;
+                            }
+                            return { quantity, notes };
+                        },
+                    }).then((result) => {
+                        if (!result.isConfirmed) return;
+                        form.querySelector('[name="quantity"]').value = result.value.quantity;
+                        form.querySelector('[name="notes"]').value = result.value.notes;
+                        form.submit();
+                    });
                 });
             });
         </script>

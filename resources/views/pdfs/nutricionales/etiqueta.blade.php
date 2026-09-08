@@ -102,6 +102,18 @@
             word-wrap: break-word;
             overflow: auto;
         }
+
+        .qr-right {
+            width: 16%;
+            text-align: right;
+            vertical-align: top;
+        }
+
+        .qr-right img {
+            width: 52px;
+            height: 52px;
+            display: inline-block;
+        }
     </style>
 </head>
 
@@ -110,8 +122,13 @@
         <div>
             <table>
                 <tr>
-                    <td style="text-align: center; width: 100%; border:none; font-size:0.70rem">
+                    <td style="text-align: center; width: 84%; border:none; font-size:0.70rem">
                         <strong>CENTRO DE MEZCLAS ESTÉRILES PRODIFEM</strong>
+                    </td>
+                    <td class="qr-right" style="border:none;">
+                        @if (!empty($qrImage))
+                            <img src="{{ $qrImage }}" alt="QR solicitud">
+                        @endif
                     </td>
                 </tr>
             </table>
@@ -129,7 +146,7 @@
                     <td style="width: 30%">
                         <strong>
                             Lote:
-                            {{ $solicitud_detalles->lote ?? 'â€”' }}
+                            {{ $solicitud_detalles->lote ?? '—' }}
                         </strong>
                     </td>
                 </tr>
@@ -255,7 +272,7 @@
                             }
                         @endphp
 
-                        {{ $volumenTotal > 0 ? number_format($sumaOsmolaridad, 2) : 'â€”' }} mOsm/mL
+                        {{ $volumenTotal > 0 ? number_format($sumaOsmolaridad, 2) : '—' }} mOsm/mL
                     </td>
 
                     <td style="border: none; border-top: 1px solid black; padding: 0; margin: 0">
@@ -285,7 +302,7 @@
                                 ($sumaDosisDeGlucosa * 1000) / ($solicitud_detalles->solicitud_detail['tiempo_infusion_min'] * 60),
                                 2,
                             )
-                            : 'â€”' }}
+                            : '—' }}
                         mg/kg/min
                     </td>
                 </tr>
@@ -306,12 +323,12 @@
                                         $sumaDosisDeGlucosa * $solicitud_detalles->solicitud_patient['peso'] * 3.4,
                                     2,
                                 )
-                                : 'â€”' }}
+                                : '—' }}
                             kcal
                         @else
                             {{ isset($sumaDosisDeAA, $sumaDosisDeLipidos, $sumaDosisDeGlucosa)
                                 ? number_format($sumaDosisDeAA * 4 + $sumaDosisDeLipidos * 9 + $sumaDosisDeGlucosa * 3.4, 2)
-                                : 'â€”' }}
+                                : '—' }}
                             kcal
                         @endif
                     </td>
@@ -333,7 +350,7 @@
                                         $solicitud_detalles->solicitud_detail['volumen_total'],
                                     2,
                                 )
-                                : 'â€”' }}
+                                : '—' }}
                             kcal/mL
                         @else
                             {{ isset(
@@ -347,7 +364,7 @@
                                         $solicitud_detalles->solicitud_detail['volumen_total'],
                                     2,
                                 )
-                                : 'â€”' }}
+                                : '—' }}
                             kcal/mL
                         @endif
                     </td>
@@ -409,7 +426,7 @@
 
                         {{ !empty($solicitud_detalles->fecha_hora_preparacion)
                             ? date('d-m-Y H:i', strtotime($solicitud_detalles->fecha_hora_preparacion)) . 'h'
-                            : 'â€”' }}
+                            : '—' }}
                     </td>
                 </tr>
 
@@ -419,7 +436,7 @@
 
                         {{ !empty($solicitud_detalles->fecha_hora_limite_uso)
                             ? date('d-m-Y H:i', strtotime($solicitud_detalles->fecha_hora_limite_uso)) . 'h'
-                            : 'â€”' }}
+                            : '—' }}
 
                     </td>
                 </tr>

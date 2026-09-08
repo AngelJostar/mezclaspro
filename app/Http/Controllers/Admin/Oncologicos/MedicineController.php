@@ -9,6 +9,7 @@ use App\Models\Oncologicos\MedicineList;
 use App\Models\Oncologicos\MedicinePresentation;
 use App\Models\Oncologicos\MedicinesCatalog;
 use App\Services\PriceListDocumentConfigurationService;
+use App\Services\PriceListWarehouseConfigurationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -27,7 +28,7 @@ class MedicineController extends Controller
             'presentations' => function ($q) {
                 $this->scopeActivePresentations($q)
                     ->orderBy('presentacion');
-            }
+            },
         ])
             ->forCategory('oncologicos')
             ->whereHas('presentations', function ($q) {
@@ -44,30 +45,43 @@ class MedicineController extends Controller
         );
     }
 
-    public function store(Request $request, PriceListDocumentConfigurationService $documentConfiguration)
-    {
+    public function store(
+        Request $request,
+        PriceListDocumentConfigurationService $documentConfiguration,
+        PriceListWarehouseConfigurationService $warehouseConfiguration
+    ) {
         $catalogCategory = $this->catalogCategoryFromRequest($request);
 
+        if ($request->filled('from_catalogo_listas') && $request->boolean('is_backup_list')) {
+            $request->merge([
+                'has_subdistributor' => false,
+                'has_contract' => false,
+                'contract_number' => null,
+                'contract_information' => null,
+            ]);
+        }
+
         $request->validate([
-            'name'          => 'required|string|max:255',
-            'description'   => 'nullable|string',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
             'active_brands' => 'nullable|boolean',
-            'charge_by'     => 'required|in:mg,frasco',
+            'charge_by' => 'required|in:mg,ml,frasco',
             'show_label_lot_expiry' => 'nullable|boolean',
             'has_mixing_service' => 'nullable|boolean',
             'mixing_service_price' => 'nullable|numeric|min:0',
 
-            'medicamentos'                   => 'required|array|min:1',
+            'medicamentos' => 'required|array|min:1',
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
-            'medicamentos.*.precio'          => 'required|numeric|min:0',
-            'medicamentos.*.precio_mg'       => 'nullable|numeric|min:0',
-            'medicamentos.*.iva_desglosado'  => 'nullable|boolean',
-            'medicamentos.*.selected'        => 'nullable|boolean',
+            'medicamentos.*.precio' => 'required|numeric|min:0',
+            'medicamentos.*.precio_mg' => 'nullable|numeric|min:0',
+            'medicamentos.*.charge_by' => 'nullable|in:mg,ml,frasco',
+            'medicamentos.*.iva_desglosado' => 'nullable|boolean',
+            'medicamentos.*.selected' => 'nullable|boolean',
             'medicamentos.*.descripcion_remision' => 'nullable|string|max:500',
 
-            'distributor_name'    => 'nullable|string|max:255|required_with:distributor_address,distributor_logo',
+            'distributor_name' => 'nullable|string|max:255|required_with:distributor_address,distributor_logo',
             'distributor_address' => 'nullable|string|max:500|required_with:distributor_name,distributor_logo',
-            'distributor_logo'    => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'distributor_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'has_subdistributor' => 'nullable|boolean',
             'subdistributor_razon_social' => 'nullable|string|max:255|required_if:has_subdistributor,1',
             'subdistributor_rfc' => 'nullable|string|max:20|required_if:has_subdistributor,1',
@@ -79,18 +93,22 @@ class MedicineController extends Controller
             'contract_number' => 'nullable|string|max:255|required_if:has_contract,1',
             'contract_information' => 'nullable|string|max:10000',
         ], [
-            'distributor_name.required_with'    => 'Indica el nombre del distribuidor.',
+            'distributor_name.required_with' => 'Indica el nombre del distribuidor.',
             'distributor_address.required_with' => 'Indica la dirección del distribuidor.',
         ]);
+
+        $warehouseAttributes = $request->filled('from_catalogo_listas')
+            ? $warehouseConfiguration->resolve($request)
+            : [];
 
         $items = collect($request->input('medicamentos', []))
             ->when(
                 $request->filled('from_catalogo_listas'),
-                fn($items) => $items->filter(
-                    fn($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                fn ($items) => $items->filter(
+                    fn ($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
                 )
             )
-            ->filter(fn($m) => !empty($m['presentation_id']) && $m['precio'] !== null && $m['precio'] !== '')
+            ->filter(fn ($m) => ! empty($m['presentation_id']) && $m['precio'] !== null && $m['precio'] !== '')
             ->values();
 
         if ($items->isEmpty()) {
@@ -105,7 +123,7 @@ class MedicineController extends Controller
             ]);
         }
 
-        if (!$this->allPresentationsAreSelectable($items->pluck('presentation_id'), $catalogCategory)) {
+        if (! $this->allPresentationsAreSelectable($items->pluck('presentation_id'), $catalogCategory)) {
             return back()->withInput()->withErrors([
                 'medicamentos' => 'Solo puedes agregar presentaciones activas del catálogo.',
             ]);
@@ -121,14 +139,16 @@ class MedicineController extends Controller
                 ['oncologicos', 'antibioticos'],
                 true
             );
-            $chargeBy = $fromCatalogEditor ? 'mg' : $request->input('charge_by', 'mg');
+            $chargeBy = $fromCatalogEditor
+                ? $this->normalizeChargeBy($items->first()['charge_by'] ?? null)
+                : $this->normalizeChargeBy($request->input('charge_by', 'mg'), 'mg');
 
-            $lista = MedicineList::create([
-                'name'          => $request->name,
-                'description'   => $request->description,
+            $lista = MedicineList::create(array_merge([
+                'name' => $request->name,
+                'description' => $request->description,
                 'catalog_category' => $catalogCategory,
                 'active_brands' => $request->boolean('active_brands', false),
-                'charge_by'     => $chargeBy,
+                'charge_by' => $chargeBy,
                 'show_label_lot_expiry' => $request->boolean('show_label_lot_expiry', false),
                 'has_contract' => $request->boolean('has_contract'),
                 'contract_number' => $request->boolean('has_contract') ? $request->input('contract_number') : null,
@@ -137,7 +157,7 @@ class MedicineController extends Controller
                 'mixing_service_price' => $request->boolean('has_mixing_service', false)
                     ? (float) $request->input('mixing_service_price', 0)
                     : 0,
-            ]);
+            ], $warehouseAttributes));
 
             if ($request->filled('from_catalogo_listas')) {
                 $documentConfiguration->syncSubdistributor($lista, $request, 'subdistributors/logos');
@@ -156,9 +176,9 @@ class MedicineController extends Controller
 
                     Distributor::create([
                         'medicine_list_id' => $lista->id,
-                        'nombre'           => $request->input('distributor_name'),
-                        'direccion'        => $request->input('distributor_address'),
-                        'logo_path'        => $logoPath,
+                        'nombre' => $request->input('distributor_name'),
+                        'direccion' => $request->input('distributor_address'),
+                        'logo_path' => $logoPath,
                     ]);
                 }
             }
@@ -166,21 +186,27 @@ class MedicineController extends Controller
             $pivotData = [];
 
             foreach ($items as $item) {
-                $presentationId  = (int) $item['presentation_id'];
+                $presentationId = (int) $item['presentation_id'];
                 $precioCapturado = (float) $item['precio'];
                 $precioMg = (float) ($item['precio_mg'] ?? 0);
+                $itemChargeBy = $fromCatalogEditor
+                    ? $this->normalizeChargeBy($item['charge_by'] ?? null, $chargeBy)
+                    : $chargeBy;
                 $remissionDescription = trim((string) ($item['descripcion_remision'] ?? ''))
                     ?: $defaultDescriptions->get($presentationId);
 
                 $pivotData[$presentationId] = [
-                    'charge_by'          => $chargeBy,
-                    'precio'             => $fromCatalogEditor || $chargeBy === 'frasco'
+                    'charge_by' => $itemChargeBy,
+                    'precio' => $fromCatalogEditor || $itemChargeBy === 'frasco'
                         ? $precioCapturado
                         : null,
-                    'precio_mg_override' => $fromCatalogEditor
-                        ? $precioMg
-                        : ($chargeBy === 'mg' ? $precioCapturado : null),
-                    'iva_desglosado'     => filter_var(
+                    'precio_mg_override' => $itemChargeBy === 'mg'
+                        ? ($fromCatalogEditor && $precioMg > 0 ? $precioMg : $precioCapturado)
+                        : null,
+                    'precio_ml_override' => $itemChargeBy === 'ml'
+                        ? $precioCapturado
+                        : null,
+                    'iva_desglosado' => filter_var(
                         $item['iva_desglosado'] ?? false,
                         FILTER_VALIDATE_BOOLEAN
                     ),
@@ -209,7 +235,7 @@ class MedicineController extends Controller
             DB::rollBack();
 
             return back()->withInput()->withErrors([
-                'error' => 'Error al crear la lista: ' . $e->getMessage(),
+                'error' => 'Error al crear la lista: '.$e->getMessage(),
             ]);
         }
     }
@@ -218,7 +244,7 @@ class MedicineController extends Controller
     {
         $lista = MedicineList::with([
             'presentations.catalog',
-            'distributor'
+            'distributor',
         ])->findOrFail($id);
         $catalogCategory = $lista->catalog_category ?: 'oncologicos';
 
@@ -226,7 +252,7 @@ class MedicineController extends Controller
             'presentations' => function ($q) {
                 $this->scopeActivePresentations($q)
                     ->orderBy('presentacion');
-            }
+            },
         ])
             ->forCategory($catalogCategory)
             ->whereHas('presentations', function ($q) {
@@ -291,41 +317,56 @@ class MedicineController extends Controller
 
         $listaItems = $lista->presentations->map(function ($pres) {
             return [
-                'catalog_id'      => $pres->catalog_id,
+                'catalog_id' => $pres->catalog_id,
                 'presentation_id' => $pres->id,
-                'charge_by'       => $pres->pivot->charge_by ?? 'mg',
-                'precio'          => ($pres->pivot->charge_by ?? 'mg') === 'frasco'
-                    ? ($pres->pivot->precio ?? null)
-                    : ($pres->pivot->precio_mg_override ?? null),
+                'charge_by' => $pres->pivot->charge_by ?? 'mg',
+                'precio' => match ($pres->pivot->charge_by ?? 'mg') {
+                    'frasco' => $pres->pivot->precio ?? null,
+                    'ml' => $pres->pivot->precio_ml_override ?? null,
+                    default => $pres->pivot->precio_mg_override ?? null,
+                },
             ];
         })
             ->values();
 
         return view('admin.oncologicos.medicines.edit', [
-            'lista'       => $lista,
-            'catalogos'   => $catalogos,
-            'listaItems'  => $listaItems,
+            'lista' => $lista,
+            'catalogos' => $catalogos,
+            'listaItems' => $listaItems,
             'distributor' => $lista->distributor,
         ]);
     }
 
-    public function update(Request $request, string $id, PriceListDocumentConfigurationService $documentConfiguration)
-    {
+    public function update(
+        Request $request,
+        string $id,
+        PriceListDocumentConfigurationService $documentConfiguration,
+        PriceListWarehouseConfigurationService $warehouseConfiguration
+    ) {
         $catalogCategory = $this->catalogCategoryFromRequest($request);
 
+        if ($request->filled('from_catalogo_listas') && $request->boolean('is_backup_list')) {
+            $request->merge([
+                'has_subdistributor' => false,
+                'has_contract' => false,
+                'contract_number' => null,
+                'contract_information' => null,
+            ]);
+        }
+
         $request->validate([
-            'name'           => 'required|string|max:255',
-            'description'    => 'nullable|string',
-            'active_brands'  => 'nullable|boolean',
-            'charge_by'      => 'required|in:mg,frasco',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'active_brands' => 'nullable|boolean',
+            'charge_by' => 'required|in:mg,ml,frasco',
             'show_label_lot_expiry' => 'nullable|boolean',
             'has_mixing_service' => 'nullable|boolean',
             'mixing_service_price' => 'nullable|numeric|min:0',
 
-            'distributor_nombre'    => 'nullable|string|max:255',
+            'distributor_nombre' => 'nullable|string|max:255',
             'distributor_direccion' => 'nullable|string|max:500',
-            'distributor_logo'      => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'distributor_delete'    => 'nullable|boolean',
+            'distributor_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'distributor_delete' => 'nullable|boolean',
             'has_subdistributor' => 'nullable|boolean',
             'subdistributor_razon_social' => 'nullable|string|max:255|required_if:has_subdistributor,1',
             'subdistributor_rfc' => 'nullable|string|max:20|required_if:has_subdistributor,1',
@@ -337,27 +378,31 @@ class MedicineController extends Controller
             'contract_number' => 'nullable|string|max:255|required_if:has_contract,1',
             'contract_information' => 'nullable|string|max:10000',
 
-            'medicamentos'                   => 'required|array|min:1',
-            'medicamentos.*.catalog_id'      => 'required|exists:medicines_catalog,id',
+            'medicamentos' => 'required|array|min:1',
+            'medicamentos.*.catalog_id' => 'required|exists:medicines_catalog,id',
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
-            'medicamentos.*.precio'          => 'required|numeric|min:0',
-            'medicamentos.*.precio_mg'       => 'nullable|numeric|min:0',
-            'medicamentos.*.iva_desglosado'  => 'nullable|boolean',
-            'medicamentos.*.selected'        => 'nullable|boolean',
+            'medicamentos.*.precio' => 'required|numeric|min:0',
+            'medicamentos.*.precio_mg' => 'nullable|numeric|min:0',
+            'medicamentos.*.charge_by' => 'nullable|in:mg,ml,frasco',
+            'medicamentos.*.iva_desglosado' => 'nullable|boolean',
+            'medicamentos.*.selected' => 'nullable|boolean',
             'medicamentos.*.descripcion_remision' => 'nullable|string|max:500',
         ]);
+
+        $warehouseAttributes = $request->filled('from_catalogo_listas')
+            ? $warehouseConfiguration->resolve($request)
+            : [];
 
         $rows = collect($request->input('medicamentos', []))
             ->when(
                 $request->filled('from_catalogo_listas'),
-                fn($rows) => $rows->filter(
-                    fn($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                fn ($rows) => $rows->filter(
+                    fn ($item) => filter_var($item['selected'] ?? false, FILTER_VALIDATE_BOOLEAN)
                 )
             )
             ->filter(
-                fn($m) =>
-                !empty($m['catalog_id']) &&
-                !empty($m['presentation_id']) &&
+                fn ($m) => ! empty($m['catalog_id']) &&
+                ! empty($m['presentation_id']) &&
                 $m['precio'] !== null &&
                 $m['precio'] !== ''
             )
@@ -393,9 +438,11 @@ class MedicineController extends Controller
                 ['oncologicos', 'antibioticos'],
                 true
             );
-            $chargeByGlobal = $fromCatalogEditor ? 'mg' : $request->input('charge_by', 'mg');
+            $chargeByGlobal = $fromCatalogEditor
+                ? $this->normalizeChargeBy($rows->first()['charge_by'] ?? null)
+                : $this->normalizeChargeBy($request->input('charge_by', 'mg'), 'mg');
 
-            if (!$this->allPresentationsAreSelectable($rows->pluck('presentation_id'), $catalogCategory)) {
+            if (! $this->allPresentationsAreSelectable($rows->pluck('presentation_id'), $catalogCategory)) {
                 DB::rollBack();
 
                 return back()->withInput()->withErrors([
@@ -404,11 +451,11 @@ class MedicineController extends Controller
             }
 
             $listAttributes = [
-                'name'          => $request->name,
-                'description'   => $request->description,
+                'name' => $request->name,
+                'description' => $request->description,
                 'catalog_category' => $catalogCategory,
                 'active_brands' => $request->boolean('active_brands', false),
-                'charge_by'     => $chargeByGlobal,
+                'charge_by' => $chargeByGlobal,
                 'show_label_lot_expiry' => $request->boolean('show_label_lot_expiry', false),
                 'has_mixing_service' => $request->boolean('has_mixing_service', false),
                 'mixing_service_price' => $request->boolean('has_mixing_service', false)
@@ -422,6 +469,7 @@ class MedicineController extends Controller
                     'contract_number' => $request->boolean('has_contract') ? $request->input('contract_number') : null,
                     'contract_information' => $request->boolean('has_contract') ? $request->input('contract_information') : null,
                 ];
+                $listAttributes += $warehouseAttributes;
             }
 
             $lista->update($listAttributes);
@@ -430,13 +478,13 @@ class MedicineController extends Controller
                 $documentConfiguration->syncSubdistributor($lista, $request, 'subdistributors/logos');
             } elseif ($request->boolean('distributor_delete')) {
                 if ($lista->distributor) {
-                    if (!empty($lista->distributor->logo_path)) {
+                    if (! empty($lista->distributor->logo_path)) {
                         Storage::disk('public')->delete($lista->distributor->logo_path);
                     }
                     $lista->distributor->delete();
                 }
             } else {
-                $distNombre    = trim((string) $request->input('distributor_nombre', ''));
+                $distNombre = trim((string) $request->input('distributor_nombre', ''));
                 $distDireccion = trim((string) $request->input('distributor_direccion', ''));
 
                 $hayDatosDistributor =
@@ -451,7 +499,7 @@ class MedicineController extends Controller
                     $distributor->direccion = $distDireccion;
 
                     if ($request->hasFile('distributor_logo')) {
-                        if (!empty($distributor->logo_path)) {
+                        if (! empty($distributor->logo_path)) {
                             Storage::disk('public')->delete($distributor->logo_path);
                         }
 
@@ -469,19 +517,25 @@ class MedicineController extends Controller
                 $presentationId = (int) $row['presentation_id'];
                 $precio = (float) $row['precio'];
                 $precioMg = (float) ($row['precio_mg'] ?? 0);
+                $rowChargeBy = $fromCatalogEditor
+                    ? $this->normalizeChargeBy($row['charge_by'] ?? null, $chargeByGlobal)
+                    : $chargeByGlobal;
                 $remissionDescription = trim((string) ($row['descripcion_remision'] ?? ''))
                     ?: trim((string) $existingDescriptions->get($presentationId, ''))
                     ?: $defaultDescriptions->get($presentationId);
 
                 $pivotData[$presentationId] = [
-                    'charge_by'          => $chargeByGlobal,
-                    'precio'             => $fromCatalogEditor || $chargeByGlobal === 'frasco'
+                    'charge_by' => $rowChargeBy,
+                    'precio' => $fromCatalogEditor || $rowChargeBy === 'frasco'
                         ? $precio
                         : null,
-                    'precio_mg_override' => $fromCatalogEditor
-                        ? $precioMg
-                        : ($chargeByGlobal === 'mg' ? $precio : null),
-                    'iva_desglosado'     => filter_var(
+                    'precio_mg_override' => $rowChargeBy === 'mg'
+                        ? ($fromCatalogEditor && $precioMg > 0 ? $precioMg : $precio)
+                        : null,
+                    'precio_ml_override' => $rowChargeBy === 'ml'
+                        ? $precio
+                        : null,
+                    'iva_desglosado' => filter_var(
                         $row['iva_desglosado'] ?? false,
                         FILTER_VALIDATE_BOOLEAN
                     ),
@@ -510,7 +564,7 @@ class MedicineController extends Controller
             DB::rollBack();
 
             return back()->withInput()->withErrors([
-                'error' => 'Error al actualizar la lista: ' . $e->getMessage(),
+                'error' => 'Error al actualizar la lista: '.$e->getMessage(),
             ]);
         }
     }
@@ -522,7 +576,7 @@ class MedicineController extends Controller
 
             $lista = MedicineList::with('distributor')->findOrFail($id);
 
-            if ($lista->distributor && !empty($lista->distributor->logo_path)) {
+            if ($lista->distributor && ! empty($lista->distributor->logo_path)) {
                 Storage::disk('public')->delete($lista->distributor->logo_path);
             }
 
@@ -541,14 +595,14 @@ class MedicineController extends Controller
             DB::rollBack();
 
             return back()->withErrors([
-                'error' => 'Error al eliminar la lista: ' . $e->getMessage()
+                'error' => 'Error al eliminar la lista: '.$e->getMessage(),
             ]);
         }
     }
 
     public function exportarExcel(MedicineList $medicineList)
     {
-        $filename = 'lista_precios_' . $medicineList->id . '.xlsx';
+        $filename = 'lista_precios_'.$medicineList->id.'.xlsx';
 
         return Excel::download(new MedicineListExport($medicineList->id), $filename);
     }
@@ -563,7 +617,7 @@ class MedicineController extends Controller
     {
         $ids = collect($presentationIds)
             ->filter()
-            ->map(fn($id) => (int) $id)
+            ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
 
@@ -603,5 +657,14 @@ class MedicineController extends Controller
 
                 return [$presentation->id => $description];
             });
+    }
+
+    private function normalizeChargeBy($value, string $fallback = 'frasco'): string
+    {
+        $chargeBy = strtolower(trim((string) $value));
+
+        return in_array($chargeBy, ['frasco', 'mg', 'ml'], true)
+            ? $chargeBy
+            : $fallback;
     }
 }

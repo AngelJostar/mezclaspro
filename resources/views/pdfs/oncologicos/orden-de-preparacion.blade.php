@@ -291,9 +291,10 @@
             optional($mezcla->inspeccion)->fecha_validacion,
             optional($mezcla->inspeccion)->hora_validacion
         );
-        $fechaHoraPreparacionTraza = $mezcla->solicitud?->fecha_hora_preparada
-            ? Carbon::parse($mezcla->solicitud->fecha_hora_preparada)->format('d/m/Y H:i')
-            : null;
+        $fechaHoraPreparacionTraza = $fmtDateTime(
+            optional($mezcla->inspeccion)->fecha_preparacion,
+            optional($mezcla->inspeccion)->hora_preparacion
+        );
         $fechaHoraInspeccionTraza = filled(optional($mezcla->inspeccion)->reviso_nombre)
             ? $fmtDateTime(optional($mezcla->inspeccion)->fecha_inspeccion, optional($mezcla->inspeccion)->hora_inspeccion)
             : null;
@@ -649,8 +650,8 @@
 
             <p>
                 <strong>Concentración calculada:</strong>
-                {{ $fmtNum($dosisTotalMg ?? null, 2) }} mg /
-                {{ $fmtNum($volumenFinalMl ?? null, 2) }} mL =
+                {{ $fmtNum($dosis_total_mg ?? null, 2) }} mg /
+                {{ $fmtNum($volumen_final_ml ?? null, 2) }} mL =
                 {{ $concentracion_final !== '—' ? $concentracion_final . ' mg/mL' : '—' }}
             </p>
 
@@ -703,5 +704,4 @@
 
 
 </html>
-
 

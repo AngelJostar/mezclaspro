@@ -75,8 +75,12 @@ class InstitucionMezclasOncoExport implements FromArray, WithHeadings, ShouldAut
                 $presentaciones = $med->presentacionesUsadas ?? collect();
 
                 if ($presentaciones->isEmpty()) {
-                    $unidadCobro = $listaCharge === 'mg' ? 'mg' : 'frasco';
-                    $cantidad = $unidadCobro === 'mg' ? (float) $med->dosis : 1;
+                    $unidadCobro = in_array($med->charge_by ?: $listaCharge, ['mg', 'ml'], true)
+                        ? ($med->charge_by ?: $listaCharge)
+                        : 'frasco';
+                    $cantidad = $unidadCobro === 'mg'
+                        ? (float) $med->dosis
+                        : ($unidadCobro === 'ml' ? (float) $med->dosis_ml : 1);
                 } else {
                     $first = $presentaciones->first();
                     $presentationId =
@@ -84,8 +88,8 @@ class InstitucionMezclasOncoExport implements FromArray, WithHeadings, ShouldAut
                         ?? optional(optional($first->batch)->presentation)->id;
 
                     $cfg = $cfgPorPresentacion->get($presentationId);
-                    $chargeBy = $cfg->charge_by ?? $listaCharge;
-                    $unidadCobro = $chargeBy === 'mg' ? 'mg' : 'frasco';
+                    $chargeBy = $first->charge_by_snapshot ?? $cfg?->charge_by ?? $med->charge_by ?? $listaCharge;
+                    $unidadCobro = in_array($chargeBy, ['mg', 'ml'], true) ? $chargeBy : 'frasco';
 
                     if ($chargeBy === 'frasco') {
                         foreach ($presentaciones as $pu) {
@@ -102,9 +106,15 @@ class InstitucionMezclasOncoExport implements FromArray, WithHeadings, ShouldAut
                         }
 
                         $precioUnit = $cantidad > 0 ? $subtotal / $cantidad : 0;
+                    } elseif ($chargeBy === 'ml') {
+                        $cantidad = (float) $presentaciones->sum('volumen_usado_ml');
+                        $subtotal = (float) $presentaciones->sum('subtotal');
+                        $precioUnit = $cantidad > 0
+                            ? $subtotal / $cantidad
+                            : (float) ($first->precio_unitario_snapshot ?? $cfg?->precio_ml_override ?? $med->precio_ml_snapshot ?? 0);
                     } else {
                         $cantidad = (float) $med->dosis;
-                        $precioUnit = (float) ($cfg->precio_mg_override ?? 0);
+                        $precioUnit = (float) ($cfg?->precio_mg_override ?? 0);
                         $subtotal = $cantidad * $precioUnit;
                     }
                 }

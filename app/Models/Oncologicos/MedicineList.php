@@ -4,12 +4,20 @@ namespace App\Models\Oncologicos;
 
 use App\Models\Hospital;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MedicineList extends Model
 {
     protected $fillable = [
         'user_id',
+        'laboratory_id',
+        'warehouse_id',
+        'backup_enabled',
+        'backup_warehouse_id',
+        'is_backup',
+        'primary_warehouse_id',
         'name',
         'description',
         'catalog_category',
@@ -30,6 +38,8 @@ class MedicineList extends Model
         'has_contract' => 'boolean',
         'has_mixing_service' => 'boolean',
         'mixing_service_price' => 'decimal:4',
+        'backup_enabled' => 'boolean',
+        'is_backup' => 'boolean',
     ];
 
     public function scopeForCategory($query, string $category)
@@ -67,6 +77,11 @@ class MedicineList extends Model
         return $this->charge_by === 'frasco';
     }
 
+    public function chargeByMl(): bool
+    {
+        return $this->charge_by === 'ml';
+    }
+
     public function presentations()
     {
         return $this->belongsToMany(
@@ -78,6 +93,7 @@ class MedicineList extends Model
             'charge_by',
             'precio',
             'precio_mg_override',
+            'precio_ml_override',
             'iva_desglosado',
             'descripcion_remision',
         ])->withTimestamps();
@@ -91,5 +107,25 @@ class MedicineList extends Model
     public function hospital()
     {
         return $this->hasOne(Hospital::class, 'onco_medicine_list_id', 'id');
+    }
+
+    public function laboratory(): BelongsTo
+    {
+        return $this->belongsTo(Laboratory::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    public function backupWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'backup_warehouse_id');
+    }
+
+    public function primaryWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'primary_warehouse_id');
     }
 }

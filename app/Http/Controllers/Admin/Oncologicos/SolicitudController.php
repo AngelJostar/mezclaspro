@@ -10,6 +10,8 @@ use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MezclaMedicamento;
 use App\Models\Oncologicos\SolicitudOnco;
 use App\Services\InstitutionBillingPricingService;
+use App\Services\OncologyMixtureDeliveryScheduleService;
+use App\Support\SolicitudStatusFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -32,8 +34,16 @@ class SolicitudController extends Controller
     public function index(Request $request)
     {
         $requestType = $this->requestType($request->route('request_type') ?? $request->query('tipo_solicitud'));
+        $pendingApprovalCount = $this->pendingApprovalCount($requestType);
+        $routePendingCount = $this->routePendingCount($requestType);
+        $deliveryPendingCount = $this->deliveryPendingCount($requestType);
 
-        return view('admin.oncologicos.solicitudes.index', compact('requestType'));
+        return view('admin.oncologicos.solicitudes.index', compact(
+            'requestType',
+            'pendingApprovalCount',
+            'routePendingCount',
+            'deliveryPendingCount'
+        ));
     }
 
     private function requestType(?string $requestType): string
@@ -53,6 +63,82 @@ class SolicitudController extends Controller
         return $requestType === 'antibioticos'
             ? 'antibiotic_medicine_list_id'
             : 'onco_medicine_list_id';
+    }
+
+    private function pendingApprovalCount(string $requestType): int
+    {
+        $user = Auth::user();
+        $role = $user->roles[0]->name ?? null;
+
+        $query = Mezcla::query()
+            ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
+            ->where('oncology_requests.tipo_solicitud', $requestType)
+            ->whereRaw('('.$this->effectiveStatusExpression().') = ?', ['pendiente']);
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $query->where('oncology_requests.hospital_id', $user->hospital_id);
+        }
+
+        return (int) $query->count();
+    }
+
+    private function effectiveStatusExpression(): string
+    {
+        return "CASE
+            WHEN oncology_requests.estado IN ('cancelada', 'no_aprobada', 'no-aprobada')
+                THEN oncology_requests.estado
+            ELSE COALESCE(NULLIF(mezclas.estado, ''), 'pendiente')
+        END";
+    }
+
+    private function routePendingCount(string $requestType): int
+    {
+        $user = Auth::user();
+        $role = $user->roles[0]->name ?? null;
+
+        $query = Mezcla::query()
+            ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
+            ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
+                $join->on('request_delivery_schedules.hospital_id', '=', 'oncology_requests.hospital_id')
+                    ->where('request_delivery_schedules.status', 'sent')
+                    ->whereRaw(
+                        'DATE(request_delivery_schedules.scheduled_date) = DATE(COALESCE(mezclas.fecha_entrega, oncology_requests.fecha_entrega))'
+                    );
+            })
+            ->where('oncology_requests.tipo_solicitud', $requestType)
+            ->whereIn(DB::raw($this->effectiveStatusExpression()), SolicitudStatusFilter::PREPARATION_STATES)
+            ->whereNull('request_delivery_schedules.id');
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $query->where('oncology_requests.hospital_id', $user->hospital_id);
+        }
+
+        return (int) $query->count();
+    }
+
+    private function deliveryPendingCount(string $requestType): int
+    {
+        $user = Auth::user();
+        $role = $user->roles[0]->name ?? null;
+
+        $query = Mezcla::query()
+            ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
+            ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
+                $join->on('request_delivery_schedules.hospital_id', '=', 'oncology_requests.hospital_id')
+                    ->where('request_delivery_schedules.status', 'sent')
+                    ->whereRaw(
+                        'DATE(request_delivery_schedules.scheduled_date) = DATE(COALESCE(mezclas.fecha_entrega, oncology_requests.fecha_entrega))'
+                    );
+            })
+            ->where('oncology_requests.tipo_solicitud', $requestType)
+            ->whereIn(DB::raw($this->effectiveStatusExpression()), SolicitudStatusFilter::PREPARATION_STATES)
+            ->whereNotNull('request_delivery_schedules.id');
+
+        if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $query->where('oncology_requests.hospital_id', $user->hospital_id);
+        }
+
+        return (int) $query->distinct('mezclas.id')->count('mezclas.id');
     }
 
     private function currentHospitalId(): int
@@ -81,6 +167,43 @@ class SolicitudController extends Controller
             ->value($column);
 
         return $listaId ? (int) $listaId : null;
+    }
+
+    private function fallbackBatchForList(object $currentBatch, int $unidades, int $laboratoryId, int $listaId, int $catalogId): ?object
+    {
+        $list = DB::table('medicine_lists')
+            ->where('id', $listaId)
+            ->first(['warehouse_id', 'backup_enabled', 'backup_warehouse_id']);
+        $backupWarehouseId = (int) ($list?->backup_warehouse_id ?? 0);
+
+        if (! $list || ! $list->backup_enabled || $backupWarehouseId <= 0
+            || (int) ($currentBatch->warehouse_id ?? 0) !== (int) ($list->warehouse_id ?? 0)) {
+            return null;
+        }
+
+        return DB::table('medicine_batches as mb')
+            ->join('medicine_presentations as mp', 'mp.id', '=', 'mb.medicine_presentation_id')
+            ->join('medicine_list_presentation as mlp', function ($join) use ($listaId) {
+                $join->on('mlp.medicine_presentation_id', '=', 'mp.id')->where('mlp.medicine_list_id', $listaId);
+            })
+            ->where('mb.laboratory_id', $laboratoryId)
+            ->where('mb.warehouse_id', $backupWarehouseId)
+            ->where('mb.medicine_presentation_id', $currentBatch->medicine_presentation_id)
+            ->where('mp.catalog_id', $catalogId)
+            ->where('mp.is_available', 1)
+            ->where('mb.stock_actual', '>=', $unidades)
+            ->where(function ($query) {
+                $query->whereNull('mb.caducidad')->orWhereDate('mb.caducidad', '>=', now()->toDateString());
+            })
+            ->orderByRaw('mb.caducidad IS NULL')
+            ->orderBy('mb.caducidad')
+            ->orderBy('mb.id')
+            ->lockForUpdate()
+            ->select('mb.id', 'mb.warehouse_id', 'mb.lote', 'mb.caducidad', 'mb.stock_actual', 'mb.stock_ml_actual', 'mb.stock_reservado',
+                'mb.medicine_presentation_id', 'mp.id as presentation_id', 'mp.catalog_id', 'mp.presentacion',
+                'mp.cantidad_medicamento', 'mp.volumen_diluyente', 'mp.legend', 'mp.marca', 'mp.precio_frasco',
+                'mlp.precio as precio_lista')
+            ->first();
     }
 
     private function consumeBatchForMix(
@@ -121,6 +244,7 @@ class SolicitudController extends Controller
                 'mb.lote',
                 'mb.caducidad',
                 'mb.stock_actual',
+                'mb.stock_ml_actual',
                 'mb.stock_reservado',
                 'mb.medicine_presentation_id',
 
@@ -144,15 +268,25 @@ class SolicitudController extends Controller
         $stockActual = (int) ($batch->stock_actual ?? 0);
 
         if ($stockActual < $unidades) {
-            throw new \Exception("Stock insuficiente para el lote {$batch->lote}. Disponible: {$stockActual}, solicitado: {$unidades}.");
+            $fallbackBatch = $this->fallbackBatchForList($batch, $unidades, $laboratoryId, $listaId, $catalogId);
+            if (! $fallbackBatch) {
+                throw new \Exception("Stock insuficiente para el lote {$batch->lote}. Disponible: {$stockActual}, solicitado: {$unidades}.");
+            }
+            $batch = $fallbackBatch;
+            $stockActual = (int) $batch->stock_actual;
         }
 
         $nuevoStock = $stockActual - $unidades;
+        $mlPorFrasco = (float) ($batch->volumen_diluyente ?? 0);
+        $stockMlAntes = (float) ($batch->stock_ml_actual ?? ($stockActual * $mlPorFrasco));
+        $cantidadMl = round($unidades * $mlPorFrasco, 2);
+        $stockMlDespues = max(0, round($stockMlAntes - $cantidadMl, 2));
 
         DB::table('medicine_batches')
             ->where('id', $batch->id)
             ->update([
                 'stock_actual' => $nuevoStock,
+                'stock_ml_actual' => $stockMlDespues,
                 'is_active'    => $nuevoStock > 0 ? 1 : 0,
                 'updated_at'   => now(),
             ]);
@@ -164,8 +298,11 @@ class SolicitudController extends Controller
             'user_id'                   => $userId,
             'movement_type'             => 'salida',
             'quantity'                  => $unidades,
+            'quantity_ml'               => $cantidadMl,
             'stock_actual_before'       => $stockActual,
             'stock_actual_after'        => $nuevoStock,
+            'stock_ml_before'           => $stockMlAntes,
+            'stock_ml_after'            => $stockMlDespues,
             'stock_reservado_before'    => (int) ($batch->stock_reservado ?? 0),
             'stock_reservado_after'     => (int) ($batch->stock_reservado ?? 0),
             'reference_type'            => 'mezcla',
@@ -346,7 +483,8 @@ class SolicitudController extends Controller
                 'mp.precio_frasco',
                 'mlp.charge_by',
                 'mlp.precio',
-                'mlp.precio_mg_override'
+                'mlp.precio_mg_override',
+                'mlp.precio_ml_override'
             )
             ->orderBy('mp.presentacion')
             ->get();
@@ -394,7 +532,7 @@ class SolicitudController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, OncologyMixtureDeliveryScheduleService $deliverySchedule)
     {
 
         $request->validate([
@@ -418,13 +556,12 @@ class SolicitudController extends Controller
             'alergias'         => 'nullable|string|max:255',
             'medico_nombre'    => 'required|string|max:255',
             'medico_cedula'    => 'required|string|max:255',
-            'fecha_entrega'    => 'required|date|after_or_equal:today',
             'observaciones'    => 'nullable|string|max:500',
+            'cantidad_mezclas' => 'required|integer|min:1|max:99',
             'mezclas'          => 'required|string',
         ], [
             'fecha_nacimiento.after'  => 'La fecha de nacimiento no puede ser mayor a 100 años.',
             'fecha_nacimiento.before' => 'La fecha de nacimiento debe ser anterior a hoy.',
-            'fecha_entrega.after_or_equal' => 'La fecha de entrega no puede ser anterior a hoy.',
         ]);
 
         $user = auth()->user();
@@ -456,6 +593,19 @@ class SolicitudController extends Controller
                 ->withInput();
         }
 
+        $cantidadMezclas = (int) $request->input('cantidad_mezclas');
+
+        if (count($mezclas) !== $cantidadMezclas) {
+            return back()
+                ->withErrors([
+                    'mezclas' => "Debes capturar las {$cantidadMezclas} mezclas indicadas en la solicitud.",
+                ])
+                ->withInput();
+        }
+
+        $mezclas = $deliverySchedule->normalize($mezclas);
+        $firstDeliveryAt = $deliverySchedule->firstDeliveryAt($mezclas);
+
         $catalogosPermitidos = DB::table('medicine_list_presentation as mlp')
             ->join('medicine_presentations as mp', 'mp.id', '=', 'mlp.medicine_presentation_id')
             ->where('mlp.medicine_list_id', $listaId)
@@ -479,6 +629,7 @@ class SolicitudController extends Controller
                 'mlp.charge_by',
                 'mlp.precio',
                 'mlp.precio_mg_override',
+                'mlp.precio_ml_override',
             ])
             ->groupBy('catalog_id')
             ->map(function ($rows) {
@@ -487,6 +638,7 @@ class SolicitudController extends Controller
                     'charge_by' => $first?->charge_by,
                     'precio'    => $first?->precio,
                     'precio_mg_override' => $first?->precio_mg_override,
+                    'precio_ml_override' => $first?->precio_ml_override,
                 ];
             });
 
@@ -508,7 +660,7 @@ class SolicitudController extends Controller
                 'fecha_nacimiento'  => $request->fecha_nacimiento,
                 'diagnostico'       => $request->diagnostico,
                 'alergias'          => $request->alergias ?? '',
-                'fecha_entrega'     => $request->fecha_entrega,
+                'fecha_entrega'     => $firstDeliveryAt,
                 'observaciones'     => $request->observaciones,
                 'nombre_medico'     => $request->medico_nombre,
                 'cedula_medico'     => $request->medico_cedula,
@@ -594,73 +746,79 @@ class SolicitudController extends Controller
                     }
                 }
 
-                $mezcla = Mezcla::create([
-                    'solicitud_id'     => $solicitud->id,
-                    'volumen_dilucion' => $volumen,
-                    'tiempo_infusion'  => $tiempo,
-                    'estado'           => 'pendiente',
-                    'set_infusion'     => $setInfusion,
-                    'infusor_id'       => $infusorId,
-                ]);
-
-                foreach ($meds as $medicamento) {
-                    $catalogId = (int) ($medicamento['medicamento_id'] ?? 0);
-
-                    $medicineOnco = MedicineOnco::firstOrCreate(
-                        ['catalog_id' => $catalogId],
-                        ['precio' => 0]
-                    );
-
-                    $catalog = $medicineOnco->catalog;
-                    if (!$catalog) {
-                        throw new \Exception("No se encontró información del catálogo para el medicamento ID {$catalogId}.");
-                    }
-
-                    $dosis = isset($medicamento['dosis']) ? (float) $medicamento['dosis'] : 0.0;
-                    if ($dosis <= 0) {
-                        throw new \Exception("La dosis debe ser mayor a 0 (catálogo {$catalogId}).");
-                    }
-
-                    $concentracion = $volumen > 0 ? $dosis / $volumen : 0;
-                    $concMin = (float) ($catalog->conc_min ?? 0);
-                    $concMax = (float) ($catalog->conc_max ?? 0);
-
-                    if (($concMin > 0 || $concMax > 0) && ($concentracion < $concMin || $concentracion > $concMax)) {
-                        throw new \Exception(
-                            "La concentración de '{$catalog->denominacion}' está fuera del rango permitido ({$concMin} - {$concMax}). Dosis: {$dosis}, Volumen: {$volumen}."
-                        );
-                    }
-
-                    $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? ($catalog->charge_by ?? 'mg');
-                    $chargeBy = strtolower(trim((string)$chargeBy));
-                    if (!in_array($chargeBy, ['mg', 'frasco', 'pieza'], true)) $chargeBy = 'mg';
-                    if ($chargeBy === 'pieza') $chargeBy = 'frasco';
-
-                    $mc = DB::table('medicines_catalog as mc')
-                        ->where('mc.id', $catalogId)
-                        ->select('mc.requires_infusor', 'mc.denominacion', 'mc.conc_min', 'mc.conc_max')
-                        ->first();
-
-                    MezclaMedicamento::create([
-                        'mezcla_id'                  => $mezcla->id,
-                        'medicamento_id'             => $medicineOnco->id,
-                        'nombre_medicamento'         => $medicamento['nombre'] ?? null,
-
-                        'dosis'                      => $dosis,
-                        'dosis_ml'                   => null,
-
-                        'diluyente_id'               => $medicamento['diluyente_id'] ?? null,
-                        'via_administracion_id'      => $medicamento['via_administracion_id'] ?? null,
-
-                        'charge_by'                  => $chargeBy,
-                        'precio_mg_snapshot'         => null,
-
-                        'denominacion_snapshot'      => $mc->denominacion ?? ($catalog->denominacion ?? null),
-                        'marca_snapshot'             => null,
-                        'requires_infusor_snapshot'  => (int) ($mc->requires_infusor ?? ($catalog->requires_infusor ?? 0)),
-                        'conc_min_snapshot'          => $mc->conc_min ?? ($catalog->conc_min ?? null),
-                        'conc_max_snapshot'          => $mc->conc_max ?? ($catalog->conc_max ?? null),
+                foreach ($mezclaData['fechas_entrega'] as $fechaEntrega) {
+                    $mezcla = Mezcla::create([
+                        'solicitud_id'     => $solicitud->id,
+                        'volumen_dilucion' => $volumen,
+                        'tiempo_infusion'  => $tiempo,
+                        'fecha_entrega'    => $fechaEntrega,
+                        'estado'           => 'pendiente',
+                        'set_infusion'     => $setInfusion,
+                        'infusor_id'       => $infusorId,
                     ]);
+
+                    foreach ($meds as $medicamento) {
+                        $catalogId = (int) ($medicamento['medicamento_id'] ?? 0);
+
+                        $medicineOnco = MedicineOnco::firstOrCreate(
+                            ['catalog_id' => $catalogId],
+                            ['precio' => 0]
+                        );
+
+                        $catalog = $medicineOnco->catalog;
+                        if (!$catalog) {
+                            throw new \Exception("No se encontró información del catálogo para el medicamento ID {$catalogId}.");
+                        }
+
+                        $dosis = isset($medicamento['dosis']) ? (float) $medicamento['dosis'] : 0.0;
+                        if ($dosis <= 0) {
+                            throw new \Exception("La dosis debe ser mayor a 0 (catálogo {$catalogId}).");
+                        }
+
+                        $concentracion = $volumen > 0 ? $dosis / $volumen : 0;
+                        $concMin = (float) ($catalog->conc_min ?? 0);
+                        $concMax = (float) ($catalog->conc_max ?? 0);
+
+                        if (($concMin > 0 || $concMax > 0) && ($concentracion < $concMin || $concentracion > $concMax)) {
+                            throw new \Exception(
+                                "La concentración de '{$catalog->denominacion}' está fuera del rango permitido ({$concMin} - {$concMax}). Dosis: {$dosis}, Volumen: {$volumen}."
+                            );
+                        }
+
+                        $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? ($catalog->charge_by ?? 'mg');
+                        $chargeBy = strtolower(trim((string)$chargeBy));
+                        if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) $chargeBy = 'mg';
+                        if ($chargeBy === 'pieza') $chargeBy = 'frasco';
+
+                        $mc = DB::table('medicines_catalog as mc')
+                            ->where('mc.id', $catalogId)
+                            ->select('mc.requires_infusor', 'mc.denominacion', 'mc.conc_min', 'mc.conc_max')
+                            ->first();
+
+                        MezclaMedicamento::create([
+                            'mezcla_id'                  => $mezcla->id,
+                            'medicamento_id'             => $medicineOnco->id,
+                            'nombre_medicamento'         => $medicamento['nombre'] ?? null,
+
+                            'dosis'                      => $dosis,
+                            'dosis_ml'                   => null,
+
+                            'diluyente_id'               => $medicamento['diluyente_id'] ?? null,
+                            'via_administracion_id'      => $medicamento['via_administracion_id'] ?? null,
+
+                            'charge_by'                  => $chargeBy,
+                            'precio_mg_snapshot'         => null,
+                            'precio_ml_snapshot'         => $chargeBy === 'ml'
+                                ? ($medicamento['precio_ml'] ?? $listaInfoPorCatalogo[$catalogId]['precio_ml_override'] ?? null)
+                                : null,
+
+                            'denominacion_snapshot'      => $mc->denominacion ?? ($catalog->denominacion ?? null),
+                            'marca_snapshot'             => null,
+                            'requires_infusor_snapshot'  => (int) ($mc->requires_infusor ?? ($catalog->requires_infusor ?? 0)),
+                            'conc_min_snapshot'          => $mc->conc_min ?? ($catalog->conc_min ?? null),
+                            'conc_max_snapshot'          => $mc->conc_max ?? ($catalog->conc_max ?? null),
+                        ]);
+                    }
                 }
             }
 
@@ -771,7 +929,8 @@ class SolicitudController extends Controller
                 'mp.precio_frasco',
                 'mlp.charge_by',
                 'mlp.precio',
-                'mlp.precio_mg_override'
+                'mlp.precio_mg_override',
+                'mlp.precio_ml_override'
             )
             ->orderBy('mp.presentacion')
             ->get();
@@ -864,7 +1023,11 @@ class SolicitudController extends Controller
         ]);
     }
 
-    public function update(Request $request, $id)
+    public function update(
+        Request $request,
+        OncologyMixtureDeliveryScheduleService $deliverySchedule,
+        $id
+    )
     {
         $request->validate([
             'paciente_nombre'  => 'required|string|max:255',
@@ -884,19 +1047,19 @@ class SolicitudController extends Controller
             'alergias'         => 'nullable|string|max:255',
             'medico_nombre'    => 'required|string|max:255',
             'medico_cedula'    => 'required|string|max:255',
-            'fecha_entrega'    => 'required|date|after_or_equal:today',
             'observaciones'    => 'nullable|string|max:500',
             'mezclas'          => 'required|string',
         ], [
             'fecha_nacimiento.after'  => 'La fecha de nacimiento no puede ser mayor a 100 años.',
             'fecha_nacimiento.before' => 'La fecha de nacimiento debe ser anterior a hoy.',
-            'fecha_entrega.after_or_equal' => 'La fecha de entrega no puede ser anterior a hoy.',
         ]);
 
         $mezclas = json_decode($request->mezclas, true);
         if (!is_array($mezclas)) {
             return back()->withErrors(['mezclas' => 'El formato del campo mezclas no es válido.'])->withInput();
         }
+
+        $mezclas = $deliverySchedule->normalize($mezclas);
 
         $user = auth()->user();
 
@@ -951,7 +1114,6 @@ class SolicitudController extends Controller
                 'fecha_nacimiento'  => $request->fecha_nacimiento,
                 'diagnostico'       => $request->diagnostico,
                 'alergias'          => $request->alergias ?? '',
-                'fecha_entrega'     => $request->fecha_entrega,
                 'observaciones'     => $request->observaciones,
                 'nombre_medico'     => $request->medico_nombre,
                 'cedula_medico'     => $request->medico_cedula,
@@ -960,8 +1122,25 @@ class SolicitudController extends Controller
             // =====================================================
             // Separar mezclas existentes y nuevas
             // =====================================================
-            $existentes = array_values(array_filter($mezclas, fn($m) => !empty($m['existente'])));
-            $nuevas     = array_values(array_filter($mezclas, fn($m) => empty($m['existente'])));
+            $existentes = [];
+            $nuevas = [];
+
+            foreach ($mezclas as $payload) {
+                if (empty($payload['existente'])) {
+                    $nuevas[] = $payload;
+                    continue;
+                }
+
+                $dates = $payload['fechas_entrega'];
+                $payload['fechas_entrega'] = [array_shift($dates)];
+                $existentes[] = $payload;
+
+                if ($dates !== []) {
+                    unset($payload['existente'], $payload['id']);
+                    $payload['fechas_entrega'] = $dates;
+                    $nuevas[] = $payload;
+                }
+            }
 
             // =====================================================
             // Actualizar set/infusor de mezclas existentes
@@ -1010,6 +1189,7 @@ class SolicitudController extends Controller
                 $mezclaModelo->update([
                     'set_infusion' => $setInfusion,
                     'infusor_id'   => $infusorId,
+                    'fecha_entrega' => $payload['fechas_entrega'][0],
                 ]);
             }
 
@@ -1045,6 +1225,7 @@ class SolicitudController extends Controller
                     'mlp.charge_by',
                     'mlp.precio',
                     'mlp.precio_mg_override',
+                    'mlp.precio_ml_override',
                 ])
                 ->groupBy('catalog_id')
                 ->map(function ($rows) {
@@ -1053,6 +1234,7 @@ class SolicitudController extends Controller
                         'charge_by' => $first?->charge_by,
                         'precio'    => $first?->precio,
                         'precio_mg_override' => $first?->precio_mg_override,
+                        'precio_ml_override' => $first?->precio_ml_override,
                     ];
                 });
 
@@ -1138,74 +1320,85 @@ class SolicitudController extends Controller
                     }
                 }
 
-                $mezcla = Mezcla::create([
-                    'solicitud_id'     => $solicitud->id,
-                    'volumen_dilucion' => $volumen,
-                    'tiempo_infusion'  => $tiempo,
-                    'estado'           => 'pendiente',
-                    'set_infusion'     => $setInfusion,
-                    'infusor_id'       => $infusorId,
-                ]);
-
-                foreach ($meds as $medicamento) {
-                    $catalogId = (int) ($medicamento['medicamento_id'] ?? 0);
-
-                    $medicineOnco = MedicineOnco::firstOrCreate(
-                        ['catalog_id' => $catalogId],
-                        ['precio' => 0]
-                    );
-
-                    $mc = $mcPorCatalogId[$catalogId] ?? null;
-                    if (!$mc) {
-                        throw new \Exception("No se encontró información del catálogo para el medicamento ID {$catalogId}.");
-                    }
-
-                    $dosis = isset($medicamento['dosis']) ? (float) $medicamento['dosis'] : 0;
-                    if ($dosis <= 0) {
-                        throw new \Exception("La dosis debe ser mayor a 0 (catálogo {$catalogId}).");
-                    }
-
-                    $conc = $volumen > 0 ? $dosis / $volumen : 0;
-                    $concMin = (float) ($mc->conc_min ?? 0);
-                    $concMax = (float) ($mc->conc_max ?? 0);
-
-                    if (($concMin > 0 || $concMax > 0) && ($conc < $concMin || $conc > $concMax)) {
-                        throw new \Exception(
-                            "La concentración de '{$mc->denominacion}' está fuera del rango permitido ({$concMin} - {$concMax}). Dosis: {$dosis}, Volumen: {$volumen}."
-                        );
-                    }
-
-                    $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? 'mg';
-                    $chargeBy = strtolower(trim((string) $chargeBy));
-                    if (!in_array($chargeBy, ['mg', 'frasco', 'pieza'], true)) {
-                        $chargeBy = 'mg';
-                    }
-                    if ($chargeBy === 'pieza') {
-                        $chargeBy = 'frasco';
-                    }
-
-                    MezclaMedicamento::create([
-                        'mezcla_id'                  => $mezcla->id,
-                        'medicamento_id'             => $medicineOnco->id,
-                        'nombre_medicamento'         => $medicamento['nombre'] ?? null,
-
-                        'dosis'                      => $dosis,
-                        'dosis_ml'                   => null,
-
-                        'diluyente_id'               => $medicamento['diluyente_id'] ?? null,
-                        'via_administracion_id'      => $medicamento['via_administracion_id'] ?? null,
-
-                        'charge_by'                  => $chargeBy,
-                        'precio_mg_snapshot'         => null,
-
-                        'denominacion_snapshot'      => $mc->denominacion ?? ($catalog->denominacion ?? null),
-                        'marca_snapshot'             => null,
-                        'requires_infusor_snapshot'  => (int) ($mc->requires_infusor ?? ($catalog->requires_infusor ?? 0)),
-                        'conc_min_snapshot'          => $mc->conc_min ?? ($catalog->conc_min ?? null),
-                        'conc_max_snapshot'          => $mc->conc_max ?? ($catalog->conc_max ?? null),
+                foreach ($mezclaData['fechas_entrega'] as $fechaEntrega) {
+                    $mezcla = Mezcla::create([
+                        'solicitud_id'     => $solicitud->id,
+                        'volumen_dilucion' => $volumen,
+                        'tiempo_infusion'  => $tiempo,
+                        'fecha_entrega'    => $fechaEntrega,
+                        'estado'           => 'pendiente',
+                        'set_infusion'     => $setInfusion,
+                        'infusor_id'       => $infusorId,
                     ]);
+
+                    foreach ($meds as $medicamento) {
+                        $catalogId = (int) ($medicamento['medicamento_id'] ?? 0);
+
+                        $medicineOnco = MedicineOnco::firstOrCreate(
+                            ['catalog_id' => $catalogId],
+                            ['precio' => 0]
+                        );
+
+                        $mc = $mcPorCatalogId[$catalogId] ?? null;
+                        if (!$mc) {
+                            throw new \Exception("No se encontró información del catálogo para el medicamento ID {$catalogId}.");
+                        }
+
+                        $dosis = isset($medicamento['dosis']) ? (float) $medicamento['dosis'] : 0;
+                        if ($dosis <= 0) {
+                            throw new \Exception("La dosis debe ser mayor a 0 (catálogo {$catalogId}).");
+                        }
+
+                        $conc = $volumen > 0 ? $dosis / $volumen : 0;
+                        $concMin = (float) ($mc->conc_min ?? 0);
+                        $concMax = (float) ($mc->conc_max ?? 0);
+
+                        if (($concMin > 0 || $concMax > 0) && ($conc < $concMin || $conc > $concMax)) {
+                            throw new \Exception(
+                                "La concentración de '{$mc->denominacion}' está fuera del rango permitido ({$concMin} - {$concMax}). Dosis: {$dosis}, Volumen: {$volumen}."
+                            );
+                        }
+
+                        $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? 'mg';
+                        $chargeBy = strtolower(trim((string) $chargeBy));
+                        if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) {
+                            $chargeBy = 'mg';
+                        }
+                        if ($chargeBy === 'pieza') {
+                            $chargeBy = 'frasco';
+                        }
+
+                        MezclaMedicamento::create([
+                            'mezcla_id'                  => $mezcla->id,
+                            'medicamento_id'             => $medicineOnco->id,
+                            'nombre_medicamento'         => $medicamento['nombre'] ?? null,
+
+                            'dosis'                      => $dosis,
+                            'dosis_ml'                   => null,
+
+                            'diluyente_id'               => $medicamento['diluyente_id'] ?? null,
+                            'via_administracion_id'      => $medicamento['via_administracion_id'] ?? null,
+
+                            'charge_by'                  => $chargeBy,
+                            'precio_mg_snapshot'         => null,
+                            'precio_ml_snapshot'         => $chargeBy === 'ml'
+                                ? ($medicamento['precio_ml'] ?? $listaInfoPorCatalogo[$catalogId]['precio_ml_override'] ?? null)
+                                : null,
+
+                            'denominacion_snapshot'      => $mc->denominacion,
+                            'marca_snapshot'             => null,
+                            'requires_infusor_snapshot'  => (int) $mc->requires_infusor,
+                            'conc_min_snapshot'          => $mc->conc_min,
+                            'conc_max_snapshot'          => $mc->conc_max,
+                        ]);
+                    }
                 }
             }
+
+            $solicitud->fecha_entrega = $solicitud->mezclas()
+                ->whereNotNull('fecha_entrega')
+                ->min('fecha_entrega');
+            $solicitud->save();
 
             DB::commit();
 
@@ -1378,9 +1571,28 @@ class SolicitudController extends Controller
             // fallback viejo:
             'mezclas.medicamentos.medicamentoOnco.catalog.presentations',
             'mezclas.medicamentos.presentacionesUsadas.batch.presentation',
+            'mezclas.medicamentos.presentacionesUsadas.batch.warehouse',
 
             'mezclas.medicamentos.diluyente',
         ])->findOrFail($solicitud->id);
+
+        $requestedMixtureId = (int) $request->query('mezcla', 0);
+
+        if ($requestedMixtureId <= 0 && $solicitud_onco->mezclas->count() === 1) {
+            $requestedMixtureId = (int) $solicitud_onco->mezclas->first()->id;
+        }
+
+        if ($requestedMixtureId <= 0) {
+            return redirect()
+                ->route('admin.oncologicos.mezclas.index', $solicitud_onco)
+                ->withErrors(['mezcla' => 'Selecciona una mezcla para generar su remisión independiente.']);
+        }
+
+        $selectedMixture = $solicitud_onco->mezclas->firstWhere('id', $requestedMixtureId);
+
+        abort_unless($selectedMixture, 404, 'La mezcla no pertenece a esta solicitud.');
+
+        $solicitud_onco->setRelation('mezclas', collect([$selectedMixture]));
 
         // =========================================================
         // ✅ 1) OBTENER LISTA DE MEDICAMENTOS DEL HOSPITAL
@@ -1490,8 +1702,13 @@ class SolicitudController extends Controller
 
                 // ✅ 1A) SIN presentaciones usadas
                 if ($presentaciones->isEmpty()) {
-                    $unidadCobro = ($listaCharge === 'mg') ? 'mg' : 'frasco';
-                    $cantidad    = ($unidadCobro === 'mg') ? (float)($med->dosis ?? 0) : 1;
+                    $chargeByMed = $med->charge_by ?: $listaCharge;
+                    $unidadCobro = in_array($chargeByMed, ['mg', 'ml'], true) ? $chargeByMed : 'frasco';
+                    $cantidad = match ($unidadCobro) {
+                        'mg' => (float) ($med->dosis ?? 0),
+                        'ml' => (float) ($med->dosis_ml ?? 0),
+                        default => 1,
+                    };
 
                     // si no hay presentaciones, normalmente no hay precios/snapshots por frasco
                     // dejamos 0 como tú lo traías (robusto)
@@ -1502,10 +1719,15 @@ class SolicitudController extends Controller
                     // ✅ 1B) CON presentaciones usadas: usar snapshot de subtotal/precio
                     $sumSubtotal = 0.0;
                     $sumUnidades = 0.0;
+                    $sumVolumen = 0.0;
+                    $chargeSnapshots = [];
 
                     foreach ($presentaciones as $pu) {
                         $unidades = (float)($pu->unidades_usadas ?? 0);
-                        if ($unidades <= 0) $unidades = 1;
+                        $chargeSnapshot = strtolower((string) ($pu->charge_by_snapshot ?: $med->charge_by ?: $listaCharge));
+                        $chargeSnapshots[] = $chargeSnapshot;
+                        $sumVolumen += (float) ($pu->volumen_usado_ml ?? 0);
+                        if ($unidades <= 0 && $chargeSnapshot === 'frasco') $unidades = 1;
 
                         // ✅ snapshot: subtotal del renglón
                         $sub = $pu->subtotal;
@@ -1537,10 +1759,10 @@ class SolicitudController extends Controller
                     }
 
                     // Si hay snapshots por frascos usados, se asume cobro por frasco
-                    $unidadCobro = 'frasco';
-                    $cantidad    = $sumUnidades;
+                    $unidadCobro = in_array('ml', $chargeSnapshots, true) ? 'ml' : 'frasco';
+                    $cantidad    = $unidadCobro === 'ml' ? $sumVolumen : $sumUnidades;
                     $subtotal    = $sumSubtotal;
-                    $precioUnit  = ($sumUnidades > 0) ? ($sumSubtotal / $sumUnidades) : 0.0;
+                    $precioUnit  = ($cantidad > 0) ? ($sumSubtotal / $cantidad) : 0.0;
                 }
 
                 $precioUnit = round($precioUnit, 4);
@@ -1589,16 +1811,7 @@ class SolicitudController extends Controller
                 $mezcla->setAttribute('infusor_subtotal', 0);
             }
 
-            $billingTotal = $parseMoney(optional($mezcla->billing)->precio_total);
-            $servicioMezclado = $this->resolveOncoMixingServiceAmount($lista, $billingTotal, $totalMezclaSinServicio);
-
-            $mezcla->setAttribute('servicio_mezclado_subtotal', $servicioMezclado);
-
-            if ($servicioMezclado > 0) {
-                $cantidadServiciosMezclado++;
-                $totalServicioMezclado += $servicioMezclado;
-                $totalRemision += $servicioMezclado;
-            }
+            $mezcla->setAttribute('servicio_mezclado_subtotal', 0);
         }
 
         if ($cantidadServiciosMezclado === 0) {
@@ -1610,11 +1823,15 @@ class SolicitudController extends Controller
             : 0.0;
         $pricingSummaries = $solicitud_onco->mezclas
             ->map(fn ($mezcla) => $pricing->priceOncoMix($mezcla));
+        $solicitud_onco->mezclas->values()->each(function ($mezcla, $index) use ($pricingSummaries): void {
+            $mezcla->setAttribute('additional_charge_lines', $pricingSummaries->get($index)['additional_charge_lines'] ?? collect());
+        });
         $remisionTotals = [
             'subtotal_before_vat' => round((float) $pricingSummaries->sum('subtotal_before_vat'), 2),
             'medication_vat' => round((float) $pricingSummaries->sum('medication_vat'), 2),
             'service_vat' => round((float) $pricingSummaries->sum('service_vat'), 2),
             'supplies_vat' => round((float) $pricingSummaries->sum('supplies_vat'), 2),
+            'additional_charges_vat' => round((float) $pricingSummaries->sum('additional_charges_vat'), 2),
             'vat_total' => round((float) $pricingSummaries->sum('vat_total'), 2),
             'total_iva_included' => round((float) $pricingSummaries->sum('total_iva_included'), 2),
         ];
@@ -1637,9 +1854,12 @@ class SolicitudController extends Controller
             'subdistributorOnly' => $subdistributorOnly,
         ])->setPaper('letter', 'portrait');
 
+        $filenameSuffix = $requestedMixtureId > 0
+            ? "{$solicitud_onco->id}-mezcla-{$requestedMixtureId}"
+            : (string) $solicitud_onco->id;
         $filename = $subdistributorOnly
-            ? "remision-subdistribuidor-{$solicitud_onco->id}.pdf"
-            : "remision-{$solicitud_onco->id}.pdf";
+            ? "remision-subdistribuidor-{$filenameSuffix}.pdf"
+            : "remision-{$filenameSuffix}.pdf";
 
         return $pdf->stream($filename);
     }

@@ -113,13 +113,16 @@
         </form>
     </div>
 
-    <script>
-        const warehousesByLaboratory = @json($laboratories->mapWithKeys(fn ($laboratory) => [
+    @php
+        $warehousesByLaboratory = $laboratories->mapWithKeys(fn ($laboratory) => [
             (string) $laboratory->id => $laboratory->warehouses->map(fn ($warehouse) => [
                 'id' => $warehouse->id,
                 'name' => $warehouse->name,
-            ])->values(),
-        ]));
+            ])->values()->all(),
+        ])->all();
+    @endphp
+    <script>
+        const warehousesByLaboratory = @json($warehousesByLaboratory);
         const laboratorySelect = document.getElementById('laboratory_id');
         const warehouseSelect = document.getElementById('warehouse_id');
 

@@ -1,6 +1,7 @@
 <?php
 
 
+use App\Http\Controllers\LabelQrController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\App;
 
@@ -40,4 +41,12 @@ Route::get('/pdf', function () {
     $pdf->loadHTML('<h1>Hola PDF</h1>');
 
     return $pdf->stream();
+});
+
+Route::middleware('signed')->group(function () {
+    Route::get('/qr/oncologicos/mezclas/{mezcla}', [LabelQrController::class, 'showOnco'])
+        ->name('qr.oncologicos.mezclas.show');
+
+    Route::get('/qr/nutricionales/solicitudes/{solicitud}', [LabelQrController::class, 'showNutri'])
+        ->name('qr.nutricionales.solicitudes.show');
 });

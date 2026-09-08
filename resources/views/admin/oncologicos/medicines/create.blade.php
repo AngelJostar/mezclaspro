@@ -51,25 +51,14 @@
                 </label>
             </div>
 
-            {{-- Switch: tipo de cobro global (mg / frasco) --}}
-            <div class="flex items-center">
-                <input type="hidden" name="charge_by" id="charge_by" value="{{ old('charge_by', 'mg') }}">
-
-                <label class="inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="charge_by_switch" class="sr-only peer"
-                        {{ old('charge_by', 'mg') === 'frasco' ? 'checked' : '' }}>
-                    <div
-                        class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 relative
-                               after:content-[''] after:absolute after:top-[2px] after:left-[2px]
-                               after:bg-white after:border-gray-300 after:border after:rounded-full
-                               after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full">
-                    </div>
-                    <span class="ml-3 text-sm font-medium text-gray-700">
-                        Cobrar por <span id="charge_by_label">
-                            {{ old('charge_by', 'mg') === 'frasco' ? 'frasco' : 'mg' }}
-                        </span>
-                    </span>
-                </label>
+            <div class="max-w-xs">
+                <label for="charge_by" class="mb-1 block text-sm font-medium text-gray-700">Tipo de cobro</label>
+                <select name="charge_by" id="charge_by"
+                    class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="mg" @selected(old('charge_by', 'mg') === 'mg')>Por mg</option>
+                    <option value="ml" @selected(old('charge_by', 'mg') === 'ml')>Por mL</option>
+                    <option value="frasco" @selected(old('charge_by', 'mg') === 'frasco')>Por frasco completo</option>
+                </select>
             </div>
 
             <div class="flex items-center">

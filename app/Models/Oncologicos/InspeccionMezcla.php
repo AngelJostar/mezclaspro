@@ -40,6 +40,8 @@ class InspeccionMezcla extends Model {
         'valido_nombre',
         'fecha_validacion',
         'hora_validacion',
+        'fecha_preparacion',
+        'hora_preparacion',
         'fecha_aprobacion',
         'hora_aprobacion',
         'reviso_nombre',

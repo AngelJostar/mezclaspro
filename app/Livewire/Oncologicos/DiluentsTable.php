@@ -49,6 +49,7 @@ class DiluentsTable extends Component
         }
 
         $diluents = $query
+            ->with(['catalogPresentations' => fn ($presentations) => $presentations->orderBy('presentation')])
             ->orderBy($this->sortField, $this->sortDirection)
             ->paginate(15);
 

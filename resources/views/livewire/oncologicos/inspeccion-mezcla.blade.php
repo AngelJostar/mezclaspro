@@ -1,9 +1,15 @@
 <div>
     @if ($mostrarModalInspeccion)
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div class="bg-white rounded-lg shadow-lg w-full max-w-6xl p-6">
+            <div class="bg-white rounded-lg shadow-lg w-full max-w-6xl max-h-[90vh] overflow-y-auto p-6">
 
-                <h2 class="text-2xl font-semibold mb-6 text-center">Inspeccion de Mezcla</h2>
+                <div class="flex items-center justify-between gap-4 border-b pb-3 mb-4">
+                    <h2 class="mixture-workflow-heading">Inspección | {{ $mixtureContext }}</h2>
+                    <button type="button" wire:click="$set('mostrarModalInspeccion', false)"
+                        aria-label="Cerrar inspección" class="shrink-0 w-8 h-8 border border-red-600 rounded text-red-600 hover:bg-red-50">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
 
                 <div class="flex justify-end mb-4">
                     <button onclick="marcarDefault()"
@@ -157,10 +163,21 @@
                                     Aprobo
                                 </label>
 
-                                <input type="text"
-                                    wire:model.defer="aprobo_nombre"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200 bg-gray-100"
-                                    readonly>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Solo Responsable sanitario o Auxiliar de responsable sanitario.
+                                </p>
+
+                                <select wire:model.defer="aprobo_nombre"
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200">
+                                    <option value="">Seleccione quién aprobó...</option>
+                                    @foreach ($aprobadores as $valor => $etiqueta)
+                                        <option value="{{ $valor }}">{{ $etiqueta }}</option>
+                                    @endforeach
+                                </select>
+
+                                @error('aprobo_nombre')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
                     </div>
@@ -184,6 +201,10 @@
 
     @push('js')
         <script>
+            window.addEventListener('mezcla-inspeccionada', () => {
+                window.location.reload();
+            });
+
             function marcarDefault() {
                 const defaults = {
                     esta_rotulado: true,

@@ -1,3 +1,14 @@
+@php
+    $isWorkflowPage = request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit')
+        && (request()->boolean('approval_popup') || request()->boolean('dispensing_popup'));
+    $workflowCompleted = $isWorkflowPage && (session('approval_popup_done') || session('dispensing_popup_done'));
+    $workflowPageConfig = [
+        'embedded' => $isWorkflowPage,
+        'completed' => (bool) $workflowCompleted,
+        'waitForConfirmation' => (bool) ($workflowCompleted && (session('success') || session('swal'))),
+        'returnTo' => session('approval_popup_return_to') ?: session('dispensing_popup_return_to'),
+    ];
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
@@ -7,6 +18,12 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <title>Central de Mezclas</title>
+
+    @if ($isWorkflowPage)
+        <script>
+            if (window.parent !== window) document.documentElement.classList.add('workflow-embedded');
+        </script>
+    @endif
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -32,11 +49,13 @@
 <body class="font-sans antialiased bg-slate-100 text-slate-900 sm:overflow-auto" :class="{ 'overflow-hidden': open }" x-data="{ open: false }">
 
 
-    @include('layouts.includes.admin.nav')
+    @unless ($isWorkflowPage)
+        @include('layouts.includes.admin.nav')
 
-    @include('layouts.includes.admin.aside')
+        @include('layouts.includes.admin.aside')
+    @endunless
 
-    <main class="admin-page sm:ml-44">
+    <main @class(['admin-page', 'sm:ml-44' => ! $isWorkflowPage, 'workflow-page' => $isWorkflowPage])>
         <div class="admin-content">
             {{ $slot }}
         </div>
@@ -45,11 +64,19 @@
         style="display: none"class="bg-gray-900/50 dark:bg-gray-900/80 fixed inset-0 z-30 sm:hidden"></div>
     @stack('modals')
 
-    @livewireScripts
+    @unless ($isWorkflowPage)
+        @include('layouts.includes.workflow-modal')
+    @endunless
+    <script type="application/json" id="workflow-page-config">@json($workflowPageConfig, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)</script>
+
+    @include('layouts.includes.livewire-scripts')
 
     @if (session('swal'))
         <script>
             let swalConfig = @json(session('swal'));
+            const swalRedirectUrl = swalConfig.redirectUrl ?? null;
+            delete swalConfig.redirectUrl;
+
             swalConfig = {
                 ...swalConfig, // Extiende la configuración existente
                 confirmButtonText: 'Aceptar',
@@ -61,7 +88,13 @@
                 }
             };
 
-            Swal.fire(swalConfig);
+            Swal.fire(swalConfig).then((result) => {
+                document.dispatchEvent(new CustomEvent('workflow-popup-dialog-closed'));
+
+                if (result.isConfirmed && swalRedirectUrl) {
+                    window.location.href = swalRedirectUrl;
+                }
+            });
         </script>
     @endif
     @auth
@@ -82,6 +115,9 @@
     <script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
     <script>
         (function() {
+            let stickyHorizontalScrollFrame = null;
+            let livewireStickyHookRegistered = false;
+
             function syncStickyProxy(source, proxy, fromSource) {
                 if (fromSource) {
                     if (Math.abs(proxy.scrollLeft - source.scrollLeft) > 1) {
@@ -97,35 +133,30 @@
 
             function ensureStickyHorizontalScroll(root = document) {
                 const selectors = [
-                    '.admin-content .overflow-x-auto',
-                    '.admin-content .billing-table-scroll',
-                    '.admin-content [data-sticky-x-mode]'
+                    '.admin-content .overflow-x-auto:not([data-disable-sticky-x])',
+                    '.admin-content .billing-table-scroll'
                 ];
 
                 root.querySelectorAll(selectors.join(', ')).forEach((source) => {
                     if (source.dataset.stickyXReady === '1') {
-                        if (typeof source._stickyXRefresh === 'function') {
+                        if (source._stickyXProxy?.isConnected && typeof source._stickyXRefresh === 'function') {
                             source._stickyXRefresh();
+                            return;
                         }
-                        return;
+
+                        delete source.dataset.stickyXReady;
                     }
 
                     const parent = source.parentElement;
                     if (!parent) return;
 
-                    const fixedToViewport = source.dataset.stickyXMode === 'fixed';
-
+                    const isViewportFixed = source.dataset.stickyXPosition === 'viewport';
                     const proxy = document.createElement('div');
-                    proxy.className = `sticky-x-proxy is-hidden${fixedToViewport ? ' is-fixed' : ''}`;
-                    proxy.setAttribute('role', 'region');
-                    proxy.setAttribute('aria-label', 'Desplazamiento horizontal de la tabla');
+                    proxy.className = 'sticky-x-proxy is-hidden';
+                    proxy.classList.toggle('is-viewport-fixed', isViewportFixed);
                     proxy.innerHTML = '<div class="sticky-x-proxy-track"></div>';
 
-                    if (fixedToViewport) {
-                        document.body.appendChild(proxy);
-                    } else {
-                        parent.insertBefore(proxy, source.nextSibling);
-                    }
+                    parent.insertBefore(proxy, source.nextSibling);
 
                     const track = proxy.firstElementChild;
                     source.dataset.stickyXReady = '1';
@@ -138,15 +169,16 @@
                         const needsScroll = source.scrollWidth > source.clientWidth + 2;
                         let shouldShow = needsScroll;
 
-                        if (fixedToViewport) {
-                            const bounds = source.getBoundingClientRect();
-                            const visibleLeft = Math.max(0, bounds.left);
-                            const visibleRight = Math.min(window.innerWidth, bounds.right);
-                            const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+                        if (isViewportFixed) {
+                            const sourceRect = source.getBoundingClientRect();
+                            const left = Math.max(0, sourceRect.left);
+                            const right = Math.min(window.innerWidth, sourceRect.right);
+                            const visibleWidth = Math.max(0, right - left);
+                            const intersectsViewport = sourceRect.top < window.innerHeight && sourceRect.bottom > 0;
 
-                            proxy.style.left = `${visibleLeft}px`;
+                            proxy.style.left = `${left}px`;
                             proxy.style.width = `${visibleWidth}px`;
-                            shouldShow = needsScroll && visibleWidth > 40 && bounds.top < window.innerHeight && bounds.bottom > 0;
+                            shouldShow = needsScroll && intersectsViewport && visibleWidth > 24;
                         }
 
                         proxy.classList.toggle('is-hidden', !shouldShow);
@@ -184,34 +216,40 @@
                     }
 
                     source._stickyXRefresh = refresh;
-
-                    if (fixedToViewport) {
-                        window.addEventListener('scroll', refresh, {
-                            passive: true
-                        });
-                    }
-
+                    source._stickyXProxy = proxy;
                     refresh();
                 });
             }
 
+            function scheduleStickyHorizontalScroll() {
+                window.cancelAnimationFrame(stickyHorizontalScrollFrame);
+                stickyHorizontalScrollFrame = window.requestAnimationFrame(() => {
+                    ensureStickyHorizontalScroll();
+                });
+            }
+
+            function registerLivewireStickyHook() {
+                if (!window.Livewire || livewireStickyHookRegistered || typeof window.Livewire.hook !== 'function') {
+                    return;
+                }
+
+                livewireStickyHookRegistered = true;
+                window.Livewire.hook('message.processed', scheduleStickyHorizontalScroll);
+                window.Livewire.hook('morph.updated', scheduleStickyHorizontalScroll);
+            }
+
             document.addEventListener('DOMContentLoaded', () => {
                 ensureStickyHorizontalScroll();
+                registerLivewireStickyHook();
             });
 
-            window.addEventListener('resize', () => {
-                ensureStickyHorizontalScroll();
-            }, {
-                passive: true
-            });
+            window.addEventListener('resize', scheduleStickyHorizontalScroll, { passive: true });
+            window.addEventListener('scroll', scheduleStickyHorizontalScroll, { passive: true });
 
             document.addEventListener('livewire:init', () => {
-                if (window.Livewire && typeof window.Livewire.hook === 'function') {
-                    window.Livewire.hook('message.processed', () => {
-                        ensureStickyHorizontalScroll();
-                    });
-                }
+                registerLivewireStickyHook();
             });
+            document.addEventListener('livewire:navigated', scheduleStickyHorizontalScroll);
         })();
     </script>
     <font></font>

@@ -7,6 +7,39 @@
             \App\Models\DistributionRoute::STATUS_COMPLETED => 'border-gray-200 bg-gray-100 text-gray-600',
         ];
         $createRouteParameters = $selectedLaboratory ? ['laboratory_id' => $selectedLaboratory->id] : [];
+        $previewRoutes = [
+            [
+                'name' => 'Ruta Norte Matutina',
+                'code' => 'R-CDMX-001',
+                'hospitals' => ['ANGELES METROPOLITANO', 'HOSPITAL SAN DIEGO', 'CENTRO DE MEZCLAS PRODIFEM'],
+                'schedule' => '07:00 - 11:00',
+                'messengers' => ['Luis M.', 'Fernanda R.'],
+                'status' => \App\Models\DistributionRoute::STATUS_IN_ROUTE,
+                'status_label' => 'En ruta',
+                'tracking' => 'Entrega en curso',
+            ],
+            [
+                'name' => 'Ruta Poniente Vespertina',
+                'code' => 'R-CDMX-002',
+                'hospitals' => ['ANGELES LOMAS', 'ANGELES PEDREGAL'],
+                'schedule' => '12:30 - 16:30',
+                'messengers' => ['Carlos T.'],
+                'status' => \App\Models\DistributionRoute::STATUS_PENDING,
+                'status_label' => 'Pendiente',
+                'tracking' => 'Lista para salida',
+            ],
+            [
+                'name' => 'Ruta Sur Prioritaria',
+                'code' => 'R-CDMX-003',
+                'hospitals' => ['ANGELES ACOXPA', 'HOSPITAL ANGELES UNIVERSIDAD', 'CBTA'],
+                'schedule' => '17:00 - 20:00',
+                'messengers' => ['Miriam C.', 'Jorge P.'],
+                'status' => \App\Models\DistributionRoute::STATUS_DELAYED,
+                'status_label' => 'Con retraso',
+                'tracking' => 'Demora de 15 min',
+            ],
+        ];
+        $showPreviewRoutes = $routes->isEmpty() && $selectedLaboratory;
     @endphp
 
     <div class="rounded-lg bg-white p-5 shadow-sm md:p-6" x-data="{ showQrNotice: true }">
@@ -102,6 +135,116 @@
                 <i class="fa-solid fa-xmark" aria-hidden="true"></i>
             </button>
         </div>
+
+        @if ($showPreviewRoutes)
+            <section class="mt-5 rounded-lg border border-dashed border-cyan-300 bg-cyan-50/60 p-5">
+                <div class="flex flex-col gap-3 border-b border-cyan-200 pb-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Vista simulada</p>
+                        <h2 class="mt-1 text-lg font-bold text-gray-950">Asi se vera una operacion con rutas activas</h2>
+                        <p class="mt-1 text-sm text-gray-600">
+                            Esta es una previsualizacion temporal para mostrar el comportamiento del modulo mientras aun no hay rutas reales registradas.
+                        </p>
+                    </div>
+                    <div class="grid gap-2 text-sm text-gray-700 sm:grid-cols-3">
+                        <div class="rounded-md border border-cyan-200 bg-white px-3 py-2 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Rutas simuladas</p>
+                            <p class="mt-1 text-xl font-bold text-gray-950">{{ count($previewRoutes) }}</p>
+                        </div>
+                        <div class="rounded-md border border-cyan-200 bg-white px-3 py-2 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Hospitales cubiertos</p>
+                            <p class="mt-1 text-xl font-bold text-gray-950">{{ collect($previewRoutes)->pluck('hospitals')->flatten()->unique()->count() }}</p>
+                        </div>
+                        <div class="rounded-md border border-cyan-200 bg-white px-3 py-2 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Mensajeros</p>
+                            <p class="mt-1 text-xl font-bold text-gray-950">{{ collect($previewRoutes)->pluck('messengers')->flatten()->unique()->count() }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
+                    <div class="space-y-3">
+                        @foreach ($previewRoutes as $index => $previewRoute)
+                            <article class="rounded-lg border border-cyan-200 bg-white p-4 shadow-sm">
+                                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-cyan-100 text-sm font-bold text-cyan-800">
+                                                {{ $index + 1 }}
+                                            </span>
+                                            <div>
+                                                <h3 class="text-base font-bold text-gray-950">{{ $previewRoute['name'] }}</h3>
+                                                <p class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ $previewRoute['code'] }}</p>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 flex flex-wrap gap-2">
+                                            @foreach ($previewRoute['hospitals'] as $hospitalName)
+                                                <span class="inline-flex rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                    {{ $hospitalName }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-start gap-2 lg:items-end">
+                                        <span class="inline-flex whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-semibold {{ $statusClasses[$previewRoute['status']] ?? $statusClasses[\App\Models\DistributionRoute::STATUS_PENDING] }}">
+                                            {{ $previewRoute['status_label'] }}
+                                        </span>
+                                        <span class="text-sm font-semibold text-gray-700">{{ $previewRoute['schedule'] }}</span>
+                                        <span class="text-xs text-gray-500">{{ $previewRoute['tracking'] }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+                                    @foreach ($previewRoute['messengers'] as $messengerName)
+                                        <span class="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-800">
+                                            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-700 text-[11px] text-white">
+                                                {{ mb_strtoupper(collect(explode(' ', $messengerName))->map(fn ($part) => mb_substr($part, 0, 1))->take(2)->join('')) }}
+                                            </span>
+                                            {{ $messengerName }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+
+                    <aside class="rounded-lg border border-cyan-200 bg-white p-4 shadow-sm">
+                        <h3 class="text-sm font-bold uppercase tracking-[0.16em] text-cyan-700">Flujo esperado</h3>
+                        <ol class="mt-4 space-y-4">
+                            <li class="flex gap-3">
+                                <span class="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-700 text-xs font-bold text-white">1</span>
+                                <div>
+                                    <p class="font-semibold text-gray-900">Crear ruta</p>
+                                    <p class="text-sm text-gray-600">Se asigna nombre, horario, hospitales cubiertos y mensajeros responsables.</p>
+                                </div>
+                            </li>
+                            <li class="flex gap-3">
+                                <span class="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-700 text-xs font-bold text-white">2</span>
+                                <div>
+                                    <p class="font-semibold text-gray-900">Generar QR</p>
+                                    <p class="text-sm text-gray-600">El mensajero escanea el codigo para abrir la ruta e iniciar el recorrido.</p>
+                                </div>
+                            </li>
+                            <li class="flex gap-3">
+                                <span class="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-700 text-xs font-bold text-white">3</span>
+                                <div>
+                                    <p class="font-semibold text-gray-900">Seguimiento en tiempo real</p>
+                                    <p class="text-sm text-gray-600">La central puede ver estatus, hospitales cubiertos y mensajeros asignados.</p>
+                                </div>
+                            </li>
+                        </ol>
+
+                        <div class="mt-5 rounded-lg border border-dashed border-blue-200 bg-blue-50 p-4 text-center">
+                            <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-dashed border-blue-300 bg-white text-blue-700">
+                                <i class="fa-solid fa-qrcode text-4xl" aria-hidden="true"></i>
+                            </div>
+                            <p class="mt-3 text-sm font-semibold text-gray-900">QR de ejemplo</p>
+                            <p class="mt-1 text-xs text-gray-500">Se mostrara aqui cuando captures una ruta real.</p>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+        @endif
 
         <div class="mt-5 overflow-x-auto border-x border-b border-gray-200">
             <table id="distribution-routes-table" class="w-full min-w-[1450px] text-left text-sm text-gray-700">
@@ -210,6 +353,86 @@
                             </td>
                         </tr>
                     @empty
+                        @if ($showPreviewRoutes)
+                            @foreach ($previewRoutes as $previewRoute)
+                                <tr class="align-middle bg-gradient-to-r from-slate-50 to-white opacity-90">
+                                    <td class="px-4 py-4">
+                                        <div class="font-bold text-gray-950">{{ $previewRoute['name'] }}</div>
+                                        <p class="mt-1 font-medium text-gray-500">{{ $previewRoute['code'] }}</p>
+                                        <span class="mt-2 inline-flex rounded-md bg-amber-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                                            Vista previa
+                                        </span>
+                                    </td>
+                                    <td class="max-w-[330px] px-4 py-4">
+                                        <div class="flex flex-wrap gap-1.5">
+                                            @foreach (array_slice($previewRoute['hospitals'], 0, 2) as $hospitalName)
+                                                <span class="inline-flex max-w-[240px] truncate rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700">
+                                                    {{ $hospitalName }}
+                                                </span>
+                                            @endforeach
+                                            @if (count($previewRoute['hospitals']) > 2)
+                                                <span class="inline-flex rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                                                    +{{ count($previewRoute['hospitals']) - 2 }} hospitales
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-medium text-gray-700">
+                                        {{ $previewRoute['schedule'] }}
+                                    </td>
+                                    <td class="px-4 py-4">
+                                        <div class="space-y-2">
+                                            @foreach ($previewRoute['messengers'] as $messengerName)
+                                                <div class="flex items-center gap-2">
+                                                    <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-800">
+                                                        {{ mb_strtoupper(collect(explode(' ', $messengerName))->map(fn ($part) => mb_substr($part, 0, 1))->take(2)->join('')) }}
+                                                    </span>
+                                                    <span class="whitespace-nowrap font-medium text-gray-800">{{ $messengerName }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-blue-50 text-blue-700">
+                                            <i class="fa-solid fa-qrcode text-3xl" aria-hidden="true"></i>
+                                        </div>
+                                        <div class="mt-1 text-xs font-medium text-gray-500">{{ $previewRoute['code'] }}</div>
+                                    </td>
+                                    <td class="px-4 py-4 text-center">
+                                        <span class="inline-flex whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-semibold {{ $statusClasses[$previewRoute['status']] ?? $statusClasses[\App\Models\DistributionRoute::STATUS_PENDING] }}">
+                                            {{ $previewRoute['status_label'] }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-4 text-center">
+                                        <span class="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600">
+                                            <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                                            {{ $previewRoute['tracking'] }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-4 text-center">
+                                        <span class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-gray-500">
+                                            <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                                            Simulado
+                                        </span>
+                                    </td>
+                                </tr>
+                            @endforeach
+                            <tr>
+                                <td colspan="8" class="border-t border-gray-200 px-6 py-5 text-center">
+                                    <span class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-medium text-blue-800">
+                                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                                        Vista previa de ejemplo. Aún no hay rutas reales capturadas para esta central.
+                                    </span>
+                                    <div class="mt-4">
+                                        <a href="{{ route('admin.distribution.create', $createRouteParameters) }}"
+                                            class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800">
+                                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                            Crear primera ruta real
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        @else
                         <tr>
                             <td colspan="8" class="px-6 py-16 text-center">
                                 <span class="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-xl text-blue-700">
@@ -224,6 +447,7 @@
                                 </a>
                             </td>
                         </tr>
+                        @endif
                     @endforelse
                 </tbody>
             </table>

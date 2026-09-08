@@ -1,4 +1,16 @@
 import './bootstrap';
+import './corporate-header';
+import './personnel-editor';
+import './hospital-editor';
+import './purchase-order';
+import './institution-hospital-map';
+import './maintenance-identification';
 import './table-column-filters';
+import './request-process-confirmations';
+import './workflow-modal';
+import './mixture-workflow';
 import './institution-report-template-editor';
+import './institution-custom-report-builder';
 import './institution-report-hospital-selector';
+import './distribution-route-modal';
+import './distribution-route-qr-modal';

@@ -6,11 +6,19 @@
             </div>
         @endif
 
+        @if (session('error'))
+            <div class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {{ session('error') }}
+            </div>
+        @endif
+
         @if ($laboratories->isNotEmpty())
             <section class="border-b border-gray-200 pb-4" aria-labelledby="warehouse-laboratory-carousel-title">
-                <div class="mb-3">
-                    <h2 id="warehouse-laboratory-carousel-title" class="text-sm font-semibold text-gray-800">Selecciona una central de mezclas</h2>
-                    <p class="text-xs text-gray-500">Gestiona la central seleccionada y consulta abajo sus almacenes e inventarios.</p>
+                <div class="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 id="warehouse-laboratory-carousel-title" class="text-sm font-semibold text-gray-800">Selecciona una central de mezclas</h2>
+                        <p class="text-xs text-gray-500">Gestiona la central seleccionada y consulta abajo sus almacenes e inventarios.</p>
+                    </div>
                 </div>
 
                 <div class="flex items-center gap-2">
@@ -126,11 +134,26 @@
                                             <span class="h-2 w-2 rounded-full {{ $warehouse->is_active ? 'bg-green-500' : 'bg-red-500' }}"></span>
                                             {{ $warehouse->is_active ? 'Activo' : 'Inactivo' }}
                                         </span>
-                                        <a href="{{ route('admin.warehouses.edit', $warehouse) }}"
-                                            class="inline-flex items-center gap-1.5 rounded bg-blue-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800">
-                                            <i class="fa-solid fa-pen" aria-hidden="true"></i>
-                                            Editar
-                                        </a>
+                                        <span class="flex items-center gap-2">
+                                            @can('oncologicos_laboratory_destroy')
+                                                <form method="POST" action="{{ route('admin.warehouses.destroy', $warehouse) }}"
+                                                    class="!w-auto" data-delete-warehouse data-warehouse-name="{{ $warehouse->name }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit"
+                                                        class="inline-flex items-center gap-1.5 rounded border border-red-600 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-300">
+                                                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                                                        Eliminar
+                                                    </button>
+                                                </form>
+                                            @endcan
+
+                                            <a href="{{ route('admin.warehouses.edit', $warehouse) }}"
+                                                class="inline-flex items-center gap-1.5 rounded bg-blue-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800">
+                                                <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                                                Editar
+                                            </a>
+                                        </span>
                                     </div>
                                 </article>
                             @endforeach
@@ -177,11 +200,21 @@
                     ],
                     [
                         'key' => 'insumos',
-                        'title' => 'Subalmacén de insumos',
+                        'title' => 'Inventario de diluyentes',
                         'description' => 'Inventario de medicamentos, lotes, caducidades y existencias.',
                         'icon' => 'fa-boxes-stacked',
                         'color' => 'text-amber-800 bg-amber-50',
                         'url' => $selectedWarehouse ? route('admin.warehouses.supplies.index', $selectedWarehouse) : null,
+                        'count_label' => 'lotes',
+                        'stock_label' => 'piezas',
+                    ],
+                    [
+                        'key' => 'consumibles',
+                        'title' => 'Inventario de consumibles',
+                        'description' => 'Inventario de consumibles, lotes, caducidades y existencias.',
+                        'icon' => 'fa-syringe',
+                        'color' => 'text-purple-800 bg-purple-50',
+                        'url' => $selectedWarehouse ? route('admin.warehouses.consumables.index', $selectedWarehouse) : null,
                         'count_label' => 'lotes',
                         'stock_label' => 'piezas',
                     ],
@@ -256,6 +289,31 @@
                 carousel.addEventListener('scroll', updateNavigation, { passive: true });
                 window.addEventListener('resize', updateNavigation);
                 requestAnimationFrame(updateNavigation);
+
+                document.querySelectorAll('[data-delete-warehouse]').forEach((form) => {
+                    form.addEventListener('submit', async (event) => {
+                        event.preventDefault();
+
+                        const warehouseName = form.dataset.warehouseName || 'este almacen';
+                        const result = await Swal.fire({
+                            title: '¿Eliminar almacén?',
+                            text: `Se eliminará ${warehouseName}. Esta acción no se puede deshacer.`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Sí, eliminar',
+                            cancelButtonText: 'Cancelar',
+                            reverseButtons: true,
+                            customClass: {
+                                confirmButton: 'warehouse-delete-confirm',
+                                cancelButton: 'warehouse-delete-cancel',
+                            },
+                        });
+
+                        if (result.isConfirmed) {
+                            form.submit();
+                        }
+                    });
+                });
             })();
         </script>
     @endpush

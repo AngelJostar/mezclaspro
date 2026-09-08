@@ -147,6 +147,17 @@
             return '$' . number_format((float) $v, 2, '.', ',');
         };
 
+        $almacenesTexto = function ($presentaciones) {
+            $almacenes = collect($presentaciones ?? [])
+                ->map(fn($pres) => $pres?->batch?->warehouse?->name)
+                ->filter(fn($name) => trim((string) $name) !== '')
+                ->unique()
+                ->values()
+                ->implode(', ');
+
+            return $almacenes !== '' ? $almacenes : '—';
+        };
+
         // ===== Datos del paciente / solicitud =====
         $pacienteNombre = $solicitud->nombre_paciente ?? '—';
         $fechaNac = $solicitud->fecha_nacimiento ? $fmtDate($solicitud->fecha_nacimiento) : '—';
@@ -226,8 +237,11 @@
                 <td class="px-1">
                     Fecha de envío:
                     <strong>{{ $fmtDateTime($fechaEmision) }}</strong>
+                    <br>
+                    Fecha de solicitud:
+                    <strong>{{ $fmtDateTime($solicitud->created_at ?? null) }}</strong>
                 </td>
-                <td class="px-1 text-right">No. Remisión: {{ $solicitud->remision ?? '—' }}</td>
+                <td class="px-1 text-right">No. Remisión: {{ $mezclas->first()?->remision ?? '—' }}</td>
             </tr>
         </table>
 
@@ -294,18 +308,24 @@
                 <td class="border-1 px-1 text-center bg-cbta font-bold">Dosis (mg)</td>
                 <td class="border-1 px-1 text-center bg-cbta font-bold">Diluyente</td>
                 <td class="border-1 px-1 text-center bg-cbta font-bold">Volumen mezcla</td>
-                <td class="border-1 px-1 text-center bg-cbta font-bold">Lote de la mezcla</td>
+                <td class="border-1 px-1 text-center bg-cbta font-bold">Almacen</td>
                 <td class="border-1 px-1 text-center bg-cbta font-bold">Unidad de cobro</td>
                 <td class="border-1 px-1 text-center bg-cbta font-bold">Cantidad</td>
                 <td class="border-1 px-1 text-center bg-cbta font-bold">Precio unitario</td>
                 <td class="border-1 border-r-0 px-1 text-center bg-cbta font-bold">Subtotal</td>
             </tr>
 
+            @php
+                $presentacionesUsadasResumen = [];
+                $lotesMezclaRemision = collect();
+            @endphp
+
             @foreach ($mezclas as $mezcla)
                 @php
                     $loteMezcla = $mezcla->lote ?? '—';
                     $volumenMezcla = isset($mezcla->volumen_dilucion) ? $mezcla->volumen_dilucion . ' ml' : '—';
                     $remisionMezcla = $mezcla->remision ?? '—';
+                    $lotesMezclaRemision->push($loteMezcla);
                 @endphp
 
                 @forelse ($mezcla->medicamentos as $med)
@@ -330,6 +350,7 @@
                         $subtotal = $med->subtotal_calculado ?? 0;
 
                         $presentaciones = $med->presentacionesUsadas ?? collect();
+                        $almacenMedicamento = $almacenesTexto($presentaciones);
 
                         // ✅ Presentaciones: preferir presentacion_snapshot
                         $presentacionesTexto = $presentaciones
@@ -380,6 +401,8 @@
                         if ($presentacionesTexto === '') {
                             $presentacionesTexto = 'Sin detalle de presentación.';
                         }
+
+                        $presentacionesUsadasResumen[] = $presentacionesTexto;
                     @endphp
 
                     <tr>
@@ -390,7 +413,7 @@
                         </td>
                         <td class="border-1 px-1 text-center">{{ $diluyente }}</td>
                         <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
-                        <td class="border-1 px-1 text-center">{{ $loteMezcla }}</td>
+                        <td class="border-1 px-1 text-center">{{ $almacenMedicamento }}</td>
                         <td class="border-1 px-1 text-center">{{ ucfirst($unidadCobro) }}</td>
                         <td class="border-1 px-1 text-center">
                             @if ($unidadCobro === 'mg')
@@ -402,17 +425,9 @@
                         <td class="border-1 px-1 text-center">{{ $money($precioUnit) }}</td>
                         <td class="border-1 border-r-0 px-1 text-center">{{ $money($subtotal) }}</td>
                     </tr>
-
-                    <tr class="fila-presentacion">
-                        <td class="border-1 border-l-0 px-1"></td>
-                        <td class="border-1 px-1 text-right font-bold">Presentaciones usadas:</td>
-                        <td class="border-1 border-r-0 px-1 text-left bg-presentacion" colspan="9">
-                            {!! $presentacionesTexto !!}
-                        </td>
-                    </tr>
                 @empty
                     <tr>
-                        <td class="border-1 border-l-0 px-1 text-center" colspan="11">
+                        <td class="border-1 border-l-0 px-1 text-center" colspan="10">
                             Sin medicamentos en esta mezcla.
                         </td>
                     </tr>
@@ -428,7 +443,7 @@
                         <td class="border-1 px-1 text-center">—</td>
                         <td class="border-1 px-1 text-center">—</td>
                         <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
-                        <td class="border-1 px-1 text-center">{{ $loteMezcla }}</td>
+                        <td class="border-1 px-1 text-center">—</td>
                         <td class="border-1 px-1 text-center">Pieza</td>
                         <td class="border-1 px-1 text-center">1</td>
                         <td class="border-1 px-1 text-center">{{ $money($mezcla->infusor_precio ?? 0) }}</td>
@@ -451,6 +466,20 @@
                         <td class="border-1 border-r-0 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
                     </tr>
                 @endif
+                @foreach (($mezcla->additional_charge_lines ?? collect()) as $charge)
+                    <tr>
+                        <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                        <td class="border-1 px-1 text-center">{{ $charge['description'] }} (IVA incluido)</td>
+                        <td class="border-1 px-1 text-center">â€”</td>
+                        <td class="border-1 px-1 text-center">â€”</td>
+                        <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
+                        <td class="border-1 px-1 text-center">â€”</td>
+                        <td class="border-1 px-1 text-center">{{ $charge['unit_label'] ?? 'Servicio' }}</td>
+                        <td class="border-1 px-1 text-center">1</td>
+                        <td class="border-1 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                        <td class="border-1 border-r-0 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                    </tr>
+                @endforeach
             @endforeach
 
             @if ((float) ($totalServicioMezclado ?? 0) > 0)
@@ -467,23 +496,36 @@
                     <td class="border-1 border-r-0 px-1 text-center">{{ $money($totalServicioMezclado ?? 0) }}</td>
                 </tr>
             @endif
-        </table>
 
-        <table>
             <tr>
-                <td class="text-right">Subtotal antes de IVA {{ $money($remisionTotals['subtotal_before_vat'] ?? 0) }}</td>
+                <td class="border-1 border-l-0 border-r-0 px-1 text-right" colspan="10">
+                    <strong>Total IVA incluido {{ $money($totalRemision) }}</strong>
+                </td>
             </tr>
-            <tr>
-                <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
-            </tr>
-            <tr>
-                <td class="text-right">IVA servicio de mezclado (16%) {{ $money($remisionTotals['service_vat'] ?? 0) }}</td>
-            </tr>
-            <tr>
-                <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>
-            </tr>
-            <tr>
-                <td class="text-right"><strong>Total IVA incluido {{ $money($totalRemision) }}</strong></td>
+
+            @foreach ($presentacionesUsadasResumen as $presentacionesTextoResumen)
+                <tr class="fila-presentacion">
+                    <td class="border-1 border-l-0 px-1"></td>
+                    <td class="border-1 px-1 text-right font-bold">Presentaciones usadas:</td>
+                    <td class="border-1 border-r-0 px-1 text-left bg-presentacion" colspan="8">
+                        {!! $presentacionesTextoResumen !!}
+                    </td>
+                </tr>
+            @endforeach
+
+            @php
+                $lotesMezclaTexto = $lotesMezclaRemision
+                    ->filter(fn($lote) => trim((string) $lote) !== '' && $lote !== '—')
+                    ->unique()
+                    ->values()
+                    ->implode(', ');
+            @endphp
+            <tr class="fila-presentacion">
+                <td class="border-1 border-l-0 px-1"></td>
+                <td class="border-1 px-1 text-right font-bold">Lote de la mezcla:</td>
+                <td class="border-1 border-r-0 px-1 text-left bg-presentacion" colspan="8">
+                    {{ $lotesMezclaTexto !== '' ? $lotesMezclaTexto : '—' }}
+                </td>
             </tr>
         </table>
 
@@ -557,6 +599,9 @@
                     <td class="px-1">
                         Fecha de envío:
                         <strong>{{ $fmtDateTime($fechaEmision) }}</strong>
+                        <br>
+                        Fecha de solicitud:
+                        <strong>{{ $fmtDateTime($solicitud->created_at ?? null) }}</strong>
                     </td>
                 </tr>
                 <tr>
@@ -634,17 +679,23 @@
                     <td class="border-1 px-1 text-center bg-cbta font-bold">Dosis (mg)</td>
                     <td class="border-1 px-1 text-center bg-cbta font-bold">Diluyente</td>
                     <td class="border-1 px-1 text-center bg-cbta font-bold">Volumen mezcla</td>
-                    <td class="border-1 px-1 text-center bg-cbta font-bold">Lote de la mezcla</td>
+                    <td class="border-1 px-1 text-center bg-cbta font-bold">Almacen</td>
                     <td class="border-1 px-1 text-center bg-cbta font-bold">Unidad de cobro</td>
                     <td class="border-1 px-1 text-center bg-cbta font-bold">Cantidad</td>
                     <td class="border-1 px-1 text-center bg-cbta font-bold">Precio unitario</td>
                     <td class="border-1 border-r-0 px-1 text-center bg-cbta font-bold">Subtotal</td>
                 </tr>
 
+                @php
+                    $presentacionesUsadasResumen = [];
+                    $lotesMezclaRemision = collect();
+                @endphp
+
                 @foreach ($mezclas as $mezcla)
                     @php
                         $loteMezcla = $mezcla->lote ?? '—';
                         $volumenMezcla = isset($mezcla->volumen_dilucion) ? $mezcla->volumen_dilucion . ' ml' : '—';
+                        $lotesMezclaRemision->push($loteMezcla);
                     @endphp
 
                     @forelse ($mezcla->medicamentos as $med)
@@ -668,6 +719,7 @@
                             $subtotal = $med->subtotal_calculado ?? 0;
 
                             $presentaciones = $med->presentacionesUsadas ?? collect();
+                            $almacenMedicamento = $almacenesTexto($presentaciones);
 
                             $presentacionesTexto = $presentaciones
                                 ->map(function ($pres) {
@@ -713,6 +765,8 @@
                             if ($presentacionesTexto === '') {
                                 $presentacionesTexto = 'Sin detalle de presentación.';
                             }
+
+                            $presentacionesUsadasResumen[] = $presentacionesTexto;
                         @endphp
 
                         <tr>
@@ -722,7 +776,7 @@
                                 {{ is_numeric($dosisFmt) ? $dosisFmt . ' mg' : $dosisFmt }}</td>
                             <td class="border-1 px-1 text-center">{{ $diluyente }}</td>
                             <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
-                            <td class="border-1 px-1 text-center">{{ $loteMezcla }}</td>
+                            <td class="border-1 px-1 text-center">{{ $almacenMedicamento }}</td>
                             <td class="border-1 px-1 text-center">{{ ucfirst($unidadCobro) }}</td>
                             <td class="border-1 px-1 text-center">
                                 @if ($unidadCobro === 'mg')
@@ -734,17 +788,9 @@
                             <td class="border-1 px-1 text-center">{{ $money($precioUnit) }}</td>
                             <td class="border-1 border-r-0 px-1 text-center">{{ $money($subtotal) }}</td>
                         </tr>
-
-                        <tr class="fila-presentacion">
-                            <td class="border-1 border-l-0 px-1"></td>
-                            <td class="border-1 px-1 text-right font-bold">Presentaciones usadas:</td>
-                            <td class="border-1 border-r-0 px-1 text-left bg-presentacion" colspan="9">
-                                {!! $presentacionesTexto !!}
-                            </td>
-                        </tr>
                     @empty
                         <tr>
-                            <td class="border-1 border-l-0 px-1 text-center" colspan="11">
+                            <td class="border-1 border-l-0 px-1 text-center" colspan="10">
                                 Sin medicamentos en esta mezcla.
                             </td>
                         </tr>
@@ -759,7 +805,7 @@
                             <td class="border-1 px-1 text-center">—</td>
                             <td class="border-1 px-1 text-center">—</td>
                             <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
-                            <td class="border-1 px-1 text-center">{{ $loteMezcla }}</td>
+                            <td class="border-1 px-1 text-center">—</td>
                             <td class="border-1 px-1 text-center">Pieza</td>
                             <td class="border-1 px-1 text-center">1</td>
                             <td class="border-1 px-1 text-center">{{ $money($mezcla->infusor_precio ?? 0) }}</td>
@@ -782,6 +828,20 @@
                             <td class="border-1 border-r-0 px-1 text-center">{{ $money($mezcla->mixing_service_total) }}</td>
                         </tr>
                     @endif
+                    @foreach (($mezcla->additional_charge_lines ?? collect()) as $charge)
+                        <tr>
+                            <td class="border-1 border-l-0 px-1 text-center">{{ $contador++ }}</td>
+                            <td class="border-1 px-1 text-center">{{ $charge['description'] }} (IVA incluido)</td>
+                            <td class="border-1 px-1 text-center">â€”</td>
+                            <td class="border-1 px-1 text-center">â€”</td>
+                            <td class="border-1 px-1 text-center">{{ $volumenMezcla }}</td>
+                            <td class="border-1 px-1 text-center">â€”</td>
+                            <td class="border-1 px-1 text-center">{{ $charge['unit_label'] ?? 'Servicio' }}</td>
+                            <td class="border-1 px-1 text-center">1</td>
+                            <td class="border-1 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                            <td class="border-1 border-r-0 px-1 text-center">{{ $money($charge['total'] ?? 0) }}</td>
+                        </tr>
+                    @endforeach
                 @endforeach
 
                 @if ((float) ($totalServicioMezclado ?? 0) > 0)
@@ -798,23 +858,36 @@
                         <td class="border-1 border-r-0 px-1 text-center">{{ $money($totalServicioMezclado ?? 0) }}</td>
                     </tr>
                 @endif
-            </table>
 
-            <table>
                 <tr>
-                    <td class="text-right">Subtotal antes de IVA {{ $money($remisionTotals['subtotal_before_vat'] ?? 0) }}</td>
+                    <td class="border-1 border-l-0 border-r-0 px-1 text-right" colspan="10">
+                        <strong>Total IVA incluido {{ $money($totalRemision) }}</strong>
+                    </td>
                 </tr>
-                <tr>
-                    <td class="text-right">IVA medicamentos seleccionados (16%) {{ $money($remisionTotals['medication_vat'] ?? 0) }}</td>
-                </tr>
-                <tr>
-                    <td class="text-right">IVA servicio de mezclado (16%) {{ $money($remisionTotals['service_vat'] ?? 0) }}</td>
-                </tr>
-                <tr>
-                    <td class="text-right">IVA insumos gravados (16%) {{ $money($remisionTotals['supplies_vat'] ?? 0) }}</td>
-                </tr>
-                <tr>
-                    <td class="text-right"><strong>Total IVA incluido {{ $money($totalRemision) }}</strong></td>
+
+                @foreach ($presentacionesUsadasResumen as $presentacionesTextoResumen)
+                    <tr class="fila-presentacion">
+                        <td class="border-1 border-l-0 px-1"></td>
+                        <td class="border-1 px-1 text-right font-bold">Presentaciones usadas:</td>
+                        <td class="border-1 border-r-0 px-1 text-left bg-presentacion" colspan="8">
+                            {!! $presentacionesTextoResumen !!}
+                        </td>
+                    </tr>
+                @endforeach
+
+                @php
+                    $lotesMezclaTexto = $lotesMezclaRemision
+                        ->filter(fn($lote) => trim((string) $lote) !== '' && $lote !== '—')
+                        ->unique()
+                        ->values()
+                        ->implode(', ');
+                @endphp
+                <tr class="fila-presentacion">
+                    <td class="border-1 border-l-0 px-1"></td>
+                    <td class="border-1 px-1 text-right font-bold">Lote de la mezcla:</td>
+                    <td class="border-1 border-r-0 px-1 text-left bg-presentacion" colspan="8">
+                        {{ $lotesMezclaTexto !== '' ? $lotesMezclaTexto : '—' }}
+                    </td>
                 </tr>
             </table>
 

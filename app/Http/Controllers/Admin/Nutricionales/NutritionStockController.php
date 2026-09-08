@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Nutricionales;
 
 use App\Exports\Nutricionales\NutritionInventoryExport;
 use App\Http\Controllers\Controller;
+use App\Models\MedicineRemainder;
 use App\Models\Nutricionales\MedicineLaboratoryStock;
 use App\Models\Nutricionales\MedicineStockMovement;
 use App\Models\Nutricionales\NutritionLaboratoryActivePresentation;
@@ -11,6 +12,7 @@ use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Warehouse;
+use App\Services\WasteAuthorizationService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +63,18 @@ class NutritionStockController extends Controller
                                 $stockQuery->orderBy('caducidad')
                                     ->orderBy('lote');
                             },
+                            'remainders' => function ($remainderQuery) use ($laboratoryId, $warehouseId) {
+                                $remainderQuery->where('domain', 'nutricional')
+                                    ->where('laboratory_id', $laboratoryId)
+                                    ->where('warehouse_id', $warehouseId)
+                                    ->where('is_active', 1)
+                                    ->where('current_ml', '>', 0)
+                                    ->where(function ($query) {
+                                        $query->whereNull('usable_until')
+                                            ->orWhere('usable_until', '>', now());
+                                    })
+                                    ->orderBy('usable_until');
+                            },
                         ])
                         ->orderBy('denominacion_comercial');
                 },
@@ -110,6 +124,7 @@ class NutritionStockController extends Controller
             ->values();
 
         $totalesPorPresentacion = collect();
+        $remanentesPorPresentacion = collect();
 
         if ($presentationIds->isNotEmpty()) {
             $totalesPorPresentacion = DB::table('medicine_laboratory_stocks')
@@ -120,6 +135,25 @@ class NutritionStockController extends Controller
                 )
                 ->where('laboratory_id', $laboratoryId)
                 ->where('warehouse_id', $warehouseId)
+                ->whereIn('nutrition_medicine_presentation_id', $presentationIds)
+                ->groupBy('nutrition_medicine_presentation_id')
+                ->get()
+                ->keyBy('nutrition_medicine_presentation_id');
+
+            $remanentesPorPresentacion = DB::table('medicine_remainders')
+                ->select(
+                    'nutrition_medicine_presentation_id',
+                    DB::raw('SUM(current_ml) as remanente_total_ml')
+                )
+                ->where('domain', 'nutricional')
+                ->where('laboratory_id', $laboratoryId)
+                ->where('warehouse_id', $warehouseId)
+                ->where('is_active', 1)
+                ->where('current_ml', '>', 0)
+                ->where(function ($query) {
+                    $query->whereNull('usable_until')
+                        ->orWhere('usable_until', '>', now());
+                })
                 ->whereIn('nutrition_medicine_presentation_id', $presentationIds)
                 ->groupBy('nutrition_medicine_presentation_id')
                 ->get()
@@ -137,19 +171,26 @@ class NutritionStockController extends Controller
                 $presentation->frascos_total = $totales
                     ? (float) $totales->frascos_total
                     : 0;
+
+                $remanentes = $remanentesPorPresentacion->get($presentation->id);
+                $presentation->remanente_total_ml = $remanentes
+                    ? (float) $remanentes->remanente_total_ml
+                    : 0;
+                $presentation->inventario_total_ml =
+                    $presentation->stock_total_ml + $presentation->remanente_total_ml;
             }
         }
 
         if ($stockFilter === '1') {
             $catalogs = $catalogs->filter(function ($catalog) {
                 return $catalog->presentations->contains(function ($presentation) {
-                    return (float) ($presentation->stock_total_ml ?? 0) > 0;
+                    return (float) ($presentation->inventario_total_ml ?? 0) > 0;
                 });
             })->values();
         } elseif ($stockFilter === '0') {
             $catalogs = $catalogs->filter(function ($catalog) {
                 return $catalog->presentations->contains(function ($presentation) {
-                    return (float) ($presentation->stock_total_ml ?? 0) <= 0;
+                    return (float) ($presentation->inventario_total_ml ?? 0) <= 0;
                 });
             })->values();
         }
@@ -209,14 +250,26 @@ class NutritionStockController extends Controller
                     continue;
                 }
 
-                $hasStock = MedicineLaboratoryStock::where('laboratory_id', $laboratoryId)
+                $hasClosedStock = MedicineLaboratoryStock::where('laboratory_id', $laboratoryId)
                     ->where('warehouse_id', $warehouseId)
                     ->where('nutrition_medicine_presentation_id', $presentationId)
                     ->where('is_active', 1)
                     ->where('stock_ml_actual', '>', 0)
                     ->exists();
 
-                if (!$hasStock) {
+                $hasRemainder = MedicineRemainder::where('domain', 'nutricional')
+                    ->where('laboratory_id', $laboratoryId)
+                    ->where('warehouse_id', $warehouseId)
+                    ->where('nutrition_medicine_presentation_id', $presentationId)
+                    ->where('is_active', 1)
+                    ->where('current_ml', '>', 0)
+                    ->where(function ($query) {
+                        $query->whereNull('usable_until')
+                            ->orWhere('usable_until', '>', now());
+                    })
+                    ->exists();
+
+                if (!$hasClosedStock && !$hasRemainder) {
                     throw new \Exception("La presentación {$presentation->denominacion_comercial} no tiene stock disponible para activarse.");
                 }
 
@@ -986,78 +1039,34 @@ class NutritionStockController extends Controller
         return view('admin.nutricionales.stocks.merma', compact('stock'));
     }
 
-    public function registrarMerma(Request $request, MedicineLaboratoryStock $stock)
+    public function registrarMerma(
+        Request $request,
+        MedicineLaboratoryStock $stock,
+        WasteAuthorizationService $wasteAuthorizationService
+    )
     {
-        $request->validate([
-            'cantidad_ml' => 'required|numeric|min:0.01',
+        $data = $request->validate([
+            'quantity' => 'required|integer|min:1',
             'notes' => 'required|string|max:500',
         ]);
 
-        DB::beginTransaction();
+        $wasteAuthorizationService->requestForNutritionStock(
+            $stock,
+            (int) $data['quantity'],
+            $data['notes'],
+            (int) $request->user()->id
+        );
 
-        try {
-            $stock->load('presentation');
+        session()->flash('swal', [
+            'title' => 'Solicitud enviada',
+            'text' => 'La merma del frasco quedó pendiente de autorización.',
+            'icon' => 'success',
+        ]);
 
-            $cantidadMl = (float) $request->cantidad_ml;
-            $stockAntes = (float) $stock->stock_ml_actual;
-            $frascosAntes = (float) $stock->frascos_actuales;
-
-            if ($cantidadMl > $stockAntes) {
-                throw new \Exception("La merma no puede ser mayor al stock actual ({$stockAntes} ml).");
-            }
-
-            $presentacionMl = (float) ($stock->presentation->presentacion_ml ?? 0);
-
-            if ($presentacionMl <= 0) {
-                throw new \Exception('La presentación no tiene configurado el campo presentacion_ml.');
-            }
-
-            $frascosMerma = $cantidadMl / $presentacionMl;
-
-            $stockDespues = $stockAntes - $cantidadMl;
-            $frascosDespues = max(0, $frascosAntes - $frascosMerma);
-
-            $stock->update([
-                'stock_ml_actual' => $stockDespues,
-                'frascos_actuales' => $frascosDespues,
-                'is_active' => $stockDespues > 0,
-            ]);
-
-            MedicineStockMovement::create([
-                'medicine_laboratory_stock_id' => $stock->id,
-                'warehouse_id' => $stock->warehouse_id,
-                'user_id' => auth()->id(),
-                'tipo' => 'merma',
-                'cantidad_ml' => $cantidadMl,
-                'cantidad_frascos' => $frascosMerma,
-                'stock_antes' => $stockAntes,
-                'stock_despues' => $stockDespues,
-                'frascos_antes' => $frascosAntes,
-                'frascos_despues' => $frascosDespues,
-                'reference_type' => 'MermaManual',
-                'reference_id' => $stock->id,
-                'notes' => $request->notes,
-            ]);
-
-            DB::commit();
-
-            session()->flash('swal', [
-                'title' => 'Merma registrada',
-                'text' => 'La merma se registró correctamente.',
-                'icon' => 'success',
-            ]);
-
-            return redirect()->route('admin.nutricionales.stocks.index', [
-                'laboratory_id' => $stock->laboratory_id,
-                'warehouse_id' => $stock->warehouse_id,
-            ]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-
-            return redirect()->back()
-                ->withErrors(['error' => $e->getMessage()])
-                ->withInput();
-        }
+        return redirect()->route('admin.nutricionales.stocks.index', [
+            'laboratory_id' => $stock->laboratory_id,
+            'warehouse_id' => $stock->warehouse_id,
+        ]);
     }
 
     public function movimientos(MedicineLaboratoryStock $stock)
@@ -1069,7 +1078,14 @@ class NutritionStockController extends Controller
             ->latest()
             ->paginate(20);
 
-        return view('admin.nutricionales.stocks.movimientos', compact('stock', 'movements'));
+        $remainders = \App\Models\MedicineRemainder::query()
+            ->where('domain', 'nutricional')
+            ->where('medicine_laboratory_stock_id', $stock->id)
+            ->with(['movements' => fn($query) => $query->with('user')->latest()])
+            ->orderByDesc('opened_at')
+            ->get();
+
+        return view('admin.nutricionales.stocks.movimientos', compact('stock', 'movements', 'remainders'));
     }
 
     public function exportarExcel(Request $request)

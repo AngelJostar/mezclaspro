@@ -55,6 +55,7 @@ class MedicineController extends Controller
             'presentations.*.fabricante' => 'nullable|string|max:255',
             'presentations.*.presentacion' => 'required|string|max:255',
             'presentations.*.presentacion_ml' => 'nullable|numeric|min:0',
+            'presentations.*.stability_hours' => 'required|integer|min:1|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
         ]);
 
@@ -88,6 +89,7 @@ class MedicineController extends Controller
                     'fabricante' => isset($presentation['fabricante']) ? trim($presentation['fabricante']) : null,
                     'presentacion' => trim($presentation['presentacion']),
                     'presentacion_ml' => $presentation['presentacion_ml'] ?? null,
+                    'stability_hours' => $presentation['stability_hours'] ?? null,
                     'is_available' => isset($presentation['is_available'])
                         ? (bool) $presentation['is_available']
                         : true,
@@ -114,6 +116,8 @@ class MedicineController extends Controller
 
     public function edit(NutritionMedicineCatalog $medicine)
     {
+        $this->ensureSuperAdminCanEdit();
+
         $medicine->load([
             'presentations' => function ($query) {
                 $query->orderBy('denominacion_comercial');
@@ -129,6 +133,8 @@ class MedicineController extends Controller
 
     public function update(Request $request, NutritionMedicineCatalog $medicine)
     {
+        $this->ensureSuperAdminCanEdit();
+
         $request->validate([
             'denominacion_generica' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
@@ -145,6 +151,7 @@ class MedicineController extends Controller
             'presentations.*.fabricante' => 'nullable|string|max:255',
             'presentations.*.presentacion' => 'required|string|max:255',
             'presentations.*.presentacion_ml' => 'nullable|numeric|min:0',
+            'presentations.*.stability_hours' => 'nullable|integer|min:1|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
 
         ]);
@@ -182,6 +189,7 @@ class MedicineController extends Controller
                     'fabricante' => isset($presentation['fabricante']) ? trim($presentation['fabricante']) : null,
                     'presentacion' => trim($presentation['presentacion']),
                     'presentacion_ml' => $presentation['presentacion_ml'] ?? null,
+                    'stability_hours' => $presentation['stability_hours'] ?? null,
                     'is_available' => isset($presentation['is_available'])
                         ? (bool) $presentation['is_available']
                         : true,
@@ -230,5 +238,10 @@ class MedicineController extends Controller
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    private function ensureSuperAdminCanEdit(): void
+    {
+        abort_unless(auth()->user()?->hasRole('Super Admin'), 403);
     }
 }

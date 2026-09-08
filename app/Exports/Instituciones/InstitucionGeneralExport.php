@@ -153,14 +153,14 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
                     hospitalNombre: $hospital?->name,
                     medico: $solicitud?->nombre_medico,
                     paciente: $solicitud?->nombre_paciente,
-                    remision: $mezcla->remision ?: ($solicitud?->remision ?: '—'),
-                    fecha: optional($solicitud?->fecha_entrega ?? $solicitud?->created_at)?->format('d/m/y') ?? '—',
+                    remision: $mezcla->remision ?: '—',
+                    fecha: optional($mezcla->fecha_entrega ?? $solicitud?->fecha_entrega ?? $solicitud?->created_at)?->format('d/m/y') ?? '—',
                     descripcion: $descripcion,
                     cantidad: $this->formatNumber($cantidad, 2),
                     unitario: $precioUnitario,
                     total: $subtotal,
                     billing: $billing,
-                    fechaOrden: $solicitud?->fecha_entrega ?? $solicitud?->created_at,
+                    fechaOrden: $mezcla->fecha_entrega ?? $solicitud?->fecha_entrega ?? $solicitud?->created_at,
                     rowOrder: $rowOrder++,
                     empresa: $institucion->razon_social ?: $institucion->nombre
                 ));
@@ -174,14 +174,14 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
                 hospitalNombre: $hospital?->name,
                 medico: $solicitud?->nombre_medico,
                 paciente: $solicitud?->nombre_paciente,
-                remision: $mezcla->remision ?: ($solicitud?->remision ?: '—'),
-                fecha: optional($solicitud?->fecha_entrega ?? $solicitud?->created_at)?->format('d/m/y') ?? '—',
+                remision: $mezcla->remision ?: '—',
+                fecha: optional($mezcla->fecha_entrega ?? $solicitud?->fecha_entrega ?? $solicitud?->created_at)?->format('d/m/y') ?? '—',
                 descripcion: 'Servicio de Mezclado',
                 cantidad: '1',
                 unitario: $serviceTotal,
                 total: $serviceTotal,
                 billing: $billing,
-                fechaOrden: $solicitud?->fecha_entrega ?? $solicitud?->created_at,
+                fechaOrden: $mezcla->fecha_entrega ?? $solicitud?->fecha_entrega ?? $solicitud?->created_at,
                 rowOrder: $rowOrder,
                 empresa: $institucion->razon_social ?: $institucion->nombre
             ));
@@ -294,11 +294,17 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
         $presentaciones = $med->presentacionesUsadas ?? collect();
 
         if ($presentaciones->isEmpty()) {
-            $unidadCobro = $listaCharge === 'mg' ? 'mg' : 'frasco';
-            $cantidad = $unidadCobro === 'mg' ? (float) ($med->dosis ?? 0) : 1.0;
+            $unidadCobro = in_array($med->charge_by ?: $listaCharge, ['mg', 'ml'], true)
+                ? ($med->charge_by ?: $listaCharge)
+                : 'frasco';
+            $cantidad = $unidadCobro === 'mg'
+                ? (float) ($med->dosis ?? 0)
+                : ($unidadCobro === 'ml' ? (float) ($med->dosis_ml ?? 0) : 1.0);
 
-            if ($unidadCobro === 'mg') {
-                $precioUnit = (float) ($med->precio_mg_snapshot ?? 0);
+            if (in_array($unidadCobro, ['mg', 'ml'], true)) {
+                $precioUnit = $unidadCobro === 'ml'
+                    ? (float) ($med->precio_ml_snapshot ?? 0)
+                    : (float) ($med->precio_mg_snapshot ?? 0);
                 $subtotal = $cantidad * $precioUnit;
             }
 
@@ -312,7 +318,7 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
             ?? optional($first->presentation)->id;
 
         $cfg = $presentationId ? $cfgPorPresentacion->get($presentationId) : null;
-        $chargeBy = $cfg->charge_by ?? $listaCharge;
+        $chargeBy = $first->charge_by_snapshot ?? $cfg?->charge_by ?? $med->charge_by ?? $listaCharge;
 
         if ($chargeBy === 'frasco') {
             foreach ($presentaciones as $pu) {
@@ -350,9 +356,14 @@ class InstitucionGeneralExport implements FromArray, WithHeadings, ShouldAutoSiz
             return [round($cantidad, 2), round($precioUnit, 4), round($subtotal, 2)];
         }
 
-        $cantidad = (float) ($med->dosis ?? 0);
-        $precioUnit = (float) ($cfg->precio_mg_override ?? $med->precio_mg_snapshot ?? 0);
-        $subtotal = $cantidad * $precioUnit;
+        $cantidad = $chargeBy === 'ml'
+            ? (float) $presentaciones->sum('volumen_usado_ml')
+            : (float) ($med->dosis ?? 0);
+        $precioUnit = $chargeBy === 'ml'
+            ? (float) ($first->precio_unitario_snapshot ?? $cfg?->precio_ml_override ?? $med->precio_ml_snapshot ?? 0)
+            : (float) ($cfg?->precio_mg_override ?? $med->precio_mg_snapshot ?? 0);
+        $snapshotSubtotal = (float) $presentaciones->sum('subtotal');
+        $subtotal = $snapshotSubtotal > 0 ? $snapshotSubtotal : $cantidad * $precioUnit;
 
         return [round($cantidad, 2), round($precioUnit, 4), round($subtotal, 2)];
     }

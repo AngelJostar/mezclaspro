@@ -15,6 +15,9 @@ class MezclaMedicamentoPresentacion extends Model
         'mezcla_medicamento_id',
         'medicine_batch_id',
         'unidades_usadas',
+        'unidades_abiertas',
+        'volumen_usado_ml',
+        'charge_by_snapshot',
         'lote_usado',
         'caducidad_usada',
 
@@ -25,13 +28,18 @@ class MezclaMedicamentoPresentacion extends Model
         'legend_snapshot',
 
         'precio_frasco_snapshot',
+        'precio_unitario_snapshot',
         'subtotal',
     ];
 
     protected $casts = [
         'unidades_usadas'        => 'integer',
+        'unidades_abiertas'      => 'integer',
+        'volumen_usado_ml'       => 'decimal:4',
+        'charge_by_snapshot'     => 'string',
         'caducidad_usada'        => 'date',
         'precio_frasco_snapshot' => 'decimal:4',
+        'precio_unitario_snapshot' => 'decimal:4',
         'subtotal'               => 'decimal:4',
 
         // (opcionales)

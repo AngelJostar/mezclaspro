@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\InstitutionReportTemplate;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -22,11 +23,193 @@ class InstitutionReportTemplateService
 
     private array $resolved = [];
 
+    private const CUSTOM_FONT_FAMILIES = [
+        'Arial',
+        'Calibri',
+        'Figtree',
+        'Georgia',
+        'Tahoma',
+        'Times New Roman',
+        'Verdana',
+    ];
+
     public function all(): array
     {
         return collect(array_keys($this->definitions()))
             ->mapWithKeys(fn (string $key) => [$key => $this->get($key)])
             ->all();
+    }
+
+    public function customTemplates(): array
+    {
+        return InstitutionReportTemplate::query()
+            ->where('is_custom', true)
+            ->with('creator:id,name,lastname,username')
+            ->latest('updated_at')
+            ->get()
+            ->map(fn (InstitutionReportTemplate $template) => $this->serializeCustomTemplate($template))
+            ->all();
+    }
+
+    public function publishedCustomTemplates(): array
+    {
+        return InstitutionReportTemplate::query()
+            ->where('is_custom', true)
+            ->where('is_published', true)
+            ->with('creator:id,name,lastname,username')
+            ->orderBy('published_at')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (InstitutionReportTemplate $template) => $this->serializeCustomTemplate($template))
+            ->all();
+    }
+
+    public function customDataSources(): array
+    {
+        return [
+            'instituciones' => 'Instituciones y hospitales',
+            'solicitudes' => 'Solicitudes y mezclas',
+            'inventarios' => 'Inventarios y productos',
+            'facturacion' => 'Facturación y remisiones',
+        ];
+    }
+
+    public function catalogParameters(): array
+    {
+        return [
+            [
+                'label' => 'Institución',
+                'parameters' => [
+                    ['key' => 'institution.name', 'label' => 'Nombre de la institución', 'sample' => 'Hospitales Metropolitanos'],
+                    ['key' => 'institution.legal_name', 'label' => 'Razón social', 'sample' => 'Operadora Hospitalaria, S.A. de C.V.'],
+                    ['key' => 'institution.rfc', 'label' => 'RFC', 'sample' => 'OHO010101AB1'],
+                    ['key' => 'institution.phone', 'label' => 'Teléfono', 'sample' => '55 1234 5678'],
+                    ['key' => 'institution.hospitals_count', 'label' => 'Número de hospitales', 'sample' => '4'],
+                ],
+            ],
+            [
+                'label' => 'Hospital',
+                'parameters' => [
+                    ['key' => 'hospital.name', 'label' => 'Nombre del hospital', 'sample' => 'Hospital Central'],
+                    ['key' => 'hospital.service', 'label' => 'Servicio', 'sample' => 'Oncología médica'],
+                    ['key' => 'hospital.address', 'label' => 'Dirección', 'sample' => 'Av. Principal 120'],
+                    ['key' => 'hospital.city', 'label' => 'Ciudad', 'sample' => 'Ciudad de México'],
+                    ['key' => 'hospital.state', 'label' => 'Estado', 'sample' => 'CDMX'],
+                ],
+            ],
+            [
+                'label' => 'Solicitud',
+                'parameters' => [
+                    ['key' => 'request.id', 'label' => 'Folio de solicitud', 'sample' => 'SOL-00125'],
+                    ['key' => 'request.type', 'label' => 'Tipo de mezcla', 'sample' => 'Oncológica'],
+                    ['key' => 'request.requested_at', 'label' => 'Fecha de solicitud', 'sample' => '31/08/2026 08:15'],
+                    ['key' => 'request.delivery_at', 'label' => 'Fecha de entrega', 'sample' => '31/08/2026 13:30'],
+                    ['key' => 'request.status', 'label' => 'Estado operativo', 'sample' => 'Entregada'],
+                    ['key' => 'request.patient', 'label' => 'Paciente', 'sample' => 'Paciente de ejemplo'],
+                    ['key' => 'request.physician', 'label' => 'Médico tratante', 'sample' => 'Dra. María López'],
+                    ['key' => 'request.diagnosis', 'label' => 'Diagnóstico', 'sample' => 'Diagnóstico registrado'],
+                    ['key' => 'request.record', 'label' => 'Registro / expediente', 'sample' => 'EXP-1024'],
+                ],
+            ],
+            [
+                'label' => 'Mezcla y producto',
+                'parameters' => [
+                    ['key' => 'mixture.remission', 'label' => 'Número de remisión', 'sample' => 'REM-00125'],
+                    ['key' => 'mixture.lot', 'label' => 'Lote de mezcla', 'sample' => 'L31AGO26001'],
+                    ['key' => 'mixture.product', 'label' => 'Producto / medicamento', 'sample' => 'Oxaliplatino'],
+                    ['key' => 'mixture.presentation', 'label' => 'Presentación', 'sample' => 'Frasco 100 mg'],
+                    ['key' => 'mixture.quantity', 'label' => 'Cantidad', 'sample' => '250'],
+                    ['key' => 'mixture.unit', 'label' => 'Unidad', 'sample' => 'mg'],
+                    ['key' => 'mixture.warehouse', 'label' => 'Almacén de surtido', 'sample' => 'IMSS Norte'],
+                ],
+            ],
+            [
+                'label' => 'Facturación',
+                'parameters' => [
+                    ['key' => 'billing.unit_price', 'label' => 'Precio unitario', 'sample' => '$1,250.00'],
+                    ['key' => 'billing.total', 'label' => 'Total IVA incluido', 'sample' => '$3,625.00'],
+                    ['key' => 'billing.invoice', 'label' => 'Folio de factura', 'sample' => 'F-2026-001'],
+                    ['key' => 'billing.status', 'label' => 'Estado de facturación', 'sample' => 'Por cobrar'],
+                ],
+            ],
+            [
+                'label' => 'Sistema',
+                'parameters' => [
+                    ['key' => 'system.generated_at', 'label' => 'Fecha de generación', 'sample' => now()->format('d/m/Y H:i')],
+                    ['key' => 'system.period_from', 'label' => 'Periodo desde', 'sample' => now()->startOfMonth()->format('d/m/Y')],
+                    ['key' => 'system.period_to', 'label' => 'Periodo hasta', 'sample' => now()->endOfMonth()->format('d/m/Y')],
+                    ['key' => 'system.user_name', 'label' => 'Usuario que genera', 'sample' => 'Usuario administrador'],
+                ],
+            ],
+        ];
+    }
+
+    public function allowedCustomParameterKeys(): array
+    {
+        return collect($this->catalogParameters())
+            ->flatMap(fn (array $group) => $group['parameters'])
+            ->pluck('key')
+            ->all();
+    }
+
+    public function createCustom(array $data, ?int $userId): array
+    {
+        do {
+            $key = 'custom_'.Str::lower(Str::random(16));
+        } while (InstitutionReportTemplate::query()->where('report_key', $key)->exists());
+
+        $template = InstitutionReportTemplate::query()->create([
+            'report_key' => $key,
+            'name' => trim((string) $data['name']),
+            'is_custom' => true,
+            'data_source' => $data['data_source'],
+            'title' => trim((string) $data['name']),
+            'subtitle' => trim((string) ($data['description'] ?? '')),
+            'columns' => [],
+            'info_boxes' => [],
+            'free_fields' => [],
+            'layout' => $this->normalizeCustomLayout($data['layout']),
+            'created_by' => $userId,
+        ]);
+
+        return $this->serializeCustomTemplate($template->load('creator:id,name,lastname,username'));
+    }
+
+    public function updateCustom(InstitutionReportTemplate $template, array $data): array
+    {
+        abort_unless($template->is_custom, 404);
+
+        $template->update([
+            'name' => trim((string) $data['name']),
+            'data_source' => $data['data_source'],
+            'title' => trim((string) $data['name']),
+            'subtitle' => trim((string) ($data['description'] ?? '')),
+            'layout' => $this->normalizeCustomLayout($data['layout']),
+        ]);
+
+        return $this->serializeCustomTemplate($template->refresh()->load('creator:id,name,lastname,username'));
+    }
+
+    public function deleteCustom(InstitutionReportTemplate $template): void
+    {
+        abort_unless($template->is_custom, 404);
+        $template->delete();
+    }
+
+    public function publishCustom(InstitutionReportTemplate $template, bool $isPublished): array
+    {
+        abort_unless($template->is_custom, 404);
+
+        $template->update([
+            'is_published' => $isPublished,
+            'published_at' => $isPublished
+                ? ($template->published_at ?? now())
+                : null,
+        ]);
+
+        return $this->serializeCustomTemplate(
+            $template->refresh()->load('creator:id,name,lastname,username')
+        );
     }
 
     public function get(string $key): array
@@ -303,6 +486,100 @@ class InstitutionReportTemplateService
             ->filter(fn (array $field) => $field['label'] !== '' || $field['value'] !== '')
             ->values()
             ->all();
+    }
+
+    private function serializeCustomTemplate(InstitutionReportTemplate $template): array
+    {
+        $creatorName = trim(implode(' ', array_filter([
+            $template->creator?->name,
+            $template->creator?->lastname,
+        ])));
+
+        return [
+            'id' => $template->id,
+            'key' => $template->report_key,
+            'name' => $template->name ?: $template->title,
+            'is_published' => (bool) $template->is_published,
+            'description' => $template->subtitle ?? '',
+            'data_source' => $template->data_source ?: 'instituciones',
+            'data_source_label' => $this->customDataSources()[$template->data_source] ?? 'Datos personalizados',
+            'layout' => $this->normalizeCustomLayout($template->layout ?? []),
+            'creator' => $creatorName !== '' ? $creatorName : ($template->creator?->username ?: 'Usuario no disponible'),
+            'updated_at' => $template->updated_at?->toIso8601String(),
+            'published_at' => $template->published_at?->toIso8601String(),
+        ];
+    }
+
+    private function normalizeCustomLayout(array $layout): array
+    {
+        $rows = min(40, max(1, (int) ($layout['rows'] ?? 8)));
+        $columns = min(20, max(1, (int) ($layout['columns'] ?? 7)));
+        $allowedParameters = $this->allowedCustomParameterKeys();
+
+        $cells = collect($layout['cells'] ?? [])
+            ->filter(fn ($cell) => is_array($cell))
+            ->map(function (array $cell) use ($rows, $columns, $allowedParameters) {
+                $row = (int) ($cell['row'] ?? -1);
+                $column = (int) ($cell['column'] ?? -1);
+
+                if ($row < 0 || $row >= $rows || $column < 0 || $column >= $columns) {
+                    return null;
+                }
+
+                $type = in_array($cell['type'] ?? null, ['text', 'free', 'parameter'], true)
+                    ? $cell['type']
+                    : 'text';
+                $parameter = in_array($cell['parameter'] ?? null, $allowedParameters, true)
+                    ? $cell['parameter']
+                    : null;
+                $repeatDirection = in_array($cell['repeat_direction'] ?? null, ['vertical', 'horizontal'], true)
+                    ? $cell['repeat_direction']
+                    : 'none';
+                $style = is_array($cell['style'] ?? null) ? $cell['style'] : [];
+                $fontFamily = in_array($style['font_family'] ?? null, self::CUSTOM_FONT_FAMILIES, true)
+                    ? $style['font_family']
+                    : 'Arial';
+                $alignment = in_array($style['align'] ?? null, ['left', 'center', 'right'], true)
+                    ? $style['align']
+                    : 'left';
+
+                return [
+                    'row' => $row,
+                    'column' => $column,
+                    'type' => $type,
+                    'value' => mb_substr((string) ($cell['value'] ?? ''), 0, 500),
+                    'parameter' => $type === 'parameter' ? $parameter : null,
+                    'repeat_direction' => $type === 'parameter' ? $repeatDirection : 'none',
+                    'style' => [
+                        'background' => $this->normalizeHexColor($style['background'] ?? null, '#FFFFFF'),
+                        'color' => $this->normalizeHexColor($style['color'] ?? null, '#1F2937'),
+                        'font_family' => $fontFamily,
+                        'font_size' => min(36, max(8, (int) ($style['font_size'] ?? 11))),
+                        'bold' => (bool) ($style['bold'] ?? false),
+                        'italic' => (bool) ($style['italic'] ?? false),
+                        'underline' => (bool) ($style['underline'] ?? false),
+                        'align' => $alignment,
+                    ],
+                ];
+            })
+            ->filter()
+            ->unique(fn (array $cell) => $cell['row'].':'.$cell['column'])
+            ->values()
+            ->all();
+
+        return [
+            'version' => 1,
+            'rows' => $rows,
+            'columns' => $columns,
+            'cells' => $cells,
+        ];
+    }
+
+    private function normalizeHexColor(mixed $value, string $fallback): string
+    {
+        $value = strtoupper((string) $value);
+
+        return preg_match('/^#[0-9A-F]{6}$/', $value) ? $value : $fallback;
     }
 
     private function assertKnownKey(string $key): void

@@ -2,6 +2,9 @@
     'user',
     'field',
     'compact' => false,
+    'displayValue' => null,
+    'emptyLabel' => null,
+    'emptyHint' => null,
 ])
 
 @php
@@ -15,8 +18,8 @@
             'password' => false,
         ],
         'password' => [
-            'value' => (string) ($user->credential_password ?? ''),
-            'empty' => 'Actualizar para mostrar',
+            'value' => (string) ($displayValue ?? $user->credential_password ?? ''),
+            'empty' => 'Sin contrasena',
             'edit' => 'Editar contrase&ntilde;a del software',
             'input' => 'Contrase&ntilde;a del software',
             'route' => 'admin.users.password.update',
@@ -31,8 +34,8 @@
             'password' => false,
         ],
         'training_password' => [
-            'value' => (string) ($user->training_credential_password ?? ''),
-            'empty' => 'Actualizar para mostrar',
+            'value' => (string) ($displayValue ?? $user->training_credential_password ?? ''),
+            'empty' => 'Sin contrasena',
             'edit' => 'Editar contrase&ntilde;a de capacitaci&oacute;n',
             'input' => 'Contrase&ntilde;a de capacitaci&oacute;n',
             'route' => 'admin.users.training-password.update',
@@ -41,7 +44,8 @@
         default => throw new InvalidArgumentException("Campo de credencial no compatible: {$field}"),
     };
 
-    $currentValue = $configuration['value'];
+    $currentValue = $displayValue !== null ? (string) $displayValue : $configuration['value'];
+    $configuration['empty'] = $emptyLabel !== null ? (string) $emptyLabel : $configuration['empty'];
     $isPassword = $configuration['password'];
     $iconSize = $compact ? 'h-7 w-7' : 'h-8 w-8';
 @endphp
@@ -55,6 +59,7 @@
 
     <div class="flex min-w-0 items-center gap-1.5" data-inline-display>
         <span data-inline-value
+            title="{{ filled($currentValue) ? '' : $emptyHint }}"
             class="{{ $isPassword && filled($currentValue) ? 'min-w-0 flex-1 truncate font-mono font-semibold text-gray-900' : ($isPassword ? 'min-w-0 flex-1 text-[11px] font-medium text-amber-700' : 'min-w-0 flex-1 truncate font-medium text-gray-800') }}">
             {{ filled($currentValue) ? $currentValue : $configuration['empty'] }}
         </span>

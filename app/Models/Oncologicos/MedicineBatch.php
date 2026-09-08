@@ -25,6 +25,8 @@ class MedicineBatch extends Model
         'stock_inicial',
         'stock_actual',
         'stock_reservado',
+        'stock_ml_inicial',
+        'stock_ml_actual',
         'costo_unitario',
         'is_current',
         'is_active',
@@ -38,6 +40,8 @@ class MedicineBatch extends Model
         'stock_inicial' => 'integer',
         'stock_actual' => 'integer',
         'stock_reservado' => 'integer',
+        'stock_ml_inicial' => 'decimal:4',
+        'stock_ml_actual' => 'decimal:4',
         'costo_unitario' => 'decimal:4',
     ];
 

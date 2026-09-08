@@ -10,6 +10,9 @@
         @foreach (($input->presentations_disponibles ?? collect()) as $presentation)
             <option value="{{ $presentation->id }}"
                 @selected((string) $row['presentationId'] === (string) $presentation->id)>
+                @if (($presentation->remanente_disponible_ml ?? 0) > 0)
+                    [Remanente disponible: {{ number_format((float) $presentation->remanente_disponible_ml, 2) }} mL]
+                @endif
                 {{ $presentation->denominacion_comercial }} — {{ $presentation->presentacion }}
             </option>
         @endforeach

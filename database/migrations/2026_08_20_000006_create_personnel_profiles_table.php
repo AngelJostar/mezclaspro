@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('department')->nullable();
             $table->date('hire_date');
             $table->string('employment_status', 30)->default('hired');
-            $table->boolean('force_password_change')->default(true);
+            $table->boolean('force_password_change')->default(false);
             $table->string('cv_path')->nullable();
             $table->string('cv_original_name')->nullable();
             $table->text('prior_experience')->nullable();

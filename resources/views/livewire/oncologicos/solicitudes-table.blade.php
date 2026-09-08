@@ -1,254 +1,233 @@
 <div>
-    <form wire:submit.prevent="aplicarBusqueda">
-        <div class="mb-4 flex items-center gap-2">
-            <input type="text" wire:model.defer="buscar" placeholder="Buscar ..."
-                class="border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200 focus:ring-opacity-50 w-1/3 p-2">
-
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-800">
-                Buscar
-            </button>
-        </div>
-    </form>
-
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm text-left text-gray-500">
-            <thead class="text-xs text-gray-700 bg-gray-50 uppercase">
-                <tr>
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('id')">
-                        ID
-                        <span class="{{ $sortField === 'id' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'id' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
-                        </span>
-                    </th>
-
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('hospital_name')">
-                        Hospital
-                        <span
-                            class="{{ $sortField === 'hospital_name' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'hospital_name' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
-                        </span>
-                    </th>
-
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('nombre_paciente')">
-                        Paciente
-                        <span
-                            class="{{ $sortField === 'nombre_paciente' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'nombre_paciente' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
-                        </span>
-                    </th>
-
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('created_at')">
-                        Fecha y hora de solicitud
-                        <span class="{{ $sortField === 'created_at' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'created_at' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
-                        </span>
-                    </th>
-
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('fecha_entrega')">
-                        Fecha y hora programada de entrega
-                        <span
-                            class="{{ $sortField === 'fecha_entrega' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'fecha_entrega' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
-                        </span>
-                    </th>
-
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('estado')">
-                        Estado operativo
-                        <span class="{{ $sortField === 'estado' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'estado' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
-                        </span>
-                    </th>
-
-                    <th class="px-2 py-2 text-center cursor-pointer" wire:click="sortBy('remision')">
-                        Remisión
-                        <span class="{{ $sortField === 'remision' ? 'font-bold text-blue-700' : 'text-gray-400' }}">
-                            {!! $sortField === 'remision' ? ($sortDirection === 'asc' ? '&uarr;' : '&darr;') : '&harr;' !!}
-                        </span>
-                    </th>
-
-                    <th class="px-2 py-2 text-center whitespace-nowrap">
-                        Lote
-                    </th>
-
-                    <th class="px-2 py-2 text-center whitespace-nowrap">
-                        Ver
-                    </th>
-
-                    <th class="px-2 py-2 text-center whitespace-nowrap">
-                        No aprobar
-                    </th>
-
-                    <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Solicitud completa
-                    </th>
-
-                    <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Registros de envío
-                    </th>
-
-                    <th class="px-4 py-2 text-center whitespace-nowrap">
-                        Remisión
-                    </th>
-                </tr>
+    <div class="overflow-x-auto" data-sticky-x-position="viewport">
+        <table class="w-full text-left text-sm text-gray-500">
+            <thead class="bg-gray-50 text-xs uppercase text-gray-700">
+                @include('admin.solicitudes._table-header', [
+                    'sortFields' => [
+                        'id' => 'id',
+                        'request_id' => 'request_id',
+                        'hospital' => 'hospital_name',
+                        'patient' => 'nombre_paciente',
+                        'requested_at' => 'created_at',
+                        'delivery_at' => 'fecha_entrega',
+                        'status' => 'estado',
+                        'lot' => 'lote',
+                    ],
+                    'tableSortField' => $sortField,
+                    'tableSortDirection' => $sortDirection,
+                ])
             </thead>
 
             <tbody>
-                @foreach ($solicitudes as $solicitud)
+                @forelse ($mezclas as $mezcla)
                     @php
-                        $estadoClasses = [
-                            'pendiente' => 'bg-yellow-100 text-yellow-700',
-                            'aprobada' => 'bg-green-100 text-green-700',
-                            'enproceso' => 'bg-blue-100 text-blue-700',
-                            'preparada' => 'bg-blue-100 text-blue-700',
-                            'revisada' => 'bg-purple-100 text-purple-700',
-                            'finalizada' => 'bg-gray-200 text-gray-700',
-                            'entregada' => 'bg-gray-200 text-gray-700',
-                            'cancelada' => 'bg-red-100 text-red-700',
-                            'no_aprobada' => 'bg-red-200 text-red-800',
-                        ];
-
-                        $estadoLabels = [
-                            'pendiente' => 'Pendiente',
-                            'aprobada' => 'Aprobada',
-                            'enproceso' => 'Preparada',
-                            'preparada' => 'Preparada',
-                            'revisada' => 'Inspeccionada',
-                            'finalizada' => 'Entregada',
-                            'entregada' => 'Entregada',
-                            'cancelada' => 'Cancelada',
-                            'no_aprobada' => 'No aprobada',
-                        ];
-
-                        $lotes = $solicitud->mezclas
-                            ->pluck('lote')
-                            ->filter()
-                            ->unique()
-                            ->values()
-                            ->join(', ');
+                        $solicitud = $mezcla->solicitud;
+                        $estado = str_replace('-', '_', mb_strtolower(trim((string) $mezcla->operational_status)));
+                        $requestListUrl = route(
+                            ($solicitud->tipo_solicitud ?? 'oncologicos') === 'antibioticos'
+                                ? 'admin.antibioticos.solicitudes.index'
+                                : 'admin.oncologicos.solicitudes.index'
+                        );
+                        $approvalUrl = $estado === 'pendiente'
+                            ? route('admin.oncologicos.mezclas.edit', [
+                                'mezcla' => $mezcla->id,
+                                'approval' => 1,
+                                'approval_popup' => 1,
+                                'return_to' => $requestListUrl,
+                            ])
+                            : null;
+                        $approvalStateLabel = match (true) {
+                            in_array($estado, ['aprobada', 'dispensada', 'preparada', 'revisada', 'entregada'], true) => 'Aprobada',
+                            in_array($estado, ['cancelada', 'no_aprobada'], true) => 'Rechazada',
+                            default => 'Sin acción',
+                        };
                     @endphp
 
-                    <tr class="border-b">
-                        <td class="px-2 py-2 text-center">
-                            {{ $solicitud->id }}
+                    <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($mezcla->id, $solicitud->hospital) }}">
+                        <td class="whitespace-nowrap px-2 py-2 text-center">
+                            @include('admin.solicitudes._type-badge', ['type' => $solicitud->tipo_solicitud])
                         </td>
 
-                        <td class="px-2 py-2 text-center">
-                            {{ $solicitud->hospital->name ?? 'N/A' }}
-                        </td>
+                        <td class="px-2 py-2 text-center">{{ $mezcla->id }}</td>
+                        <td class="px-2 py-2 text-center">{{ $solicitud->id }}</td>
+                        <td class="px-2 py-2 text-center">{{ $solicitud->hospital->name ?? 'N/A' }}</td>
+                        <td class="px-2 py-2 text-center">{{ $solicitud->nombre_paciente }}</td>
 
-                        <td class="px-2 py-2 text-center">
-                            {{ $solicitud->nombre_paciente }}
-                        </td>
-
-                        <td class="px-2 py-2 text-center">
+                        <td class="w-[11rem] min-w-[11rem] max-w-[11rem] whitespace-nowrap px-2 py-2 text-center">
                             {{ $solicitud->created_at?->timezone('America/Mexico_City')->format('Y-m-d H:i') ?? '—' }}
                         </td>
 
-                        <td class="px-2 py-2 text-center">
-                            @if ($solicitud->fecha_entrega)
-                                {{ \Carbon\Carbon::parse($solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i') }}
-                            @else
-                                —
-                            @endif
+                        <td class="w-[11rem] min-w-[11rem] max-w-[11rem] whitespace-nowrap px-2 py-2 text-center">
+                            {{ ($mezcla->fecha_entrega ?? $solicitud->fecha_entrega)
+                                ? \Carbon\Carbon::parse($mezcla->fecha_entrega ?? $solicitud->fecha_entrega)->timezone('America/Mexico_City')->format('Y-m-d H:i')
+                                : '—' }}
                         </td>
 
                         <td class="px-2 py-2 text-center">
-                            <span
-                                class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ $estadoClasses[$solicitud->estado] ?? 'bg-gray-100 text-gray-700' }}">
-                                {{ $estadoLabels[$solicitud->estado] ?? ucfirst($solicitud->estado) }}
-                            </span>
+                            @include('admin.solicitudes._status-badge', ['status' => $estado])
                         </td>
+                        <td class="px-2 py-2 text-center">{{ $mezcla->lote ?? '—' }}</td>
 
-                        <td class="px-2 py-2 text-center">
-                            {{ $solicitud->remision ?? '-' }}
-                        </td>
-
-                        <td class="px-2 py-2 text-center">
-                            {{ $lotes !== '' ? $lotes : '-' }}
-                        </td>
-
-                        <td class="px-2 py-2 text-center whitespace-nowrap">
-                            <a href="{{ route('admin.oncologicos.mezclas.index', $solicitud->id) }}"
+                        <td class="whitespace-nowrap px-2 py-2 text-center">
+                            <a href="{{ route('admin.oncologicos.mezclas.show', $mezcla) }}"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
                                 Ver
                             </a>
                         </td>
 
-                        <td class="px-2 py-2 text-center whitespace-nowrap">
-                            @hasanyrole('Cliente|Institucion')
-                                @if ($solicitud->estado === 'pendiente')
-                                    <form method="POST"
-                                        action="{{ route('admin.oncologicos.solicitudes.cancelar', $solicitud) }}"
-                                        class="form-confirmar-cancelar inline-block">
-                                        @csrf
-
-                                        <button type="submit"
-                                            class="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-200">
-                                            Cancelar
-                                        </button>
-                                    </form>
-                                @else
-                                    <button type="button" disabled
-                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
-                                        Cancelar
-                                    </button>
-                                @endif
-                            @endhasanyrole
-
+                        <td class="whitespace-nowrap px-2 py-2 text-center">
                             @hasanyrole('Admin|Super Admin')
-                                @if (in_array($solicitud->estado, ['pendiente', 'enproceso'], true))
-                                    <form method="POST"
-                                        action="{{ route('admin.oncologicos.solicitudes.cancelar', $solicitud) }}"
-                                        class="form-confirmar-cancelar inline-block">
-                                        @csrf
-
-                                        <button type="submit"
-                                            class="inline-flex items-center justify-center rounded-full bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-200">
-                                            No aprobar
-                                        </button>
-                                    </form>
+                                @if ($approvalUrl)
+                                    <a href="{{ $approvalUrl }}"
+                                        data-approval-popup="approval-{{ $solicitud->tipo_solicitud ?? 'oncologicos' }}-{{ $mezcla->id }}"
+                                        class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
+                                        Aprobar
+                                    </a>
                                 @else
                                     <button type="button" disabled
-                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
-                                        No aprobar
+                                        @class([
+                                            'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                                            'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
+                                            'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
+                                        ])>
+                                        {{ $approvalStateLabel }}
                                     </button>
                                 @endif
+                            @else
+                                <button type="button" disabled
+                                    @class([
+                                        'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                                        'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
+                                        'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
+                                    ])>
+                                    {{ $approvalStateLabel }}
+                                </button>
                             @endhasanyrole
                         </td>
 
-                        <td class="px-4 py-2 text-center whitespace-nowrap">
+                        <td class="whitespace-nowrap px-2 py-2 text-center">
+                            @hasanyrole('Admin|Super Admin')
+                                @if ($estado === 'aprobada')
+                                    <a href="{{ route('admin.oncologicos.mezclas.edit', [
+                                            'mezcla' => $mezcla->id,
+                                            'modo' => 'dispensacion',
+                                            'dispensing_popup' => 1,
+                                            'return_to' => $requestListUrl,
+                                        ]) }}"
+                                        data-dispensing-popup="dispensing-{{ $solicitud->tipo_solicitud ?? 'oncologicos' }}-{{ $mezcla->id }}"
+                                        class="inline-flex items-center justify-center rounded-full bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300">
+                                        Dispensar
+                                    </a>
+                                @elseif ($estado === 'dispensada')
+                                    <form method="POST" action="{{ route('admin.oncologicos.mezclas.update', $mezcla) }}"
+                                        class="inline-block" data-request-process-form
+                                        data-confirm-title="Marcar como preparada?"
+                                        data-confirm-text=""
+                                        data-confirm-button="Si"
+                                        data-confirm-cancel="No">
+                                        @csrf
+                                        @method('PUT')
+                                        <input type="hidden" name="return_to" value="{{ $requestListUrl }}">
+                                        <input type="hidden" name="accion" value="preparada">
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300">
+                                            Preparar
+                                        </button>
+                                    </form>
+                                @elseif ($estado === 'preparada')
+                                    <button type="button"
+                                        onclick="window.dispatchEvent(new CustomEvent('abrir-modal-inspeccion', { detail: [{{ $mezcla->id }}] }))"
+                                        class="inline-flex items-center justify-center rounded-full bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-200">
+                                        Inspeccionar
+                                    </button>
+                                @elseif ($estado === 'revisada')
+                                    <form method="POST" action="{{ route('admin.oncologicos.mezclas.update', $mezcla) }}"
+                                        class="inline-block" data-request-process-form
+                                        data-confirm-title="¿Marcar mezcla como entregada?"
+                                        data-confirm-text="La mezcla quedará como ENTREGADA."
+                                        data-confirm-icon="success" data-confirm-color="#374151"
+                                        data-confirm-button="Sí, entregar">
+                                        @csrf
+                                        @method('PUT')
+                                        <input type="hidden" name="return_to" value="{{ $requestListUrl }}">
+                                        <input type="hidden" name="accion" value="entregada">
+                                        <button type="submit"
+                                            class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200">
+                                            Entregar
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" disabled
+                                        class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                        Proceso
+                                    </button>
+                                @endif
+                            @else
+                                <button type="button" disabled
+                                    class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                    Proceso
+                                </button>
+                            @endhasanyrole
+                        </td>
+
+                        <td class="whitespace-nowrap px-4 py-2 text-center">
                             <a href="{{ route('admin.oncologicos.mezclas.solicitudCompleta', $solicitud) }}"
-                                target="_blank"
-                                rel="noopener"
+                                target="_blank" rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
                                 Solicitud completa
                             </a>
                         </td>
 
-                        <td class="px-4 py-2 text-center whitespace-nowrap">
+                        @foreach ([
+                            ['label' => 'Inspección', 'route' => 'admin.oncologicos.mezclas.inspeccion'],
+                            ['label' => 'Etiqueta', 'route' => 'admin.oncologicos.mezclas.etiqueta'],
+                            ['label' => 'Orden de preparación', 'route' => 'admin.oncologicos.mezclas.ordenPreparacion'],
+                        ] as $documentAction)
+                            <td class="whitespace-nowrap px-4 py-2 text-center">
+                                <a href="{{ route($documentAction['route'], $mezcla) }}" target="_blank" rel="noopener"
+                                    title="{{ $documentAction['label'] }} de la mezcla #{{ $mezcla->id }}"
+                                    class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                    {{ $documentAction['label'] }}
+                                </a>
+                            </td>
+                        @endforeach
+
+                        <td class="whitespace-nowrap px-4 py-2 text-center">
                             <a href="{{ route('admin.oncologicos.mezclas.envio', $solicitud) }}"
-                                target="_blank"
-                                rel="noopener"
+                                target="_blank" rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
                                 Registros de envío
                             </a>
                         </td>
 
-                        <td class="px-4 py-2 text-center whitespace-nowrap">
-                            <a href="{{ route('admin.oncologicos.mezclas.remision', $solicitud) }}"
-                                target="_blank"
-                                rel="noopener"
+                        <td class="whitespace-nowrap px-4 py-2 text-center">
+                            <a href="{{ route('admin.oncologicos.mezclas.remision', ['solicitud' => $solicitud, 'mezcla' => $mezcla->id]) }}"
+                                target="_blank" rel="noopener"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
                                 Remisión
                             </a>
                         </td>
+
+                        <td class="whitespace-nowrap px-4 py-2 text-center">
+                            <a href="{{ route('admin.oncologicos.mezclas.remision', ['solicitud' => $solicitud, 'mezcla' => $mezcla->id, 'subdistribuidor' => 1]) }}"
+                                target="_blank" rel="noopener"
+                                class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                Remision Subdistribuidor
+                            </a>
+                        </td>
                     </tr>
-                @endforeach
+                @empty
+                    <tr>
+                        <td colspan="19" class="px-4 py-10 text-center text-sm text-gray-500">
+                            No se encontraron mezclas para esta vista.
+                        </td>
+                    </tr>
+                @endforelse
             </tbody>
         </table>
 
         <div class="mt-4">
-            {{ $solicitudes->links() }}
+            {{ $mezclas->links() }}
         </div>
     </div>
 </div>

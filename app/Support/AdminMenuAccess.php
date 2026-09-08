@@ -107,6 +107,11 @@ final class AdminMenuAccess
                 ],
             ],
             [
+                'permission' => 'menu.maintenance-qualifications',
+                'label' => 'Mantenimiento y Calificaciones',
+                'icon' => 'fa-screwdriver-wrench',
+            ],
+            [
                 'permission' => 'menu.users',
                 'label' => 'Roles y Permisos',
                 'icon' => 'fa-user-shield',
@@ -298,6 +303,7 @@ final class AdminMenuAccess
             || in_array($routeName, [
                 'admin.oncologicos.laboratory.purchase-orders.create',
                 'admin.oncologicos.laboratory.purchase-orders.store',
+                'admin.oncologicos.laboratory.purchase-orders.products',
             ], true)) {
             return 'menu.compras.new';
         }
@@ -373,9 +379,15 @@ final class AdminMenuAccess
             return match ($routeName) {
                 'admin.capacitaciones.alumnos' => 'menu.capacitaciones.alumnos',
                 'admin.capacitaciones.personal',
+                'admin.capacitaciones.personal.edit',
+                'admin.capacitaciones.personal.update',
                 'admin.capacitaciones.personal.store' => 'menu.capacitaciones.personal',
                 default => 'menu.capacitaciones.programas',
             };
+        }
+
+        if (str_starts_with($routeName, 'admin.maintenance-qualifications.')) {
+            return 'menu.maintenance-qualifications';
         }
 
         if (in_array($routeName, [

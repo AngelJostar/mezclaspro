@@ -6,6 +6,7 @@ use App\Models\Nutricionales\NutriMedicineList;
 use App\Models\Oncologicos\Laboratory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Hospital extends Model
 {
@@ -19,7 +20,12 @@ class Hospital extends Model
         'internal_key',
         'unit_type',
         'care_level',
+        'fiscal_name',
         'rfc',
+        'fiscal_regime',
+        'cfdi_use',
+        'billing_email',
+        'billing_phone',
         'clues',
         'free_text',
         'google_maps_url',
@@ -29,6 +35,12 @@ class Hospital extends Model
         'postal_code',
         'neighborhood',
         'street_number',
+        'latitude',
+        'longitude',
+        'utm_zone',
+        'utm_hemisphere',
+        'utm_easting',
+        'utm_northing',
         'contact_name',
         'contact_position',
         'phone',
@@ -53,11 +65,23 @@ class Hospital extends Model
         'service_oncology' => 'boolean',
         'service_antibiotics' => 'boolean',
         'service_nutrition' => 'boolean',
+        'latitude' => 'float',
+        'longitude' => 'float',
+        'utm_zone' => 'integer',
+        'utm_easting' => 'float',
+        'utm_northing' => 'float',
     ];
 
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+
+    public function distributionRoutes(): BelongsToMany
+    {
+        return $this->belongsToMany(DistributionRoute::class, 'distribution_route_hospital')
+            ->withPivot(['id', 'stop_order', 'completed_at'])
+            ->withTimestamps();
     }
 
     public function clientes()

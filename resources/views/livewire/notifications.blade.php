@@ -1,23 +1,22 @@
-<div class="ms-3 relative" wire:poll.10s>
-    <x-dropdown align="right" width="64">
+<div class="corporate-notifications" wire:poll.10s>
+    <x-dropdown align="right" width="64" dropdownClasses="corporate-dropdown-panel">
         <x-slot name="trigger">
-            <span class="inline-flex rounded-md">
                 <button type="button"
-                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                    Notificaciones
+                    class="corporate-control corporate-notifications__trigger"
+                    x-bind:aria-expanded="open.toString()" aria-haspopup="true" aria-label="Notificaciones" title="Notificaciones">
+                    <span class="corporate-notifications__icon" wire:ignore><i data-lucide="bell" aria-hidden="true"></i></span>
+                    <span class="corporate-notifications__label">Notificaciones</span>
                     @if ($this->unreadCount)
-                        <span
-                            class="ml-2 bg-red-100 text-red-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-full dark:bg-red-900 dark:text-red-300">
+                        <span class="corporate-notifications__badge">
                             {{ $this->unreadCount > 99 ? '99+' : $this->unreadCount }}
                         </span>
                     @endif
                 </button>
-            </span>
 
         </x-slot>
 
         <x-slot name="content">
-            <div class="max-h-[calc(100vh - 8rem)] overflow-auto">
+            <div class="corporate-notifications__list">
                 @if ($this->notifications->count())
                     <ul class="divide-y">
                         @foreach ($this->notifications as $notification)

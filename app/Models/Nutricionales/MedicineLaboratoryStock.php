@@ -52,4 +52,9 @@ class MedicineLaboratoryStock extends Model
     {
         return $this->hasMany(MedicineStockMovement::class, 'medicine_laboratory_stock_id');
     }
+
+    public function remainders()
+    {
+        return $this->hasMany(\App\Models\MedicineRemainder::class, 'medicine_laboratory_stock_id');
+    }
 }

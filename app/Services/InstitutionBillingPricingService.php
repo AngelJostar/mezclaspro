@@ -6,6 +6,7 @@ use App\Models\Nutricionales\Medicine as NutricionalMedicine;
 use App\Models\Nutricionales\Solicitud as NutricionalSolicitud;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MedicinePresentation;
+use App\Models\PriceListAdditionalCharge;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -42,20 +43,16 @@ class InstitutionBillingPricingService
         $medicationTotalWithVat = round($medicationTotal + $medicationVat, 2);
         $infusorApplies = ((bool) $mezcla->set_infusion || !empty($mezcla->infusor_id)) && $mezcla->infusor;
         $suppliesTotal = $infusorApplies ? round((float) ($mezcla->infusor?->precio ?? 0), 2) : 0.0;
-        $storedTotal = $this->parseMoney($mezcla->billing?->precio_total);
-        $minimumBaseTotal = round($medicationTotal + $suppliesTotal, 2);
-
-        if ($storedTotal >= $minimumBaseTotal && $storedTotal > 0) {
-            $serviceTotal = round($storedTotal - $minimumBaseTotal, 2);
-            $totalIncluded = round($storedTotal + $medicationVat, 2);
-        } else {
-            $serviceTotal = $this->mixingServicePrice();
-            $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $serviceTotal, 2);
-        }
+        $additionalCharges = $this->additionalCharges($isAntibiotic ? 'antibioticos' : 'oncologicos', $medicineListId);
+        $additionalTotal = (float) $additionalCharges->sum('total');
+        $serviceTotal = 0.0;
+        $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $additionalTotal, 2);
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
         $suppliesVat = $this->splitIncludedVat($suppliesTotal);
-        $subtotalBeforeVat = round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'], 2);
+        $additionalBase = round((float) $additionalCharges->sum('subtotal_before_vat'), 2);
+        $additionalVat = round((float) $additionalCharges->sum('vat'), 2);
+        $subtotalBeforeVat = round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'] + $additionalBase, 2);
 
         $mezcla->setAttribute('infusor_aplica', (bool) $infusorApplies);
         $mezcla->setAttribute(
@@ -86,8 +83,11 @@ class InstitutionBillingPricingService
             'supplies_base' => $suppliesVat['base'],
             'supplies_vat' => $suppliesVat['vat'],
             'supplies_total' => $suppliesTotal,
+            'additional_charge_lines' => $additionalCharges,
+            'additional_charges_base' => $additionalBase,
+            'additional_charges_vat' => $additionalVat,
             'subtotal_before_vat' => $subtotalBeforeVat,
-            'vat_total' => round($medicationVat + $serviceVat['vat'] + $suppliesVat['vat'], 2),
+            'vat_total' => round($medicationVat + $serviceVat['vat'] + $suppliesVat['vat'] + $additionalVat, 2),
             'total_iva_included' => $totalIncluded,
         ];
     }
@@ -106,30 +106,34 @@ class InstitutionBillingPricingService
         $medicationLines = collect();
         $supplyLines = collect();
         $serviceFromInputs = 0.0;
+        $additionalCharges = $this->additionalCharges('nutricionales', $medicineListId);
 
         foreach ($solicitud->input ?? collect() as $item) {
             $description = trim((string) ($item->input?->description ?? ''));
             $listConfig = $this->nutritionListConfig($item, $medicineListId);
-            $unitPrice = $this->nutritionUnitPrice($item, $listConfig);
+            $chargeBy = $this->resolveNutritionChargeMethod($listConfig);
+            $unitPrice = $this->nutritionUnitPrice($item, $listConfig, $chargeBy);
             $remissionDescription = trim((string) ($listConfig?->descripcion_remision ?? ''));
 
             if ($this->isNutritionService($description)) {
+                continue;
                 $serviceFromInputs += $unitPrice;
                 continue;
             }
 
             if ($this->isNutritionTaxableSupply($description)) {
+                if ($additionalCharges->isNotEmpty() && stripos($description, 'bolsa eva') !== false) continue;
                 $supplyLines->push([
                     'description' => $this->nutritionSupplyDescription($description),
                     'quantity' => 1.0,
-                    'unit_label' => 'pieza',
+                    'unit_label' => $chargeBy === 'frasco' ? 'frasco' : 'pieza',
                     'unit_price' => $unitPrice,
                     'subtotal' => round($unitPrice, 2),
                 ]);
                 continue;
             }
 
-            $quantity = $this->nutritionVolume($solicitud, $item);
+            $quantity = $chargeBy === 'frasco' ? 1.0 : $this->nutritionVolume($solicitud, $item);
             $subtotal = round($quantity * $unitPrice, 2);
 
             $medicationLines->push([
@@ -137,7 +141,7 @@ class InstitutionBillingPricingService
                     ?: ($item->input?->nutritionMedicineCatalog?->denominacion_generica
                         ?: ($description ?: 'Ingrediente de nutrición parenteral')),
                 'quantity' => $quantity,
-                'unit_label' => 'mL',
+                'unit_label' => $chargeBy === 'frasco' ? 'frasco' : 'mL',
                 'unit_price' => $unitPrice,
                 'subtotal' => $subtotal,
             ]);
@@ -145,19 +149,14 @@ class InstitutionBillingPricingService
 
         $medicationTotal = round((float) $medicationLines->sum('subtotal'), 2);
         $suppliesTotal = round((float) $supplyLines->sum('subtotal'), 2);
-        $storedTotal = $this->parseMoney($solicitud->billing?->precio_total);
         $minimumTotal = round($medicationTotal + $suppliesTotal, 2);
-
-        if ($storedTotal >= $minimumTotal && $storedTotal > 0) {
-            $serviceTotal = round($storedTotal - $minimumTotal, 2);
-            $totalIncluded = round($storedTotal, 2);
-        } else {
-            $serviceTotal = round($serviceFromInputs > 0 ? $serviceFromInputs : $this->mixingServicePrice(), 2);
-            $totalIncluded = round($minimumTotal + $serviceTotal, 2);
-        }
+        $serviceTotal = 0.0;
+        $totalIncluded = round($minimumTotal + (float) $additionalCharges->sum('total'), 2);
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
         $suppliesVat = $this->splitIncludedVat($suppliesTotal);
+        $additionalBase = round((float) $additionalCharges->sum('subtotal_before_vat'), 2);
+        $additionalVat = round((float) $additionalCharges->sum('vat'), 2);
 
         return [
             'description' => $medicationLines
@@ -174,8 +173,11 @@ class InstitutionBillingPricingService
             'supplies_base' => $suppliesVat['base'],
             'supplies_vat' => $suppliesVat['vat'],
             'supplies_total' => $suppliesTotal,
-            'subtotal_before_vat' => round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'], 2),
-            'vat_total' => round($serviceVat['vat'] + $suppliesVat['vat'], 2),
+            'additional_charge_lines' => $additionalCharges,
+            'additional_charges_base' => $additionalBase,
+            'additional_charges_vat' => $additionalVat,
+            'subtotal_before_vat' => round($medicationTotal + $serviceVat['base'] + $suppliesVat['base'] + $additionalBase, 2),
+            'vat_total' => round($serviceVat['vat'] + $suppliesVat['vat'] + $additionalVat, 2),
             'total_iva_included' => $totalIncluded,
         ];
     }
@@ -247,9 +249,7 @@ class InstitutionBillingPricingService
         $description = trim((string) ($firstConfig?->descripcion_remision ?? ''))
             ?: $fallbackDescription;
         $configuredPricePerMg = $this->oncoPricePerMilligram($firstConfig);
-        $chargeBy = $configuredPricePerMg > 0
-            ? 'mg'
-            : ($medicamento->charge_by ?: ($firstConfig?->charge_by ?? 'frasco'));
+        $chargeBy = $this->resolveOncoChargeMethod($firstConfig, $medicamento);
         $bottleQuantity = $this->resolveBottleQuantity($medicamento, $presentationsUsed, $firstConfig);
 
         if ($chargeBy === 'mg') {
@@ -262,6 +262,16 @@ class InstitutionBillingPricingService
                     : (float) ($medicamento->medicamentoOnco?->precio_mg ?? 0));
             $subtotal = round($quantity * $unitPrice, 2);
             $unitLabel = 'mg';
+            $vatBreakdown = (bool) ($firstConfig?->iva_desglosado ?? false);
+            $vat = $this->calculateVatFromBase($subtotal, $vatBreakdown);
+        } elseif ($chargeBy === 'ml') {
+            $quantity = (float) $presentationsUsed->sum('volumen_usado_ml');
+            $snapshotPricePerMl = $medicamento->precio_ml_snapshot;
+            $unitPrice = $snapshotPricePerMl !== null
+                ? (float) $snapshotPricePerMl
+                : (float) ($firstConfig?->precio_ml_override ?? $firstConfig?->precio ?? 0);
+            $subtotal = round($quantity * $unitPrice, 2);
+            $unitLabel = 'mL';
             $vatBreakdown = (bool) ($firstConfig?->iva_desglosado ?? false);
             $vat = $this->calculateVatFromBase($subtotal, $vatBreakdown);
         } else {
@@ -387,6 +397,7 @@ class InstitutionBillingPricingService
                     'mlp.charge_by',
                     'mlp.precio',
                     'mlp.precio_mg_override',
+                    'mlp.precio_ml_override',
                     'mlp.iva_desglosado',
                     'mlp.descripcion_remision',
                     'mp.presentacion',
@@ -423,14 +434,43 @@ class InstitutionBillingPricingService
             : 0.0;
     }
 
-    private function nutritionUnitPrice($item, $listConfig): float
+    private function resolveOncoChargeMethod($config, $medicamento): string
+    {
+        foreach ([$config?->charge_by, $medicamento->charge_by] as $value) {
+            $chargeBy = strtolower(trim((string) $value));
+
+            if (in_array($chargeBy, ['frasco', 'mg', 'ml'], true)) {
+                return $chargeBy;
+            }
+        }
+
+        return $this->oncoPricePerMilligram($config) > 0 ? 'mg' : 'frasco';
+    }
+
+    private function resolveNutritionChargeMethod($listConfig): string
+    {
+        $chargeBy = strtolower(trim((string) ($listConfig?->charge_by ?? '')));
+
+        return in_array($chargeBy, ['frasco', 'ml'], true) ? $chargeBy : 'ml';
+    }
+
+    private function nutritionUnitPrice($item, $listConfig, string $chargeBy): float
     {
         $snapshot = (float) ($item->precio_ml ?? 0);
+        $listPricePerMl = (float) ($listConfig?->precio_ml ?? 0);
+
+        if ($chargeBy === 'frasco') {
+            $presentationMl = (float) ($item->presentation?->presentacion_ml ?? 0);
+            $pricePerMl = $listPricePerMl > 0 ? $listPricePerMl : $snapshot;
+
+            return $presentationMl > 0 ? round($pricePerMl * $presentationMl, 4) : $pricePerMl;
+        }
+
         if ($snapshot > 0) {
             return $snapshot;
         }
 
-        return (float) ($listConfig?->precio_ml ?? 0);
+        return $listPricePerMl;
     }
 
     private function nutritionListConfig($item, int $medicineListId): ?object
@@ -449,6 +489,7 @@ class InstitutionBillingPricingService
                 ->where('nutrition_medicine_presentation_id', $presentationId)
                 ->first([
                     'precio_ml',
+                    'charge_by',
                     'descripcion_remision',
                 ]);
         }
@@ -493,6 +534,22 @@ class InstitutionBillingPricingService
         }
 
         return $description ?: 'Insumo';
+    }
+
+    private function additionalCharges(string $type, int $listId): Collection
+    {
+        if ($listId <= 0) return collect();
+
+        return PriceListAdditionalCharge::query()
+            ->where('price_list_type', $type)->where('price_list_id', $listId)->where('is_active', true)
+            ->orderBy('name')->get()
+            ->map(function ($charge) {
+                $total = round((float) $charge->amount, 2);
+                $vat = $charge->iva_included ? $this->splitIncludedVat($total) : ['base' => $total, 'vat' => 0.0, 'total' => $total];
+                return ['concept_type' => $charge->concept_type, 'description' => $charge->name, 'quantity' => 1.0,
+                    'unit_label' => $charge->concept_type === 'Servicio' ? 'servicio' : 'pieza',
+                    'unit_price_before_vat' => $vat['base'], 'subtotal_before_vat' => $vat['base'], 'vat' => $vat['vat'], 'total' => $total];
+            });
     }
 
     private function mixingServicePrice(): float

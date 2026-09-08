@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Oncologicos\DiluentPresentation;
+use App\Models\Oncologicos\DiluentCatalogPresentation;
+use App\Models\ConsumableLot;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
@@ -113,6 +115,18 @@ class WarehouseController extends Controller
                 'warehouse_id' => $warehouse->id,
             ])
             ->with('success', 'La informacion del almacen se actualizo correctamente.');
+    }
+
+    public function destroy(Warehouse $warehouse)
+    {
+        $laboratoryId = $warehouse->laboratory_id;
+        $warehouseName = $warehouse->name;
+
+        $warehouse->delete();
+
+        return redirect()
+            ->route('admin.warehouses.index', ['laboratory_id' => $laboratoryId])
+            ->with('success', "El almacen {$warehouseName} se elimino correctamente.");
     }
 
     public function purchaseOrders(Request $request)
@@ -230,8 +244,7 @@ class WarehouseController extends Controller
             ->orderByDesc('is_active')
             ->orderBy('caducidad')
             ->orderBy('id')
-            ->paginate(40)
-            ->withQueryString();
+            ->get();
 
         $summary = DiluentPresentation::query()
             ->where('warehouse_id', $warehouse->id)
@@ -246,6 +259,90 @@ class WarehouseController extends Controller
             'summary',
             'search'
         ));
+    }
+
+    public function createSupplyLot(Warehouse $warehouse)
+    {
+        $warehouse->load('laboratory');
+        $presentations = DiluentCatalogPresentation::query()
+            ->with('diluent:id,denominacion_generica')
+            ->where('is_active', true)
+            ->orderBy('diluent_id')
+            ->orderBy('presentation')
+            ->get();
+
+        return view('admin.warehouses.supply-lot-form', compact('warehouse', 'presentations'));
+    }
+
+    public function storeSupplyLot(Request $request, Warehouse $warehouse)
+    {
+        $data = $request->validate([
+            'catalog_presentation_id' => ['required', 'integer', 'exists:diluent_catalog_presentations,id'],
+            'lote' => ['required', 'string', 'max:100'],
+            'caducidad' => ['nullable', 'date'],
+            'fecha_ingreso' => ['required', 'date'],
+            'cantidad' => ['required', 'numeric', 'gt:0'],
+            'notas' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $catalogPresentation = DiluentCatalogPresentation::query()->with('diluent')->findOrFail($data['catalog_presentation_id']);
+        $quantity = (float) $data['cantidad'];
+
+        DB::transaction(function () use ($warehouse, $catalogPresentation, $data, $quantity, $request) {
+            $lot = DiluentPresentation::query()
+                ->where('warehouse_id', $warehouse->id)
+                ->where('catalog_presentation_id', $catalogPresentation->id)
+                ->whereRaw('LOWER(TRIM(lote)) = ?', [mb_strtolower(trim($data['lote']))])
+                ->lockForUpdate()
+                ->first();
+
+            $before = (float) ($lot?->stock_actual ?? 0);
+            if ($lot) {
+                $lot->update([
+                    'caducidad' => $data['caducidad'] ?? $lot->caducidad,
+                    'fecha_ingreso' => $data['fecha_ingreso'],
+                    'stock_inicial' => (float) $lot->stock_inicial + $quantity,
+                    'stock_actual' => $before + $quantity,
+                    'is_active' => true,
+                ]);
+            } else {
+                $lot = DiluentPresentation::create([
+                    'diluent_id' => $catalogPresentation->diluent_id,
+                    'catalog_presentation_id' => $catalogPresentation->id,
+                    'laboratory_id' => $warehouse->laboratory_id,
+                    'warehouse_id' => $warehouse->id,
+                    'presentacion' => $catalogPresentation->presentation,
+                    'volume_ml' => $catalogPresentation->volume_ml,
+                    'denominacion_comercial' => $catalogPresentation->commercial_name,
+                    'fabricante' => $catalogPresentation->manufacturer,
+                    'lote' => $data['lote'],
+                    'caducidad' => $data['caducidad'] ?? null,
+                    'fecha_ingreso' => $data['fecha_ingreso'],
+                    'stock_inicial' => $quantity,
+                    'stock_actual' => $quantity,
+                    'stock_reservado' => 0,
+                    'is_active' => true,
+                ]);
+            }
+
+            DB::table('diluent_stock_movements')->insert([
+                'diluent_presentation_id' => $lot->id,
+                'laboratory_id' => $warehouse->laboratory_id,
+                'warehouse_id' => $warehouse->id,
+                'user_id' => $request->user()?->id,
+                'movement_type' => 'entrada',
+                'quantity' => $quantity,
+                'stock_actual_before' => $before,
+                'stock_actual_after' => $before + $quantity,
+                'reference_type' => 'diluent_presentation',
+                'reference_id' => $lot->id,
+                'notes' => $data['notas'] ?? 'Ingreso de lote desde almacén.',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        return redirect()->route('admin.warehouses.supplies.index', $warehouse)->with('success', 'Lote registrado correctamente.');
     }
 
     private function inventorySummary(?Warehouse $warehouse): array
@@ -279,11 +376,19 @@ class WarehouseController extends Controller
             ->selectRaw('COALESCE(SUM(stock_actual), 0) as stock_total')
             ->first();
 
+        $consumablesSummary = DB::table('consumable_lots')
+            ->where('warehouse_id', $warehouse->id)
+            ->where('is_active', 1)
+            ->selectRaw('COUNT(DISTINCT id) as batches_count')
+            ->selectRaw('COALESCE(SUM(stock_actual), 0) as stock_total')
+            ->first();
+
         return [
             'oncologicos' => $medicineSummary->get('oncologicos'),
             'antibioticos' => $medicineSummary->get('antibioticos'),
             'nutricionales' => $nutritionSummary,
             'insumos' => $suppliesSummary,
+            'consumibles' => $consumablesSummary,
         ];
     }
 
@@ -294,6 +399,7 @@ class WarehouseController extends Controller
             'antibioticos' => null,
             'nutricionales' => null,
             'insumos' => null,
+            'consumibles' => null,
         ];
     }
 }

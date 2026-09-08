@@ -7,15 +7,17 @@
         request()->routeIs('admin.instituciones.reportes') => 'administracion',
         request()->routeIs('admin.users.*', 'admin.roles.*', 'admin.permissions.*') => 'usuarios_permisos',
         request()->routeIs('admin.capacitaciones.*') => 'capacitaciones',
+        request()->routeIs('admin.maintenance-qualifications.*') => 'maintenance_qualifications',
         request()->routeIs('admin.purchases.*', 'admin.warehouses.purchase-orders.*', 'admin.oncologicos.laboratory.purchase-orders.*', 'admin.suppliers.*') => 'compras',
         request()->routeIs('admin.catalogo-listas.*', 'admin.nutricionales.medicines.*', 'admin.nutricionales.inputs.*', 'admin.nutricionales.nutri-medicine-lists.*', 'admin.oncologicos.medicines.*', 'admin.oncologicos.diluents.*') => 'catalogo_listas',
+        request()->routeIs('admin.distribution.*') => 'distribution',
         request()->routeIs('admin.instituciones.*', 'admin.hospitals.*') => 'instituciones',
         default => null,
     };
 @endphp
 
 <aside id="logo-sidebar"
-    class="fixed top-0 left-0 z-40 w-64 h-screen pt-20 transition-transform duration-200 ease-in-out bg-white border-r border-gray-200 shadow-xl sm:w-44 sm:translate-x-0 sm:shadow-none dark:bg-gray-800 dark:border-gray-700"
+    class="fixed top-0 left-0 z-40 w-64 h-screen transition-transform duration-200 ease-in-out bg-white border-r border-gray-200 shadow-xl sm:w-44 sm:translate-x-0 sm:shadow-none dark:bg-gray-800 dark:border-gray-700"
     x-bind:class="open ? 'translate-x-0' : '-translate-x-full'"
     x-data="{ openMenu: @js($initialOpenMenu) }" aria-label="Sidebar">
 
@@ -148,15 +150,33 @@
                 </li>
             @endif
 
-            <!-- Distribución -->
             @if ($menuAllows('menu.distribucion', $sidebarUser?->can('laboratorios')))
                 <li class="rounded-lg border border-cyan-200 bg-cyan-50 p-1 dark:border-cyan-700 dark:bg-cyan-900/20">
-                    <a href="{{ route('admin.distribution.index') }}"
-                        x-on:click="open = false"
-                        class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-cyan-100 dark:text-white dark:hover:bg-cyan-800/50 group {{ request()->routeIs('admin.distribution.*') ? 'bg-cyan-100' : '' }}">
-                        <i class="fa-solid fa-route text-cyan-600 dark:text-cyan-300"></i>
-                        <span class="ms-3 font-bold">Distribución</span>
-                    </a>
+                    <button type="button" @click="openMenu === 'distribution' ? openMenu = null : openMenu = 'distribution'"
+                        class="flex w-full items-center rounded-lg p-2 text-gray-900 hover:bg-cyan-100 dark:text-white dark:hover:bg-cyan-800/50 {{ request()->routeIs('admin.distribution.*') ? 'bg-cyan-100 dark:bg-cyan-800/50' : '' }}"
+                        :aria-expanded="(openMenu === 'distribution').toString()">
+                        <i class="fa-solid fa-truck-fast text-cyan-600 dark:text-cyan-300" aria-hidden="true"></i>
+                        <span class="ms-3 min-w-0 flex-1 text-left font-bold">Distribución</span>
+                        <i class="fa-solid fa-chevron-down text-xs text-cyan-700 transition-transform"
+                            :class="openMenu === 'distribution' ? 'rotate-180' : ''" aria-hidden="true"></i>
+                    </button>
+
+                    <ul x-cloak x-show="openMenu === 'distribution'" class="mt-1 space-y-1 pl-4">
+                        <li>
+                            <a href="{{ route('admin.distribution.routes.index') }}" x-on:click="open = false"
+                                class="flex items-center rounded-lg p-2 text-sm leading-4 text-gray-900 hover:bg-white/80 dark:text-white dark:hover:bg-gray-700 {{ request()->routeIs('admin.distribution.routes.*') ? 'bg-white/90 text-cyan-800 shadow-sm' : '' }}">
+                                <i class="fa-solid fa-route shrink-0 text-gray-500" aria-hidden="true"></i>
+                                <span class="ms-2">Catálogo de Rutas</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('admin.distribution.deliveries.index') }}" x-on:click="open = false"
+                                class="flex items-center rounded-lg p-2 text-sm leading-4 text-gray-900 hover:bg-white/80 dark:text-white dark:hover:bg-gray-700 {{ request()->routeIs('admin.distribution.deliveries.*') ? 'bg-white/90 text-cyan-800 shadow-sm' : '' }}">
+                                <i class="fa-solid fa-calendar-days shrink-0 text-gray-500" aria-hidden="true"></i>
+                                <span class="ms-2">Programación de Entregas</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
             @endif
 
@@ -357,6 +377,20 @@
             @endif
             @endunless
 
+            @if ($menuAllows('menu.maintenance-qualifications', $sidebarUser?->hasRole('Super Admin') ?? false))
+                <li class="rounded-lg border border-emerald-200 bg-emerald-50 p-1 dark:border-emerald-700 dark:bg-emerald-900/20">
+                    <a href="{{ route('admin.maintenance-qualifications.index') }}" aria-label="Mantenimiento y Calificaciones"
+                        x-on:click="open = false"
+                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-emerald-100 dark:text-white dark:hover:bg-emerald-800/50 {{ request()->routeIs('admin.maintenance-qualifications.*') ? 'bg-emerald-100 dark:bg-emerald-800/50' : '' }}">
+                        <i class="fa-solid fa-screwdriver-wrench shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden="true"></i>
+                        <span class="ms-2 min-w-0 text-center text-xs font-bold leading-4">
+                            <span class="block">Mantenimiento y</span>
+                            <span class="block">Calificaciones</span>
+                        </span>
+                    </a>
+                </li>
+            @endif
+
             @unless (auth()->user()?->hasRole('Capacitacion'))
             <!-- Roles y Permisos -->
             @if ($menuAllows('menu.users', $sidebarUser?->can('roles') || $sidebarUser?->can('permisos')))
@@ -394,6 +428,20 @@
                 </li>
             @endif
             @endunless
+
+            @hasanyrole('Super Admin')
+                <li class="rounded-lg border border-rose-200 bg-rose-50 p-1 dark:border-rose-700 dark:bg-rose-900/20">
+                    <a href="{{ route('admin.superadministrator.index') }}" aria-label="Superadministrador"
+                        x-on:click="open = false"
+                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-rose-100 dark:text-white dark:hover:bg-rose-800/50 {{ request()->routeIs('admin.superadministrator.*') ? 'bg-rose-100 dark:bg-rose-800/50' : '' }}">
+                        <i class="fa-solid fa-crown shrink-0 text-rose-600 dark:text-rose-300" aria-hidden="true"></i>
+                        <span class="ms-2 min-w-0 text-center text-xs font-bold leading-4">
+                            <span class="block">Super</span>
+                            <span class="block">administrador</span>
+                        </span>
+                    </a>
+                </li>
+            @endhasanyrole
 
         </ul>
     </div>

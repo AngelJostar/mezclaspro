@@ -91,19 +91,42 @@
         'ELECTROLITOS' => [4],
         'ADITIVOS' => [5],
     ];
+
+    $estadoSolicitud = str_replace('-', '_', mb_strtolower(trim((string) ($solicitud->estado ?? 'pendiente'))));
+    $isPendingApproval = $estadoSolicitud === 'pendiente';
+    $isApprovalMode = request()->boolean('approval') || $isPendingApproval;
+    $returnTo = old('return_to', request('return_to', ''));
+    $closeHref = $returnTo !== '' ? $returnTo : route('admin.nutricionales.solicitudes.index');
+    $formTitle = $isApprovalMode
+        ? 'Aprobación de mezcla #'.$solicitud->id
+        : 'SOLICITUD DE NUTRICIÓN PARENTERAL';
 @endphp
 
 <x-admin-layout>
     <div class="flex flex-col items-center">
-        <div class="mt-2 mb-4 grid w-full grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <span aria-hidden="true"></span>
-            <h1 class="text-2xl font-medium text-gray-800 text-center">
-                SOLICITUD DE NUTRICIÓN PARENTERAL
+        <div class="mt-2 mb-4 flex w-full flex-wrap items-center gap-4">
+            <h1 data-workflow-heading class="mixture-workflow-heading">
+                {{ $isApprovalMode ? 'Aprobación' : 'Nutrición parenteral' }} | {{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->user?->hospital) }}
             </h1>
-            <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
-                class="justify-self-end rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                Cerrar
-            </a>
+            <div class="flex flex-wrap items-center gap-3">
+                @if ($isApprovalMode && $isPendingApproval)
+                    <x-button form="solicitudForm" type="button" class="bg-green-600 hover:bg-green-700"
+                        onclick="updateAccion('aprobar')">
+                        APROBAR MEZCLA
+                    </x-button>
+                    <x-button form="solicitudForm" type="button" formnovalidate class="bg-red-600 hover:bg-red-700 focus:bg-red-700 active:bg-red-800 focus:ring-red-500"
+                        onclick="updateAccion('rechazar')">
+                        RECHAZAR MEZCLA
+                    </x-button>
+                @endif
+                <a href="{{ $closeHref }}"
+                    data-workflow-popup-close
+                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    title="Cerrar formato de solicitud"
+                    aria-label="Cerrar formato de solicitud">
+                    <span aria-hidden="true">&times;</span>
+                </a>
+            </div>
         </div>
 
         @if ($errors->any())
@@ -156,6 +179,10 @@
 
             @csrf
             @method('PUT')
+            <input type="hidden" name="return_to" value="{{ $returnTo }}">
+            @if (old('approval_popup', request('approval_popup')))
+                <input type="hidden" name="approval_popup" value="1">
+            @endif
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -433,21 +460,11 @@
 
             <input type="hidden" name="accion" id="accion_input" value="actualizar">
 
-            <div class="flex justify-end gap-5 mt-6 mb-3">
-                <x-button>ACTUALIZAR</x-button>
-            </div>
-
-            <div class="flex justify-end gap-5 mb-3">
-                <x-button type="button" onclick="updateAccion('aprobar')">
-                    APROBAR
-                </x-button>
-            </div>
-
-            <div class="flex justify-end gap-5">
-                <x-button type="button" onclick="updateAccion('cancelar')">
-                    NO APROBADA
-                </x-button>
-            </div>
+            @if (! $isApprovalMode)
+                <div class="flex justify-end gap-5 mt-6 mb-3">
+                    <x-button>ACTUALIZAR</x-button>
+                </div>
+            @endif
         </form>
     </div>
 
@@ -486,8 +503,9 @@
 
                         option.value = stock.lote;
                         option.dataset.caducidad = stock.caducidad;
-                        option.textContent =
-                            `${stock.lote} — Cad: ${stock.caducidad} — Stock: ${stock.stock_ml_actual} ml`;
+                        option.textContent = stock.is_remainder
+                            ? `${stock.lote} - REMANENTE: ${stock.stock_ml_actual} mL - Usar antes de: ${stock.usable_until}`
+                            : `${stock.lote} - Cad: ${stock.caducidad} - Stock cerrado: ${stock.stock_ml_actual} mL`;
 
                         if (selectedLote) {
                             option.selected = stock.lote === selectedLote;
@@ -556,17 +574,20 @@
             function updateAccion(value) {
                 const form = document.getElementById('solicitudForm');
                 const accionInput = document.getElementById('accion_input');
+                const isRejectAction = value === 'rechazar';
 
                 Swal.fire({
-                    title: `¿Seguro que deseas ${value === 'aprobar' ? 'aprobar' : 'rechazar'} esta solicitud?`,
+                    title: `¿Seguro que deseas ${value === 'aprobar' ? 'aprobar' : 'rechazar'} esta mezcla?`,
+                    text: isRejectAction ? 'La mezcla quedará fuera del proceso de preparación.' : '',
+                    icon: isRejectAction ? 'warning' : 'question',
                     showCancelButton: true,
-                    confirmButtonText: "Confirmar",
+                    confirmButtonText: value === 'aprobar' ? 'Sí, aprobar' : 'Sí, rechazar',
                     cancelButtonText: "Cancelar",
                 }).then((result) => {
                     if (result.isConfirmed) {
                         accionInput.value = value;
 
-                        if (form.checkValidity()) {
+                        if (isRejectAction || form.checkValidity()) {
                             form.submit();
                         } else {
                             const primerCampoInvalido = form.querySelector(':invalid');

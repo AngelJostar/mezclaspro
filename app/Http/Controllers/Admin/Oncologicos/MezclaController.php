@@ -11,12 +11,19 @@ use App\Models\Oncologicos\MedicinePresentation;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MezclaMedicamento;
 use App\Models\Oncologicos\SolicitudOnco;
+use App\Services\MedicineRemainderService;
+use App\Services\OncologicMedicationInventoryService;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class MezclaController extends Controller
 {
@@ -53,10 +60,111 @@ class MezclaController extends Controller
         return $usuario?->username ?: $nombre;
     }
 
+    private function redirectAfterMixtureAction(Mezcla $mezcla, Request $request)
+    {
+        $returnTo = trim((string) $request->input('return_to', ''));
+        $safeReturnTo = '';
+
+        if ($returnTo !== '') {
+            if (
+                str_starts_with($returnTo, '/')
+                && ! str_starts_with($returnTo, '//')
+                && (str_starts_with($returnTo, '/admin/') || str_contains($returnTo, '/admin/'))
+            ) {
+                $safeReturnTo = $returnTo;
+            } else {
+                $urlParts = parse_url($returnTo) ?: [];
+                $path = (string) ($urlParts['path'] ?? '');
+                $allowedHosts = array_filter([
+                    $request->getHost(),
+                    parse_url((string) config('app.url'), PHP_URL_HOST),
+                ]);
+
+                if (
+                    isset($urlParts['host'])
+                    && in_array($urlParts['host'], $allowedHosts, true)
+                    && (str_starts_with($path, '/admin/') || str_contains($path, '/admin/'))
+                ) {
+                    $query = isset($urlParts['query']) ? '?' . $urlParts['query'] : '';
+                    $safeReturnTo = $path . $query;
+                }
+            }
+        }
+
+        $isApprovalPopup = $request->boolean('approval_popup');
+        $isDispensingPopup = $request->boolean('dispensing_popup');
+
+        if ($isApprovalPopup || $isDispensingPopup) {
+            $routeParams = ['mezcla' => $mezcla->id];
+
+            if ($isApprovalPopup) {
+                $routeParams['approval'] = 1;
+                $routeParams['approval_popup'] = 1;
+            }
+
+            if ($isDispensingPopup) {
+                $routeParams['modo'] = 'dispensacion';
+                $routeParams['dispensing_popup'] = 1;
+            }
+
+            if ($safeReturnTo !== '') {
+                $routeParams['return_to'] = $safeReturnTo;
+            }
+
+            return redirect()
+                ->route('admin.oncologicos.mezclas.edit', $routeParams)
+                ->with($isDispensingPopup ? 'dispensing_popup_done' : 'approval_popup_done', true)
+                ->with($isDispensingPopup ? 'dispensing_popup_return_to' : 'approval_popup_return_to', $safeReturnTo ?: route('admin.solicitudes.index'));
+        }
+
+        if ($safeReturnTo !== '') {
+            return redirect()->to($safeReturnTo);
+        }
+
+        return redirect()->route('admin.oncologicos.mezclas.index', $mezcla->solicitud->id);
+    }
+
+    private function fallbackBatchForList(object $currentBatch, int $unidades, int $laboratoryId, int $listaId, int $catalogId): ?object
+    {
+        $list = DB::table('medicine_lists')
+            ->where('id', $listaId)
+            ->first(['warehouse_id', 'backup_enabled', 'backup_warehouse_id']);
+        $backupWarehouseId = (int) ($list?->backup_warehouse_id ?? 0);
+
+        if (! $list || ! $list->backup_enabled || $backupWarehouseId <= 0
+            || (int) ($currentBatch->warehouse_id ?? 0) !== (int) ($list->warehouse_id ?? 0)) {
+            return null;
+        }
+
+        return DB::table('medicine_batches as mb')
+            ->join('medicine_presentations as mp', 'mp.id', '=', 'mb.medicine_presentation_id')
+            ->join('medicine_list_presentation as mlp', function ($join) use ($listaId) {
+                $join->on('mlp.medicine_presentation_id', '=', 'mp.id')->where('mlp.medicine_list_id', $listaId);
+            })
+            ->where('mb.laboratory_id', $laboratoryId)
+            ->where('mb.warehouse_id', $backupWarehouseId)
+            ->where('mb.medicine_presentation_id', $currentBatch->medicine_presentation_id)
+            ->where('mp.catalog_id', $catalogId)
+            ->where('mp.is_available', 1)
+            ->where('mb.stock_actual', '>=', $unidades)
+            ->where(function ($query) {
+                $query->whereNull('mb.caducidad')->orWhereDate('mb.caducidad', '>=', now()->toDateString());
+            })
+            ->orderByRaw('mb.caducidad IS NULL')
+            ->orderBy('mb.caducidad')
+            ->orderBy('mb.id')
+            ->lockForUpdate()
+            ->select('mb.id', 'mb.warehouse_id', 'mb.lote', 'mb.caducidad', 'mb.stock_actual', 'mb.stock_ml_actual', 'mb.stock_reservado',
+                'mb.medicine_presentation_id', 'mp.id as presentation_id', 'mp.catalog_id', 'mp.presentacion',
+                'mp.cantidad_medicamento', 'mp.volumen_diluyente', 'mp.legend', 'mp.marca', 'mp.precio_frasco',
+                'mlp.precio as precio_lista')
+            ->first();
+    }
+
     public function index($id)
     {
         $solicitud = SolicitudOnco::with([
-            'hospital',
+            'hospital.instituciones',
             'mezclas' => fn($q) => $q
                 ->with(['medicamentos.medicamentoOnco.catalog'])
                 ->orderBy('id'),
@@ -69,6 +177,7 @@ class MezclaController extends Controller
     private function releaseBatchConsumptionForMix(
         int $medicineBatchId,
         int $unidades,
+        float $volumenAbiertoMl,
         int $laboratoryId,
         int $mezclaId,
         ?int $userId = null
@@ -88,12 +197,15 @@ class MezclaController extends Controller
         }
 
         $stockActual = (int) ($batch->stock_actual ?? 0);
+        $stockMlActual = (float) ($batch->stock_ml_actual ?? 0);
         $nuevoStock  = $stockActual + $unidades;
+        $nuevoStockMl = $stockMlActual + max(0, $volumenAbiertoMl);
 
         DB::table('medicine_batches')
             ->where('id', $medicineBatchId)
             ->update([
                 'stock_actual' => $nuevoStock,
+                'stock_ml_actual' => $nuevoStockMl,
                 'is_active'    => $nuevoStock > 0 ? 1 : 0,
                 'updated_at'   => now(),
             ]);
@@ -105,8 +217,11 @@ class MezclaController extends Controller
             'user_id'                => $userId,
             'movement_type'          => 'cancelacion_salida',
             'quantity'               => $unidades,
+            'quantity_ml'            => max(0, $volumenAbiertoMl),
             'stock_actual_before'    => $stockActual,
             'stock_actual_after'     => $nuevoStock,
+            'stock_ml_before'        => $stockMlActual,
+            'stock_ml_after'         => $nuevoStockMl,
             'stock_reservado_before' => (int) ($batch->stock_reservado ?? 0),
             'stock_reservado_after'  => (int) ($batch->stock_reservado ?? 0),
             'reference_type'         => 'mezcla',
@@ -266,6 +381,7 @@ class MezclaController extends Controller
                 'mb.lote',
                 'mb.caducidad',
                 'mb.stock_actual',
+                'mb.stock_ml_actual',
                 'mb.stock_reservado',
                 'mb.medicine_presentation_id',
 
@@ -289,15 +405,25 @@ class MezclaController extends Controller
         $stockActual = (int) ($batch->stock_actual ?? 0);
 
         if ($stockActual < $unidades) {
-            throw new \Exception("Stock insuficiente para el lote {$batch->lote}. Disponible: {$stockActual}, solicitado: {$unidades}.");
+            $fallbackBatch = $this->fallbackBatchForList($batch, $unidades, $laboratoryId, $listaId, $catalogId);
+            if (! $fallbackBatch) {
+                throw new \Exception("Stock insuficiente para el lote {$batch->lote}. Disponible: {$stockActual}, solicitado: {$unidades}.");
+            }
+            $batch = $fallbackBatch;
+            $stockActual = (int) $batch->stock_actual;
         }
 
         $nuevoStock = $stockActual - $unidades;
+        $mlPorFrasco = (float) ($batch->volumen_diluyente ?? 0);
+        $stockMlAntes = (float) ($batch->stock_ml_actual ?? ($stockActual * $mlPorFrasco));
+        $cantidadMl = round($unidades * $mlPorFrasco, 2);
+        $stockMlDespues = max(0, round($stockMlAntes - $cantidadMl, 2));
 
         DB::table('medicine_batches')
             ->where('id', $batch->id)
             ->update([
                 'stock_actual' => $nuevoStock,
+                'stock_ml_actual' => $stockMlDespues,
                 'is_active'    => $nuevoStock > 0 ? 1 : 0,
                 'updated_at'   => now(),
             ]);
@@ -309,8 +435,11 @@ class MezclaController extends Controller
             'user_id'                => $userId,
             'movement_type'          => 'salida',
             'quantity'               => $unidades,
+            'quantity_ml'            => $cantidadMl,
             'stock_actual_before'    => $stockActual,
             'stock_actual_after'     => $nuevoStock,
+            'stock_ml_before'        => $stockMlAntes,
+            'stock_ml_after'         => $stockMlDespues,
             'stock_reservado_before' => (int) ($batch->stock_reservado ?? 0),
             'stock_reservado_after'  => (int) ($batch->stock_reservado ?? 0),
             'reference_type'         => 'mezcla',
@@ -349,6 +478,7 @@ class MezclaController extends Controller
         ?int $userId = null
     ): array {
         $totalMlAportado = 0.0;
+        $dosisPendienteMg = (float) $mezclaMedicamento->dosis;
         $marcaElegida = null;
         $alMenosUna = false;
 
@@ -356,23 +486,29 @@ class MezclaController extends Controller
             $batchId  = isset($pres['batch_id']) ? (int) $pres['batch_id'] : 0;
             $unidades = isset($pres['frascos']) ? (int) $pres['frascos'] : 0;
 
-            if ($batchId <= 0 || $unidades <= 0) {
+            if ($batchId <= 0 || $unidades < 0) {
                 continue;
             }
 
             $alMenosUna = true;
 
-            $batchConsumido = $this->consumeBatchForMix(
+            if ($dosisPendienteMg <= 0.0001) {
+                break;
+            }
+
+            $batchConsumido = app(OncologicMedicationInventoryService::class)->consume(
                 $batchId,
                 $unidades,
                 $laboratoryId,
                 $listaId,
                 $catalogId,
                 $mezclaId,
+                $dosisPendienteMg,
                 $userId,
                 isset($pres['precio_frasco']) && $pres['precio_frasco'] !== ''
                     ? (float) $pres['precio_frasco']
-                    : null
+                    : null,
+                $mezclaMedicamento->charge_by
             );
 
             $marcaActual = trim((string) ($batchConsumido->marca ?? ''));
@@ -390,7 +526,12 @@ class MezclaController extends Controller
             DB::table('mezcla_medicamento_presentaciones')->insert([
                 'mezcla_medicamento_id'         => $mezclaMedicamento->id,
                 'medicine_batch_id'             => $batchConsumido->batch_id,
-                'unidades_usadas'               => $unidades,
+                'unidades_usadas'               => $batchConsumido->charge_by === 'frasco'
+                    ? $batchConsumido->billable_containers
+                    : 0,
+                'unidades_abiertas'             => $batchConsumido->opened_containers,
+                'volumen_usado_ml'              => $batchConsumido->used_ml,
+                'charge_by_snapshot'            => $batchConsumido->charge_by,
 
                 'presentacion_snapshot'         => $batchConsumido->presentacion,
                 'cantidad_medicamento_snapshot' => $batchConsumido->cantidad_medicamento,
@@ -400,22 +541,24 @@ class MezclaController extends Controller
                 'lote_usado'                    => $batchConsumido->lote,
                 'caducidad_usada'               => $batchConsumido->caducidad,
                 'precio_frasco_snapshot'        => $batchConsumido->precio_frasco,
+                'precio_unitario_snapshot'      => $batchConsumido->unit_price,
                 'subtotal'                      => $batchConsumido->subtotal,
                 'created_at'                    => now(),
                 'updated_at'                    => now(),
             ]);
 
-            $volMl = (float) ($batchConsumido->volumen_diluyente ?? 0);
-
-            if ($volMl > 0) {
-                $totalMlAportado += ($volMl * $unidades);
-            }
+            $totalMlAportado += (float) $batchConsumido->used_ml;
+            $dosisPendienteMg = max(0, $dosisPendienteMg - (float) $batchConsumido->dose_provided_mg);
         }
 
         if (!$alMenosUna) {
             throw new \Exception(
                 "Debes seleccionar al menos una presentación/lote con unidades mayores a 0 para el medicamento del catálogo {$catalogId}."
             );
+        }
+
+        if ($dosisPendienteMg > 0.01) {
+            throw new \Exception("Las presentaciones seleccionadas no cubren la dosis. Faltan " . round($dosisPendienteMg, 4) . " mg.");
         }
 
         return [
@@ -588,7 +731,7 @@ class MezclaController extends Controller
         $user = Auth::user();
 
         $mezcla = Mezcla::with([
-            'solicitud.hospital',
+            'solicitud.hospital.instituciones',
             'infusor',
             'diluentPresentation.diluent',
             'medicamentos.medicamentoOnco.catalog',
@@ -695,17 +838,29 @@ class MezclaController extends Controller
         // - Solo presentaciones en la lista
         // - Solo batches del laboratorio, vigentes y no vencidos
         // =========================
+        $remanentesVigentes = DB::table('medicine_remainders')
+            ->select('medicine_batch_id', DB::raw('SUM(current_ml) as remanente_ml'))
+            ->where('domain', 'oncologico')
+            ->where('laboratory_id', $laboratoryId)
+            ->where('is_active', 1)
+            ->where('current_ml', '>', 0)
+            ->where(function ($query) {
+                $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+            })
+            ->groupBy('medicine_batch_id');
+
         $presentacionesRaw = DB::table('medicine_presentations as mp')
             ->join('medicine_list_presentation as mlp', 'mlp.medicine_presentation_id', '=', 'mp.id')
             ->leftJoin('medicine_batches as mb', function ($join) use ($laboratoryId) {
                 $join->on('mb.medicine_presentation_id', '=', 'mp.id')
                     ->where('mb.laboratory_id', '=', $laboratoryId)
-                    ->where('mb.is_active', '=', 1)
-                    ->where('mb.stock_actual', '>', 0)
                     ->where(function ($q) {
                         $q->whereNull('mb.caducidad')
                             ->orWhereDate('mb.caducidad', '>=', now()->toDateString());
                     });
+            })
+            ->leftJoinSub($remanentesVigentes, 'mr', function ($join) {
+                $join->on('mr.medicine_batch_id', '=', 'mb.id');
             })
             ->where('mlp.medicine_list_id', $listaId)
             ->where('mp.is_available', 1)
@@ -715,16 +870,23 @@ class MezclaController extends Controller
                 'mp.catalog_id',
                 'mp.presentacion',
                 'mp.marca',
+                'mp.contenido_valor',
+                'mp.contenido_unidad',
                 'mp.cantidad_medicamento',
                 'mp.volumen_diluyente',
                 'mp.precio_frasco',
                 'mlp.charge_by',
                 'mlp.precio',
                 'mlp.precio_mg_override',
+                'mlp.precio_ml_override',
                 DB::raw('mb.id as batch_id'),
                 DB::raw('mb.lote as lote'),
                 DB::raw('mb.caducidad as caducidad'),
-                DB::raw('mb.stock_actual as stock_actual')
+                DB::raw('mb.fecha_ingreso as fecha_ingreso'),
+                DB::raw('mb.stock_inicial as stock_inicial'),
+                DB::raw('mb.stock_actual as stock_actual'),
+                DB::raw('mb.stock_reservado as stock_reservado'),
+                DB::raw('COALESCE(mr.remanente_ml, 0) as remanente_ml')
             )
             ->orderBy('mp.presentacion')
             ->orderBy('mb.caducidad')
@@ -743,19 +905,27 @@ class MezclaController extends Controller
                             'catalog_id' => $first->catalog_id,
                             'presentacion' => $first->presentacion,
                             'marca' => $first->marca,
+                            'contenido_valor' => $first->contenido_valor,
+                            'contenido_unidad' => $first->contenido_unidad,
                             'cantidad_medicamento' => $first->cantidad_medicamento,
                             'volumen_diluyente' => $first->volumen_diluyente,
                             'precio_frasco' => $first->precio_frasco,
                             'charge_by' => $first->charge_by ?? 'frasco',
                             'precio' => $first->precio ?? null,
                             'precio_mg_override' => $first->precio_mg_override ?? null,
+                            'precio_ml_override' => $first->precio_ml_override ?? null,
                             'batches' => $rows
-                                ->filter(fn($r) => !empty($r->batch_id))
+                                ->filter(fn($r) => !empty($r->batch_id)
+                                    && ((float) $r->stock_actual > 0 || (float) $r->remanente_ml > 0))
                                 ->map(fn($r) => [
                                     'id' => $r->batch_id,
                                     'lote' => $r->lote,
                                     'caducidad' => $r->caducidad,
+                                    'fecha_ingreso' => $r->fecha_ingreso,
+                                    'stock_inicial' => $r->stock_inicial,
                                     'stock_actual' => $r->stock_actual,
+                                    'stock_reservado' => $r->stock_reservado,
+                                    'remanente_ml' => $r->remanente_ml,
                                 ])
                                 ->values(),
                         ];
@@ -854,19 +1024,61 @@ class MezclaController extends Controller
                         'mp.catalog_id',
                         'mp.presentacion',
                         'mp.marca',
+                        'mp.contenido_valor',
+                        'mp.contenido_unidad',
                         'mp.cantidad_medicamento',
                         'mp.volumen_diluyente',
                         'mp.precio_frasco',
                         DB::raw('mb.id as batch_id'),
                         DB::raw('mb.lote as lote'),
-                        DB::raw('mb.caducidad as caducidad')
+                        DB::raw('mb.caducidad as caducidad'),
+                        DB::raw('mb.fecha_ingreso as fecha_ingreso'),
+                        DB::raw('mb.stock_inicial as stock_inicial'),
+                        DB::raw('mb.stock_actual as stock_actual'),
+                        DB::raw('mb.stock_reservado as stock_reservado'),
+                        DB::raw('0 as remanente_ml')
                     )
                     ->orderBy('mp.presentacion')
                     ->orderBy('mb.caducidad')
                     ->get();
 
                 if ($extras->isNotEmpty()) {
-                    $presentacionesPorCatalogo = $presentacionesPorCatalogo->put($catId, $extras->values());
+                    $presentacionesPorCatalogo = $presentacionesPorCatalogo->put($catId, $extras
+                        ->groupBy('id')
+                        ->map(function ($rows) {
+                            $first = $rows->first();
+
+                            return [
+                                'id' => $first->id,
+                                'catalog_id' => $first->catalog_id,
+                                'presentacion' => $first->presentacion,
+                                'marca' => $first->marca,
+                                'contenido_valor' => $first->contenido_valor,
+                                'contenido_unidad' => $first->contenido_unidad,
+                                'cantidad_medicamento' => $first->cantidad_medicamento,
+                                'volumen_diluyente' => $first->volumen_diluyente,
+                                'precio_frasco' => $first->precio_frasco,
+                                'charge_by' => 'frasco',
+                                'precio' => null,
+                                'precio_mg_override' => null,
+                                'precio_ml_override' => null,
+                                'batches' => $rows
+                                    ->filter(fn($r) => !empty($r->batch_id)
+                                        && ((float) $r->stock_actual > 0 || (float) $r->remanente_ml > 0))
+                                    ->map(fn($r) => [
+                                        'id' => $r->batch_id,
+                                        'lote' => $r->lote,
+                                        'caducidad' => $r->caducidad,
+                                        'fecha_ingreso' => $r->fecha_ingreso,
+                                        'stock_inicial' => $r->stock_inicial,
+                                        'stock_actual' => $r->stock_actual,
+                                        'stock_reservado' => $r->stock_reservado,
+                                        'remanente_ml' => $r->remanente_ml,
+                                    ])
+                                    ->values(),
+                            ];
+                        })
+                        ->values());
                 }
             }
         }
@@ -972,28 +1184,27 @@ class MezclaController extends Controller
             $mezcla->lote = 'L' . $dia . $mesAbbr . $anio . $consecutivo;
         };
 
-        $asegurarRemisionPorSolicitud = function (SolicitudOnco $solicitud) {
-            if (!empty($solicitud->remision)) {
-                $solicitud->mezclas()
-                    ->whereNull('remision')
-                    ->update(['remision' => $solicitud->remision]);
-
-                return $solicitud->remision;
+        $asegurarRemisionPorMezcla = function (Mezcla $mezcla) {
+            if (!empty($mezcla->remision)) {
+                return $mezcla->remision;
             }
 
-            $maxNum = SolicitudOnco::whereNotNull('remision')
+            $maxSolicitud = SolicitudOnco::whereNotNull('remision')
+                ->lockForUpdate()
+                ->max(DB::raw('CAST(remision AS UNSIGNED)'));
+            $maxMezcla = Mezcla::whereNotNull('remision')
                 ->lockForUpdate()
                 ->max(DB::raw('CAST(remision AS UNSIGNED)'));
 
-            $nuevo = ((int) $maxNum) + 1;
+            $nuevo = max((int) $maxSolicitud, (int) $maxMezcla) + 1;
             $remision = (string) $nuevo;
 
-            $solicitud->remision = $remision;
-            $solicitud->save();
+            $mezcla->remision = $remision;
 
-            $solicitud->mezclas()
-                ->whereNull('remision')
-                ->update(['remision' => $remision]);
+            if ($mezcla->solicitud && empty($mezcla->solicitud->remision)) {
+                $mezcla->solicitud->remision = $remision;
+                $mezcla->solicitud->save();
+            }
 
             return $remision;
         };
@@ -1007,6 +1218,7 @@ class MezclaController extends Controller
         ])->findOrFail($id);
 
         $user = auth()->user();
+        $accion = (string) $request->input('accion', 'actualizar');
 
         $hospitalUserId      = (int) ($user->hospital_id ?? 0);
         $hospitalSolicitudId = (int) ($mezcla->solicitud->hospital_id ?? 0);
@@ -1014,6 +1226,20 @@ class MezclaController extends Controller
         $esAdmin = $user->hasAnyRole(['Admin', 'Super Admin']);
         if (!$esAdmin && $hospitalUserId && $hospitalSolicitudId && $hospitalUserId !== $hospitalSolicitudId) {
             abort(403, 'No autorizado para actualizar mezclas de otro hospital.');
+        }
+
+        if ($accion === 'rechazar') {
+            if ($mezcla->operational_status !== 'pendiente') {
+                return back()->withErrors(['error' => 'Solo una mezcla pendiente puede rechazarse.']);
+            }
+
+            DB::transaction(function () use ($mezcla) {
+                $mezcla->estado = 'cancelada';
+                $mezcla->save();
+            });
+
+            return $this->redirectAfterMixtureAction($mezcla, $request)
+                ->with('success', 'Mezcla rechazada correctamente.');
         }
 
         $laboratoryId = (int) (optional($mezcla->solicitud->hospital)->laboratory_id ?? 0);
@@ -1065,17 +1291,17 @@ class MezclaController extends Controller
             ->pluck('medicine_presentation_id')
             ->mapWithKeys(fn($pid) => [(int) $pid => true]);
 
-        if ($request->accion === 'preparada') {
+        if ($accion === 'preparada') {
+            if ($mezcla->estado !== 'dispensada') {
+                return back()->withErrors(['error' => 'Solo una mezcla dispensada puede marcarse como preparada.']);
+            }
+
             $preparoNombre = $this->nombreUsuario($user);
 
-            DB::transaction(function () use ($mezcla, $generarLotePorMezcla, $asegurarRemisionPorSolicitud, $preparoNombre) {
+            DB::transaction(function () use ($mezcla, $generarLotePorMezcla, $asegurarRemisionPorMezcla, $preparoNombre) {
                 $mezcla->estado = 'preparada';
                 $generarLotePorMezcla($mezcla);
-
-                if ($mezcla->solicitud) {
-                    $remision = $asegurarRemisionPorSolicitud($mezcla->solicitud);
-                    $mezcla->remision = $remision;
-                }
+                $asegurarRemisionPorMezcla($mezcla);
 
                 $mezcla->save();
 
@@ -1095,12 +1321,15 @@ class MezclaController extends Controller
                 }
             });
 
-            return redirect()
-                ->route('admin.oncologicos.mezclas.index', $mezcla->solicitud->id)
+            return $this->redirectAfterMixtureAction($mezcla, $request)
                 ->with('success', 'Mezcla marcada como preparada. Se registró el responsable en la inspección.');
         }
 
-        if ($request->accion === 'entregada') {
+        if ($accion === 'entregada') {
+            if ($mezcla->estado !== 'revisada') {
+                return back()->withErrors(['error' => 'Solo una mezcla revisada puede marcarse como entregada.']);
+            }
+
             $liberoNombre = $this->nombreUsuario($user);
 
             DB::transaction(function () use ($mezcla, $liberoNombre) {
@@ -1122,8 +1351,7 @@ class MezclaController extends Controller
 
             });
 
-            return redirect()
-                ->route('admin.oncologicos.mezclas.index', $mezcla->solicitud->id)
+            return $this->redirectAfterMixtureAction($mezcla, $request)
                 ->with('success', 'Mezcla marcada como entregada y liberador registrado.');
         }
 
@@ -1173,6 +1401,7 @@ class MezclaController extends Controller
         DB::beginTransaction();
 
         try {
+            $shouldDispense = $accion === 'dispensar';
             $volumenDilucion = (float) ($mezclaData['volumen_dilucion'] ?? 0);
             $tiempoInfusion  = $mezclaData['tiempo_infusion'] ?? null;
 
@@ -1208,11 +1437,8 @@ class MezclaController extends Controller
             }
 
             $diluentPresentationId = $mezclaData['diluent_presentation_id'] ?? null;
-            if (false && $request->accion === 'aprobar' && !$diluentPresentationId) {
-                throw new \Exception("Debes seleccionar una presentaciÃ³n de diluyente para aprobar la mezcla.");
-            }
 
-            if ($request->accion === 'aprobar' && !$diluentPresentationId) {
+            if ($shouldDispense && !$diluentPresentationId) {
                 $diluentPresentationId = $this->resolveDiluentPresentationByFefo(
                     (int) $refDil,
                     $volumenDilucion,
@@ -1224,7 +1450,11 @@ class MezclaController extends Controller
                 }
             }
 
-            if ($diluentPresentationId) {
+            if (! $shouldDispense) {
+                $diluentPresentationId = null;
+            }
+
+            if ($shouldDispense && $diluentPresentationId) {
                 $dilPres = DiluentPresentation::where('id', (int) $diluentPresentationId)
                     ->where('is_active', true)
                     ->where(function ($query) use ($laboratoryId) {
@@ -1242,11 +1472,11 @@ class MezclaController extends Controller
                 }
             }
 
-            if ($diluentPresentationId && isset($dilPres) && $dilPres->laboratory_id !== null && (float) ($dilPres->stock_actual ?? 0) <= 0) {
-                throw new \Exception("La presentaciÃ³n de diluyente seleccionada no tiene stock disponible.");
+            if ($shouldDispense && $diluentPresentationId && isset($dilPres) && $dilPres->laboratory_id !== null && (float) ($dilPres->stock_actual ?? 0) <= 0) {
+                throw new \Exception("La presentación de diluyente seleccionada no tiene stock disponible.");
             }
 
-            if ($diluentPresentationId && isset($dilPres)) {
+            if ($shouldDispense && $diluentPresentationId && isset($dilPres)) {
                 if ((float) ($dilPres->stock_actual ?? 0) <= 0) {
                     throw new \Exception("La presentacion de diluyente seleccionada no tiene stock disponible.");
                 }
@@ -1285,9 +1515,16 @@ class MezclaController extends Controller
 
             $mezcla->volumen_dilucion        = $volumenDilucion;
             $mezcla->tiempo_infusion         = $tiempoInfusion;
+            $mezcla->fecha_entrega            = $request->fecha_entrega;
             $mezcla->set_infusion            = $setInfusion;
             $mezcla->infusor_id              = $infusorId;
-            $mezcla->diluent_presentation_id = $diluentPresentationId ?: null;
+
+            if ($shouldDispense) {
+                $mezcla->diluent_presentation_id = $diluentPresentationId ?: null;
+            } elseif ($accion === 'aprobar') {
+                $mezcla->diluent_presentation_id = null;
+            }
+
             $mezcla->save();
 
             if ($mezcla->solicitud) {
@@ -1302,8 +1539,10 @@ class MezclaController extends Controller
                 $mezcla->solicitud->diagnostico       = $request->diagnostico;
                 $mezcla->solicitud->nombre_medico     = $request->medico_nombre;
                 $mezcla->solicitud->cedula_medico     = $request->medico_cedula;
-                $mezcla->solicitud->fecha_entrega     = $request->fecha_entrega;
                 $mezcla->solicitud->observaciones     = $request->observaciones;
+                $mezcla->solicitud->fecha_entrega     = $mezcla->solicitud->mezclas()
+                    ->whereNotNull('fecha_entrega')
+                    ->min('fecha_entrega') ?? $request->fecha_entrega;
                 $mezcla->solicitud->save();
             }
 
@@ -1313,14 +1552,17 @@ class MezclaController extends Controller
             $mmIds = $mezcla->medicamentos()->pluck('id');
 
             if ($mmIds->isNotEmpty()) {
+                app(MedicineRemainderService::class)->rollbackReference('mezcla', $mezcla->id, $user->id);
+
                 $presentacionesViejas = DB::table('mezcla_medicamento_presentaciones')
                     ->whereIn('mezcla_medicamento_id', $mmIds)
-                    ->get(['medicine_batch_id', 'unidades_usadas']);
+                    ->get(['medicine_batch_id', 'unidades_usadas', 'unidades_abiertas', 'volumen_diluyente_snapshot']);
 
                 foreach ($presentacionesViejas as $pv) {
                     $this->releaseBatchConsumptionForMix(
                         (int) $pv->medicine_batch_id,
-                        (int) $pv->unidades_usadas,
+                        (int) ($pv->unidades_abiertas ?: $pv->unidades_usadas),
+                        (float) ($pv->volumen_diluyente_snapshot ?? 0) * (int) ($pv->unidades_abiertas ?: $pv->unidades_usadas),
                         $laboratoryId,
                         $mezcla->id,
                         $user->id
@@ -1376,7 +1618,7 @@ class MezclaController extends Controller
                 }
 
                 $chargeBy = strtolower(trim((string) ($m['charge_by'] ?? ($catalog->charge_by ?? 'mg'))));
-                if (!in_array($chargeBy, ['mg', 'frasco', 'pieza'], true)) {
+                if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) {
                     $chargeBy = 'mg';
                 }
                 if ($chargeBy === 'pieza') {
@@ -1399,11 +1641,15 @@ class MezclaController extends Controller
                     'precio_mg_snapshot'         => $chargeBy === 'mg' && isset($m['precio_mg']) && $m['precio_mg'] !== ''
                         ? (float) $m['precio_mg']
                         : null,
+                    'precio_ml_snapshot'         => $chargeBy === 'ml' && isset($m['precio_frasco']) && $m['precio_frasco'] !== ''
+                        ? (float) $m['precio_frasco']
+                        : null,
                 ]);
 
                 $presentacionesPayload = $m['presentaciones'] ?? [];
+                $shouldConsumeMedicationInventory = $shouldDispense && $chargeBy !== 'mg';
 
-                if ($chargeBy !== 'mg') {
+                if ($shouldConsumeMedicationInventory) {
                     if (!is_array($presentacionesPayload) || count($presentacionesPayload) === 0) {
                         throw new \Exception("Debes seleccionar al menos una presentación con stock para '{$catalog->denominacion}'.");
                     }
@@ -1437,15 +1683,19 @@ class MezclaController extends Controller
                     }
                 }
 
-                $resultadoPresentaciones = $this->attachPresentacionesAndConsumeInventory(
-                    $mm,
-                    is_array($presentacionesPayload) ? $presentacionesPayload : [],
-                    $catalogId,
-                    (int) $listaId,
-                    $laboratoryId,
-                    $mezcla->id,
-                    $user->id
-                );
+                $resultadoPresentaciones = [];
+
+                if ($shouldConsumeMedicationInventory) {
+                    $resultadoPresentaciones = $this->attachPresentacionesAndConsumeInventory(
+                        $mm,
+                        is_array($presentacionesPayload) ? $presentacionesPayload : [],
+                        $catalogId,
+                        (int) $listaId,
+                        $laboratoryId,
+                        $mezcla->id,
+                        $user->id
+                    );
+                }
 
                 if (!empty($resultadoPresentaciones['marca_snapshot'])) {
                     $mm->marca_snapshot = $resultadoPresentaciones['marca_snapshot'];
@@ -1468,15 +1718,9 @@ class MezclaController extends Controller
                 $mm->save();
             }
 
-            if ($request->accion === 'aprobar') {
+            if ($accion === 'aprobar') {
                 $mezcla->estado = 'aprobada';
                 $generarLotePorMezcla($mezcla);
-                $this->consumeDiluentPresentationForMix(
-                    (int) ($mezcla->diluent_presentation_id ?? 0),
-                    $laboratoryId,
-                    $mezcla->id,
-                    $user->id
-                );
                 $mezcla->save();
 
                 $aproboNombre = $this->nombreUsuario($user);
@@ -1497,15 +1741,27 @@ class MezclaController extends Controller
                 $inspeccion->save();
             }
 
+            if ($accion === 'dispensar') {
+                $mezcla->estado = 'dispensada';
+                $this->consumeDiluentPresentationForMix(
+                    (int) ($mezcla->diluent_presentation_id ?? 0),
+                    $laboratoryId,
+                    $mezcla->id,
+                    $user->id
+                );
+                $mezcla->save();
+            }
+
             DB::commit();
 
-            return redirect()
-                ->route('admin.oncologicos.mezclas.index', $mezcla->solicitud->id)
+            return $this->redirectAfterMixtureAction($mezcla, $request)
                 ->with(
                     'success',
-                    $request->accion === 'aprobar'
-                        ? 'Mezcla aprobada correctamente.'
-                        : 'Mezcla y solicitud actualizadas correctamente.'
+                    match ($accion) {
+                        'aprobar' => 'Mezcla aprobada correctamente.',
+                        'dispensar' => 'Dispensacion guardada correctamente.',
+                        default => 'Mezcla y solicitud actualizadas correctamente.',
+                    }
                 );
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1892,6 +2148,11 @@ class MezclaController extends Controller
             $showLabelLotExpiry = (bool) optional(MedicineList::find($medicineListId))->show_label_lot_expiry;
         }
 
+        $qrUrl = URL::signedRoute('qr.oncologicos.mezclas.show', ['mezcla' => $mezcla->id]);
+        $qrRenderer = new ImageRenderer(new RendererStyle(76, 1), new SvgImageBackEnd());
+        $qrSvg = (new Writer($qrRenderer))->writeString($qrUrl);
+        $qrImage = 'data:image/svg+xml;base64,' . base64_encode($qrSvg);
+
         // =========================================
         // 1) Medicamentos: nombre (denominación + marca) + dosis + lote + caducidad
         // =========================================
@@ -2038,6 +2299,9 @@ class MezclaController extends Controller
 
             'fechaPreparacion'  => $fechaPreparacion,
             'fechaLimiteUso'    => $fechaLimiteUso,
+            'qrUrl'             => $qrUrl,
+            'qrSvg'             => $qrSvg,
+            'qrImage'           => $qrImage,
             'legendEtiqueta'    => $chosenLegend,
             'tempMinEtiqueta'   => $chosenTempMin,
             'tempMaxEtiqueta'   => $chosenTempMax,

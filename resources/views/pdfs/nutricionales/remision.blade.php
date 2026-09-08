@@ -242,6 +242,9 @@
                             <td style="border: none; border-top: 1px solid black; font-weight: bold">
                                 Fecha de envío:
                                 {{ date('d-m-Y', strtotime($solicitud_detalles->solicitud_detail['fecha_hora_entrega'])) }}
+                                <br>
+                                Fecha de solicitud:
+                                {{ $solicitud_detalles->created_at ? \Carbon\Carbon::parse($solicitud_detalles->created_at)->format('d-m-Y H:i') : '—' }}
                             </td>
                             <td style="text-align: right; border: none; border-top: 1px solid black;">
                                 DOMICILIO INSTITUCION RECEPTORA:
@@ -360,22 +363,22 @@
                             <th style="border-top: none; background: #D9E2F3; width: 30%; text-align: center">
                                 <strong>MEDICAMENTO</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 10%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 9%; text-align: center">
                                 <strong>DOSIS</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 10%; text-align: center">
-                                <strong>LOTE DE LA MEZCLA</strong>
+                            <th style="border-top: none; background: #D9E2F3; width: 12%; text-align: center">
+                                <strong>ALMACÉN</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 12.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 12%; text-align: center">
                                 <strong>PRESENTACIÓN</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 8.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 9%; text-align: center">
                                 <strong>CANTIDAD</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 7.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 8%; text-align: center">
                                 <strong>PRECIO (ml)</strong>
                             </th>
-                            <th style="border-top: none; background: #D9E2F3; width: 12.5%; text-align: center">
+                            <th style="border-top: none; background: #D9E2F3; width: 15%; text-align: center">
                                 <strong>SUBTOTAL</strong>
                             </th>
                         </tr>
@@ -422,14 +425,9 @@
                                     {{ ajustarUnidad($input_completo->input->unidad ?? '', $solicitud_detalles->solicitud_detail['npt']) }}
                                 </td>
 
-                                @if ($loop->first)
-                                    <td style="text-align: center; border:none"
-                                        rowspan="{{ count($inputs_solicitud) }}">
-
-                                        {{ $solicitud_detalles->lote ?? '—' }}
-
-                                    </td>
-                                @endif
+                                <td style="text-align: center">
+                                    {{ $almacenesPorSolicitudInput[$input_completo->id] ?? '—' }}
+                                </td>
 
                                 <td style="text-align: center">
                                     {{ presentacionNutri($input_completo) }}
@@ -483,7 +481,9 @@
                                 </strong>
                             </td>
                             <td style="text-align: center;"></td>
-                            <td style="text-align: center; border-top: none !important;"></td>
+                            <td style="text-align: center;">
+                                {{ $almacenesPorSolicitudInput[$bolsa_eva?->id] ?? '—' }}
+                            </td>
                             <td style="text-align: center">
                                 {{ presentacionNutri($bolsa_eva) }}
                             </td>
@@ -510,7 +510,9 @@
                                     </strong>
                                 </td>
                                 <td style="text-align: center"></td>
-                                <td style="text-align: center"></td>
+                                <td style="text-align: center">
+                                    {{ $almacenesPorSolicitudInput[$set_infusion?->id] ?? '—' }}
+                                </td>
                                 <td style="text-align: center">
                                     {{ presentacionNutri($set_infusion) }}
                                 </td>
@@ -522,29 +524,23 @@
                             </tr>
                         @endif
 
-                        <tr>
+                        @foreach (($pricingSummary['additional_charge_lines'] ?? collect()) as $charge)
                             @php
                                 $contador++;
-                                $precioServicio = (float) ($servicio_preparacion->precio_ml ?? 0);
-                                $total += $precioServicio;
+                                $precioCargo = (float) ($charge['total'] ?? 0);
+                                $total += $precioCargo;
                             @endphp
-
-                            <td style="text-align: center">{{ $contador }}</td>
-                            <td>
-                                <strong>
-                                    {{ $servicio_preparacion->denominacion_generica ?? 'Servicio de preparación' }}
-                                    <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span>
-                                </strong>
-                            </td>
-                            <td style="text-align: center"></td>
-                            <td style="text-align: center"></td>
-                            <td style="text-align: center"></td>
-                            <td>1 serv</td>
-                            <td>${{ number_format($precioServicio, 3, '.', '') }}</td>
-                            <td style="text-align: center">
-                                ${{ number_format($precioServicio, 3, '.', '') }}
-                            </td>
-                        </tr>
+                            <tr>
+                                <td style="text-align: center">{{ $contador }}</td>
+                                <td><strong>{{ $charge['description'] }} <span style="font-size: 8px; font-weight: normal;">(IVA incluido)</span></strong></td>
+                                <td style="text-align: center"></td>
+                                <td style="text-align: center"></td>
+                                <td style="text-align: center"></td>
+                                <td>1 {{ $charge['unit_label'] ?? 'pieza' }}</td>
+                                <td>${{ number_format($precioCargo, 3, '.', '') }}</td>
+                                <td style="text-align: center">${{ number_format($precioCargo, 3, '.', '') }}</td>
+                            </tr>
+                        @endforeach
 
                         <tr>
                             <td></td>
@@ -562,24 +558,6 @@
                     <table>
                         <tr>
                             <td style="text-align: right; border-top: none">
-                                Subtotal antes de IVA
-                                ${{ number_format((float) ($pricingSummary['subtotal_before_vat'] ?? 0), 2, '.', ',') }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; border-top: none">
-                                IVA servicio de mezclado (16%)
-                                ${{ number_format((float) ($pricingSummary['service_vat'] ?? 0), 2, '.', ',') }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; border-top: none">
-                                IVA insumos gravados (16%)
-                                ${{ number_format((float) ($pricingSummary['supplies_vat'] ?? 0), 2, '.', ',') }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; border-top: none">
                                 <strong>
                                     Total IVA incluido
                                     ${{ number_format((float) ($pricingSummary['total_iva_included'] ?? $total), 2, '.', ',') }}
@@ -589,6 +567,11 @@
                     </table>
 
                     <table>
+                        <tr>
+                            <td style="border: none; padding-top: 4px;">
+                                <strong>Lote de la mezcla:</strong> {{ $solicitud_detalles->lote ?? '—' }}
+                            </td>
+                        </tr>
                         <tr>
                             <td style="border: none"><strong>Observaciones:</strong></td>
                         </tr>

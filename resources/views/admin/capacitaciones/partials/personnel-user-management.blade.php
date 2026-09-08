@@ -62,9 +62,9 @@
                                         <summary
                                             class="flex min-h-12 cursor-pointer list-none items-center gap-3 px-3 py-2 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
                                             <span
-                                                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-gray-600">
-                                                <i class="fa-solid fa-plus text-xs group-open:hidden" aria-hidden="true"></i>
-                                                <i class="fa-solid fa-minus hidden text-xs group-open:inline" aria-hidden="true"></i>
+                                                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-base font-bold leading-none text-gray-600">
+                                                <span class="group-open:hidden" aria-hidden="true">+</span>
+                                                <span class="hidden group-open:inline" aria-hidden="true">-</span>
                                             </span>
                                             <i class="fa-solid {{ $menuItem['icon'] }} w-5 text-center text-blue-700"
                                                 aria-hidden="true"></i>
@@ -93,8 +93,10 @@
                                     </details>
                                 @else
                                     <label class="flex min-h-12 cursor-pointer items-center gap-3 px-3 py-2 hover:bg-gray-50">
-                                        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center text-gray-400">
-                                            <i class="fa-solid fa-circle text-[6px]" aria-hidden="true"></i>
+                                        <span
+                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 text-base font-bold leading-none text-gray-600"
+                                            aria-hidden="true">
+                                            +
                                         </span>
                                         <i class="fa-solid {{ $menuItem['icon'] }} w-5 text-center text-blue-700"
                                             aria-hidden="true"></i>

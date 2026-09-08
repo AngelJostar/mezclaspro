@@ -3,6 +3,9 @@
 namespace App\Livewire\Nutricionales;
 
 use App\Models\Nutricionales\Solicitud as NutricionalesSolicitud;
+use App\Support\SolicitudStatusFilter;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -11,10 +14,10 @@ class SolicitudesTable extends Component
 {
     use WithPagination;
 
-    public $buscar = '';
-    public $search = '';
+    public string $statusFilter = SolicitudStatusFilter::ALL;
 
     public $sortField = 'id';
+
     public $sortDirection = 'desc';
 
     protected $paginationTheme = 'tailwind';
@@ -22,6 +25,11 @@ class SolicitudesTable extends Component
     protected $listeners = [
         'nutricional-inspeccionada' => '$refresh',
     ];
+
+    public function mount(string $statusFilter = SolicitudStatusFilter::ALL): void
+    {
+        $this->statusFilter = SolicitudStatusFilter::normalize($statusFilter);
+    }
 
     public function sortBy($field)
     {
@@ -35,12 +43,6 @@ class SolicitudesTable extends Component
         $this->resetPage();
     }
 
-    public function aplicarBusqueda()
-    {
-        $this->search = trim($this->buscar);
-        $this->resetPage();
-    }
-
     public function render()
     {
         $user = Auth::user();
@@ -48,7 +50,7 @@ class SolicitudesTable extends Component
 
         $query = NutricionalesSolicitud::query()
             ->with([
-                'user.hospital',
+                'user.hospital.instituciones',
                 'solicitud_detail',
                 'solicitud_patient',
             ]);
@@ -57,29 +59,11 @@ class SolicitudesTable extends Component
             $query->where('solicituds.user_id', $user->id);
         }
 
-        if ($this->search !== '') {
-            $query->where(function ($query) {
-                $query->where('solicituds.id', 'like', "%{$this->search}%")
-                    ->orWhere('solicituds.estado', 'like', "%{$this->search}%")
-                    ->orWhere('solicituds.lote', 'like', "%{$this->search}%")
-                    ->orWhere('solicituds.remision', 'like', "%{$this->search}%")
-                    ->orWhereDate('solicituds.created_at', $this->search)
-                    ->orWhereDate('solicituds.fecha_hora_preparacion', $this->search)
-                    ->orWhereDate('solicituds.fecha_hora_limite_uso', $this->search)
-                    ->orWhereHas('solicitud_detail', function ($q) {
-                        $q->whereDate('fecha_hora_entrega', $this->search);
-                    })
-                    ->orWhereHas('user.hospital', function ($q) {
-                        $q->where('name', 'like', "%{$this->search}%");
-                    })
-                    ->orWhereHas('solicitud_patient', function ($q) {
-                        $q->where('nombre_paciente', 'like', "%{$this->search}%")
-                            ->orWhere('apellidos_paciente', 'like', "%{$this->search}%");
-                    });
-            });
-        }
+        $this->applyStatusFilter($query);
 
-        if ($this->sortField === 'solicitud_details.fecha_hora_entrega') {
+        if ($this->sortField === 'request_id') {
+            $query->orderBy('solicituds.id', $this->sortDirection);
+        } elseif ($this->sortField === 'solicitud_details.fecha_hora_entrega') {
             $query = $query
                 ->leftJoin('solicitud_details as sd', 'solicituds.solicitud_detail_id', '=', 'sd.id')
                 ->select('solicituds.*')
@@ -117,5 +101,63 @@ class SolicitudesTable extends Component
 
         return view('livewire.nutricionales.solicitudes-table', compact('solicitudes'));
     }
-}
 
+    private function applyStatusFilter(Builder $query): void
+    {
+        if ($this->statusFilter === SolicitudStatusFilter::PENDING) {
+            $query->where(function (Builder $query) {
+                $query->whereNull('solicituds.estado')
+                    ->orWhere('solicituds.estado', 'pendiente');
+            });
+
+            return;
+        }
+
+        if ($this->statusFilter === SolicitudStatusFilter::PREPARATION) {
+            $query->whereIn('solicituds.estado', SolicitudStatusFilter::PREPARATION_STATES);
+            $this->joinDeliverySchedules($query);
+            $query->whereNull('request_delivery_schedules.id');
+
+            return;
+        }
+
+        if ($this->statusFilter === SolicitudStatusFilter::IN_ROUTE) {
+            $query->whereIn('solicituds.estado', SolicitudStatusFilter::PREPARATION_STATES);
+            $this->joinDeliverySchedules($query);
+            $query->whereNotNull('request_delivery_schedules.id');
+
+            return;
+        }
+
+        if ($this->statusFilter === SolicitudStatusFilter::DELIVERED) {
+            $query->whereIn('solicituds.estado', SolicitudStatusFilter::DELIVERED_STATES);
+
+            return;
+        }
+
+        if ($this->statusFilter === SolicitudStatusFilter::HISTORY) {
+            $query->whereIn('solicituds.estado', SolicitudStatusFilter::HISTORY_STATES);
+        }
+    }
+
+    private function joinDeliverySchedules(Builder $query): void
+    {
+        $query
+            ->leftJoin('users as request_delivery_users', 'request_delivery_users.id', '=', 'solicituds.user_id')
+            ->leftJoin(
+                'solicitud_details as request_delivery_details',
+                'request_delivery_details.id',
+                '=',
+                'solicituds.solicitud_detail_id'
+            )
+            ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function (JoinClause $join) {
+                $join->on('request_delivery_schedules.hospital_id', '=', 'request_delivery_users.hospital_id')
+                    ->where('request_delivery_schedules.status', 'sent')
+                    ->whereRaw(
+                        'DATE(request_delivery_schedules.scheduled_date) = DATE(request_delivery_details.fecha_hora_entrega)'
+                    );
+            })
+            ->select('solicituds.*')
+            ->distinct();
+    }
+}

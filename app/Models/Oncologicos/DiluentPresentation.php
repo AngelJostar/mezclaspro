@@ -9,6 +9,7 @@ class DiluentPresentation extends Model
 {
     protected $fillable = [
         'diluent_id',
+        'catalog_presentation_id',
         'laboratory_id',
         'warehouse_id',
         'presentacion',             // ej. "Bolsa 500 mL"
@@ -38,6 +39,10 @@ class DiluentPresentation extends Model
     public function diluent()
     {
         return $this->belongsTo(Diluent::class);
+    }
+    public function catalogPresentation()
+    {
+        return $this->belongsTo(DiluentCatalogPresentation::class, 'catalog_presentation_id');
     }
 
     public function laboratory()

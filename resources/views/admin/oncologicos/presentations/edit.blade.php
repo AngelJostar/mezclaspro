@@ -90,8 +90,8 @@
              ESTABILIDAD (NUEVO)
         ========================== -->
                 <div class="col-span-12 md:col-span-3">
-                    <label class="text-sm">Estabilidad (horas) (opcional)</label>
-                    <input class="w-full border rounded p-2" type="number" min="0" name="stability_hours"
+                    <label class="text-sm">Estabilidad reconstituido (horas)</label>
+                    <input class="w-full border rounded p-2" type="number" min="1" max="8760" name="stability_hours"
                         value="{{ old('stability_hours', $presentation->stability_hours) }}" placeholder="Ej. 24">
                     <div class="text-xs text-gray-500 mt-1">
                         Tiempo máximo de uso recomendado.

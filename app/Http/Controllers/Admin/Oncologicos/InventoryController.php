@@ -5,6 +5,11 @@ namespace App\Http\Controllers\Admin\Oncologicos;
 use App\Exports\Oncologicos\OncologicosInventoryExport;
 use App\Http\Controllers\Controller;
 use App\Models\Oncologicos\Laboratory;
+use App\Models\Oncologicos\MedicineBatch;
+use App\Models\Oncologicos\MedicineBatchMovement;
+use App\Models\MedicineRemainder;
+use App\Services\MedicineRemainderService;
+use App\Services\WasteAuthorizationService;
 use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -14,6 +19,159 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class InventoryController extends Controller
 {
+
+    public function editBatch(MedicineBatch $batch)
+    {
+        abort_unless(auth()->user()->hasRole('Super Admin'), 403);
+
+        $batch->load(['laboratory', 'warehouse', 'presentation.catalog']);
+
+        return view('admin.oncologicos.inventory.edit', compact('batch'));
+    }
+
+    public function updateBatch(Request $request, MedicineBatch $batch)
+    {
+        abort_unless(auth()->user()->hasRole('Super Admin'), 403);
+
+        $data = $request->validate([
+            'lote' => 'required|string|max:255',
+            'caducidad' => 'required|date',
+            'fecha_ingreso' => 'nullable|date',
+            'is_active' => 'required|boolean',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $duplicate = MedicineBatch::query()
+            ->whereKeyNot($batch->id)
+            ->where('laboratory_id', $batch->laboratory_id)
+            ->where('warehouse_id', $batch->warehouse_id)
+            ->where('medicine_presentation_id', $batch->medicine_presentation_id)
+            ->where('lote', trim($data['lote']))
+            ->exists();
+
+        if ($duplicate) {
+            return back()->withErrors(['lote' => 'Ya existe ese lote para la misma presentacion, central y almacen.'])->withInput();
+        }
+
+        $batch->update([
+            'lote' => trim($data['lote']),
+            'caducidad' => $data['caducidad'],
+            'fecha_ingreso' => $data['fecha_ingreso'] ?: null,
+            'is_active' => (bool) $data['is_active'],
+        ]);
+
+        return redirect()->route('admin.oncologicos.inventory.index', [
+            'laboratory_id' => $batch->laboratory_id,
+            'warehouse_id' => $batch->warehouse_id,
+            'category' => $batch->presentation?->catalog?->catalog_category,
+        ])->with('success', 'El lote se actualizo correctamente.');
+    }
+
+    public function mermaForm(MedicineBatch $batch)
+    {
+        return redirect()->route('admin.oncologicos.inventory.index', [
+            'laboratory_id' => $batch->laboratory_id,
+            'warehouse_id' => $batch->warehouse_id,
+            'category' => $batch->presentation?->catalog?->catalog_category,
+        ]);
+    }
+
+    public function registrarMerma(
+        Request $request,
+        MedicineBatch $batch,
+        WasteAuthorizationService $wasteAuthorizationService
+    )
+    {
+        $data = $request->validate([
+            'quantity' => 'required|integer|min:1',
+            'unit' => 'required|in:frasco',
+            'notes' => 'required|string|max:500',
+        ]);
+
+        $wasteAuthorizationService->requestForBatch(
+            $batch,
+            (int) $data['quantity'],
+            $data['notes'],
+            (int) $request->user()->id
+        );
+
+        return redirect()->route('admin.oncologicos.inventory.index', [
+            'laboratory_id' => $batch->laboratory_id,
+            'warehouse_id' => $batch->warehouse_id,
+            'category' => $batch->presentation?->catalog?->catalog_category,
+        ])->with('success', 'La solicitud de merma fue enviada al superadministrador.');
+    }
+
+    public function descartarRemanente(MedicineBatch $batch)
+    {
+        DB::transaction(function () use ($batch) {
+            $lockedBatch = MedicineBatch::query()->lockForUpdate()->findOrFail($batch->id);
+            $remainders = MedicineRemainder::query()
+                ->where('domain', 'oncologico')
+                ->where('medicine_batch_id', $lockedBatch->id)
+                ->where('is_active', true)
+                ->where('current_ml', '>', 0)
+                ->where(function ($query) {
+                    $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+                })
+                ->lockForUpdate()
+                ->get();
+
+            $discardedMl = (float) $remainders->sum('current_ml');
+            if ($discardedMl <= 0.0001) {
+                throw new \InvalidArgumentException('El lote seleccionado no tiene remanente disponible para enviar a merma.');
+            }
+
+            $remainderService = app(MedicineRemainderService::class);
+            foreach ($remainders as $remainder) {
+                $remainderService->discard($remainder, 'Merma manual de remanente', 'MermaRemanente', $lockedBatch->id, auth()->id());
+            }
+
+            MedicineBatchMovement::create([
+                'medicine_batch_id' => $lockedBatch->id,
+                'laboratory_id' => $lockedBatch->laboratory_id,
+                'warehouse_id' => $lockedBatch->warehouse_id,
+                'user_id' => auth()->id(),
+                'movement_type' => 'merma',
+                'quantity' => 0,
+                'quantity_ml' => $discardedMl,
+                'stock_actual_before' => $lockedBatch->stock_actual,
+                'stock_actual_after' => $lockedBatch->stock_actual,
+                'stock_ml_before' => $lockedBatch->stock_ml_actual,
+                'stock_ml_after' => $lockedBatch->stock_ml_actual,
+                'stock_reservado_before' => $lockedBatch->stock_reservado,
+                'stock_reservado_after' => $lockedBatch->stock_reservado,
+                'reference_type' => 'MermaRemanente',
+                'reference_id' => $lockedBatch->id,
+                'notes' => 'Merma manual de remanente abierto: '.number_format($discardedMl, 4, '.', '').' mL.',
+            ]);
+        });
+
+        return redirect()->route('admin.oncologicos.inventory.index', [
+            'laboratory_id' => $batch->laboratory_id,
+            'warehouse_id' => $batch->warehouse_id,
+            'category' => $batch->presentation?->catalog?->catalog_category,
+        ])->with('success', 'El remanente se envio a merma correctamente.');
+    }
+
+    public function movimientos(MedicineBatch $batch)
+    {
+        $batch->load(['laboratory', 'warehouse', 'presentation.catalog']);
+
+        $movements = $batch->movements()
+            ->with('user')
+            ->latest('id')
+            ->paginate(25);
+
+        $remainders = MedicineRemainder::query()
+            ->with(['movements' => fn ($query) => $query->with('user')->orderBy('id')])
+            ->where('domain', 'oncologico')
+            ->where('medicine_batch_id', $batch->id)
+            ->latest('opened_at')
+            ->get();
+
+        return view('admin.oncologicos.inventory.movimientos', compact('batch', 'movements', 'remainders'));
+    }
 
     public function selectLaboratory(Request $request)
     {
@@ -354,6 +512,25 @@ class InventoryController extends Controller
             ->orderBy('mb.caducidad')
             ->orderBy('mb.id')
             ->get();
+
+        $remaindersByBatch = MedicineRemainder::query()
+            ->where('domain', 'oncologico')
+            ->where('laboratory_id', $laboratoryId)
+            ->where('warehouse_id', $warehouseId)
+            ->where('is_active', true)
+            ->where('current_ml', '>', 0)
+            ->where(function ($query) {
+                $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+            })
+            ->selectRaw('medicine_batch_id, SUM(current_ml) as remanente_ml')
+            ->groupBy('medicine_batch_id')
+            ->pluck('remanente_ml', 'medicine_batch_id');
+
+        $rows->each(function ($row) use ($remaindersByBatch) {
+            $row->remanente_ml = $row->batch_id
+                ? (float) ($remaindersByBatch->get($row->batch_id) ?? 0)
+                : 0.0;
+        });
 
         $groupedRows = $rows
             ->groupBy('catalog_id')

@@ -31,6 +31,18 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Fortify::authenticateUsing(function (Request $request) {
+            $user = User::query()
+                ->where('username', $request->input('username'))
+                ->first();
+
+            if (! $user || ! $user->is_active || ! Hash::check((string) $request->input('password'), $user->password)) {
+                return null;
+            }
+
+            return $user;
+        });
+
         Fortify::createUsersUsing(CreateNewUser::class);
         Fortify::updateUserProfileInformationUsing(UpdateUserProfileInformation::class);
         Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);

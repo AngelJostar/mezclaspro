@@ -140,6 +140,22 @@
             font-size: 4.45pt;
             line-height: 1.02;
         }
+
+        .title-cell {
+            width: 84%;
+        }
+
+        .qr-cell {
+            width: 16%;
+            text-align: right;
+            vertical-align: middle;
+        }
+
+        .qr-cell img {
+            width: 40px;
+            height: 40px;
+            display: inline-block;
+        }
     </style>
 </head>
 
@@ -226,7 +242,12 @@
     <div class="label">
         <table>
             <tr>
-                <td class="title">MEZCLAS ESTÉRILES ONCOLÓGICAS</td>
+                <td class="title title-cell">MEZCLAS ESTÉRILES ONCOLÓGICAS</td>
+                <td class="qr-cell">
+                    @if (!empty($qrImage))
+                        <img src="{{ $qrImage }}" alt="QR mezcla">
+                    @endif
+                </td>
             </tr>
         </table>
 

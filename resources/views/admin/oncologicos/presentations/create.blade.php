@@ -124,10 +124,12 @@
                 </div>
 
                 <div class="col-span-12 md:col-span-3">
-                    <label class="text-sm">Estabilidad (horas) (opcional)</label>
+                    <label class="text-sm">Estabilidad reconstituido (horas) <span class="text-red-600">*</span></label>
                     <input class="w-full border rounded p-2"
                         type="number"
-                        min="0"
+                        min="1"
+                        max="8760"
+                        required
                         name="presentations[__i__][stability_hours]"
                         value="__stability_hours__"
                         placeholder="Ej. 24">

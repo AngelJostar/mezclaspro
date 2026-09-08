@@ -476,13 +476,21 @@ class InstitucionBillingController extends Controller
                 });
             })
             ->when($dateFrom, function ($query) use ($dateFrom) {
-                $query->whereHas('solicitud', function ($subquery) use ($dateFrom) {
-                    $subquery->whereDate('fecha_entrega', '>=', $dateFrom);
+                $query->where(function ($dateQuery) use ($dateFrom) {
+                    $dateQuery->whereDate('mezclas.fecha_entrega', '>=', $dateFrom)
+                        ->orWhere(function ($legacyQuery) use ($dateFrom) {
+                            $legacyQuery->whereNull('mezclas.fecha_entrega')
+                                ->whereHas('solicitud', fn ($requestQuery) => $requestQuery->whereDate('fecha_entrega', '>=', $dateFrom));
+                        });
                 });
             })
             ->when($dateTo, function ($query) use ($dateTo) {
-                $query->whereHas('solicitud', function ($subquery) use ($dateTo) {
-                    $subquery->whereDate('fecha_entrega', '<=', $dateTo);
+                $query->where(function ($dateQuery) use ($dateTo) {
+                    $dateQuery->whereDate('mezclas.fecha_entrega', '<=', $dateTo)
+                        ->orWhere(function ($legacyQuery) use ($dateTo) {
+                            $legacyQuery->whereNull('mezclas.fecha_entrega')
+                                ->whereHas('solicitud', fn ($requestQuery) => $requestQuery->whereDate('fecha_entrega', '<=', $dateTo));
+                        });
                 });
             })
             ->when($billingStatus === 'con', function ($query) {
@@ -621,13 +629,16 @@ class InstitucionBillingController extends Controller
             $servicio = $record->solicitud?->servicio ?: '—';
             $medico = $record->solicitud?->nombre_medico ?: '—';
             $registro = $record->solicitud?->registro_paciente ?: '—';
-            $fechaModel = $record->solicitud?->fecha_entrega;
+            $fechaModel = $record->fecha_entrega ?? $record->solicitud?->fecha_entrega;
             $estado = $record->estado ?: ($record->solicitud?->estado ?? '—');
             $origenTipo = 'oncologica_mezcla';
             $tipoTexto = $record->solicitud?->tipo_solicitud === 'antibioticos'
                 ? 'Mezcla antibiótica'
                 : 'Mezcla oncológica';
-            $viewRoute = route('admin.oncologicos.mezclas.remision', $record->solicitud);
+            $viewRoute = route('admin.oncologicos.mezclas.remision', [
+                'solicitud' => $record->solicitud,
+                'mezcla' => $record->id,
+            ]);
             $viewLabel = 'Ver mezcla';
             $pricing = $this->pricing->priceOncoMix($record);
         } else {
@@ -679,7 +690,7 @@ class InstitucionBillingController extends Controller
             : [$this->pricing->formatMoney((float) $pricing['subtotal_before_vat'])];
         $totalPrice = (float) $pricing['total_iva_included'];
         $formattedTotalPrice = $totalPrice > 0 ? $this->pricing->formatMoney($totalPrice) : '—';
-        $remision = $record->remision ?: ($type === 'onco' ? $record->solicitud?->remision : null);
+        $remision = $record->remision;
         $vencimiento = $this->dueDates->calculate($fechaModel, $billing?->estatus_facturacion);
 
         return [
@@ -783,6 +794,15 @@ class InstitucionBillingController extends Controller
                 'subtotal_before_vat' => (float) ($pricing['supplies_base'] ?? 0),
                 'vat' => (float) ($pricing['supplies_vat'] ?? 0),
                 'total_with_vat' => (float) ($pricing['supplies_total'] ?? 0),
+            ];
+        }
+
+        foreach ($pricing['additional_charge_lines'] ?? collect() as $charge) {
+            $lines[] = [
+                'concept_type' => $charge['concept_type'], 'description' => $charge['description'],
+                'quantity' => $charge['quantity'], 'unit_label' => $charge['unit_label'],
+                'unit_price_before_vat' => $charge['unit_price_before_vat'], 'subtotal_before_vat' => $charge['subtotal_before_vat'],
+                'vat' => $charge['vat'], 'total_with_vat' => $charge['total'],
             ];
         }
 
