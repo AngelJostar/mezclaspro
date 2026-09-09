@@ -52,6 +52,7 @@ class MixtureIntegrationStatusChanged extends Notification
             'received' => 'recibida desde Dr. Sam',
             'materialized', 'pending' => 'creada y pendiente de operación',
             'authorized' => 'autorizada para preparación',
+            'dispensed' => 'dispensada',
             'preparing' => 'en preparación',
             'ready' => 'lista para entrega',
             'delivered' => 'entregada y conciliada',

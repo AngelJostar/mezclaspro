@@ -12,6 +12,8 @@ use App\Models\Oncologicos\SolicitudOnco;
 use App\Services\Integrations\DrSam\ExternalMixtureRequestService;
 use App\Services\Integrations\DrSam\ExternalMixtureMaterializer;
 use App\Services\Integrations\DrSam\ExternalMixtureStatusService;
+use App\Services\InstitutionBillingPricingService;
+use App\Support\MixtureIntegrationStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -49,7 +51,8 @@ class ExternalMixtureRequestController extends Controller
 
         return match ($record->materialized_type) {
             'npt' => app(NptSolicitudController::class)->remision(
-                Solicitud::query()->findOrFail($record->materialized_id)
+                Solicitud::query()->findOrFail($record->materialized_id),
+                app(InstitutionBillingPricingService::class)
             ),
             'oncology' => app(OncologySolicitudController::class)->remision(
                 SolicitudOnco::query()->findOrFail($record->materialized_id)
@@ -64,6 +67,7 @@ class ExternalMixtureRequestController extends Controller
             'request_id' => $record->remote_request_id,
             'local_external_id' => $record->local_external_id,
             'status' => $record->status,
+            'status_label' => MixtureIntegrationStatus::label($record->status),
             'integration_stage' => $this->integrationStage($record),
             'status_message' => $this->statusMessage($record),
             'has_error' => in_array($record->status, ['materialization_failed', 'rejected', 'cancelled'], true),
@@ -94,8 +98,8 @@ class ExternalMixtureRequestController extends Controller
         return match ($record->status) {
             'received' => 'received',
             'materialization_failed', 'materialized', 'pending' => 'materialization',
-            'authorized', 'preparing', 'ready' => 'operation',
-            'delivered' => 'delivery',
+            'authorized', 'dispensed', 'preparing', 'ready' => 'operation',
+            'in_route', 'delivered' => 'delivery',
             'rejected', 'cancelled' => 'closed',
             default => 'synchronization',
         };
@@ -116,8 +120,10 @@ class ExternalMixtureRequestController extends Controller
             'received' => 'Solicitud recibida desde Dr. Sam; pendiente de materialización.',
             'materialized', 'pending' => 'Solicitud creada en Mezclas y pendiente de operación.',
             'authorized' => 'Solicitud autorizada para preparación.',
+            'dispensed' => 'La mezcla fue dispensada.',
             'preparing' => 'La mezcla se encuentra en preparación.',
             'ready' => 'La mezcla está lista para entrega.',
+            'in_route' => 'La mezcla se encuentra en ruta.',
             'delivered' => 'La mezcla fue entregada y conciliada.',
             'rejected' => 'La solicitud fue rechazada en Mezclas.',
             'cancelled' => 'La solicitud fue cancelada.',

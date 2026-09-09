@@ -8,6 +8,7 @@ use App\Models\Nutricionales\Solicitud;
 use App\Models\Nutricionales\SolicitudInput;
 use App\Models\Oncologicos\MedicineBatchMovement;
 use App\Models\Oncologicos\SolicitudOnco;
+use App\Support\MixtureIntegrationStatus;
 
 class ExternalMixtureStatusService
 {
@@ -84,6 +85,8 @@ class ExternalMixtureStatusService
                 $status = 'ready';
             } elseif ($mixtureStates->contains('preparada')) {
                 $status = 'preparing';
+            } elseif ($mixtureStates->contains('dispensada')) {
+                $status = 'dispensed';
             } elseif ($mixtureStates->contains('aprobada')) {
                 $status = 'authorized';
             }
@@ -154,15 +157,7 @@ class ExternalMixtureStatusService
 
     private function canonical(?string $status): string
     {
-        return match (strtolower((string) $status)) {
-            'aprobada', 'autorizada' => 'authorized',
-            'enproceso', 'preparada' => 'preparing',
-            'revisada', 'lista' => 'ready',
-            'finalizada', 'entregada' => 'delivered',
-            'cancelada' => 'cancelled',
-            'no_aprobada', 'no-aprobada', 'rechazada' => 'rejected',
-            default => 'pending',
-        };
+        return MixtureIntegrationStatus::fromCbta($status);
     }
 
     private function remission(?string $number, $updatedAt, array $items = []): array

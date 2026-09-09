@@ -2304,6 +2304,7 @@ class SolicitudController extends Controller
 
         $hospital = $solicitud->user?->hospital;
         $nutriMedicineListId = $hospital?->nutri_medicine_list_id;
+        $priceList = $hospital?->nutriMedicineList;
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
         $distributor = $hospital?->nutriMedicineList?->distributor;
 

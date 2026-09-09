@@ -22,7 +22,10 @@ class MobileAuthController extends Controller
 
         $user = User::query()
             ->whereRaw('LOWER(username) = ?', [strtolower(trim($credentials['username']))])
-            ->with('personnelProfile:id,user_id,positions,employment_status')
+            ->with([
+                'personnelProfile:id,user_id,positions,employment_status',
+                'hospital:id,name,short_name,is_active,access_is_active',
+            ])
             ->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
@@ -31,9 +34,9 @@ class MobileAuthController extends Controller
             ]);
         }
 
-        if (! $user->is_active || ! $this->isMessenger($user)) {
+        if (! $user->is_active || ! $this->accessModule($user)) {
             throw ValidationException::withMessages([
-                'username' => ['Este usuario no tiene acceso a la aplicación de mensajería.'],
+                'username' => ['Este usuario no tiene acceso a la aplicación móvil.'],
             ]);
         }
 
@@ -52,9 +55,12 @@ class MobileAuthController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $user->loadMissing('personnelProfile:id,user_id,positions,employment_status');
+        $user->loadMissing([
+            'personnelProfile:id,user_id,positions,employment_status',
+            'hospital:id,name,short_name,is_active,access_is_active',
+        ]);
 
-        abort_unless($user->is_active && $this->isMessenger($user), 403, 'Acceso de mensajero requerido.');
+        abort_unless($user->is_active && $this->accessModule($user), 403, 'Acceso movil requerido.');
 
         return response()->json(['user' => $this->userData($user)]);
     }
@@ -75,15 +81,41 @@ class MobileAuthController extends Controller
             && in_array(PersonnelProfile::POSITION_COURIER, $profile->positions ?? [], true);
     }
 
+    private function isHospitalUser(User $user): bool
+    {
+        return (bool) $user->hospital_id
+            && $user->hasAnyRole(['Cliente', 'Institucion'])
+            && $user->hospital
+            && $user->hospital->is_active
+            && $user->hospital->access_is_active;
+    }
+
+    private function accessModule(User $user): ?string
+    {
+        if ($this->isMessenger($user)) {
+            return 'courier';
+        }
+
+        return $this->isHospitalUser($user) ? 'hospital' : null;
+    }
+
     /**
      * @return array<string, mixed>
      */
     private function userData(User $user): array
     {
+        $module = $this->accessModule($user);
+
         return [
             'id' => $user->id,
             'name' => trim($user->name.' '.$user->lastname),
             'username' => $user->username,
+            'module' => $module,
+            'hospital' => $module === 'hospital' ? [
+                'id' => $user->hospital?->id,
+                'name' => $user->hospital?->name,
+                'short_name' => $user->hospital?->short_name,
+            ] : null,
         ];
     }
 }

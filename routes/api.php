@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Mobile\MobileAuthController;
+use App\Http\Controllers\Api\Mobile\MobileHospitalController;
 use App\Http\Controllers\Api\Mobile\MobileRouteController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,7 @@ Route::prefix('mobile')->middleware('throttle:api')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/me', [MobileAuthController::class, 'me']);
         Route::post('/auth/logout', [MobileAuthController::class, 'logout']);
+        Route::get('/hospital/dashboard', [MobileHospitalController::class, 'dashboard']);
         Route::get('/routes/assigned', [MobileRouteController::class, 'assigned']);
         Route::get('/routes/{distributionRoute}', [MobileRouteController::class, 'show']);
         Route::post('/routes/{distributionRoute}/start', [MobileRouteController::class, 'start']);

@@ -102,10 +102,19 @@ class MixturesDemoSeeder extends Seeder
                 ['description' => $name, 'tipo_input' => 'adulto'],
                 ['unidad' => 'ml', 'orden_enum' => $index + 1, 'category_id' => $category->id, 'mult' => 1, 'div' => 1, 'is_active' => true]
             );
-            $catalog = NutritionMedicineCatalog::query()->updateOrCreate(
-                ['external_code' => $code],
-                ['denominacion_generica' => $name, 'category_id' => $category->id, 'input_id' => $input->id, 'is_active' => true]
-            );
+            // Las bases anteriores a la API ya pueden tener un catálogo ligado al
+            // input, pero sin external_code. Reutilizarlo evita duplicar el input.
+            $catalog = NutritionMedicineCatalog::query()->where('external_code', $code)->first()
+                ?? NutritionMedicineCatalog::query()->where('input_id', $input->id)->first();
+
+            $catalog ??= new NutritionMedicineCatalog();
+            $catalog->fill([
+                'external_code' => $code,
+                'denominacion_generica' => $name,
+                'category_id' => $category->id,
+                'input_id' => $input->id,
+                'is_active' => true,
+            ])->save();
             $presentation = NutritionMedicinePresentation::query()->updateOrCreate(
                 ['external_code' => $presentationCode],
                 [
@@ -244,10 +253,17 @@ class MixturesDemoSeeder extends Seeder
                 ]);
             }
 
-            $catalog = NutritionMedicineCatalog::query()->updateOrCreate(
-                ['external_code' => $code],
-                ['denominacion_generica' => $name, 'category_id' => $category->id, 'input_id' => $input->id, 'is_active' => true]
-            );
+            $catalog = NutritionMedicineCatalog::query()->where('external_code', $code)->first()
+                ?? NutritionMedicineCatalog::query()->where('input_id', $input->id)->first();
+
+            $catalog ??= new NutritionMedicineCatalog();
+            $catalog->fill([
+                'external_code' => $code,
+                'denominacion_generica' => $name,
+                'category_id' => $category->id,
+                'input_id' => $input->id,
+                'is_active' => true,
+            ])->save();
             $presentation = NutritionMedicinePresentation::query()->updateOrCreate(
                 ['external_code' => $presentationCode],
                 [

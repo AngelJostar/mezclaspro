@@ -329,13 +329,13 @@ class ExternalMixtureMaterializerTest extends TestCase
         config()->set('services.dr_sam.webhook_url', 'https://dr-sam.test/api/integrations/cbta/mixture-status');
         config()->set('services.dr_sam.webhook_secret', 'webhook-secret');
         Http::fake(['https://dr-sam.test/*' => Http::response(['accepted' => true])]);
-        foreach (['aprobada' => 'authorized', 'preparada' => 'preparing', 'revisada' => 'ready', 'entregada' => 'delivered'] as $source => $canonical) {
+        foreach (['aprobada' => 'authorized', 'dispensada' => 'dispensed', 'preparada' => 'preparing', 'revisada' => 'ready', 'entregada' => 'delivered'] as $source => $canonical) {
             $mixture->update(['estado' => $source]);
             $refreshed = app(ExternalMixtureStatusService::class)->refresh($external->fresh());
             $this->assertSame($canonical, $refreshed->status);
             $this->assertSame('validated', $refreshed->status_details['inventory']['stage']);
             $this->assertFalse($refreshed->status_details['inventory']['consumed']);
         }
-        Http::assertSentCount(4);
+        Http::assertSentCount(5);
     }
 }
