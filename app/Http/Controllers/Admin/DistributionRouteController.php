@@ -247,7 +247,6 @@ class DistributionRouteController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'route_type' => ['required', 'string', 'in:vehicular,dron'],
-            'messenger_id' => ['required', 'integer', 'exists:users,id'],
             'hospital_ids' => ['required', 'array', 'min:1'],
             'hospital_ids.*' => ['integer', 'distinct', 'exists:hospitals,id'],
         ]);
@@ -293,7 +292,6 @@ class DistributionRouteController extends Controller
                 ]);
 
             $distributionRoute->hospitals()->sync($hospitalAssignments);
-            $distributionRoute->messengers()->sync([$validated['messenger_id']]);
 
             return $distributionRoute;
         });
@@ -317,7 +315,6 @@ class DistributionRouteController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'route_type' => ['required', 'string', 'in:vehicular,dron'],
-            'messenger_id' => ['required', 'integer', 'exists:users,id'],
             'hospital_ids' => ['required', 'array', 'min:1'],
             'hospital_ids.*' => ['integer', 'distinct', 'exists:hospitals,id'],
         ]);
@@ -363,7 +360,6 @@ class DistributionRouteController extends Controller
                 ]);
 
             $distributionRoute->hospitals()->sync($hospitalAssignments);
-            $distributionRoute->messengers()->sync([$validated['messenger_id']]);
         });
 
         return redirect()

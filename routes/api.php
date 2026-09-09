@@ -46,7 +46,10 @@ Route::prefix('mobile')->middleware('throttle:api')->group(function (): void {
         Route::post('/auth/logout', [MobileAuthController::class, 'logout']);
         Route::get('/hospital/dashboard', [MobileHospitalController::class, 'dashboard']);
         Route::get('/routes/assigned', [MobileRouteController::class, 'assigned']);
+        Route::get('/routes/available', [MobileRouteController::class, 'available']);
         Route::get('/routes/{distributionRoute}', [MobileRouteController::class, 'show']);
+        Route::post('/routes/{distributionRoute}/accept', [MobileRouteController::class, 'accept']);
+        Route::post('/routes/{distributionRoute}/release', [MobileRouteController::class, 'release']);
         Route::post('/routes/{distributionRoute}/start', [MobileRouteController::class, 'start']);
         Route::post('/routes/{distributionRoute}/locations', [MobileRouteController::class, 'location']);
         Route::post('/routes/{distributionRoute}/deliveries/{schedule}/confirm', [MobileRouteController::class, 'confirmDelivery']);

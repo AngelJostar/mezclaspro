@@ -4,11 +4,6 @@
         $distributionRoute->exists ? $distributionRoute->hospitals->pluck('id')->all() : []
     ))->map(fn ($id) => (int) $id)->values()->all();
 
-    $selectedMessengerIds = collect(old(
-        'messenger_ids',
-        $distributionRoute->exists ? $distributionRoute->messengers->pluck('id')->all() : []
-    ))->map(fn ($id) => (int) $id)->values()->all();
-
     $selectableHospitalIds = $hospitals
         ->reject(fn ($hospital) => $hospitalRouteAssignments->has($hospital->id))
         ->pluck('id')
@@ -19,11 +14,8 @@
 
 <div x-data="{
     selectedHospitals: @js($selectedHospitalIds),
-    selectedMessengers: @js($selectedMessengerIds),
     hospitalSearch: '',
-    messengerSearch: '',
     allHospitalIds: @js($selectableHospitalIds),
-    allMessengerIds: @js($messengers->pluck('id')->map(fn ($id) => (int) $id)->values()),
     allHospitalsSelected() {
         return this.allHospitalIds.length > 0
             && this.allHospitalIds.every((id) => this.selectedHospitals.includes(id));
@@ -35,18 +27,6 @@
         }
 
         this.selectedHospitals = [...new Set([...this.selectedHospitals, ...this.allHospitalIds])];
-    },
-    allMessengersSelected() {
-        return this.allMessengerIds.length > 0
-            && this.allMessengerIds.every((id) => this.selectedMessengers.includes(id));
-    },
-    toggleAllMessengers() {
-        if (this.allMessengersSelected()) {
-            this.selectedMessengers = this.selectedMessengers.filter((id) => !this.allMessengerIds.includes(id));
-            return;
-        }
-
-        this.selectedMessengers = [...new Set([...this.selectedMessengers, ...this.allMessengerIds])];
     },
 }" class="space-y-4">
     @if ($errors->any())
@@ -106,6 +86,8 @@
             </label>
         </div>
 
+        {{-- Las rutas nuevas se publican para aceptación desde la aplicación móvil. --}}
+        @if (false)
         <div class="mt-3 border-t border-gray-200 pt-3">
             <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div class="flex-1">
@@ -143,6 +125,10 @@
             </div>
             <p class="mt-1.5 text-[11px] font-medium text-cyan-700"><span x-text="selectedMessengers.length"></span> mensajeros seleccionados</p>
         </div>
+        @endif
+        <p class="mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-800">
+            Al guardar, la ruta queda publicada sin mensajero. El primer mensajero disponible que la acepte desde la aplicación será responsable del recorrido.
+        </p>
     </section>
 
     <section aria-labelledby="route-hospitals-heading">

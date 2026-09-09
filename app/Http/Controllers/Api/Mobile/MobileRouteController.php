@@ -8,6 +8,7 @@ use App\Models\DistributionDeliverySchedule;
 use App\Models\DistributionLocationUpdate;
 use App\Models\DistributionRoute;
 use App\Models\DistributionRouteRun;
+use App\Models\PersonnelProfile;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class MobileRouteController extends Controller
     {
         /** @var User $messenger */
         $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
         $date = $request->date('date')?->toDateString() ?? now('America/Mexico_City')->toDateString();
 
         $routes = DistributionRoute::query()
@@ -42,10 +44,99 @@ class MobileRouteController extends Controller
         ]);
     }
 
+    public function available(Request $request): JsonResponse
+    {
+        /** @var User $messenger */
+        $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
+        $date = $request->date('date')?->toDateString() ?? now('America/Mexico_City')->toDateString();
+
+        $routes = DistributionRoute::query()
+            ->where('status', DistributionRoute::STATUS_PENDING)
+            ->doesntHave('messengers')
+            ->whereExists(function ($query) use ($date) {
+                $query->selectRaw('1')
+                    ->from('distribution_delivery_schedules as available_schedules')
+                    ->whereColumn('available_schedules.distribution_route_id', 'distribution_routes.id')
+                    ->whereDate('available_schedules.scheduled_date', $date)
+                    ->where('available_schedules.status', 'sent');
+            })
+            ->with('hospitals:id,name,adress,short_name,latitude,longitude')
+            ->orderBy('schedule_start')
+            ->get()
+            ->map(fn (DistributionRoute $route) => $this->availableRouteData($route, $date))
+            ->filter(fn (array $route) => $route['stops_count'] > 0)
+            ->values();
+
+        return response()->json([
+            'date' => $date,
+            'routes' => $routes,
+        ]);
+    }
+
+    public function accept(Request $request, DistributionRoute $distributionRoute): JsonResponse
+    {
+        /** @var User $messenger */
+        $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
+        $date = $request->date('date')?->toDateString() ?? now('America/Mexico_City')->toDateString();
+
+        DB::transaction(function () use ($messenger, $distributionRoute, $date): void {
+            User::query()->whereKey($messenger->id)->lockForUpdate()->firstOrFail();
+            $route = DistributionRoute::query()->lockForUpdate()->findOrFail($distributionRoute->id);
+
+            abort_unless($route->status === DistributionRoute::STATUS_PENDING, 422, 'La ruta ya no está disponible.');
+            abort_if($route->messengers()->exists(), 422, 'La ruta ya fue aceptada por otro mensajero.');
+            abort_unless($this->hasAvailableStops($route, $date), 422, 'La ruta no tiene entregas disponibles para hoy.');
+
+            $hasActiveRoute = DistributionRoute::query()
+                ->whereHas('messengers', fn ($query) => $query->whereKey($messenger->id))
+                ->whereIn('status', [
+                    DistributionRoute::STATUS_PENDING,
+                    DistributionRoute::STATUS_IN_ROUTE,
+                    DistributionRoute::STATUS_DELAYED,
+                ])
+                ->lockForUpdate()
+                ->exists();
+
+            abort_if($hasActiveRoute, 422, 'Primero libera o finaliza tu ruta actual.');
+
+            $route->messengers()->attach($messenger->id);
+        });
+
+        return response()->json(['message' => 'Ruta aceptada. Ya puedes iniciarla cuando estés listo.']);
+    }
+
+    public function release(Request $request, DistributionRoute $distributionRoute): JsonResponse
+    {
+        /** @var User $messenger */
+        $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
+
+        DB::transaction(function () use ($messenger, $distributionRoute): void {
+            User::query()->whereKey($messenger->id)->lockForUpdate()->firstOrFail();
+            $route = DistributionRoute::query()->lockForUpdate()->findOrFail($distributionRoute->id);
+
+            $this->ensureMessengerAssigned($route, $messenger);
+            abort_unless($route->status === DistributionRoute::STATUS_PENDING, 422, 'Una ruta iniciada no puede liberarse.');
+
+            $hasStarted = DistributionRouteRun::query()
+                ->where('distribution_route_id', $route->id)
+                ->where('messenger_id', $messenger->id)
+                ->exists();
+
+            abort_if($hasStarted, 422, 'Una ruta iniciada no puede liberarse.');
+            $route->messengers()->detach($messenger->id);
+        });
+
+        return response()->json(['message' => 'Ruta liberada y publicada nuevamente para otros mensajeros.']);
+    }
+
     public function show(Request $request, DistributionRoute $distributionRoute): JsonResponse
     {
         /** @var User $messenger */
         $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
         $this->ensureMessengerAssigned($distributionRoute, $messenger);
         $date = $request->date('date')?->toDateString() ?? now('America/Mexico_City')->toDateString();
 
@@ -61,6 +152,7 @@ class MobileRouteController extends Controller
     {
         /** @var User $messenger */
         $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
         $this->ensureMessengerAssigned($distributionRoute, $messenger);
         $coordinates = $this->coordinates($request, true);
 
@@ -97,6 +189,7 @@ class MobileRouteController extends Controller
     {
         /** @var User $messenger */
         $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
         $this->ensureMessengerAssigned($distributionRoute, $messenger);
         $coordinates = $this->coordinates($request);
         $run = $this->activeRun($distributionRoute, $messenger);
@@ -184,6 +277,20 @@ class MobileRouteController extends Controller
         abort_unless($route->messengers()->whereKey($messenger->id)->exists(), 403, 'No tienes asignada esta ruta.');
     }
 
+    private function ensureMobileMessenger(User $messenger): void
+    {
+        $profile = $messenger->loadMissing('personnelProfile:id,user_id,positions,employment_status')->personnelProfile;
+
+        abort_unless(
+            $messenger->is_active
+                && $profile
+                && $profile->employment_status === 'hired'
+                && in_array(PersonnelProfile::POSITION_COURIER, $profile->positions ?? [], true),
+            403,
+            'Acceso de mensajero requerido.'
+        );
+    }
+
     private function activeRun(DistributionRoute $route, User $messenger): DistributionRouteRun
     {
         $run = DistributionRouteRun::query()
@@ -196,6 +303,15 @@ class MobileRouteController extends Controller
         abort_unless($run, 422, 'Inicia la ruta antes de registrar ubicación o entregas.');
 
         return $run;
+    }
+
+    private function hasAvailableStops(DistributionRoute $route, string $date): bool
+    {
+        return DistributionDeliverySchedule::query()
+            ->where('distribution_route_id', $route->id)
+            ->whereDate('scheduled_date', $date)
+            ->where('status', 'sent')
+            ->exists();
     }
 
     /**
@@ -272,6 +388,53 @@ class MobileRouteController extends Controller
             'run' => $run ? $this->runData($run) : null,
             'stops_count' => $stops->count(),
             'completed_stops_count' => $stops->where('status', 'delivered')->count(),
+            'stops' => $stops,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function availableRouteData(DistributionRoute $route, string $date): array
+    {
+        $schedules = DistributionDeliverySchedule::query()
+            ->where('distribution_route_id', $route->id)
+            ->whereDate('scheduled_date', $date)
+            ->where('status', 'sent')
+            ->get()
+            ->keyBy('hospital_id');
+
+        $stops = $route->hospitals
+            ->filter(fn ($hospital) => $schedules->has($hospital->id))
+            ->map(function ($hospital) use ($schedules): array {
+                $schedule = $schedules->get($hospital->id);
+
+                return [
+                    'schedule_id' => $schedule->id,
+                    'hospital_id' => $hospital->id,
+                    'order' => (int) $hospital->pivot->stop_order,
+                    'hospital' => $hospital->short_name ?: $hospital->name,
+                    'address' => $hospital->adress,
+                    'latitude' => $hospital->latitude,
+                    'longitude' => $hospital->longitude,
+                    'status' => 'pending',
+                    'delivered_at' => null,
+                ];
+            })
+            ->sortBy('order')
+            ->values();
+
+        return [
+            'id' => $route->id,
+            'code' => $route->code,
+            'name' => $route->name,
+            'date' => $date,
+            'schedule_start' => Carbon::parse($route->schedule_start)->format('H:i'),
+            'schedule_end' => Carbon::parse($route->schedule_end)->format('H:i'),
+            'status' => 'available',
+            'run' => null,
+            'stops_count' => $stops->count(),
+            'completed_stops_count' => 0,
             'stops' => $stops,
         ];
     }
