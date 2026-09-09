@@ -148,8 +148,7 @@
                                 {{ match ($mezcla->estado) {
                                     'pendiente' => 'bg-yellow-100 text-yellow-800',
                                     'aprobada' => 'bg-green-100 text-green-800',
-                                    'dispensada' => 'bg-sky-100 text-sky-800',
-                                    'revisada' => 'bg-indigo-100 text-indigo-800',
+                                    'dispensada', 'enproceso', 'preparada', 'revisada' => 'bg-blue-100 text-blue-700',
                                     'cancelada' => 'bg-red-100 text-red-800',
                                     default => 'bg-gray-100 text-gray-800',
                                 } }}">
@@ -195,6 +194,8 @@
                                         'return_to' => $requestListUrl,
                                     ]) }}"
                                     data-dispensing-popup="dispensing-{{ $solicitud->tipo_solicitud ?? 'oncologicos' }}-{{ $mezcla->id }}"
+                                    :variant="$mezcla->has_inspection_rejection ? 'red' : 'warning'"
+                                    title="{{ $mezcla->has_inspection_rejection ? 'Reiniciar fabricación: inspección rechazada' : 'Dispensar mezcla' }}"
                                     icon="fa-solid fa-box-open">
                                     Dispensar
                                 </x-table-action-link>
@@ -206,7 +207,9 @@
                                     @method('PUT')
                                     <input type="hidden" name="return_to" value="{{ $requestListUrl }}">
                                     <input type="hidden" name="accion" value="preparada">
-                                    <x-table-action-button onclick="confirmarPreparada({{ $mezcla->id }})" variant="green">
+                                    <x-table-action-button onclick="confirmarPreparada({{ $mezcla->id }})"
+                                        :variant="$mezcla->has_inspection_rejection ? 'red' : 'warning'"
+                                        title="{{ $mezcla->has_inspection_rejection ? 'Preparar nuevamente: rechazo previo en inspección' : 'Preparar mezcla' }}">
                                         Preparar
                                     </x-table-action-button>
                                 </form>
@@ -218,6 +221,8 @@
                         <td class="px-6 py-4 text-center whitespace-nowrap">
                             @if ($mezcla->estado === 'preparada')
                                 <x-table-action-button
+                                    :variant="$mezcla->has_inspection_rejection ? 'red' : 'warning'"
+                                    title="{{ $mezcla->has_inspection_rejection ? 'Inspeccionar nuevamente: rechazo previo en inspección' : 'Inspeccionar mezcla' }}"
                                     onclick="window.dispatchEvent(new CustomEvent('abrir-modal-inspeccion', { detail: [{{ $mezcla->id }}] }))">
                                     Inspección
                                 </x-table-action-button>

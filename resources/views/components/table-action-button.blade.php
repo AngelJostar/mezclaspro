@@ -11,6 +11,7 @@
         'green' => 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-300',
         'red' => 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-300',
         'yellow' => 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-300',
+        'warning' => 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 focus:ring-yellow-300',
         'gray' => 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-300',
     ];
 @endphp

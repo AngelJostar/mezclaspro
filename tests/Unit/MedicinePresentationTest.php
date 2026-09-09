@@ -7,6 +7,25 @@ use PHPUnit\Framework\TestCase;
 
 class MedicinePresentationTest extends TestCase
 {
+    public function test_remainder_conversion_uses_the_dispensing_concentration_without_rounding(): void
+    {
+        $this->assertSame(50.0, MedicinePresentation::remainderInMilligramsFrom(2, 250, 10));
+        $this->assertSame(625.0, MedicinePresentation::remainderInMilligramsFrom(2.5, 1000, 4));
+        $this->assertEqualsWithDelta(0.0617, MedicinePresentation::remainderInMilligramsFrom('0.1234', 5, 10), 0.0000001);
+    }
+
+    public function test_empty_remainders_are_zero_even_without_concentration(): void
+    {
+        $this->assertSame(0.0, MedicinePresentation::remainderInMilligramsFrom(0, null, null));
+    }
+
+    public function test_nonempty_remainders_without_concentration_are_not_mislabeled_as_zero_mg(): void
+    {
+        foreach ([[null, 10], [250, null], [250, 0], [0, 10]] as [$mg, $ml]) {
+            $this->assertNull(MedicinePresentation::remainderInMilligramsFrom(2, $mg, $ml));
+        }
+    }
+
     public function test_it_reads_milligrams_from_structured_content(): void
     {
         $presentation = new MedicinePresentation([

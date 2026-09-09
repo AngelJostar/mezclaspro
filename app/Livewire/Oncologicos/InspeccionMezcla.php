@@ -8,6 +8,10 @@ use App\Models\Oncologicos\Mezcla;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use App\Services\InspectionRejectionService;
 
 class InspeccionMezcla extends Component
 {
@@ -16,12 +20,41 @@ class InspeccionMezcla extends Component
         'Auxiliar de responsable sanitario',
     ];
 
+    private const CONTENT_DEFAULTS = [
+        'esta_rotulado' => 1,
+        'medicamento' => 1,
+        'volumen_medicamento' => 1,
+        'sello_seguridad' => 1,
+        'esta_roto' => 0,
+        'contenido_homogeneo' => 1,
+        'presenta_turbidez' => 0,
+        'aprueba_contenedor' => 1,
+        'numero_lote' => 1,
+        'dosis_volumen_total' => 1,
+        'rubrica_preparador' => 1,
+        'presenta_fugas' => 0,
+        'coloracion_apropiada' => 1,
+        'presenta_particulas' => 0,
+        'aprueba_contenido' => 1,
+    ];
+
     public $mostrarModalInspeccion = false;
 
+    #[\Livewire\Attributes\Locked]
+    public bool $mostrarModalRechazo = false;
+    #[\Livewire\Attributes\Locked]
+    public bool $rechazoGuardado = false;
+    public string $motivoRechazo = '';
+
+    #[\Livewire\Attributes\Locked]
     public $mezclaId;
+    #[\Livewire\Attributes\Locked]
+    public int $productionAttempt = 1;
     public $lote_mezcla = '';
     #[\Livewire\Attributes\Locked]
     public string $mixtureContext = '';
+    #[\Livewire\Attributes\Locked]
+    public array $inspectionSummary = [];
 
     // checks
     public $es_limpia = 0;
@@ -109,6 +142,40 @@ class InspeccionMezcla extends Component
         $this->observaciones = 'N.A.';
     }
 
+    private function cargarResumen(Mezcla $mezcla): void
+    {
+        $solicitud = $mezcla->solicitud;
+        $text = static fn ($value) => trim((string) $value) !== '' ? trim((string) $value) : '—';
+        $quantity = static fn ($value, string $unit) => is_numeric($value)
+            ? number_format((float) $value, 2).' '.$unit : '—';
+
+        $this->inspectionSummary = [
+            'destination' => \App\Support\MixtureWorkflowContext::destination($solicitud?->hospital),
+            'type' => $solicitud?->tipo_solicitud === 'antibioticos' ? 'Antibiótica' : 'Oncológica',
+            'patient' => [
+                'name' => $text($solicitud?->nombre_paciente),
+                'record' => $text($solicitud?->registro_paciente),
+                'sex' => match (strtoupper((string) $solicitud?->sexo)) {
+                    'M' => 'Masculino', 'F' => 'Femenino', default => $text($solicitud?->sexo),
+                },
+                'age' => $solicitud?->edad !== null ? $solicitud->edad.' años' : '—',
+                'weight' => $quantity($solicitud?->peso, 'kg'),
+                'service' => $text($solicitud?->servicio),
+                'location' => $text(collect([$solicitud?->piso, $solicitud?->cama])->filter(fn ($value) => filled($value))->implode(' / ')),
+                'doctor' => $text($solicitud?->nombre_medico),
+            ],
+            'total_volume' => $quantity($mezcla->volumen_dilucion, 'mL'),
+            'medications' => $mezcla->medicamentos->map(fn ($medication) => [
+                'name' => $text($medication->denominacion_snapshot ?: $medication->nombre_medicamento),
+                'dose' => $quantity($medication->dosis, 'mg'),
+                'volume' => $quantity($medication->dosis_ml, 'mL'),
+                'diluent' => $text($medication->diluyente?->denominacion_generica
+                    ?: $mezcla->diluentPresentation?->diluent?->denominacion_generica),
+                'route' => $text($medication->viaAdministracion?->name),
+            ])->all(),
+        ];
+    }
+
     #[On('abrir-modal-inspeccion')]
     public function abrirModalInspeccion($mezclaId)
     {
@@ -119,11 +186,24 @@ class InspeccionMezcla extends Component
 
         if (!$mezclaId) return;
 
+        $mezcla = Mezcla::with([
+            'solicitud.hospital.instituciones', 'medicamentos.diluyente',
+            'medicamentos.viaAdministracion', 'diluentPresentation.diluent',
+        ])->findOrFail((int) $mezclaId);
+        $user = Auth::user();
+        abort_unless($user?->hasAnyRole(['Admin', 'Super Admin'])
+            || ((int) $user?->hospital_id > 0 && (int) $user->hospital_id === (int) $mezcla->solicitud?->hospital_id), 403);
+
+        $this->resetExcept('aprobadores');
+        $this->reviso_nombre = $this->nombreUsuarioActual();
+        $this->observaciones = 'N.A.';
         $this->mezclaId = (int) $mezclaId;
         $this->mostrarModalInspeccion = true;
-        $mezcla = Mezcla::with('solicitud.hospital.instituciones')->find($this->mezclaId);
+        $this->productionAttempt = (int) ($mezcla?->production_attempt ?? 1);
+        $this->resetValidation();
         $this->lote_mezcla = (string) ($mezcla?->lote ?? '');
         $this->mixtureContext = \App\Support\MixtureWorkflowContext::label($this->mezclaId, $mezcla?->solicitud?->hospital);
+        $this->cargarResumen($mezcla);
 
         // Hidratar con la inspección existente (creada en "Aprobar")
         $ins = OncologicosInspeccionMezcla::where('mezcla_id', $mezclaId)->first();
@@ -133,24 +213,24 @@ class InspeccionMezcla extends Component
             $this->es_limpia = (int) $ins->es_limpia;
             $this->es_libre = (int) $ins->es_libre;
             $this->tipo_contenedor = (string) ($ins->tipo_contenedor ?? '');
-            $this->esta_rotulado = (int) $ins->esta_rotulado;
-            $this->numero_lote = (int) $ins->numero_lote;
-            $this->medicamento = (int) $ins->medicamento;
-            $this->dosis_volumen_total = (int) $ins->dosis_volumen_total;
-            $this->volumen_medicamento = (int) $ins->volumen_medicamento;
-            $this->rubrica_preparador = (int) $ins->rubrica_preparador;
-            $this->sello_seguridad = (int) $ins->sello_seguridad;
+            $this->esta_rotulado = (bool) $ins->esta_rotulado;
+            $this->numero_lote = (bool) $ins->numero_lote;
+            $this->medicamento = (bool) $ins->medicamento;
+            $this->dosis_volumen_total = (bool) $ins->dosis_volumen_total;
+            $this->volumen_medicamento = (bool) $ins->volumen_medicamento;
+            $this->rubrica_preparador = (bool) $ins->rubrica_preparador;
+            $this->sello_seguridad = (bool) $ins->sello_seguridad;
             $this->presenta_grietas = (int) $ins->presenta_grietas;
-            $this->presenta_fugas = (int) $ins->presenta_fugas;
-            $this->esta_roto = (int) $ins->esta_roto;
+            $this->presenta_fugas = (bool) $ins->presenta_fugas;
+            $this->esta_roto = (bool) $ins->esta_roto;
 
-            $this->coloracion_apropiada = (int) $ins->coloracion_apropiada;
-            $this->contenido_homogeneo = (int) $ins->contenido_homogeneo;
-            $this->presenta_particulas = (int) $ins->presenta_particulas;
-            $this->presenta_turbidez = (int) $ins->presenta_turbidez;
+            $this->coloracion_apropiada = (bool) $ins->coloracion_apropiada;
+            $this->contenido_homogeneo = (bool) $ins->contenido_homogeneo;
+            $this->presenta_particulas = (bool) $ins->presenta_particulas;
+            $this->presenta_turbidez = (bool) $ins->presenta_turbidez;
             $this->volumen_correcto = (int) $ins->volumen_correcto;
-            $this->aprueba_contenido = (int) $ins->aprueba_contenido;
-            $this->aprueba_contenedor = (int) $ins->aprueba_contenedor;
+            $this->aprueba_contenido = (bool) $ins->aprueba_contenido;
+            $this->aprueba_contenedor = (bool) $ins->aprueba_contenedor;
             $this->mezcla_aprobada = (int) $ins->mezcla_aprobada;
 
             $this->dosis_volumen = $ins->dosis_volumen;
@@ -167,14 +247,68 @@ class InspeccionMezcla extends Component
             }
             $this->aprobo_nombre = '';
         }
+
+        // La fila se crea antes de inspeccionar; no sustituir respuestas ya firmadas.
+        if (! $ins || (blank($ins->reviso_nombre) && blank($ins->aprobo_nombre)
+            && ! $ins->mezcla_aprobada && blank($ins->fecha_aprobacion))) {
+            foreach (self::CONTENT_DEFAULTS as $field => $value) {
+                $this->{$field} = (bool) $value;
+            }
+        }
     }
 
     public function guardarInspeccion()
     {
-        $mezcla = Mezcla::findOrFail($this->mezclaId);
-        if ($mezcla->estado !== 'preparada') {
-            $this->addError('mezclaId', 'Solo una mezcla preparada puede inspeccionarse.');
-            return;
+        $this->registrarResultado(true);
+    }
+
+    public function rechazarInspeccion()
+    {
+        Gate::authorize('oncologicos_mezclas_update');
+        if (! $this->mostrarModalInspeccion) return;
+
+        $this->resetValidation();
+        $this->motivoRechazo = '';
+        $this->mostrarModalRechazo = true;
+    }
+
+    public function cancelarRechazo(): void
+    {
+        $this->mostrarModalRechazo = false;
+        $this->motivoRechazo = '';
+        $this->resetValidation();
+    }
+
+    public function guardarRechazo(): void
+    {
+        Gate::authorize('oncologicos_mezclas_update');
+        $this->motivoRechazo = trim($this->motivoRechazo);
+        $this->validate(['motivoRechazo' => 'required|string|max:2000'], [
+            'motivoRechazo.required' => 'Registra el motivo del rechazo.',
+            'motivoRechazo.max' => 'El motivo no debe exceder los 2000 caracteres.',
+        ]);
+        if (in_array(mb_strtolower($this->motivoRechazo), ['n.a.', 'n.a', 'na', 'n/a'], true)) {
+            throw ValidationException::withMessages(['motivoRechazo' => 'Registra el motivo del rechazo.']);
+        }
+        $this->registrarResultado(false);
+    }
+
+    public function volverASolicitudes(): void
+    {
+        if ($this->rechazoGuardado) {
+            $this->redirectRoute('admin.solicitudes.index');
+        }
+    }
+
+    private function registrarResultado(bool $approved): void
+    {
+        Gate::authorize('oncologicos_mezclas_update');
+        $this->mezcla_aprobada = $approved ? 1 : 0;
+        $this->reviso_nombre = $this->nombreUsuarioActual();
+        if (! $approved) {
+            $this->aprobo_nombre = '';
+            $this->dosis_volumen = $this->dosis_volumen ?: 0;
+            $this->peso_mezcla = $this->peso_mezcla ?: 0;
         }
 
         // Refuerza valores de nombres visibles (sin tocar preparo/libero)
@@ -200,8 +334,8 @@ class InspeccionMezcla extends Component
             'aprueba_contenido' => 'required|boolean',
             'aprueba_contenedor' => 'required|boolean',
             'mezcla_aprobada' => 'required|boolean',
-            'dosis_volumen' => 'required|numeric|gt:0',
-            'peso_mezcla' => 'required|numeric|gt:0',
+            'dosis_volumen' => $approved ? 'required|numeric|gt:0' : 'required|numeric|min:0',
+            'peso_mezcla' => $approved ? 'required|numeric|gt:0' : 'required|numeric|min:0',
             'observaciones' => 'nullable|string',
             'reviso_nombre' => 'required|string|max:255',
             'aprobo_nombre' => 'nullable|required_if:mezcla_aprobada,1|string|max:255',
@@ -214,6 +348,28 @@ class InspeccionMezcla extends Component
             'peso_mezcla.gt' => 'El campo peso de la mezcla debe ser mayor a 0.',
             'aprobo_nombre.required_if' => 'Selecciona a la persona que aprobó la mezcla.',
         ]);
+
+        DB::transaction(fn () => $this->persistResult($approved));
+
+        $this->mostrarModalInspeccion = false;
+        if ($approved) {
+            $this->dispatch('mezcla-inspeccionada');
+        } else {
+            $this->mostrarModalRechazo = false;
+            $this->rechazoGuardado = true;
+        }
+    }
+
+    private function persistResult(bool $approved): void
+    {
+        $mezcla = Mezcla::query()->lockForUpdate()->findOrFail($this->mezclaId);
+        $user = Auth::user();
+        abort_unless($user->hasAnyRole(['Admin', 'Super Admin'])
+            || ((int) $user->hospital_id > 0 && (int) $user->hospital_id === (int) $mezcla->solicitud?->hospital_id), 403);
+        if ($mezcla->operational_status !== 'preparada'
+            || (int) $mezcla->production_attempt !== $this->productionAttempt) {
+            throw ValidationException::withMessages(['mezclaId' => 'La mezcla cambió de proceso. Cierra y vuelve a abrir la inspección.']);
+        }
 
         // Cargar existente o crear en memoria.
         $ins = OncologicosInspeccionMezcla::firstOrNew(['mezcla_id' => $this->mezclaId]);
@@ -267,10 +423,11 @@ class InspeccionMezcla extends Component
         $ins->save();
 
         // Guardar mediante el modelo mantiene sincronizado el estado de la solicitud.
-        $mezcla->update(['estado' => 'revisada']);
-
-        $this->mostrarModalInspeccion = false;
-        $this->dispatch('mezcla-inspeccionada');
+        if ($approved) {
+            $mezcla->update(['estado' => 'revisada']);
+        } else {
+            app(InspectionRejectionService::class)->reject($mezcla, $ins, $this->motivoRechazo);
+        }
     }
 
 

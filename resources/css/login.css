@@ -1,0 +1,109 @@
+.login-page { grid-template-rows: 98px minmax(734px, 1fr) 55px; }
+.login-page [hidden] { display: none !important; }
+.login-page .welcome-brand { flex-basis: 280px; }
+.login-page .welcome-support { gap: 16px; }
+.login-page .welcome-support-icon { width: 60px; height: 60px; flex-basis: 60px; }
+.login-page .welcome-support-details, .login-page .welcome-support-details strong { font-size: 18px; }
+.login-copy { position: relative; z-index: 1; width: 38.1%; max-width: 760px; margin-left: 6.55%; padding: 46px 0 34px; }
+.login-panel { padding: 48px 48px 24px; border-top: 6px solid #0644b3; border-radius: 8px; background: #fff; box-shadow: 0 12px 30px #14396b0d; }
+.login-eyebrow { font-size: 18px; line-height: 24px; font-weight: 700; color: #0644b3; }
+.login-panel h1 { margin-top: 12px; font-size: 48px; line-height: 1.1; font-weight: 700; }
+.login-description { margin-top: 8px; font-size: 20px; line-height: 1.4; color: #597299; }
+.login-form { margin-top: 24px; }
+.login-field + .login-field { margin-top: 18px; }
+.login-field label { display: block; margin-bottom: 5px; font-size: 16px; line-height: 20px; font-weight: 600; }
+.login-input-wrap { position: relative; }
+.login-field input { display: block; width: 100%; height: 60px; padding: 12px 18px 12px 62px; border: 1.5px solid #abcaff; border-radius: 8px; background: #f6f9fc; color: #0c172b; font: inherit; font-size: 20px; outline: none; }
+.login-field input:focus { border-color: #0750c4; box-shadow: 0 0 0 3px #0750c41a; }
+.login-field input[aria-invalid="true"] { border-color: #c53939; }
+.login-field input:-webkit-autofill { -webkit-box-shadow: 0 0 0 100px #f6f9fc inset; -webkit-text-fill-color: #0c172b; }
+.login-field #password { padding-right: 58px; }
+.login-input-icon { position: absolute; width: 23px; height: 23px; top: 50%; left: 20px; transform: translateY(-50%); color: #637da5; stroke-width: 2.4; pointer-events: none; }
+.login-password-toggle { position: absolute; inset: 7px 7px 7px auto; width: 44px; padding: 10px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #637da5; cursor: pointer; }
+.login-password-toggle svg { width: 24px; height: 24px; }
+.login-password-toggle:hover { color: #0644b3; background: #eaf1fb; }
+.login-submit { display: flex; justify-content: center; align-items: center; gap: 22px; width: 100%; min-height: 60px; margin-top: 16px; padding: 14px 22px; border: 1px solid #0644b3; border-radius: 8px; background: #0644b3; color: white; font: inherit; font-size: 22px; line-height: 1.35; font-weight: 600; cursor: pointer; transition: background-color 150ms ease; }
+.login-submit:hover { background: #05368e; }
+.login-submit svg { width: 28px; height: 28px; flex-shrink: 0; stroke-width: 1.8; }
+.login-page button:focus-visible { outline: 3px solid #75ad3a; outline-offset: 3px; }
+.login-assurance { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 18px; color: #087d35; font-size: 16px; line-height: 24px; text-align: center; }
+.login-assurance svg { width: 22px; height: 22px; flex-shrink: 0; color: #78ad3c; }
+.login-copy .welcome-benefits { grid-template-columns: 1fr 1.33fr 1.45fr; width: 100%; margin-top: 34px; }
+.login-copy .welcome-benefits li, .login-copy .welcome-benefits li:first-child { align-items: center; padding-inline: 12px; }
+.login-copy .welcome-benefit-icon { width: 52px; height: 52px; }
+.login-page .login-visual { width: 51.8%; border-top-left-radius: 27% 22%; border-bottom-left-radius: 20% 38%; }
+.login-quality { position: absolute; top: 20%; left: 9.5%; display: flex; align-items: center; gap: 18px; padding: 17px 22px; border-radius: 8px; background: #fff; color: #091e49; box-shadow: 0 5px 20px #194e6c12; font-size: 19px; line-height: 1.3; font-weight: 600; }
+.login-quality svg { width: 50px; height: 54px; color: #0746a9; stroke-width: 1.6; flex-shrink: 0; }
+.login-page .welcome-footer p { font-size: 14px; }
+.login-page .welcome-privacy, .login-page .welcome-connection { font-size: 16px; }
+.login-page .welcome-connection { gap: 12px; }
+.login-page .welcome-connection-icon { width: 34px; height: 34px; flex-basis: 34px; }
+.login-page .welcome-connection-icon svg { width: 22px; height: 22px; }
+.login-message { margin-top: 18px; padding: 12px 14px; border: 1px solid; border-radius: 6px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.login-message ul { padding-left: 18px; }
+.login-error { border-color: #e6a5a5; color: #9f2020; background: #fff4f4; }
+.login-status { border-color: #a1d4b0; color: #176231; background: #f0faf3; }
+@media (min-width: 1101px) and (max-width: 1599px) {
+    .login-page { grid-template-rows: 90px minmax(620px, 1fr) 60px; }
+    .login-copy { width: 42%; margin-left: 5%; padding: 32px 0 24px; }
+    .login-panel { padding: 32px 34px 22px; }
+    .login-panel h1 { font-size: 40px; }
+    .login-eyebrow { font-size: 16px; }
+    .login-description { font-size: 18px; }
+    .login-field input { height: 54px; font-size: 18px; }
+    .login-submit { min-height: 54px; font-size: 20px; }
+    .login-copy .welcome-benefits { margin-top: 28px; }
+    .login-copy .welcome-benefit-icon { width: 46px; height: 46px; }
+    .login-quality { left: 12%; padding: 16px; gap: 14px; font-size: 17px; }
+    .login-quality svg { width: 44px; height: 48px; }
+}
+@media (max-width: 1100px) {
+    .login-page { grid-template-rows: auto 1fr auto; }
+    .login-page .welcome-header { min-height: 98px; }
+    .login-page .welcome-support-details, .login-page .welcome-support-details strong { font-size: 14px; }
+    .login-page .welcome-support-icon { width: 44px; height: 44px; flex-basis: 44px; }
+    .login-main { flex-direction: column; align-items: stretch; }
+    .login-copy { width: min(100%, 720px); max-width: none; margin: 0 auto; padding: 32px 24px; }
+    .login-panel { padding: 32px 36px 24px; }
+    .login-panel h1 { font-size: 40px; }
+    .login-description { font-size: 18px; }
+    .login-page .login-visual { position: relative; inset: auto; order: 1; width: 100%; height: 390px; border-radius: 0; }
+    .login-page .welcome-photo { width: 100%; height: auto; min-height: 100%; }
+    .login-quality { top: 24px; left: 24px; font-size: 16px; padding: 14px 18px; }
+    .login-quality svg { width: 40px; height: 44px; }
+    .login-page .welcome-footer { grid-template-columns: 1fr auto; }
+    .login-page .welcome-footer p { grid-column: 1 / -1; grid-row: 2; text-align: center; }
+}
+@media (max-width: 599px) {
+    .login-page .welcome-brand { flex: none; width: 250px; }
+    .login-page .welcome-header { padding: 18px 18px 14px; }
+    .login-page .welcome-support { gap: 10px; }
+    .login-page .welcome-support-details, .login-page .welcome-support-details strong { font-size: 13px; }
+    .login-page .welcome-support-icon { width: 36px; height: 36px; flex-basis: 36px; }
+    .login-copy { padding: 24px 18px; }
+    .login-panel { padding: 26px 20px 20px; }
+    .login-eyebrow { font-size: 13px; line-height: 1.4; }
+    .login-panel h1 { font-size: 32px; }
+    .login-description { font-size: 16px; line-height: 1.4; }
+    .login-form { margin-top: 22px; }
+    .login-field label { font-size: 14px; }
+    .login-field input { height: 52px; padding-left: 44px; font-size: 16px; }
+    .login-input-icon { left: 14px; width: 20px; height: 20px; }
+    .login-password-toggle { inset-block: 4px; }
+    .login-submit { min-height: 52px; font-size: 18px; gap: 16px; }
+    .login-assurance { font-size: 13px; gap: 8px; }
+    .login-copy .welcome-benefits { margin-top: 28px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .login-copy .welcome-benefits li, .login-copy .welcome-benefits li:first-child { font-size: 12px; padding-inline: 8px; }
+    .login-copy .welcome-benefit-icon { width: 40px; height: 40px; }
+    .login-page .login-visual { height: auto; aspect-ratio: 947 / 673; }
+    .login-page .welcome-photo { height: 100%; }
+    .login-quality { top: 16px; left: 16px; font-size: 14px; padding: 12px; gap: 12px; }
+    .login-quality svg { width: 32px; height: 36px; }
+    .login-page .welcome-footer p { font-size: 11px; }
+    .login-page .welcome-privacy, .login-page .welcome-connection { font-size: 12px; }
+    .login-page .welcome-connection { gap: 8px; }
+    .login-page .welcome-connection-icon { width: 30px; height: 30px; flex-basis: 30px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .login-submit { transition: none; }
+}

@@ -1,0 +1,67 @@
+.supply-catalog-toolbar {
+    flex-wrap: wrap;
+    gap: 16px 24px;
+}
+
+.supply-catalog-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex: 0 1 400px;
+    width: 400px;
+    max-width: 100%;
+    padding: 4px;
+    border: 1px solid #a5e2e8;
+    border-radius: 999px;
+    background: #fff;
+}
+
+.supply-catalog-switch a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    color: #405575;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-decoration: none;
+    transition: background-color 150ms, color 150ms;
+}
+
+.supply-catalog-switch a:hover {
+    background: #ecfafa;
+    color: #006b64;
+}
+
+.supply-catalog-switch a[aria-current="page"] {
+    color: #fff;
+    background: #008b80;
+    box-shadow: inset 0 1px 0 #ffffff30;
+}
+
+.supply-catalog-switch a:focus-visible {
+    outline: 2px solid #1453a0;
+    outline-offset: 2px;
+}
+
+.supply-catalog-actions {
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (max-width: 767px) {
+    .supply-catalog-switch {
+        flex-basis: auto;
+        width: 100%;
+    }
+
+    .supply-catalog-actions {
+        flex-wrap: wrap;
+    }
+
+    .supply-catalog-actions input {
+        flex-basis: 180px;
+    }
+}

@@ -14,6 +14,7 @@ use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicinesCatalog;
 use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,10 +22,16 @@ use Illuminate\View\View;
 
 class CatalogProductController extends Controller
 {
-    public function create(Request $request, string $category): View
+    public function create(Request $request, string $category): View|RedirectResponse
     {
         $category = $this->normalizeCategory($category);
         $isSupplies = $category === 'insumos';
+        if ($isSupplies && !$request->boolean('modal')) {
+            return redirect()->route('admin.catalogo-listas.catalog', [
+                'category' => 'insumos', 'nuevo_diluyente' => 1,
+                ...$request->only(['laboratory_id', 'warehouse_id']),
+            ]);
+        }
         $laboratories = $isSupplies
             ? Laboratory::query()
                 ->where('activo', true)
@@ -39,6 +46,14 @@ class CatalogProductController extends Controller
             ?? $laboratories->first();
         $selectedWarehouse = $selectedLaboratory?->warehouses->firstWhere('id', $request->integer('warehouse_id'))
             ?? $selectedLaboratory?->warehouses->first();
+
+        if ($isSupplies) {
+            return view('admin.catalogo-listas.partials.diluent-form', [
+                'laboratories' => $laboratories,
+                'selectedLaboratoryId' => $selectedLaboratory?->id,
+                'selectedWarehouseId' => $selectedWarehouse?->id,
+            ]);
+        }
 
         return view('admin.catalogo-listas.product-form', [
             'category' => $category,
@@ -57,10 +72,14 @@ class CatalogProductController extends Controller
         ]);
     }
 
-    public function store(Request $request, string $category): RedirectResponse
+    public function store(Request $request, string $category): RedirectResponse|JsonResponse
     {
         $category = $this->normalizeCategory($category);
         $isSupplies = $category === 'insumos';
+        if ($isSupplies) {
+            $request->merge(collect($request->only(['generic_description', 'commercial_name', 'presentation', 'manufacturer']))
+                ->map(fn ($value) => is_string($value) ? trim($value) : $value)->all());
+        }
 
         $data = $request->validate([
             'generic_description' => ['required', 'string', 'max:255'],
@@ -79,7 +98,7 @@ class CatalogProductController extends Controller
             'warehouse_id' => [$isSupplies ? 'required' : 'nullable', 'integer', 'exists:warehouses,id'],
         ], [
             'generic_description.required' => $isSupplies
-                ? 'Captura el nombre generico del insumo.'
+                ? 'Captura el nombre genérico del diluyente.'
                 : 'Captura la descripcion generica.',
             'concentration.required' => $isSupplies
                 ? 'Captura el volumen.'
@@ -100,6 +119,9 @@ class CatalogProductController extends Controller
         ]);
 
         if ($isSupplies) {
+            if (!Laboratory::query()->whereKey($data['laboratory_id'])->where('activo', true)->exists()) {
+                throw ValidationException::withMessages(['laboratory_id' => 'Selecciona una central activa.']);
+            }
             $warehouseBelongsToLaboratory = Warehouse::query()
                 ->whereKey($data['warehouse_id'])
                 ->where('laboratory_id', $data['laboratory_id'])
@@ -140,9 +162,17 @@ class CatalogProductController extends Controller
         });
 
         $message = $isSupplies
-            ? 'Insumo agregado correctamente al catalogo.'
+            ? 'Diluyente agregado correctamente al catálogo.'
             : 'Producto agregado correctamente al catalogo de '
                 . CatalogoListasController::CATEGORIES[$category]['label'] . '.';
+
+        if ($isSupplies && $request->expectsJson()) {
+            $request->session()->flash('success', $message);
+            return response()->json([
+                'message' => $message,
+                'redirect' => route('admin.catalogo-listas.catalog', ['category' => 'insumos']),
+            ], 201);
+        }
 
         return redirect()
             ->route('admin.catalogo-listas.catalog', ['category' => $category])
@@ -292,6 +322,7 @@ class CatalogProductController extends Controller
             'volume_ml' => $data['concentration'],
             'denominacion_comercial' => $commercialName,
             'fabricante' => trim((string) ($data['manufacturer'] ?? '')) ?: null,
+            'stability_hours' => $data['stability_hours'],
             'stock_inicial' => 0,
             'stock_actual' => 0,
             'stock_reservado' => 0,

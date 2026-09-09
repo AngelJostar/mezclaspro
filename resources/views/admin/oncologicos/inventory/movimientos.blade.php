@@ -75,7 +75,16 @@
                                 <td class="whitespace-nowrap px-4 py-3">{{ optional($movement->created_at)->format('d/m/Y H:i') }}</td>
                                 <td class="px-4 py-3">{{ $movement->user?->username ?? $movement->user?->name ?? 'Sistema' }}</td>
                                 <td class="px-4 py-3 font-semibold">{{ $movement->reference_type === 'PerdidaStock' ? 'Perdida de stock' : ($movementLabels[$movement->movement_type] ?? ucfirst($movement->movement_type)) }}</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-right">{{ number_format((float) $movement->quantity_ml, 2) }} mL</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-right">
+                                    @if ($movement->reference_type === 'MermaRemanente')
+                                        @php
+                                            $quantityMg = \App\Models\Oncologicos\MedicinePresentation::remainderInMilligramsFrom($movement->quantity_ml, $presentation?->cantidad_medicamento, $presentation?->volumen_diluyente);
+                                        @endphp
+                                        {{ $quantityMg === null ? 'Sin concentracion' : number_format($quantityMg, 2).' mg' }}
+                                    @else
+                                        {{ number_format((float) $movement->quantity_ml, 2) }} mL
+                                    @endif
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-right">{{ number_format((float) $movement->stock_ml_before, 2) }} mL</td>
                                 <td class="whitespace-nowrap px-4 py-3 text-right font-semibold">{{ number_format((float) $movement->stock_ml_after, 2) }} mL</td>
                                 <td class="px-4 py-3">{{ $movement->reference_type ?: 'Sin referencia' }}{{ $movement->reference_id ? ' #' . $movement->reference_id : '' }}</td>
@@ -112,12 +121,14 @@
                             @php
                                 $expired = $remainder->usable_until && $remainder->usable_until->isPast();
                                 $available = $remainder->is_active && !$expired && (float) $remainder->current_ml > 0;
+                                $initialMg = \App\Models\Oncologicos\MedicinePresentation::remainderInMilligramsFrom($remainder->initial_ml, $presentation?->cantidad_medicamento, $presentation?->volumen_diluyente);
+                                $currentMg = \App\Models\Oncologicos\MedicinePresentation::remainderInMilligramsFrom($remainder->current_ml, $presentation?->cantidad_medicamento, $presentation?->volumen_diluyente);
                             @endphp
                             <tr>
                                 <td class="whitespace-nowrap px-4 py-3">{{ optional($remainder->opened_at)->format('d/m/Y H:i') }}</td>
                                 <td class="whitespace-nowrap px-4 py-3">{{ optional($remainder->usable_until)->format('d/m/Y H:i') ?? 'Sin limite configurado' }}</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-right">{{ number_format((float) $remainder->initial_ml, 2) }} mL</td>
-                                <td class="whitespace-nowrap px-4 py-3 text-right text-lg font-semibold {{ $available ? 'text-emerald-700' : 'text-gray-500' }}">{{ number_format((float) $remainder->current_ml, 2) }} mL</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-right">{{ $initialMg === null ? 'Sin concentracion' : number_format($initialMg, 2).' mg' }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-right text-lg font-semibold {{ $available ? 'text-emerald-700' : 'text-gray-500' }}">{{ $currentMg === null ? 'Sin concentracion' : number_format($currentMg, 2).' mg' }}</td>
                                 <td class="px-4 py-3">
                                     <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $available ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700' }}">
                                         {{ $available ? 'Disponible' : ($expired ? 'Vencido' : 'Agotado/descartado') }}

@@ -5,6 +5,8 @@
         </div>
     </div>
 
+    <livewire:admin.agent-center />
+
     @if (session('status'))
         <div class="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
             role="status">
@@ -114,6 +116,8 @@
 
     <section class="mt-4 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm"
         aria-labelledby="waste-report-title"
+        data-waste-view="{{ $initialWasteView }}" :data-waste-view="wasteFilter"
+        x-effect="$dispatch('waste-filter-changed', { filter: wasteFilter })"
         x-data="{ wasteOpen: {{ $wasteDateRange['open'] ? 'true' : 'false' }}, wasteFilter: '{{ $initialWasteView }}' }">
         <button type="button"
             class="group flex min-h-16 w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-amber-50/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-300"
@@ -173,25 +177,30 @@
                         {{ $wasteSummary['frasco'] }}
                     </span>
                 </button>
+                <button type="button" role="tab" @click="wasteFilter = 'inspeccion'"
+                    :aria-selected="(wasteFilter === 'inspeccion').toString()"
+                    class="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-red-300"
+                    :class="wasteFilter === 'inspeccion' ? 'border-red-700 bg-red-700 text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-red-50'">
+                    Mermas de inspección
+                    <span class="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-800">{{ $wasteSummary['inspeccion'] }}</span>
+                </button>
                 <button type="button" role="tab" @click="wasteFilter = 'requests'"
                     :aria-selected="(wasteFilter === 'requests').toString()"
                     class="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-300"
                     :class="wasteFilter === 'requests' ? 'text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-emerald-50'"
                     :style="wasteFilter === 'requests' ? 'background-color: #047857; border-color: #047857; color: #ffffff;' : ''">
                     Solicitudes de Merma
-                    <span class="inline-flex min-w-5 items-center justify-center rounded px-1.5 py-0.5 text-[10px]"
-                        :class="wasteFilter === 'requests' ? 'text-emerald-900' : 'bg-amber-100 text-amber-800'"
-                        :style="wasteFilter === 'requests' ? 'background-color: #fef3c7; color: #92400e;' : ''">
+                    <span class="inline-flex min-w-5 items-center justify-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700">
                         {{ $pendingWasteAuthorizationCount }}
                     </span>
                 </button>
             </div>
 
-            <div x-cloak x-show="wasteFilter !== 'requests'">
                 <form method="GET" action="{{ route('admin.superadministrator.index') }}"
                 class="flex flex-wrap items-end gap-3 border-b border-gray-200 bg-white px-4 py-3"
                 aria-label="Filtrar reporte de mermas por periodo">
                 <input type="hidden" name="waste_open" value="1">
+                <input type="hidden" name="waste_view" :value="wasteFilter">
 
                 <fieldset>
                     <legend class="mb-1 text-xs font-semibold text-gray-700">Desde</legend>
@@ -271,6 +280,15 @@
                 @endif
                 </form>
 
+            <div x-cloak x-show="wasteFilter !== 'requests'">
+                <dl class="grid grid-cols-1 gap-4 border-b border-gray-200 bg-gray-50 px-4 py-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Totales filtrados de mermas">
+                    @foreach (['all' => 'Total general', 'remanente' => 'Merma de remanente', 'frasco' => 'Merma de frasco', 'inspeccion' => 'Mermas de inspección'] as $type => $label)
+                        <div class="min-w-0">
+                            <dt class="text-xs font-medium text-gray-600">{{ $label }}</dt>
+                            <dd class="mt-1 break-words text-sm font-semibold text-gray-900" data-waste-total="{{ $type }}" aria-live="polite">{{ \App\Support\WasteReportUnits::formatTotal($wasteTotals[$type]) }}</dd>
+                        </div>
+                    @endforeach
+                </dl>
                 <div class="overflow-x-auto" data-disable-sticky-x
                     style="min-height: clamp(500px, 62vh, 760px);">
                     <table id="waste-report-table" class="w-full table-fixed text-left text-sm text-gray-600"
@@ -281,12 +299,12 @@
                         <col style="width: 140px;">
                         <col style="width: 235px;">
                         <col style="width: 215px;">
+                        <col style="width: 165px;">
                         <col style="width: 170px;">
                         <col style="width: 150px;">
                         <col style="width: 255px;">
                         <col style="width: 240px;">
                         <col style="width: 230px;">
-                        <col style="width: 165px;">
                         <col style="width: 200px;">
                         <col style="width: 160px;">
                     </colgroup>
@@ -303,27 +321,27 @@
                             <x-filterable-table-header column="4" trigger-class="js-waste-column-filter"
                                 sort-class="js-waste-column-sort" scope="col">Presentación</x-filterable-table-header>
                             <x-filterable-table-header column="5" trigger-class="js-waste-column-filter"
-                                sort-class="js-waste-column-sort" scope="col">Marca</x-filterable-table-header>
+                                sort-class="js-waste-column-sort" sort-type="number" scope="col">Unidades</x-filterable-table-header>
                             <x-filterable-table-header column="6" trigger-class="js-waste-column-filter"
-                                sort-class="js-waste-column-sort" scope="col">Lote</x-filterable-table-header>
+                                sort-class="js-waste-column-sort" scope="col">Marca</x-filterable-table-header>
                             <x-filterable-table-header column="7" trigger-class="js-waste-column-filter"
+                                sort-class="js-waste-column-sort" scope="col">Lote</x-filterable-table-header>
+                            <x-filterable-table-header column="8" trigger-class="js-waste-column-filter"
                                 sort-class="js-waste-column-sort" sort-type="number" align="right" scope="col">
                                 <span class="block">Precio costo por</span>
                                 <span class="block whitespace-nowrap">
                                     mililitro <span class="text-[10px] font-medium normal-case text-gray-500">(Precio de compra)</span>
                                 </span>
                             </x-filterable-table-header>
-                            <x-filterable-table-header column="8" trigger-class="js-waste-column-filter"
+                            <x-filterable-table-header column="9" trigger-class="js-waste-column-filter"
                                 sort-class="js-waste-column-sort" sort-type="number" align="right" scope="col">
                                 <span class="block">Precio costo por</span>
                                 <span class="block whitespace-nowrap">
                                     frasco <span class="text-[10px] font-medium normal-case text-gray-500">(Precio de compra)</span>
                                 </span>
                             </x-filterable-table-header>
-                            <x-filterable-table-header column="9" trigger-class="js-waste-column-filter"
-                                sort-class="js-waste-column-sort" scope="col">Central / almacén</x-filterable-table-header>
                             <x-filterable-table-header column="10" trigger-class="js-waste-column-filter"
-                                sort-class="js-waste-column-sort" sort-type="number" align="right" scope="col">Cantidad</x-filterable-table-header>
+                                sort-class="js-waste-column-sort" scope="col">Central / almacén</x-filterable-table-header>
                             <x-filterable-table-header column="11" trigger-class="js-waste-column-filter"
                                 sort-class="js-waste-column-sort" scope="col">Motivo</x-filterable-table-header>
                             <x-filterable-table-header column="12" trigger-class="js-waste-column-filter"
@@ -333,6 +351,7 @@
                     <tbody class="divide-y divide-gray-200 bg-white">
                         @foreach ($wasteRecords as $record)
                             <tr x-cloak class="js-waste-filter-row"
+                                data-waste-type="{{ $record['type'] }}" data-waste-units="{{ json_encode($record['units']) }}"
                                 x-show="wasteFilter === 'all' || wasteFilter === '{{ $record['type'] }}'">
                                 <td class="px-3 py-3 align-top whitespace-nowrap"
                                     data-sort-value="{{ $record['occurred_at']?->format('Y-m-d H:i:s') }}">
@@ -345,8 +364,27 @@
                                     </span>
                                 </td>
                                 <td class="px-3 py-3 align-top font-medium text-gray-800" data-sort-value="{{ $record['area'] }}">{{ $record['area'] }}</td>
-                                <td class="px-3 py-3 align-top font-semibold text-gray-900" data-sort-value="{{ $record['product'] }}">{{ $record['product'] }}</td>
+                                <td class="px-3 py-3 align-top font-semibold text-gray-900" data-sort-value="{{ $record['product'] }}">
+                                    {{ $record['product'] }}
+                                    @if (!empty($record['inspection_destination']))
+                                        <span class="block mt-1 text-xs font-normal">{{ $record['inspection_destination'] }}</span>
+                                    @endif
+                                    @if (!empty($record['inspection_materials']))
+                                        <details class="mt-2 text-xs font-normal">
+                                            <summary class="cursor-pointer">Materiales del intento</summary>
+                                            <ul class="mt-2 space-y-1">
+                                                @foreach ($record['inspection_materials'] as $material)
+                                                    <li>{{ $material }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </details>
+                                    @endif
+                                </td>
                                 <td class="px-3 py-3 align-top" data-sort-value="{{ $record['presentation'] }}">{{ $record['presentation'] }}</td>
+                                <td class="px-3 py-3 align-top font-semibold text-gray-900"
+                                    data-sort-value="{{ $record['units']['mg'] ?? $record['units']['mL'] ?? $record['units']['frascos'] ?? $record['units']['mezclas'] ?? '' }}">
+                                    {{ \App\Support\WasteReportUnits::formatQuantities($record['units']) }}
+                                </td>
                                 <td class="px-3 py-3 align-top font-medium text-gray-800" data-sort-value="{{ $record['brand'] }}">{{ $record['brand'] }}</td>
                                 <td class="px-3 py-3 align-top font-mono text-xs text-gray-800" data-sort-value="{{ $record['lot'] }}">{{ $record['lot'] }}</td>
                                 <td class="px-3 py-3 text-right align-top whitespace-nowrap"
@@ -376,51 +414,33 @@
                                     <span class="block font-medium text-gray-900">{{ $record['laboratory'] }}</span>
                                     <span class="block text-xs text-gray-500">{{ $record['warehouse'] }}</span>
                                 </td>
-                                <td class="px-3 py-3 text-right align-top whitespace-nowrap"
-                                    data-sort-value="{{ $record['quantity_ml'] > 0 ? $record['quantity_ml'] : $record['quantity_containers'] }}">
-                                    @if ($record['quantity_containers'] > 0)
-                                        <span class="block font-semibold text-gray-900">
-                                            {{ number_format($record['quantity_containers'], 2) }}
-                                            {{ abs($record['quantity_containers'] - 1) < 0.0001 ? 'frasco' : 'frascos' }}
-                                        </span>
-                                    @endif
-                                    @if ($record['quantity_ml'] > 0)
-                                        <span class="block text-xs font-medium text-gray-600">
-                                            {{ number_format($record['quantity_ml'], 2) }} mL
-                                        </span>
-                                    @endif
-                                    @if ($record['quantity_containers'] <= 0 && $record['quantity_ml'] <= 0)
-                                        <span class="text-gray-400">-</span>
-                                    @endif
-                                </td>
                                 <td class="px-3 py-3 align-top whitespace-normal" data-sort-value="{{ $record['reason'] }}">{{ $record['reason'] }}</td>
                                 <td class="px-3 py-3 align-top" data-sort-value="{{ $record['user'] }}">{{ $record['user'] }}</td>
                             </tr>
                         @endforeach
 
-                        @if ($wasteSummary['all'] === 0)
-                            <tr x-show="wasteFilter === 'all'">
-                                <td colspan="13" class="px-4 py-8 text-center text-gray-500">No hay mermas registradas.</td>
-                            </tr>
-                        @endif
-                        @if ($wasteSummary['remanente'] === 0)
-                            <tr x-cloak x-show="wasteFilter === 'remanente'">
-                                <td colspan="13" class="px-4 py-8 text-center text-gray-500">No hay mermas de remanente registradas.</td>
-                            </tr>
-                        @endif
-                        @if ($wasteSummary['frasco'] === 0)
-                            <tr x-cloak x-show="wasteFilter === 'frasco'">
-                                <td colspan="13" class="px-4 py-8 text-center text-gray-500">No hay mermas de frasco registradas.</td>
-                            </tr>
-                        @endif
+                        <tr id="waste-filter-empty" @class(['hidden' => ($wasteSummary[$initialWasteView] ?? $wasteSummary['all']) > 0])>
+                            <td colspan="13" class="px-4 py-8 text-center text-gray-500">No hay mermas con los filtros aplicados.</td>
+                        </tr>
                     </tbody>
+                    <tfoot class="border-t border-gray-300 bg-gray-50 text-gray-900">
+                        <tr>
+                            <th colspan="5" class="px-3 py-4 text-right" scope="row">Total de la sección</th>
+                            <td class="px-3 py-4 font-semibold" data-waste-current-total aria-live="polite">{{ \App\Support\WasteReportUnits::formatTotal($wasteTotals[$initialWasteView] ?? $wasteTotals['all']) }}</td>
+                            <td colspan="7"></td>
+                        </tr>
+                    </tfoot>
                     </table>
                 </div>
             </div>
 
+            <div x-cloak x-show="wasteFilter === 'requests'" class="border-b bg-gray-50 px-4 py-4">
+                <span class="text-xs text-gray-600">Total de unidades solicitadas</span>
+                <strong class="mt-1 block text-sm text-gray-900" data-waste-request-total aria-live="polite">{{ \App\Support\WasteReportUnits::formatTotal($requestedUnitTotals) }}</strong>
+            </div>
             <div x-cloak x-show="wasteFilter === 'requests'" class="overflow-x-auto" data-disable-sticky-x
                 style="min-height: clamp(500px, 62vh, 760px);">
-                <table class="w-full table-fixed text-left text-sm text-gray-600" style="min-width: 2050px;">
+                <table id="waste-request-table" class="w-full table-fixed text-left text-sm text-gray-600" style="min-width: 2050px;">
                     <colgroup>
                         <col style="width: 155px;">
                         <col style="width: 125px;">
@@ -445,7 +465,7 @@
                             <th class="px-3 py-3">Marca</th>
                             <th class="px-3 py-3">Lote</th>
                             <th class="px-3 py-3">Central / almacén</th>
-                            <th class="px-3 py-3 text-right">Cantidad</th>
+                            <th class="px-3 py-3 text-right">Unidades</th>
                             <th class="px-3 py-3">Motivo</th>
                             <th class="px-3 py-3">Solicitante / revisión</th>
                             <th class="px-3 py-3">Acciones</th>
@@ -472,7 +492,7 @@
                                 $requesterName = trim(($wasteRequest->requester?->name ?? '').' '.($wasteRequest->requester?->lastname ?? ''));
                                 $reviewerName = trim(($wasteRequest->reviewer?->name ?? '').' '.($wasteRequest->reviewer?->lastname ?? ''));
                             @endphp
-                            <tr>
+                            <tr data-waste-request-units="{{ json_encode(['frascos' => (float) $wasteRequest->quantity_containers, 'mL' => (float) $wasteRequest->quantity_ml]) }}">
                                 <td class="px-3 py-3 align-top whitespace-nowrap">
                                     <span class="block font-medium text-gray-900">{{ $wasteRequest->created_at?->format('d/m/Y') ?? '-' }}</span>
                                     <span class="block text-xs text-gray-500">{{ $wasteRequest->created_at?->format('H:i') ?? '-' }}</span>
@@ -568,6 +588,49 @@
             @include('admin.catalogo-listas.partials.column-filter-script')
 
             document.addEventListener('DOMContentLoaded', function() {
+                const table = document.getElementById('waste-report-table');
+                const report = document.querySelector('[data-waste-view]');
+                const rows = Array.from(table?.querySelectorAll('.js-waste-filter-row') || []);
+                const units = new Map(rows.map(row => [row, JSON.parse(row.dataset.wasteUnits)]));
+                let currentView = report?.dataset.wasteView || 'all';
+                const totalFor = quantities => {
+                    const sums = {};
+                    let missing = 0;
+                    quantities.forEach(values => Object.entries(values).forEach(([unit, amount]) => {
+                        if (amount === null) missing++;
+                        else sums[unit] = (sums[unit] || 0) + Number(amount);
+                    }));
+                    const parts = ['mg', 'mL', 'frascos', 'mezclas'].filter(unit => unit in sums).map(unit => {
+                        const label = sums[unit] === 1 ? ({ frascos: 'frasco', mezclas: 'mezcla' }[unit] || unit) : unit;
+                        return sums[unit].toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + label;
+                    });
+                    const text = parts.join(' · ') || '0.00 unidades';
+                    return text + (missing ? ' · Sin cuantificar: ' + missing : '');
+                };
+                const updateTotals = () => {
+                    const filtered = rows.filter(row => row.dataset.columnFilterMatch !== '0');
+                    document.querySelectorAll('[data-waste-total]').forEach(target => {
+                        const type = target.dataset.wasteTotal;
+                        target.textContent = totalFor(filtered.filter(row => type === 'all' || row.dataset.wasteType === type).map(row => units.get(row)));
+                    });
+                    const current = filtered.filter(row => currentView === 'all' || row.dataset.wasteType === currentView);
+                    document.querySelector('[data-waste-current-total]').textContent = totalFor(current.map(row => units.get(row)));
+                    document.getElementById('waste-filter-empty').classList.toggle('hidden', current.length > 0);
+                };
+                document.addEventListener('waste-filter-changed', event => {
+                    currentView = event.detail.filter;
+                    updateTotals();
+                });
+                const requestBody = document.querySelector('#waste-request-table tbody');
+                const updateRequestedTotals = () => {
+                    const visible = Array.from(requestBody?.querySelectorAll('[data-waste-request-units]') || [])
+                        .filter(row => !row.classList.contains('automatic-column-filter-hidden') && !row.classList.contains('hidden'));
+                    document.querySelector('[data-waste-request-total]').textContent = totalFor(visible.map(row => JSON.parse(row.dataset.wasteRequestUnits)));
+                };
+                if (requestBody) new MutationObserver(updateRequestedTotals).observe(requestBody, {
+                    attributes: true, attributeFilter: ['class'], subtree: true,
+                });
+                updateRequestedTotals();
                 window.createExcelColumnFilters({
                     tableId: 'waste-report-table',
                     rowSelector: '.js-waste-filter-row',
@@ -577,10 +640,10 @@
                         document.querySelectorAll('.js-waste-filter-row').forEach((row) => {
                             row.classList.toggle('hidden', row.dataset.columnFilterMatch === '0');
                         });
+                        updateTotals();
                     },
                 });
 
-                const table = document.getElementById('waste-report-table');
                 const tbody = table?.tBodies[0];
                 const sortButtons = Array.from(table?.querySelectorAll('.js-waste-column-sort') || []);
                 let activeSortColumn = null;

@@ -14,6 +14,88 @@
     text-align: left;
     overflow-wrap: anywhere;
 }
+.dispensing-mixture {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid #aabbd1;
+    border-radius: 4px;
+    background: #fff;
+    color: #142d53;
+}
+.dispensing-mixture > h3 { margin-bottom: 18px; font-size: 24px; line-height: 1.25; font-weight: 700; }
+.dispensing-mixture [hidden] { display: none; }
+.dispensing-mixture label { display: block; margin-bottom: 6px; font-size: 15px; line-height: 1.4; font-weight: 500; color: #142d53; }
+.dispensing-mixture input:not([type="checkbox"]):not([type="hidden"]),
+.dispensing-mixture select { min-width: 0; width: 100%; max-width: 100%; height: 40px; padding: 7px 12px; border: 1px solid #b5c3d8; border-radius: 4px; color: #142d53; background-color: #fff; font-size: 15px; line-height: 1.4; }
+.dispensing-mixture select { padding-right: 32px; text-overflow: ellipsis; }
+.dispensing-mixture input:focus-visible, .dispensing-mixture select:focus-visible { outline: 2px solid #70b4de; outline-offset: 1px; }
+.dispensing-mixture input:disabled, .dispensing-mixture select:disabled { color: #7e91ae; background-color: #f8fafc; }
+/* The outer table only groups existing form controls; the inner table remains tabular. */
+.admin-content .dispensing-medication-table,
+.dispensing-medication-table { display: block; width: 100%; min-width: 0; border: 0; text-align: left; margin-bottom: 12px; }
+.dispensing-medication-table > tbody { display: block; }
+.dispensing-medication-table > tbody > .medicamento-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 18px; margin-bottom: 18px; }
+.dispensing-medication-table > tbody > .medicamento-row > td { min-width: 0; border: 0; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+.dispensing-medication-table > tbody > .medicamento-row > [hidden],
+.dispensing-medication-table [hidden] { display: none; }
+.dispensing-dose-layout { display: grid; grid-template-columns: minmax(150px, .9fr) minmax(0, 1.4fr); align-items: end; gap: 16px; }
+.dispensing-dose-field { min-width: 0; }
+.dispensing-unit-input { display: flex; min-width: 0; height: 40px; }
+.dispensing-unit-input > span { display: flex; flex: 0 0 64px; align-items: center; justify-content: center; border: 1px solid #b5c3d8; border-left: 0; border-radius: 0 4px 4px 0; background: #f0f3f7; color: #597194; font-size: 15px; }
+.dispensing-mixture .dispensing-unit-input > input { border-radius: 4px 0 0 4px; flex: 1; width: 0; }
+.dispensing-dose-summary { min-width: 0; margin: 0; padding-left: 16px; border-left: 1px solid #d2deeb; font-size: 15px; line-height: 1.5; }
+.dispensing-dose-target { color: #142d53; }
+.dispensing-dose-covered { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.dispensing-dose-covered svg { width: 18px; height: 18px; flex: none; }
+.dispensing-dose-summary.text-emerald-700 { color: #008d91; }
+.dispensing-medication-table .medicamento-detail-row { display: block; margin-bottom: 22px; }
+.dispensing-medication-table .medicamento-detail-row:last-child { margin-bottom: 0; }
+.dispensing-medication-table .medicamento-detail-row > td { display: block; min-width: 0; padding: 14px; border: 1px solid #d3deeb; border-radius: 4px; background: #f8fafc; }
+.dispensing-mixture .dispensing-half-field { max-width: none; width: min(100%, 640px); }
+.dispensing-mixture .dispensing-half-field label { font-size: 15px; }
+.dispensing-presentation-scroll { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: auto; scrollbar-color: #94a3b8 #eef2f6; }
+.dispensing-presentation-scroll:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+.dispensing-presentation-scroll::-webkit-scrollbar { height: 12px; }
+.dispensing-presentation-scroll::-webkit-scrollbar-track { background: #eef2f6; }
+.dispensing-presentation-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border: 2px solid #eef2f6; border-radius: 6px; }
+.admin-content .dispensing-presentation-table,
+.dispensing-presentation-table { width: 100%; min-width: 1120px; table-layout: fixed; }
+.dispensing-presentation-table th,
+.dispensing-presentation-table td { min-width: 0; padding: 10px 8px; white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+.dispensing-presentation-table th { font-size: 12px; line-height: 1.4; vertical-align: middle; color: #142d53; font-weight: 600; }
+.dispensing-presentation-table th > .flex { flex-direction: column; align-items: center; gap: 5px; }
+.dispensing-presentation-table th > .flex > span { width: 100%; }
+.dispensing-presentation-table td { font-size: 14px; line-height: 1.5; }
+.dispensing-presentation-table td .text-xs { font-size: 13px; line-height: 1.5; }
+.dispensing-presentation-table input,
+.dispensing-presentation-table select { min-width: 0; max-width: 100%; }
+.dispensing-presentation-table .batch-select { font-size: 14px; padding-left: 8px; padding-right: 28px; }
+.dispensing-mixture .dispensing-presentation-table .input-frascos { width: 100%; min-width: 0; text-align: center; padding: 7px 4px; }
+.dispensing-presentation-table .batch-status { padding-inline: 6px; }
+.dispensing-presentation-table .remainder-waste-button { min-height: 36px; padding-inline: 10px; font-size: 13px; }
+.dispensing-mixture [data-diluent-fields] { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.9fr) minmax(0, 1fr); gap: 18px; padding-top: 14px; border-top: 1px solid #d3deeb; margin-bottom: 18px; }
+.dispensing-mixture [data-diluent-fields] > div { grid-column: auto; min-width: 0; }
+.dispensing-mixture #diluent_presentation_hint { margin-top: 4px; font-size: 13px; line-height: 1.5; color: #597194; overflow-wrap: anywhere; }
+.dispensing-mixture [data-infusion-fields] { grid-template-columns: minmax(0, 1.2fr) minmax(150px, .9fr) minmax(0, 2.4fr) minmax(0, 1.4fr); align-items: start; gap: 18px; }
+.dispensing-mixture .dispensing-time-field { order: 1; }
+.dispensing-mixture .dispensing-set-field { order: 2; align-self: start; min-height: 40px; margin-top: 27px; }
+.dispensing-mixture .dispensing-set-field label { margin: 0; }
+.dispensing-mixture .dispensing-set-field input { flex: none; width: 18px; height: 18px; border-color: #9eafc6; }
+.dispensing-mixture .dispensing-infusor-field { order: 3; }
+.dispensing-mixture .dispensing-infusor-field p { margin-top: 4px; font-size: 13px; color: #597194; }
+.dispensing-mixture .btn-agregar-medicamento { margin-top: 4px; min-height: 34px; padding: 6px 12px; font-size: 13px; }
+@media (max-width: 1100px) {
+    .dispensing-dose-layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .dispensing-dose-summary { border-left: 0; padding-left: 0; }
+    .dispensing-mixture [data-infusion-fields] { grid-template-columns: minmax(0, 1fr) 160px minmax(0, 1.6fr); }
+}
+@media (max-width: 760px) {
+    .dispensing-mixture { padding: 12px; }
+    .dispensing-medication-table > tbody > .medicamento-row { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .dispensing-medication-table .medicamento-detail-row > td { padding: 10px; }
+    .dispensing-mixture [data-diluent-fields], .dispensing-mixture [data-infusion-fields] { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .dispensing-mixture .dispensing-set-field { margin-top: 0; }
+}
 .dispensing-patient { margin-bottom: 14px; }
 .dispensing-patient-section { margin-bottom: 6px; border: 1px solid #dbe7f1; border-radius: 4px; }
 .dispensing-patient-section h2 {
@@ -60,4 +142,68 @@
 }
 @media (max-width: 400px) {
     .dispensing-patient-grid.clinical-data { grid-template-columns: minmax(0, 1fr); }
+}
+
+.inspection-review {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 40px);
+    overflow: hidden;
+    color: #172b4d;
+}
+.inspection-review-header { flex: none; padding: 16px 24px; }
+.inspection-review-header h2 { margin: 0; font-size: 18px; line-height: 1.4; font-weight: 700; }
+.inspection-review-body { min-height: 0; overflow-y: auto; padding: 16px 24px; overscroll-behavior: contain; }
+.inspection-context-band { padding: 12px 14px; margin-bottom: 14px; border: 1px solid #d1e5fc; background: #eff6ff; }
+.inspection-context-title { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; color: #174c82; font-size: 15px; line-height: 1.4; font-weight: 700; }
+.inspection-context-title svg { width: 21px; height: 21px; color: #2563eb; }
+.inspection-patient-grid { display: grid; grid-template-columns: minmax(0, 2.4fr) repeat(4, minmax(0, 1fr)); gap: 12px; }
+.inspection-care-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; margin-top: 12px; }
+.inspection-context-band dl { font-size: 13px; line-height: 1.5; }
+.inspection-context-band dl > div { min-width: 0; }
+.inspection-context-band dt { color: #415572; font-size: 11px; font-weight: 600; }
+.inspection-context-band dd { margin: 0; overflow-wrap: anywhere; }
+.inspection-mixture-meta { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 10px; }
+.inspection-mixture-meta > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.admin-content .inspection-summary-table,
+.inspection-summary-table { width: 100%; min-width: 700px; table-layout: fixed; border-collapse: collapse; background: #fff; }
+.inspection-summary-table th, .inspection-summary-table td { padding: 8px 10px; border: 1px solid #dce5ef; text-align: left; overflow-wrap: anywhere; }
+.inspection-summary-table th { background: #e8f0f9; font-size: 11px; line-height: 1.4; font-weight: 600; }
+.inspection-summary-table td { font-size: 13px; line-height: 1.5; vertical-align: top; }
+.inspection-summary-table th:nth-child(1) { width: 25%; }
+.inspection-summary-table th:nth-child(2) { width: 13%; }
+.inspection-summary-table th:nth-child(3) { width: 17%; }
+.inspection-summary-table th:nth-child(4) { width: 21%; }
+.inspection-summary-table th:nth-child(5) { width: 13%; }
+.inspection-summary-table th:nth-child(6) { width: 11%; }
+.inspection-review-body > .grid h3 { margin-bottom: 10px; font-size: 16px; line-height: 1.4; }
+.inspection-review-body label, .inspection-review-body label span { font-size: 12px; line-height: 1.5; }
+.inspection-review-body input:not([type="checkbox"]), .inspection-review-body select, .inspection-review-body textarea { min-width: 0; padding: 7px 10px; font-size: 13px; line-height: 1.5; }
+.inspection-review-body select { padding-right: 30px; }
+.inspection-review-body input[type="checkbox"] { width: 15px; height: 15px; min-height: 15px; }
+.inspection-check-item { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: start; gap: 8px; cursor: pointer; }
+.inspection-check-item > span:last-child { padding-top: 3px; overflow-wrap: anywhere; }
+.inspection-answer { position: relative; display: block; width: 52px; height: 24px; }
+.inspection-review-body .inspection-answer input[type="checkbox"] { position: absolute; inset: 0; z-index: 1; width: 52px; height: 24px; min-height: 24px; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
+.inspection-answer-track { position: absolute; inset: 0; border-radius: 999px; background: #dc2626; color: #fff; }
+.inspection-answer-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.inspection-answer-yes, .inspection-answer-no { position: absolute; top: 0; display: flex; height: 24px; align-items: center; font-size: 11px; font-weight: 700; line-height: 1; }
+.inspection-answer-yes { left: 8px; visibility: hidden; }
+.inspection-answer-no { right: 7px; }
+.inspection-answer input:checked + .inspection-answer-track { background: #15803d; }
+.inspection-answer input:checked + .inspection-answer-track::after { transform: translateX(28px); }
+.inspection-answer input:checked + .inspection-answer-track .inspection-answer-yes { visibility: visible; }
+.inspection-answer input:checked + .inspection-answer-track .inspection-answer-no { visibility: hidden; }
+.inspection-answer input:focus-visible + .inspection-answer-track { outline: 2px solid #2563eb; outline-offset: 3px; }
+.inspection-review-actions { flex: none; padding: 14px 24px; background: #fff; }
+.inspection-review-actions button { min-width: 0; min-height: 38px; }
+@media (max-width: 767px) {
+    .inspection-review { max-height: calc(100dvh - 24px); }
+    .inspection-review-header { padding: 14px 16px; }
+    .inspection-review-body { padding: 14px 16px; }
+    .inspection-review-actions { padding: 12px; }
+    .inspection-patient-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .inspection-patient-grid > :first-child { grid-column: 1 / -1; }
+    .inspection-care-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .inspection-care-grid > :last-child { grid-column: 1 / -1; }
 }

@@ -38,11 +38,14 @@ const commandHeadings = [
 ];
 
 function getRows(table) {
-    if (window.jQuery?.fn?.dataTable?.isDataTable?.(table)) {
-        return window.jQuery(table).DataTable().rows().nodes().toArray();
-    }
+    const rows = window.jQuery?.fn?.dataTable?.isDataTable?.(table)
+        ? window.jQuery(table).DataTable().rows().nodes().toArray()
+        : Array.from(table.tBodies).flatMap((tbody) => Array.from(tbody.rows));
+    const columnCount = table.tHead?.rows[table.tHead.rows.length - 1]?.cells.length;
 
-    return Array.from(table.tBodies).flatMap((tbody) => Array.from(tbody.rows));
+    // Full-width empty-state messages are not records or filter options.
+    return rows.filter((row) => !(row.cells.length === 1
+        && row.cells[0].colSpan > 1 && row.cells[0].colSpan === columnCount));
 }
 
 function controlValue(control) {

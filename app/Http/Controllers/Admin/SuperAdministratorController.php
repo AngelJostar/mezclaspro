@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use Carbon\CarbonImmutable;
 use App\Http\Controllers\Controller;
 use App\Models\MedicineRemainderMovement;
+use App\Models\InspectionWaste;
 use App\Models\Nutricionales\MedicineStockMovement;
 use App\Models\Oncologicos\MedicineBatchMovement;
 use App\Models\User;
@@ -61,7 +62,7 @@ class SuperAdministratorController extends Controller
 
         $initialWasteView = in_array(
             $request->query('waste_view'),
-            ['all', 'remanente', 'frasco', 'requests'],
+            ['all', 'remanente', 'frasco', 'inspeccion', 'requests'],
             true
         ) ? (string) $request->query('waste_view') : 'all';
         $wasteDateRange = $this->wasteDateRange($request);
@@ -71,7 +72,13 @@ class SuperAdministratorController extends Controller
             'all' => $wasteRecords->count(),
             'remanente' => $wasteRecords->where('type', 'remanente')->count(),
             'frasco' => $wasteRecords->where('type', 'frasco')->count(),
+            'inspeccion' => $wasteRecords->where('type', 'inspeccion')->count(),
         ];
+        $wasteTotals = [];
+        foreach (['all', 'remanente', 'frasco', 'inspeccion'] as $type) {
+            $rows = $type === 'all' ? $wasteRecords : $wasteRecords->where('type', $type);
+            $wasteTotals[$type] = \App\Support\WasteReportUnits::sum($rows->pluck('units'));
+        }
         $wasteMonthOptions = self::WASTE_MONTH_OPTIONS;
         $selectedYears = array_filter([
             $wasteDateRange['from_year'],
@@ -81,8 +88,7 @@ class SuperAdministratorController extends Controller
         $maximumWasteYear = max([now()->year + 1, ...$selectedYears]);
         $wasteYearOptions = range($maximumWasteYear, $minimumWasteYear);
         $wasteAuthorizationRequests = Schema::hasTable('waste_authorization_requests')
-            ? WasteAuthorizationRequest::query()
-                ->with(['requester', 'reviewer'])
+            ? $this->applyWasteDateRange(WasteAuthorizationRequest::query()->with(['requester', 'reviewer']), $wasteDateRange)
                 ->orderByRaw('CASE WHEN status = ? THEN 0 ELSE 1 END', [WasteAuthorizationRequest::STATUS_PENDING])
                 ->orderByDesc('created_at')
                 ->get()
@@ -90,11 +96,16 @@ class SuperAdministratorController extends Controller
         $pendingWasteAuthorizationCount = $wasteAuthorizationRequests
             ->where('status', WasteAuthorizationRequest::STATUS_PENDING)
             ->count();
+        $requestedUnitTotals = \App\Support\WasteReportUnits::sum($wasteAuthorizationRequests->map(fn ($item) => [
+            'frascos' => (float) $item->quantity_containers, 'mL' => (float) $item->quantity_ml,
+        ]));
 
         return view('admin.superadministrator.index', compact(
             'administrators',
             'wasteRecords',
             'wasteSummary',
+            'wasteTotals',
+            'requestedUnitTotals',
             'wasteDateRange',
             'wasteMonthOptions',
             'wasteYearOptions',
@@ -212,6 +223,11 @@ class SuperAdministratorController extends Controller
     {
         $records = collect();
 
+        if (Schema::hasTable('inspection_wastes')) {
+            $records = $records->concat($this->applyWasteDateRange(InspectionWaste::query(), $dateRange)
+                ->get()->map(fn (InspectionWaste $waste) => $this->mapInspectionWaste($waste)));
+        }
+
         if (Schema::hasTable('medicine_remainder_movements') && Schema::hasTable('medicine_remainders')) {
             $remainderWasteQuery = MedicineRemainderMovement::query()
                 ->with([
@@ -303,7 +319,50 @@ class SuperAdministratorController extends Controller
             'from' => $from,
             'to' => $to,
             'active' => $active,
-            'open' => $active || $request->boolean('waste_open'),
+            'open' => $active || $request->boolean('waste_open', true),
+        ];
+    }
+
+    private function mapInspectionWaste(InspectionWaste $waste): array
+    {
+        $snapshot = $waste->snapshot;
+        $medications = collect($snapshot['medications'] ?? []);
+        $presentations = $medications->flatMap(fn ($medication) => $medication['presentaciones_usadas'] ?? []);
+        $materials = $presentations->map(fn ($presentation) =>
+            ($presentation['presentacion_snapshot'] ?? 'Presentación').' · Lote '.($presentation['lote_usado'] ?? '-')
+            .' · '.($presentation['volumen_usado_ml'] ?? 0).' mL');
+        if (!empty($snapshot['diluent'])) {
+            $materials->push('Diluyente: '.($snapshot['diluent']['presentacion'] ?? 'Presentación')
+                .' · Lote '.($snapshot['diluent']['lote'] ?? '-'));
+        }
+
+        return [
+            'id' => 'inspeccion-'.$waste->id,
+            'type' => 'inspeccion',
+            'type_label' => 'Merma de inspección',
+            'area' => ($snapshot['category'] ?? '') === 'antibioticos' ? 'Antibióticos' : 'Oncológico',
+            'product' => 'Mezcla #'.$waste->mezcla_id.' · Intento '.$waste->production_attempt,
+            'presentation' => $medications->map(fn ($medication) =>
+                (($medication['denominacion_snapshot'] ?? '') ?: ($medication['nombre_medicamento'] ?? 'Medicamento')))->implode('; '),
+            'units' => [
+                'mg' => $medications->isNotEmpty() && $medications->every(fn ($medication) => isset($medication['dosis']) && is_numeric($medication['dosis']))
+                    ? (float) $medications->sum('dosis') : null,
+                'mezclas' => 1.0,
+            ],
+            'brand' => $medications->pluck('marca_snapshot')->filter()->unique()->implode(', ') ?: '-',
+            'lot' => $snapshot['mixture']['lote'] ?? 'Sin lote',
+            'purchase_cost_per_ml' => null,
+            'purchase_cost_per_bottle' => null,
+            'laboratory' => $snapshot['laboratory'] ?? 'Sin central',
+            'warehouse' => implode(', ', $snapshot['warehouses'] ?? []) ?: 'Sin almacén',
+            'inspection_destination' => 'Solicitud #'.($snapshot['request_id'] ?? '-').' · '.($snapshot['hospital'] ?? 'Sin hospital'),
+            'quantity_containers' => 0,
+            'quantity_ml' => (float) ($snapshot['mixture']['volumen_dilucion'] ?? 0),
+            'quantity_mixtures' => 1,
+            'reason' => $waste->reason,
+            'user' => $snapshot['reviewer'] ?? '-',
+            'occurred_at' => $waste->created_at,
+            'inspection_materials' => $materials->all(),
         ];
     }
 
@@ -404,6 +463,11 @@ class SuperAdministratorController extends Controller
             'warehouse' => $remainder?->warehouse?->name ?: 'Sin almacén',
             'quantity_containers' => 0.0,
             'quantity_ml' => (float) ($movement->quantity_ml ?? 0),
+            'units' => $isOncologic
+                ? ['mg' => \App\Models\Oncologicos\MedicinePresentation::remainderInMilligramsFrom(
+                    $movement->quantity_ml, $presentation?->contentInMilligrams(), $presentation?->volumen_diluyente
+                )]
+                : ['mL' => (float) ($movement->quantity_ml ?? 0)],
             'reason' => $remainder?->discard_reason ?: ($movement->notes ?: 'Sin motivo registrado'),
             'user' => $this->userLabel($movement->user),
             'occurred_at' => $movement->created_at,
@@ -430,6 +494,7 @@ class SuperAdministratorController extends Controller
             'warehouse' => $movement->warehouse?->name ?: ($batch?->warehouse?->name ?: 'Sin almacén'),
             'quantity_containers' => (float) ($movement->quantity ?? 0),
             'quantity_ml' => (float) ($movement->quantity_ml ?? 0),
+            'units' => ['frascos' => (float) ($movement->quantity ?? 0), 'mL' => (float) ($movement->quantity_ml ?? 0)],
             'reason' => $movement->notes ?: 'Sin motivo registrado',
             'user' => $this->userLabel($movement->user),
             'occurred_at' => $movement->created_at,
@@ -456,6 +521,7 @@ class SuperAdministratorController extends Controller
             'warehouse' => $movement->warehouse?->name ?: ($stock?->warehouse?->name ?: 'Sin almacén'),
             'quantity_containers' => (float) ($movement->cantidad_frascos ?? 0),
             'quantity_ml' => (float) ($movement->cantidad_ml ?? 0),
+            'units' => ['frascos' => (float) ($movement->cantidad_frascos ?? 0), 'mL' => (float) ($movement->cantidad_ml ?? 0)],
             'reason' => $movement->notes ?: 'Sin motivo registrado',
             'user' => $this->userLabel($movement->user),
             'occurred_at' => $movement->created_at,

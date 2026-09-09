@@ -79,9 +79,9 @@
 
             swalConfig = {
                 ...swalConfig, // Extiende la configuración existente
-                confirmButtonText: 'Aceptar',
+                confirmButtonText: swalConfig.confirmButtonText ?? 'Aceptar',
                 cancelButtonText: 'Cancelar',
-                showCancelButton: true, // Habilita el botón de cancelar si es necesario
+                showCancelButton: swalConfig.showCancelButton ?? true,
                 customClass: {
                     confirmButton: 'swal-button-confirm',
                     cancelButton: 'swal-button-cancel'
@@ -133,8 +133,8 @@
 
             function ensureStickyHorizontalScroll(root = document) {
                 const selectors = [
-                    '.admin-content .overflow-x-auto:not([data-disable-sticky-x])',
-                    '.admin-content .billing-table-scroll'
+                    '.admin-content .overflow-x-auto:not([data-disable-sticky-x]):not([data-sticky-x-position="viewport"])',
+                    '.admin-content .billing-table-scroll:not([data-sticky-x-position="viewport"])'
                 ];
 
                 root.querySelectorAll(selectors.join(', ')).forEach((source) => {

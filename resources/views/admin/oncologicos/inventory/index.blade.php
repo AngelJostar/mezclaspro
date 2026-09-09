@@ -203,7 +203,8 @@
                                                         data-stock-actual="{{ number_format((float) $batch->stock_actual, 2, '.', '') }}"
                                                         data-stock-reservado="{{ number_format((float) $batch->stock_reservado, 2, '.', '') }}"
                                                         data-ml-per-bottle="{{ number_format((float) ($batch->volumen_diluyente ?? 0), 4, '.', '') }}"
-                                                        data-remanente-ml="{{ number_format((float) $batch->remanente_ml, 2, '.', '') }}"
+                                                        data-remanente-ml="{{ $batch->remanente_ml }}"
+                                                        data-remanente-mg="{{ $batch->remanente_mg }}"
                                                         data-remanente-merma-url="{{ route('admin.oncologicos.inventory.descartarRemanente', $batch->batch_id) }}">
                                                         {{ $batch->lote }}
                                                     </option>
@@ -296,10 +297,10 @@
                                     <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                                         @if ($firstBatch)
                                             <span class="font-semibold text-amber-700 selected-remainder">
-                                                {{ number_format((float) $firstBatch->remanente_ml, 2) }} mL
+                                                {{ $firstBatch->remanente_mg === null ? 'Sin concentracion' : number_format($firstBatch->remanente_mg, 2, '.', '').' mg' }}
                                             </span>
                                         @else
-                                            <span class="text-xs text-gray-400">0.00 mL</span>
+                                            <span class="text-xs text-gray-400">0.00 mg</span>
                                         @endif
                                     </td>
 
@@ -407,13 +408,17 @@
                     const lossForm = row.querySelector('.stock-loss-form');
                     if (lossForm && option.dataset.lossUrl) lossForm.action = option.dataset.lossUrl;
 
-                    const remainderMl = Number(option.dataset.remainderMl || 0);
+                    const remainderMl = Number(option.dataset.remanenteMl || 0);
+                    const remainderMg = option.dataset.remanenteMg;
                     const remainderLabel = row.querySelector('.selected-remainder');
-                    if (remainderLabel) remainderLabel.textContent = remainderMl.toFixed(2) + ' mL';
+                    if (remainderLabel) remainderLabel.textContent = remainderMg === '' || remainderMg == null
+                        ? 'Sin concentracion' : Number(remainderMg).toLocaleString('en-US', {
+                            minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false
+                        }) + ' mg';
 
                     const remainderForm = row.querySelector('.remainder-waste-form');
                     const remainderButton = row.querySelector('.remainder-waste-button');
-                    if (remainderForm && option.dataset.remainderMermaUrl) remainderForm.action = option.dataset.remainderMermaUrl;
+                    if (remainderForm && option.dataset.remanenteMermaUrl) remainderForm.action = option.dataset.remanenteMermaUrl;
                     if (remainderButton) {
                         const enabled = remainderMl > 0.0001;
                         remainderButton.disabled = !enabled;
@@ -435,7 +440,7 @@
 
                     Swal.fire({
                         title: 'Enviar remanente a merma?',
-                        text: 'Esta accion dejara el remanente del lote en 0 mL.',
+                        text: 'Esta accion dejara el remanente del lote en 0 mg.',
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonText: 'Si, enviar a merma',

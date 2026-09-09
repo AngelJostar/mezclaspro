@@ -1,0 +1,29 @@
+.fixed-table-scrollbar {
+    position: fixed;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: calc(36px + env(safe-area-inset-bottom, 0px));
+    padding: 3px 6px calc(3px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid #cbd5e1;
+    border-bottom: 0;
+    border-radius: 4px 4px 0 0;
+    background: #f8fafc;
+    box-shadow: 0 -3px 12px #172d5214;
+}
+.fixed-table-scrollbar[hidden] { display: none; }
+.fixed-table-scrollbar button { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 3px; color: #334e74; }
+.fixed-table-scrollbar button:hover:not(:disabled) { background: #e2e8f0; }
+.fixed-table-scrollbar button:disabled { color: #94a3b8; cursor: default; }
+.fixed-table-scrollbar svg { width: 18px; height: 18px; }
+.fixed-table-scrollbar input[type="range"] { appearance: none; -webkit-appearance: none; display: block; flex: 1; min-width: 0; width: 100%; height: 28px; margin: 0; padding: 0; border: 0; background: transparent; cursor: ew-resize; }
+.fixed-table-scrollbar input[type="range"]::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: #e2e8f0; }
+.fixed-table-scrollbar input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: var(--scroll-thumb-width, 36px); height: 10px; border: 0; border-radius: 5px; background: #64748b; }
+.fixed-table-scrollbar input[type="range"]::-moz-range-track { height: 10px; border-radius: 5px; background: #e2e8f0; }
+.fixed-table-scrollbar input[type="range"]::-moz-range-thumb { width: var(--scroll-thumb-width, 36px); height: 10px; border: 0; border-radius: 5px; background: #64748b; }
+.fixed-table-scrollbar input[type="range"]:hover::-webkit-slider-thumb { background: #475569; }
+.fixed-table-scrollbar input[type="range"]:hover::-moz-range-thumb { background: #475569; }
+.fixed-table-scrollbar :focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.admin-page.has-fixed-table-scrollbar { padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px)); }
