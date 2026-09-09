@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicineBatch;
 use App\Models\Oncologicos\MedicineBatchMovement;
+use App\Models\Oncologicos\MedicinePresentation;
 use App\Models\MedicineRemainder;
 use App\Services\MedicineRemainderService;
 use App\Services\WasteAuthorizationService;
@@ -127,6 +128,12 @@ class InventoryController extends Controller
                 $remainderService->discard($remainder, 'Merma manual de remanente', 'MermaRemanente', $lockedBatch->id, auth()->id());
             }
 
+            $discardedMg = MedicinePresentation::remainderInMilligramsFrom(
+                $discardedMl,
+                $lockedBatch->presentation?->cantidad_medicamento,
+                $lockedBatch->presentation?->volumen_diluyente
+            );
+
             MedicineBatchMovement::create([
                 'medicine_batch_id' => $lockedBatch->id,
                 'laboratory_id' => $lockedBatch->laboratory_id,
@@ -143,7 +150,9 @@ class InventoryController extends Controller
                 'stock_reservado_after' => $lockedBatch->stock_reservado,
                 'reference_type' => 'MermaRemanente',
                 'reference_id' => $lockedBatch->id,
-                'notes' => 'Merma manual de remanente abierto: '.number_format($discardedMl, 4, '.', '').' mL.',
+                'notes' => 'Merma manual de remanente abierto: '.($discardedMg === null
+                    ? 'sin concentracion configurada.'
+                    : number_format($discardedMg, 4, '.', '').' mg.'),
             ]);
         });
 
@@ -487,6 +496,7 @@ class InventoryController extends Controller
                 'mp.presentacion',
                 'mp.contenido_valor',
                 'mp.contenido_unidad',
+                'mp.cantidad_medicamento',
                 'mp.marca',
                 'mp.fabricante',
                 'mp.volumen_diluyente',
@@ -530,6 +540,9 @@ class InventoryController extends Controller
             $row->remanente_ml = $row->batch_id
                 ? (float) ($remaindersByBatch->get($row->batch_id) ?? 0)
                 : 0.0;
+            $row->remanente_mg = MedicinePresentation::remainderInMilligramsFrom(
+                $row->remanente_ml, $row->cantidad_medicamento, $row->volumen_diluyente
+            );
         });
 
         $groupedRows = $rows

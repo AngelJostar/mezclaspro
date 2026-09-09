@@ -7,6 +7,23 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Frontend Assets After a Pull
+
+The generated `public/build` directory is not tracked by Git. After pulling
+frontend changes, run these commands from the project root on the machine
+serving the application (including Laragon):
+
+```sh
+npm ci
+npm run build
+php artisan view:clear
+```
+
+This regenerates `public/build/manifest.json` and its JavaScript/CSS assets.
+An error such as `Unable to locate file in Vite manifest: resources/js/welcome.js`
+means the compiled assets are missing or outdated. Do not edit the manifest
+manually; rebuild it with Vite.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

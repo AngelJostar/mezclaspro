@@ -51,7 +51,7 @@ class SuperAdministratorManagementTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_super_administrator_panel_starts_collapsed_and_shows_waste_report_filters(): void
+    public function test_super_administrator_panel_opens_waste_report_and_keeps_authorizations_collapsed(): void
     {
         $superAdministrator = $this->userWithRole('Super Admin');
         $this->userWithRole('Admin');
@@ -60,7 +60,7 @@ class SuperAdministratorManagementTest extends TestCase
             $mock->shouldReceive('counts')->once()->andReturn(['yellow' => 0, 'red' => 0]);
         });
 
-        $this->actingAs($superAdministrator)
+        $response = $this->actingAs($superAdministrator)
             ->get(route('admin.superadministrator.index'))
             ->assertOk()
             ->assertSee('Autorizaciones')
@@ -85,9 +85,18 @@ class SuperAdministratorManagementTest extends TestCase
             ->assertSee('Aplicar filtro')
             ->assertSee('Borrar filtro')
             ->assertSee('authorizationsOpen: false', false)
-            ->assertSee("wasteOpen: false, wasteFilter: 'all'", false)
+            ->assertSee("wasteOpen: true, wasteFilter: 'all'", false)
             ->assertSee('aria-controls="authorizations-table"', false)
             ->assertSee('aria-controls="waste-report-content"', false);
+
+        $document = new \DOMDocument();
+        @$document->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
+        $counter = (new \DOMXPath($document))->query('//button[@role="tab" and contains(., "Solicitudes de Merma")]/span')->item(0);
+        $this->assertNotNull($counter);
+        $this->assertStringContainsString('bg-gray-100', $counter->getAttribute('class'));
+        $this->assertStringContainsString('text-gray-700', $counter->getAttribute('class'));
+        $this->assertFalse($counter->hasAttribute(':class'));
+        $this->assertFalse($counter->hasAttribute(':style'));
     }
 
     public function test_waste_report_normalizes_a_month_range_and_stays_open(): void
@@ -111,6 +120,44 @@ class SuperAdministratorManagementTest extends TestCase
             ->assertSee('value="2026" selected', false)
             ->assertSee("wasteOpen: true, wasteFilter: 'all'", false)
             ->assertSee('Borrar filtro');
+    }
+
+    public function test_inspection_wastes_appear_in_their_category_and_respect_the_date_filter(): void
+    {
+        (require database_path('migrations/2026_09_08_000001_create_inspection_wastes_table.php'))->up();
+        foreach ([['2026-08-15 10:30:00', 1], ['2026-09-08 11:00:00', 2]] as [$date, $attempt]) {
+            \App\Models\InspectionWaste::forceCreate([
+                'mezcla_id' => 39, 'production_attempt' => $attempt,
+                'reason' => 'Fuga en contenedor, intento '.$attempt,
+                'snapshot' => [
+                    'category' => 'antibioticos', 'request_id' => 24, 'hospital' => 'Hospital de prueba',
+                    'reviewer' => 'Inspector de prueba', 'mixture' => ['lote' => 'LOTE-39', 'volumen_dilucion' => 250],
+                    'medications' => [['denominacion_snapshot' => 'Medicamento de prueba', 'dosis' => 90, 'marca_snapshot' => 'Marca',
+                        'presentaciones_usadas' => [['presentacion_snapshot' => '50 mg', 'lote_usado' => 'MED-01', 'volumen_usado_ml' => 45]]]],
+                ], 'created_at' => $date,
+            ]);
+        }
+        $this->mock(InstitutionBillingPendingSummaryService::class, function ($mock) {
+            $mock->shouldReceive('counts')->andReturn(['yellow' => 0, 'red' => 0]);
+        });
+        $response = $this->actingAs($this->userWithRole('Super Admin'))
+            ->get(route('admin.superadministrator.index', ['waste_view' => 'inspeccion']))
+            ->assertOk()->assertSee('Mermas de inspección')->assertSee('Mezcla #39')
+            ->assertSee('Materiales del intento')->assertSee('MED-01')->assertSee('1.00 mezcla')
+            ->assertSee('Fuga en contenedor, intento 1')->assertSee('Fuga en contenedor, intento 2')
+            ->assertSee("wasteFilter: 'inspeccion'", false);
+        $this->assertSame(2, $response->viewData('wasteSummary')['inspeccion']);
+        $this->assertSame(['mg' => 180.0, 'mezclas' => 2.0], $response->viewData('wasteTotals')['inspeccion']['quantities']);
+        $this->assertSame($response->viewData('wasteTotals')['all'], $response->viewData('wasteTotals')['inspeccion']);
+        $record = $response->viewData('wasteRecords')->first();
+        $this->assertSame('Medicamento de prueba', $record['presentation']);
+        $this->assertSame(['mg' => 90.0, 'mezclas' => 1.0], $record['units']);
+        $filtered = $this->get(route('admin.superadministrator.index', [
+            'waste_view' => 'inspeccion', 'waste_from' => '2026-09', 'waste_to' => '2026-09',
+        ]))->assertOk()->assertSee('Fuga en contenedor, intento 2')->assertDontSee('Fuga en contenedor, intento 1');
+        $this->assertSame(1, $filtered->viewData('wasteSummary')['inspeccion']);
+        $this->assertSame(['mg' => 90.0, 'mezclas' => 1.0], $filtered->viewData('wasteTotals')['all']['quantities']);
+        $this->assertSame('inspeccion', $filtered->viewData('initialWasteView'));
     }
 
     public function test_oncology_container_waste_is_only_applied_after_super_administrator_approval(): void
@@ -264,6 +311,26 @@ class SuperAdministratorManagementTest extends TestCase
             'frascos_actuales' => 4,
         ]);
         $this->assertDatabaseCount('medicine_stock_movements', 0);
+    }
+
+    public function test_requested_units_respect_the_period_and_are_not_added_to_recorded_waste(): void
+    {
+        foreach (['2026-08-15', '2026-09-08'] as $date) {
+            \App\Models\WasteAuthorizationRequest::create([
+                'domain' => 'oncologico', 'quantity_containers' => 2, 'quantity_ml' => 20.5,
+                'reason' => 'Solicitud de prueba', 'snapshot_product' => 'Producto de prueba',
+            ])->forceFill(['created_at' => $date])->save();
+        }
+        $this->mock(InstitutionBillingPendingSummaryService::class, function ($mock) {
+            $mock->shouldReceive('counts')->andReturn(['yellow' => 0, 'red' => 0]);
+        });
+        $response = $this->actingAs($this->userWithRole('Super Admin'))->get(route('admin.superadministrator.index', [
+            'waste_view' => 'requests', 'waste_from' => '2026-09', 'waste_to' => '2026-09',
+        ]))->assertOk()->assertSee('Total de unidades solicitadas')->assertSee('20.50 mL · 2.00 frascos');
+        $this->assertCount(1, $response->viewData('wasteAuthorizationRequests'));
+        $this->assertSame(1, $response->viewData('pendingWasteAuthorizationCount'));
+        $this->assertSame(['frascos' => 2.0, 'mL' => 20.5], $response->viewData('requestedUnitTotals')['quantities']);
+        $this->assertSame([], $response->viewData('wasteTotals')['all']['quantities']);
     }
 
     public function test_non_super_administrator_cannot_authorize_container_waste(): void
@@ -1165,6 +1232,13 @@ class SuperAdministratorManagementTest extends TestCase
 
     private function createTestSchema(): void
     {
+        (require database_path('migrations/2026_09_08_000003_create_ai_agents_table.php'))->up();
+
+        Schema::create('laboratory_purchase_orders', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('created_by');
+        });
+
         Schema::create('hospitals', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -1179,7 +1253,11 @@ class SuperAdministratorManagementTest extends TestCase
             $table->string('name');
             $table->string('lastname');
             $table->string('username')->unique();
+            $table->string('training_username')->nullable();
             $table->string('password');
+            $table->text('credential_password')->nullable();
+            $table->string('training_password')->nullable();
+            $table->text('training_credential_password')->nullable();
             $table->rememberToken();
             $table->boolean('is_active')->default(true);
             $table->foreignId('hospital_id')->nullable();

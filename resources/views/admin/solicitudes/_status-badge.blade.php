@@ -14,9 +14,7 @@
 
     $statusClass = match ($statusKey) {
         'aprobada' => 'bg-green-100 text-green-700',
-        'dispensada' => 'bg-sky-100 text-sky-700',
-        'preparada' => 'bg-blue-100 text-blue-700',
-        'revisada' => 'bg-purple-100 text-purple-700',
+        'dispensada', 'preparada', 'revisada' => 'bg-blue-100 text-blue-700',
         'entregada' => 'bg-gray-200 text-gray-700',
         'cancelada' => 'bg-red-100 text-red-700',
         'no_aprobada' => 'bg-red-200 text-red-800',

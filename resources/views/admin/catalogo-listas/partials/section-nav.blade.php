@@ -4,6 +4,7 @@
     'mode' => null,
     'categoryRouteName' => null,
     'categoryRouteQuery' => [],
+    'catalogRouteQuery' => [],
     'embedded' => false,
 ])
 
@@ -96,25 +97,9 @@
         </button>
     </div>
 
-    @if (in_array($category, ['oncologicos', 'diluyentes', 'consumibles'], true))
-        <div class="mt-2 flex items-center gap-2">
-            <span class="w-8"></span>
-            <a href="{{ route('admin.catalogo-listas.catalog', ['category' => 'diluyentes']) }}"
-                class="flex h-16 w-48 items-center gap-3 rounded-lg border px-4 text-left transition {{ $category === 'diluyentes' ? 'border-cyan-500 bg-cyan-50 text-gray-900 shadow-sm ring-1 ring-cyan-300' : 'border-gray-200 bg-white text-gray-700 hover:border-cyan-300 hover:bg-gray-50' }}">
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-50 text-cyan-700"><i class="fa-solid fa-droplet"></i></span>
-                <span class="text-sm font-bold">Diluyentes</span>
-            </a>
-            <a href="{{ route('admin.catalogo-listas.catalog', ['category' => 'consumibles']) }}"
-                class="flex h-16 w-48 items-center gap-3 rounded-lg border px-4 text-left transition {{ $category === 'consumibles' ? 'border-cyan-500 bg-cyan-50 text-gray-900 shadow-sm ring-1 ring-cyan-300' : 'border-gray-200 bg-white text-gray-700 hover:border-cyan-300 hover:bg-gray-50' }}">
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-50 text-amber-700"><i class="fa-solid fa-syringe"></i></span>
-                <span class="text-sm font-bold">Consumibles</span>
-            </a>
-        </div>
-    @endif
-
-    @unless ($embedded)
+    @unless ($embedded || $category === 'insumos')
         <div class="mt-3 flex flex-wrap items-center gap-2">
-            <a href="{{ route('admin.catalogo-listas.catalog', ['category' => $category]) }}"
+            <a href="{{ route('admin.catalogo-listas.catalog', array_merge(['category' => $category], $catalogRouteQuery)) }}"
                 class="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-bold transition {{ $mode === 'catalogo' ? 'border-blue-950 bg-blue-950 text-white shadow-sm' : 'border-blue-900 bg-blue-900 text-white hover:bg-blue-950' }}">
                 <span>Catalogo</span>
             </a>

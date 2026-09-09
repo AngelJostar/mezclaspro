@@ -110,6 +110,23 @@ class MedicinePresentation extends Model
         return null;
     }
 
+    public static function remainderInMilligramsFrom($remainderMl, $medicineAmount, $containerMl): ?float
+    {
+        $remainderMl = (float) $remainderMl;
+        if ($remainderMl <= 0) {
+            return 0.0;
+        }
+
+        $medicineAmount = (float) $medicineAmount;
+        $containerMl = (float) $containerMl;
+        if ($medicineAmount <= 0 || $containerMl <= 0) {
+            return null;
+        }
+
+        // Match the concentration used by OncologicMedicationInventoryService; storage stays in mL.
+        return $remainderMl * ($medicineAmount / $containerMl);
+    }
+
     public function lists()
     {
         return $this->belongsToMany(

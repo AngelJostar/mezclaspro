@@ -16,17 +16,19 @@
     @endphp
 
     <div class="mb-4 flex items-start justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-4">
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-4">
             <h1 data-workflow-heading class="mixture-workflow-heading">{{ $formTitle }} #{{ $mezcla->id }} | {{ \App\Support\MixtureWorkflowContext::destination($solicitud->hospital ?? null) }}</h1>
             @if ($isApprovalMode && $isPendingApproval)
-                <x-button form="formularioMezcla" type="submit" class="bg-green-600 hover:bg-green-700"
-                    onclick="document.getElementById('accion').value='aprobar'">
-                    APROBAR MEZCLA
-                </x-button>
-                <x-button form="formularioMezcla" type="submit" formnovalidate class="bg-red-600 hover:bg-red-700 focus:bg-red-700 active:bg-red-800 focus:ring-red-500"
-                    onclick="document.getElementById('accion').value='rechazar'">
-                    RECHAZAR MEZCLA
-                </x-button>
+                <div data-workflow-approval-actions class="ml-auto flex flex-wrap items-center justify-end gap-3">
+                    <x-button form="formularioMezcla" type="submit" class="bg-green-600 hover:bg-green-700"
+                        onclick="document.getElementById('accion').value='aprobar'">
+                        APROBAR MEZCLA
+                    </x-button>
+                    <x-button form="formularioMezcla" type="submit" formnovalidate class="bg-red-600 hover:bg-red-700 focus:bg-red-700 active:bg-red-800 focus:ring-red-500"
+                        onclick="document.getElementById('accion').value='rechazar'">
+                        RECHAZAR MEZCLA
+                    </x-button>
+                </div>
             @endif
         </div>
         <a href="{{ $closeHref }}"
@@ -178,6 +180,7 @@
 
         <div id="contenedorMezcla"></div>
         <input type="hidden" name="mezcla_json" id="mezcla_json">
+        <input type="hidden" name="production_attempt" value="{{ $mezcla->production_attempt ?? 1 }}">
 
         <div class="flex justify-end mt-4 gap-4">
             <input type="hidden" name="accion" id="accion" value="actualizar">
@@ -458,11 +461,20 @@
             return Number.isFinite(number) ? number.toFixed(decimals) : Number(0).toFixed(decimals);
         }
 
+        function formatRemainderMg(value) {
+            return value === '' || value == null ? 'Sin concentracion' : Number(value).toLocaleString('en-US', {
+                minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false
+            }) + ' mg';
+        }
+
         function formatDisplayDate(value) {
             if (!value) return '—';
 
+            // Lot dates represent calendar days, not instants in the browser's time zone.
+            const calendarDay = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T ])/);
+            if (calendarDay) return `${calendarDay[3]}/${calendarDay[2]}/${calendarDay[1]}`;
             const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+            return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('es-MX');
         }
 
         function resaltarPresentacionFila(filaId) {
@@ -470,18 +482,79 @@
             const selectedPresentationId = selector?.value || '';
 
             document.querySelectorAll(`#presentaciones_body_${filaId} .presentacion-row`).forEach(row => {
-                const isSelected = selectedPresentationId !== '' && String(row.dataset.presentationId) === String(selectedPresentationId);
+                const isSelected = isDispensingMode ? row.dataset.dispensingSelected === '1'
+                    : selectedPresentationId !== '' && String(row.dataset.presentationId) === String(selectedPresentationId);
                 row.classList.toggle('bg-blue-50', isSelected);
                 row.classList.toggle('ring-1', isSelected);
                 row.classList.toggle('ring-blue-200', isSelected);
             });
         }
 
+        function propuestaDePresentacion(row, filaId, containers = null) {
+            return window.calculateDispensingProposal({
+                doseMg: document.querySelector(`#fila_${filaId} .dosis-input`)?.value,
+                containerMg: row.dataset.cantidadMg,
+                containerMl: row.dataset.volumenMl,
+                remainderMl: row.dataset.remanenteDisponibleMl,
+                stock: row.dataset.stockActual,
+                reserved: row.dataset.stockReservado,
+                containers,
+            });
+        }
+
+        function actualizarPropuestaFrascos(filaId, selectedRow = null, keepQuantity = false) {
+            if (!isDispensingMode) return;
+            const rows = [...document.querySelectorAll(`#presentaciones_body_${filaId} .presentacion-row`)];
+            const selector = document.getElementById(`presentacion_selector_${filaId}`);
+            const selectedBrand = selectedRow ? window.dispensingBrandKey(datosPresentacion(selectedRow)) : null;
+            const proposal = keepQuantity ? null : window.optimizeDispensingSelection({
+                doseMg: document.querySelector(`#fila_${filaId} .dosis-input`)?.value,
+                presentations: rows.map(datosPresentacion), brand: selectedBrand,
+            });
+            rows.forEach(row => {
+                const input = row.querySelector('.input-frascos');
+                const allocation = proposal?.allocations.find(item => item.id === row.dataset.presentationId);
+                const sameBrand = selectedBrand === null || window.dispensingBrandKey(datosPresentacion(row)) === selectedBrand;
+                if (!keepQuantity) input.value = allocation?.openedContainers ?? 0;
+                else if (!sameBrand) input.value = 0;
+                row.dataset.dispensingSelected = keepQuantity
+                    ? (sameBrand && (Number(input.value) > 0 || ((row === selectedRow || row.dataset.dispensingSelected === '1')
+                        && Number(row.dataset.remanenteDisponibleMl) > 0)) ? '1' : '0')
+                    : (allocation?.providedMg > 0 ? '1' : '0');
+                input.max = propuestaDePresentacion(row, filaId).availableContainers ?? 0;
+            });
+            const activeRows = rows.filter(row => row.dataset.dispensingSelected === '1');
+            if (selector) selector.value = activeRows.length === 1 ? activeRows[0].dataset.presentationId : '';
+            resaltarPresentacionFila(filaId);
+            recalcularResumenPresentaciones(filaId);
+        }
+
+        function datosPresentacion(row) {
+            return {
+                id: row.dataset.presentationId, presentationId: row.dataset.presentationId,
+                brand: row.dataset.marca, containerMg: row.dataset.cantidadMg, containerMl: row.dataset.volumenMl,
+                remainderMl: row.dataset.remanenteDisponibleMl, stock: row.dataset.stockActual,
+                reserved: row.dataset.stockReservado, containers: Number(row.querySelector('.input-frascos').value),
+            };
+        }
+
+        function seleccionarPresentacionFila(filaId) {
+            const selectedId = document.getElementById(`presentacion_selector_${filaId}`)?.value;
+            const row = [...document.querySelectorAll(`#presentaciones_body_${filaId} .presentacion-row`)]
+                .find(item => item.dataset.presentationId === selectedId);
+            actualizarPropuestaFrascos(filaId, row);
+        }
+
+        function ajustarFrascosManualmente(input, filaId) {
+            actualizarPropuestaFrascos(filaId, input.closest('.presentacion-row'), true);
+        }
+
         function inicializarPresentacionesFila(filaId, catalogIdOrOncoId, presentacionesGuardadas = []) {
             const catalogId = toCatalogId(catalogIdOrOncoId);
             if (!catalogId) return;
 
-            const lista = presentacionesPorCatalogo?.[catalogId] || [];
+            const lista = [...(presentacionesPorCatalogo?.[catalogId] || [])]
+                .sort((a, b) => Number(b.cantidad_medicamento || 0) - Number(a.cantidad_medicamento || 0));
             const wrap = document.getElementById(`presentaciones_wrap_${filaId}`);
             const selector = document.getElementById(`presentacion_selector_${filaId}`);
             const tbody = document.getElementById(`presentaciones_body_${filaId}`);
@@ -502,7 +575,7 @@
             if (!lista.length) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="9" class="px-4 py-4 text-center text-xs text-gray-500">
+                        <td colspan="10" class="px-4 py-4 text-center text-xs text-gray-500">
                             Este medicamento no tiene presentaciones disponibles.
                         </td>
                     </tr>
@@ -519,7 +592,7 @@
                 );
 
                 const selectedBatchId = guardada?.medicine_batch_id || batches[0]?.id || '';
-                const frascosValue = guardada ? Number(guardada.unidades_usadas || 0) : 0;
+                const frascosValue = guardada ? Number(guardada.unidades_abiertas ?? guardada.unidades_usadas ?? 0) : 0;
                 const precioFrascoValue = guardada ?
                     Number(guardada.precio_frasco_snapshot || 0) :
                     getPrecioFrascoDefault(p);
@@ -536,9 +609,11 @@
                             data-caducidad-text="${cad}"
                             data-fecha-ingreso-text="${ingreso}"
                             data-stock-inicial="${formatDisplayNumber(b.stock_inicial)}"
-                            data-stock="${formatDisplayNumber(b.stock_actual)}"
-                            data-stock-reservado="${formatDisplayNumber(b.stock_reservado)}"
-                            data-remanente="${formatDisplayNumber(b.remanente_ml)}">
+                            data-stock="${Number(b.stock_actual || 0)}"
+                            data-stock-reservado="${Number(b.stock_reservado || 0)}"
+                            data-remanente="${Number(b.remanente_ml || 0)}"
+                            data-remanente-disponible="${Number(b.remanente_disponible_ml ?? b.remanente_ml ?? 0)}"
+                            data-remanente-mg="${b.remanente_mg ?? ''}">
                             ${escapeHtml(b.lote ?? 'Sin lote')}
                         </option>
                     `;
@@ -546,7 +621,8 @@
 
                 const selectedBatch = batches.find(b => Number(b.id) === Number(selectedBatchId)) || batches[0] ||
                     null;
-                const hasUsableBatch = !!selectedBatch && (Number(selectedBatch.stock_actual || 0) > 0 || Number(selectedBatch.remanente_ml || 0) > 0);
+                const hasUsableBatch = !!selectedBatch && (Number(selectedBatch.stock_actual || 0) > 0
+                    || Number(selectedBatch.remanente_disponible_ml ?? selectedBatch.remanente_ml ?? 0) > 0);
                 const hasClosedStock = !!selectedBatch && Number(selectedBatch.stock_actual || 0) > 0;
                 const hasRemainder = !!selectedBatch && Number(selectedBatch.remanente_ml || 0) > 0.0001;
 
@@ -558,6 +634,11 @@
                 tr.classList.add('presentacion-row', 'bg-white', 'border-b', 'last:border-b-0');
                 tr.dataset.presentationId = p.id;
                 tr.dataset.cantidadMg = p.cantidad_medicamento || 0;
+                tr.dataset.volumenMl = p.volumen_diluyente || 0;
+                tr.dataset.stockActual = selectedBatch?.stock_actual || 0;
+                tr.dataset.stockReservado = selectedBatch?.stock_reservado || 0;
+                tr.dataset.remanenteDisponibleMl = selectedBatch?.remanente_disponible_ml ?? selectedBatch?.remanente_ml ?? 0;
+                tr.dataset.savedSelection = guardada ? '1' : '0';
                 tr.dataset.marca = p.marca || '';
                 tr.dataset.batchId = selectedBatch?.id || selectedBatchId || '';
                 tr.dataset.hasStock = hasUsableBatch ? '1' : '0';
@@ -604,7 +685,7 @@
             <td class="px-4 py-3 text-center align-top">${statusBadge}</td>
             <td class="px-4 py-3 text-center align-top whitespace-nowrap">
                 <span class="font-semibold text-amber-700 selected-remainder">
-                    ${formatDisplayNumber(selectedBatch?.remanente_ml)} mL
+                    ${formatRemainderMg(selectedBatch ? selectedBatch.remanente_mg : 0)}
                 </span>
             </td>
             <td class="px-4 py-3 text-center align-top whitespace-nowrap">
@@ -623,16 +704,21 @@
                     class="w-16 rounded border px-1 py-0.5 text-right input-frascos ${hasClosedStock ? '' : 'bg-gray-100 text-gray-400'}"
                     value="${hasClosedStock ? frascosValue : 0}"
                     ${hasClosedStock ? '' : 'disabled'}
-                    title="${hasClosedStock ? 'Frascos a usar' : 'Sin frascos cerrados disponibles'}"
-                    oninput="recalcularResumenPresentaciones(${filaId})">
+                    aria-label="Frascos de ${escapeHtml(p.presentacion || 'presentacion')}"
+                    title="Maximo de frascos a abrir; se usan primero los remanentes vigentes y solo se abren los frascos necesarios."
+                    oninput="ajustarFrascosManualmente(this, ${filaId})">
+            </td>
+            <td class="min-w-[120px] px-4 py-3 text-center align-top whitespace-nowrap">
+                <span class="estimated-remainder font-semibold text-emerald-700"
+                    title="Remanente total estimado de esta presentacion en el almacen despues de preparar la mezcla; sujeto a vigencia y confirmacion de existencias.">-</span>
             </td>
         `;
 
                 tbody.appendChild(tr);
             });
 
-            resaltarPresentacionFila(filaId);
-            recalcularResumenPresentaciones(filaId);
+            const savedRow = [...tbody.querySelectorAll('.presentacion-row')].find(row => row.dataset.savedSelection === '1');
+            actualizarPropuestaFrascos(filaId, savedRow, !!savedRow);
         }
 
 
@@ -644,10 +730,13 @@
 
             row.dataset.batchId = option.value;
             row.dataset.remanenteMl = option.dataset.remanente || 0;
+            row.dataset.remanenteDisponibleMl = option.dataset.remanenteDisponible || 0;
+            row.dataset.stockActual = option.dataset.stock || 0;
+            row.dataset.stockReservado = option.dataset.stockReservado || 0;
 
             const stockActual = Number(option.dataset.stock || 0);
             const remanente = Number(option.dataset.remanente || 0);
-            const disponible = stockActual > 0 || remanente > 0.0001;
+            const disponible = stockActual > 0 || Number(row.dataset.remanenteDisponibleMl) > 0.0001;
 
             row.dataset.hasStock = disponible ? '1' : '0';
 
@@ -658,7 +747,7 @@
                 '.info-stock-actual': option.dataset.stock || '0.00',
                 '.info-stock-reservado': option.dataset.stockReservado || '0.00',
                 '.selected-stock': `${option.dataset.stock || '0.00'} frascos`,
-                '.selected-remainder': `${formatDisplayNumber(remanente)} mL`,
+                '.selected-remainder': formatRemainderMg(option.dataset.remanenteMg),
             };
 
             Object.entries(values).forEach(([selector, value]) => {
@@ -702,7 +791,7 @@
                 remainderButton.classList.toggle('text-gray-600', !hasRemainder);
             }
 
-            recalcularResumenPresentaciones(filaId);
+            actualizarPropuestaFrascos(filaId, row);
         }
 
         function recalcularResumenPresentaciones(filaId) {
@@ -711,6 +800,37 @@
 
             const dosisInput = fila.querySelector('.dosis-input');
             const objetivo = parseFloat(dosisInput?.value || "0");
+
+            if (isDispensingMode) {
+                const selected = [...document.querySelectorAll(`#presentaciones_body_${filaId} .presentacion-row`)]
+                    .filter(row => row.dataset.dispensingSelected === '1');
+                const proposal = window.evaluateDispensingSelection({ doseMg: objetivo, presentations: selected.map(datosPresentacion) });
+                fila.dispensingProposal = proposal;
+                document.querySelectorAll(`#presentaciones_body_${filaId} .presentacion-row`).forEach(row => {
+                    const active = row.dataset.dispensingSelected === '1';
+                    const estimate = row.querySelector('.estimated-remainder');
+                    if (!active) {
+                        if (estimate) estimate.textContent = '-';
+                        return;
+                    }
+                    const allocation = proposal.allocations.find(item => item.id === row.dataset.presentationId);
+                    if (estimate) estimate.textContent = proposal.covered ? formatRemainderMg(allocation?.estimatedRemainderMg) : '-';
+                });
+                const resumen = document.getElementById(`resumen_dosis_${filaId}`);
+                if (resumen) {
+                    const covered = !!proposal?.covered;
+                    resumen.classList.toggle('text-red-600', !covered);
+                    resumen.classList.toggle('text-emerald-700', covered);
+                    const status = !proposal?.valid ? 'Sin propuesta disponible'
+                        : covered ? 'dosis cubierta' : proposal.missingMg > 0 ? `faltan ${formatDisplayNumber(proposal.missingMg)} mg` : 'Cantidad de frascos no disponible';
+                    resumen.innerHTML = `<div class="dispensing-dose-target">Dosis objetivo: ${formatDisplayNumber(objetivo)} mg</div>
+                        <div class="dispensing-dose-covered">Dosis cubierta: ${formatDisplayNumber(proposal?.providedMg)} mg
+                            ${covered ? '<i data-dispensing-icon="circle-check" aria-hidden="true"></i>' : `(${status})`}</div>
+                        ${proposal?.usedRemainderMg > 0 ? `<div>Remanente a utilizar: ${formatRemainderMg(proposal.usedRemainderMg)}</div>` : ''}`;
+                    window.refreshDispensingIcons?.(resumen);
+                }
+                return;
+            }
 
             const rows = document.querySelectorAll(`#presentaciones_body_${filaId} .presentacion-row`);
             let aportada = 0;
@@ -741,6 +861,43 @@
         // ===========================
         // Diluyente común + presentaciones de diluyente
         // ===========================
+        function organizarMedicamentoDispensacion(fila, filaId) {
+            if (!isDispensingMode) return;
+
+            const medicamento = fila.querySelector('[data-name="medicamento"]');
+            medicamento.id = `medicamento_${filaId}`;
+            const labelMedicamento = document.createElement('label');
+            labelMedicamento.htmlFor = medicamento.id;
+            labelMedicamento.textContent = 'Medicamento';
+            medicamento.before(labelMedicamento);
+            fila.cells[0].classList.add('dispensing-medication-field');
+            fila.cells[2].hidden = true;
+            fila.querySelector('[data-name="charge_label"]').closest('div').hidden = true;
+
+            // Reuse the original controls and handlers; only their layout changes.
+            const dosis = fila.querySelector('.dosis-input');
+            dosis.id = `dosis_${filaId}`;
+            const field = document.createElement('div');
+            field.className = 'dispensing-dose-field';
+            field.innerHTML = `<label for="${dosis.id}">Dosis</label><div class="dispensing-unit-input"><span aria-hidden="true">mg</span></div>`;
+            dosis.before(field);
+            field.querySelector('.dispensing-unit-input').prepend(dosis);
+            dosis.setAttribute('aria-label', 'Dosis en miligramos');
+            fila.cells[1].classList.add('dispensing-dose-layout');
+            const resumen = document.getElementById(`resumen_dosis_${filaId}`);
+            resumen.classList.add('dispensing-dose-summary');
+            resumen.setAttribute('role', 'status');
+            resumen.setAttribute('aria-atomic', 'true');
+
+            const detalle = document.getElementById(`detalle_fila_${filaId}`);
+            detalle.querySelectorAll('.max-w-xl').forEach(field => field.classList.add('dispensing-half-field'));
+            const presentacion = document.getElementById(`presentacion_selector_${filaId}`);
+            presentacion.previousElementSibling.htmlFor = presentacion.id;
+            const via = detalle.querySelector('[data-name="via_administracion"]');
+            via.id = `via_${filaId}`;
+            via.previousElementSibling.htmlFor = via.id;
+        }
+
         function getDiluyentePorFila(fila) {
             return document.getElementById(`diluyente_${fila.id}`);
         }
@@ -827,11 +984,10 @@
                 const opt = document.createElement('option');
                 opt.value = p.id;
 
-                let txt = `${p.presentacion} (${p.volume_ml} mL`;
-                if (p.denominacion_comercial) txt += ` · ${p.denominacion_comercial}`;
-                if (p.lote) txt += ` · Lote ${p.lote}`;
-                if (p.caducidad) txt += ` · Cad. ${p.caducidad}`;
-                txt += ')';
+                let txt = `${p.volume_ml} mL · ${p.denominacion_comercial || p.presentacion}`;
+                const repeated = lista.some(other => other.id !== p.id && Number(other.volume_ml) === Number(p.volume_ml)
+                    && (other.denominacion_comercial || other.presentacion) === (p.denominacion_comercial || p.presentacion));
+                if (repeated && p.lote) txt += ` · Lote ${p.lote}`;
 
                 opt.textContent = txt;
                 select.appendChild(opt);
@@ -839,21 +995,26 @@
 
             if (preservedId) {
                 select.value = String(preservedId);
-
-                if (hint) {
-                    const optSel = select.options[select.selectedIndex];
-                    hint.textContent = (optSel && optSel.value) ?
-                        `Presentación guardada previamente: ${optSel.textContent}.` :
-                        'Se sugerirá una presentación en función del volumen de dilución.';
-                }
             }
+            actualizarDetalleDiluyente();
+        }
+
+        function actualizarDetalleDiluyente() {
+            if (!isDispensingMode) return;
+            const select = document.getElementById('diluent_presentation_id');
+            const hint = document.getElementById('diluent_presentation_hint');
+            if (!select || !hint) return;
+            const presentation = (diluentPresentationsPorDiluyente?.[getDiluyenteComunId()] || [])
+                .find(item => String(item.id) === select.value);
+            hint.textContent = presentation
+                ? `Lote: ${presentation.lote || 'Sin lote'} · Caducidad: ${formatDisplayDate(presentation.caducidad)}`
+                : 'Selecciona una presentación del diluyente.';
         }
 
         function autoSelectDiluentPresentationForVolume() {
             if (!isDispensingMode) return;
 
             const select = document.querySelector('[data-name="diluent_presentation_id"]');
-            const hint = document.getElementById('diluent_presentation_hint');
             const volumenInput = document.querySelector('[data-name="volumen_dilucion"]');
             if (!select || !volumenInput) return;
 
@@ -904,11 +1065,7 @@
 
             if (elegida) {
                 select.value = String(elegida.id);
-                if (hint) {
-                    hint.textContent =
-                        `Sugerida: ${elegida.presentacion} (${elegida.volume_ml} mL) ` +
-                        `para un volumen de dilución de ${vol} mL. Puedes cambiarla si lo requieres.`;
-                }
+                actualizarDetalleDiluyente();
             }
         }
 
@@ -918,6 +1075,7 @@
         function renderMezcla(mezclaData) {
             const mezclaDiv = document.createElement('div');
             mezclaDiv.classList.add("border", "border-black", "p-4", "relative");
+            if (isDispensingMode) mezclaDiv.classList.add('dispensing-mixture');
 
             const firstDiluentId = (mezclaData.medicamentos && mezclaData.medicamentos.length > 0) ?
                 mezclaData.medicamentos[0].diluyente_id : null;
@@ -945,8 +1103,9 @@
             mezclaDiv.innerHTML = `
             <h3 class="text-lg font-semibold mb-4">Mezcla</h3>
 
-            <table class="table-auto w-full border text-center mb-4">
-                <thead class="bg-gray-100">
+            <table class="table-auto w-full border text-center mb-4 ${isDispensingMode ? 'dispensing-medication-table' : ''}"
+                ${isDispensingMode ? 'role="presentation" data-disable-column-filters' : ''}>
+                <thead class="bg-gray-100" ${isDispensingMode ? 'hidden' : ''}>
                     <tr>
                         <th class="border px-2 py-1 text-xs">MEDICAMENTO</th>
                         <th class="border px-2 py-1 text-xs">DOSIS</th>
@@ -957,12 +1116,15 @@
                 <tbody id="medicamentos_mezcla"></tbody>
             </table>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label>Volumen de dilución (ml)*</label>
-                    <input type="number" step="0.01" data-name="volumen_dilucion"
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" data-volume-fields>
+                <div class="dispensing-volume-field">
+                    <label for="volumen_dilucion">${isDispensingMode ? 'Volumen de dilución*' : 'Volumen de dilución (ml)*'}</label>
+                    <div class="${isDispensingMode ? 'dispensing-unit-input' : ''}">
+                    <input id="volumen_dilucion" type="number" step="0.01" data-name="volumen_dilucion"
                         class="w-full border rounded px-2 py-1 text-sm"
                         value="${mezclaData.volumen_dilucion ?? ''}">
+                    ${isDispensingMode ? '<span aria-hidden="true">mL</span>' : ''}
+                    </div>
                 </div>
             </div>
 
@@ -974,6 +1136,7 @@
                 <div class="min-w-0 md:col-span-2">
                     <label for="diluent_presentation_id">Presentación del diluyente</label>
                     <select id="diluent_presentation_id" data-name="diluent_presentation_id"
+                        onchange="actualizarDetalleDiluyente()" aria-describedby="diluent_presentation_hint"
                         class="w-full border rounded px-2 py-1 text-sm">
                         ${opcionesPresentacionDiluyente}
                     </select>
@@ -984,21 +1147,24 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" data-infusion-fields>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox"
+                <div class="flex items-center gap-2 dispensing-set-field">
+                    <input id="set_infusion" type="checkbox"
                         data-name="set_infusion"
                         class="w-4 h-4"
                         ${mezclaData.set_infusion ? 'checked' : ''}
                         onchange="toggleSetInfusion(this)">
-                    <label class="select-none">Set de infusión</label>
+                    <label for="set_infusion" class="select-none">Set de infusión</label>
                 </div>
-                <div class="min-w-0">
-                    <label for="tiempo_infusion">Tiempo de infusión (min)*</label>
+                <div class="min-w-0 dispensing-time-field">
+                    <label for="tiempo_infusion">${isDispensingMode ? 'Tiempo de infusión*' : 'Tiempo de infusión (min)*'}</label>
+                    <div class="${isDispensingMode ? 'dispensing-unit-input' : ''}">
                     <input id="tiempo_infusion" type="number" data-name="tiempo_infusion"
                         class="w-full border rounded px-2 py-1 text-sm"
                         value="${mezclaData.tiempo_infusion ?? ''}">
+                    ${isDispensingMode ? '<span aria-hidden="true">min</span>' : ''}
+                    </div>
                 </div>
-                <div class="min-w-0">
+                <div class="min-w-0 dispensing-infusor-field">
                     <label for="infusor_id">Infusor</label>
                     <select id="infusor_id" data-name="infusor_id"
                         class="w-full border rounded px-2 py-1 text-sm"
@@ -1012,7 +1178,7 @@
                                                     `).join('')}
                     </select>
                     <p class="text-xs text-gray-500">
-                        Se habilita si la mezcla contiene medicamento(s) que admiten infusor.
+                        ${isDispensingMode ? 'Disponible para medicamentos compatibles.' : 'Se habilita si la mezcla contiene medicamento(s) que admiten infusor.'}
                     </p>
                 </div>
             </div>
@@ -1025,6 +1191,13 @@
 
             document.getElementById('contenedorMezcla').innerHTML = '';
             document.getElementById('contenedorMezcla').appendChild(mezclaDiv);
+            if (isDispensingMode) {
+                const volumeRow = mezclaDiv.querySelector('[data-volume-fields]');
+                mezclaDiv.querySelector('[data-diluent-fields]').appendChild(volumeRow.firstElementChild);
+                volumeRow.remove();
+                mezclaDiv.querySelector('[data-infusion-fields]').prepend(
+                    mezclaDiv.querySelector('.dispensing-time-field'), mezclaDiv.querySelector('.dispensing-set-field'));
+            }
 
             const tbody = mezclaDiv.querySelector('#medicamentos_mezcla');
 
@@ -1082,7 +1255,7 @@
                         name="dosis_existente[]"
                         value="${med.dosis ?? ''}"
                         class="w-full border px-2 py-1 text-sm dosis-input"
-                        oninput="recalcularResumenPresentaciones(${contadorFilas})">
+                        oninput="${isDispensingMode ? 'actualizarPropuestaFrascos' : 'recalcularResumenPresentaciones'}(${contadorFilas})">
 
                     <div class="mt-1 text-sm text-red-600" id="resumen_dosis_${contadorFilas}">
                         Dosis objetivo: ${Number(med.dosis || 0).toFixed(2)} mg<br>
@@ -1118,23 +1291,30 @@
                             <label class="text-xs font-semibold text-gray-700">Seleccionar presentación</label>
                             <select id="presentacion_selector_${contadorFilas}"
                                 class="mt-1 w-full rounded border-gray-300 text-sm"
-                                onchange="resaltarPresentacionFila(${contadorFilas})">
+                                onchange="seleccionarPresentacionFila(${contadorFilas})">
                                 <option value="">Todas las presentaciones</option>
                             </select>
                         </div>
-                        <div class="overflow-x-auto rounded border border-gray-200 bg-white">
-                            <table class="w-full text-left text-xs text-gray-600">
+                        <div class="dispensing-presentation-scroll overflow-x-auto rounded border border-gray-200 bg-white"
+                            data-disable-sticky-x tabindex="0" role="region" aria-label="Presentaciones y lotes del medicamento ${contadorFilas}">
+                            <table class="dispensing-presentation-table w-full text-left text-xs text-gray-600">
+                                <colgroup>
+                                    <col style="width:11%"><col style="width:8%"><col style="width:12%">
+                                    <col style="width:18%"><col style="width:10%"><col style="width:8%">
+                                    <col style="width:9%"><col style="width:8%"><col style="width:7%"><col style="width:9%">
+                                </colgroup>
                                 <thead class="bg-gray-50 text-[11px] uppercase text-gray-700">
                                     <tr>
                                         <th class="px-4 py-3">Presentación</th>
                                         <th class="px-4 py-3">Marca</th>
                                         <th class="px-4 py-3">Lote</th>
                                         <th class="px-4 py-3">Detalle del lote</th>
-                                        <th class="px-4 py-3 text-center">Stock lote seleccionado</th>
+                                        <th class="px-4 py-3 text-center">Stock del lote</th>
                                         <th class="px-4 py-3 text-center">Estado</th>
                                         <th class="px-4 py-3 text-center">Remanente</th>
                                         <th class="px-4 py-3 text-center">Merma remanente</th>
                                         <th class="px-4 py-3 text-center">Frascos</th>
+                                        <th class="min-w-[120px] px-4 py-3 text-center">Remanente estimado</th>
                                     </tr>
                                 </thead>
                                 <tbody id="presentaciones_body_${contadorFilas}"></tbody>
@@ -1157,6 +1337,7 @@
                 tbody.appendChild(fila);
                 tbody.appendChild(detalleFila);
                 posicionarDiluyente(fila);
+                organizarMedicamentoDispensacion(fila, contadorFilas);
 
                 // Inicializaciones
                 toggleUIByChargeBy(contadorFilas, catalogId);
@@ -1269,7 +1450,7 @@
                     <input type="number"
                         name="nueva_dosis[]"
                         class="w-full border px-2 py-1 text-sm dosis-input"
-                        oninput="recalcularResumenPresentaciones(${contadorFilas})">
+                        oninput="${isDispensingMode ? 'actualizarPropuestaFrascos' : 'recalcularResumenPresentaciones'}(${contadorFilas})">
                     <div class="mt-1 text-xs text-gray-600" id="resumen_dosis_${contadorFilas}">
                         Dosis objetivo: 0 mg<br>
                         Dosis aportada: 0 mg
@@ -1301,23 +1482,30 @@
                             <label class="text-xs font-semibold text-gray-700">Seleccionar presentación</label>
                             <select id="presentacion_selector_${contadorFilas}"
                                 class="mt-1 w-full rounded border-gray-300 text-sm"
-                                onchange="resaltarPresentacionFila(${contadorFilas})">
+                                onchange="seleccionarPresentacionFila(${contadorFilas})">
                                 <option value="">Todas las presentaciones</option>
                             </select>
                         </div>
-                        <div class="overflow-x-auto rounded border border-gray-200 bg-white">
-                            <table class="w-full text-left text-xs text-gray-600">
+                        <div class="dispensing-presentation-scroll overflow-x-auto rounded border border-gray-200 bg-white"
+                            data-disable-sticky-x tabindex="0" role="region" aria-label="Presentaciones y lotes del medicamento ${contadorFilas}">
+                            <table class="dispensing-presentation-table w-full text-left text-xs text-gray-600">
+                                <colgroup>
+                                    <col style="width:11%"><col style="width:8%"><col style="width:12%">
+                                    <col style="width:18%"><col style="width:10%"><col style="width:8%">
+                                    <col style="width:9%"><col style="width:8%"><col style="width:7%"><col style="width:9%">
+                                </colgroup>
                                 <thead class="bg-gray-50 text-[11px] uppercase text-gray-700">
                                     <tr>
                                         <th class="px-4 py-3">Presentación</th>
                                         <th class="px-4 py-3">Marca</th>
                                         <th class="px-4 py-3">Lote</th>
                                         <th class="px-4 py-3">Detalle del lote</th>
-                                        <th class="px-4 py-3 text-center">Stock lote seleccionado</th>
+                                        <th class="px-4 py-3 text-center">Stock del lote</th>
                                         <th class="px-4 py-3 text-center">Estado</th>
                                         <th class="px-4 py-3 text-center">Remanente</th>
                                         <th class="px-4 py-3 text-center">Merma remanente</th>
                                         <th class="px-4 py-3 text-center">Frascos</th>
+                                        <th class="min-w-[120px] px-4 py-3 text-center">Remanente estimado</th>
                                     </tr>
                                 </thead>
                                 <tbody id="presentaciones_body_${contadorFilas}"></tbody>
@@ -1339,6 +1527,7 @@
                 tbody.appendChild(fila);
                 tbody.appendChild(detalleFila);
                 posicionarDiluyente(fila);
+                organizarMedicamentoDispensacion(fila, contadorFilas);
 
                 updateInfusorDisponibilidad();
                 updateDiluentPresentationSelector();
@@ -1397,12 +1586,13 @@
                 const presRows = document.querySelectorAll(`#presentaciones_body_${filaId} .presentacion-row`);
                 const arr = [];
                 presRows.forEach(r => {
+                    if (isDispensingMode && r.dataset.dispensingSelected !== '1') return;
                     const hasStock = String(r.dataset.hasStock || '0') === '1';
                     const frascos = parseFloat(r.querySelector('.input-frascos')?.value || "0");
                     const precioFrasco = r.querySelector('.input-precio-frasco')?.value || '';
                     const batchSelect = r.querySelector('.batch-select');
                     const batchId = batchSelect?.value || r.dataset.batchId || null;
-                    const remanenteMl = parseFloat(r.dataset.remanenteMl || '0');
+                    const remanenteMl = parseFloat(r.dataset.remanenteDisponibleMl || '0');
 
                     // ✅ si no hay stock, forzar 0 (por seguridad)
                     if (!hasStock) {
@@ -1466,6 +1656,13 @@
                 };
 
                 if (requiresInventorySelection && chargeBy !== 'mg') {
+                    const filaId = row.tr.id.replace('fila_', '');
+                    recalcularResumenPresentaciones(filaId);
+                    if (isDispensingMode && !row.tr.dispensingProposal?.covered) {
+                        Swal.fire({ icon: 'error', title: 'Dosis sin cubrir',
+                            text: `Para "${row.nombre}" selecciona frascos disponibles de una misma marca que cubran toda la dosis. Faltan ${formatDisplayNumber(row.tr.dispensingProposal?.missingMg)} mg.` });
+                        return;
+                    }
                     // Acepta frascos cerrados o un remanente vigente.
                     medObj.presentaciones = buildPresentacionesFromFila(row.tr);
 

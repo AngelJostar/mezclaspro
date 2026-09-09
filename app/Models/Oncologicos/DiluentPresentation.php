@@ -16,6 +16,7 @@ class DiluentPresentation extends Model
         'volume_ml',                // ej. 500.00
         'denominacion_comercial',   // ej. "NaCl 0.9% B. Braun"
         'fabricante',
+        'stability_hours',
         'lote',
         'caducidad',
         'fecha_ingreso',
@@ -28,6 +29,7 @@ class DiluentPresentation extends Model
 
     protected $casts = [
         'volume_ml' => 'float',
+        'stability_hours' => 'integer',
         'stock_inicial' => 'float',
         'stock_actual' => 'float',
         'stock_reservado' => 'float',

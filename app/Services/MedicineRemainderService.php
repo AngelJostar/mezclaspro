@@ -11,6 +11,23 @@ class MedicineRemainderService
 {
     private const EPSILON = 0.0001;
 
+    public function availableOncologicTotals(int $laboratoryId, array $presentationIds): Collection
+    {
+        // Preview only: ignore expired/discarded stock without performing the expiry write operation.
+        return MedicineRemainder::query()
+            ->where('domain', 'oncologico')
+            ->where('laboratory_id', $laboratoryId)
+            ->whereIn('medicine_presentation_id', $presentationIds)
+            ->where('is_active', true)
+            ->where('current_ml', '>', self::EPSILON)
+            ->where(function ($query) {
+                $query->whereNull('usable_until')->orWhere('usable_until', '>', now());
+            })
+            ->selectRaw('medicine_presentation_id, warehouse_id, SUM(current_ml) as available_ml')
+            ->groupBy('medicine_presentation_id', 'warehouse_id')
+            ->get();
+    }
+
     public function expireDueRemainders(?CarbonInterface $at = null): int
     {
         $at ??= now();

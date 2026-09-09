@@ -56,6 +56,9 @@ Route::get('/dashboard', function () {
 Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
     ->name('solicitudes.index');
 
+Route::get('solicitudes/exportar', [UnifiedSolicitudController::class, 'exportarExcel'])
+    ->name('solicitudes.exportar');
+
 
 Route::get('nutricionales/solicitudes/exportar', [SolicitudController::class, 'exportarExcel'])
     ->name('nutricionales.solicitudes.exportar')
@@ -196,6 +199,7 @@ Route::prefix('catalogo-listas')
         Route::get('{category}/productos/nuevo', [CatalogProductController::class, 'create'])->name('products.create');
         Route::post('{category}/productos', [CatalogProductController::class, 'store'])->name('products.store');
         Route::get('{category}/catalogo', [CatalogoListasController::class, 'catalog'])->name('catalog');
+        Route::get('{category}/catalogo/descargar', [CatalogoListasController::class, 'exportCatalog'])->name('catalog.export');
         Route::get('{category}/listas', [CatalogoListasController::class, 'lists'])->name('lists');
         Route::get('{category}/listas/nueva', [CatalogoListasController::class, 'createList'])->name('lists.create');
         Route::post('listas/unificadas', [CatalogoListasController::class, 'storeUnifiedList'])->name('lists.store-unified');

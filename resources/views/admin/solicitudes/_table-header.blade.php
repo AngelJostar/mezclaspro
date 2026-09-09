@@ -2,6 +2,7 @@
     $sortFields = $sortFields ?? [];
     $tableSortField = $tableSortField ?? null;
     $tableSortDirection = $tableSortDirection ?? 'asc';
+    $isHospitalView = $isHospitalView ?? (auth()->user()?->hasAnyRole(['Cliente', 'Institucion']) ?? false);
 
     $columns = [
         ['key' => 'type', 'lines' => ['Tipo']],
@@ -14,8 +15,8 @@
         ['key' => 'status', 'lines' => ['Estado operativo']],
         ['key' => 'lot', 'lines' => ['Lote']],
         ['key' => 'view', 'lines' => ['Ver'], 'action' => true],
-        ['key' => 'edit', 'lines' => ['Aprobación'], 'action' => true],
-        ['key' => 'process', 'lines' => ['Próximo', 'proceso'], 'action' => true],
+        ['key' => 'edit', 'lines' => ['Aprobación']],
+        ['key' => 'process', 'lines' => ['Próximo', 'proceso']],
         ['key' => 'complete_request', 'lines' => ['Solicitud completa'], 'action' => true],
         ['key' => 'inspection', 'lines' => ['Inspección'], 'action' => true],
         ['key' => 'label', 'lines' => ['Etiqueta'], 'action' => true],
@@ -24,6 +25,13 @@
         ['key' => 'remission_document', 'lines' => ['Remisión'], 'action' => true],
         ['key' => 'subdistributor_remission', 'lines' => ['Remision', 'Subdistribuidor'], 'action' => true],
     ];
+
+    if ($isHospitalView) {
+        $columns = array_filter($columns, fn ($column) => in_array($column['key'], [
+            'type', 'id', 'request_id', 'hospital', 'patient', 'requested_at',
+            'delivery_at', 'status', 'lot', 'view', 'edit',
+        ], true));
+    }
 @endphp
 
 <tr>

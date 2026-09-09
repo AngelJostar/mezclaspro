@@ -8,7 +8,16 @@ use Illuminate\Support\Facades\DB;
 
 class ConsumableCatalogController extends Controller
 {
-    public function create() { return view('admin.catalogo-listas.consumable-form', ['item' => new ConsumableItem(), 'mode' => 'create']); }
+    public function create(Request $request)
+    {
+        if (!$request->boolean('modal')) {
+            return redirect()->route('admin.catalogo-listas.catalog', [
+                'category' => 'insumos', 'tipo_insumo' => 'consumibles', 'nuevo_consumible' => 1,
+            ]);
+        }
+
+        return view('admin.catalogo-listas.partials.consumable-create-form');
+    }
 
     public function store(Request $request)
     {
@@ -17,7 +26,15 @@ class ConsumableCatalogController extends Controller
             $item = ConsumableItem::create(['name' => $data['name'], 'unit' => $data['unit'], 'is_active' => true]);
             $item->catalogPresentations()->createMany($data['presentations']);
         });
-        return redirect()->route('admin.catalogo-listas.catalog', 'consumibles')->with('success', 'Consumible creado correctamente.');
+        $redirect = redirect()->route('admin.catalogo-listas.catalog', ['category' => 'insumos', 'tipo_insumo' => 'consumibles'])
+            ->with('success', 'Consumible creado correctamente.');
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Consumible creado correctamente.', 'redirect' => $redirect->getTargetUrl(),
+            ], 201);
+        }
+
+        return $redirect;
     }
 
     public function edit(ConsumableItem $item) { $item->load('catalogPresentations'); return view('admin.catalogo-listas.consumable-form', ['item' => $item, 'mode' => 'edit']); }
@@ -33,7 +50,7 @@ class ConsumableCatalogController extends Controller
                 $id ? $item->catalogPresentations()->whereKey($id)->update($presentation) : $item->catalogPresentations()->create($presentation);
             }
         });
-        return redirect()->route('admin.catalogo-listas.catalog', 'consumibles')->with('success', 'Consumible actualizado correctamente.');
+        return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'insumos', 'tipo_insumo' => 'consumibles'])->with('success', 'Consumible actualizado correctamente.');
     }
 
     private function validated(Request $request, ?ConsumableItem $item = null): array

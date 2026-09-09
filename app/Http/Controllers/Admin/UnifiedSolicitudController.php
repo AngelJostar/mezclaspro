@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\UnifiedSolicitudesExport;
 use App\Http\Controllers\Controller;
 use App\Models\DistributionDeliverySchedule;
 use App\Models\Nutricionales\Solicitud as NutritionSolicitud;
@@ -10,10 +11,23 @@ use App\Models\Oncologicos\SolicitudOnco;
 use App\Support\SolicitudStatusFilter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class UnifiedSolicitudController extends Controller
 {
     public function index(Request $request)
+    {
+        return view('admin.solicitudes.index', $this->listData($request));
+    }
+
+    public function exportarExcel(Request $request)
+    {
+        $data = $this->listData($request);
+
+        return Excel::download(new UnifiedSolicitudesExport($data['requests']), 'solicitudes_todas.xlsx');
+    }
+
+    private function listData(Request $request): array
     {
         $user = $request->user();
         $canViewNutrition = $user->can('nutricionales_solicitudes_index');
@@ -21,7 +35,7 @@ class UnifiedSolicitudController extends Controller
 
         abort_unless($canViewNutrition || $canViewOncology, 403);
 
-        $role = $user->roles->first()?->name;
+        $isHospitalUser = $user->hasAnyRole(['Cliente', 'Institucion']);
         $requests = collect();
         $statusFilter = SolicitudStatusFilter::normalize($request->query('estado'));
 
@@ -29,7 +43,7 @@ class UnifiedSolicitudController extends Controller
             $nutritionQuery = NutritionSolicitud::query()
                 ->with(['user.hospital.instituciones', 'solicitud_detail', 'solicitud_patient']);
 
-            if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            if ($isHospitalUser) {
                 $nutritionQuery->where('user_id', $user->id);
             }
 
@@ -67,12 +81,12 @@ class UnifiedSolicitudController extends Controller
                     'hospital.instituciones',
                     'user',
                     'mezclas' => fn ($query) => $query
-                        ->select('id', 'solicitud_id', 'lote', 'estado', 'remision', 'fecha_entrega')
+                        ->select('id', 'solicitud_id', 'lote', 'estado', 'remision', 'fecha_entrega', 'production_attempt')
                         ->orderBy('id'),
                 ])
                 ->whereIn('tipo_solicitud', ['oncologicos', 'antibioticos']);
 
-            if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            if ($isHospitalUser) {
                 $oncologyQuery->where('hospital_id', $user->hospital_id);
             }
 
@@ -160,7 +174,7 @@ class UnifiedSolicitudController extends Controller
             ->sortByDesc(fn (array $row) => $row['requested_at']?->getTimestamp() ?? 0)
             ->values();
 
-        return view('admin.solicitudes.index', compact(
+        return compact(
             'requests',
             'statusFilter',
             'pendingApprovalCount',
@@ -168,7 +182,7 @@ class UnifiedSolicitudController extends Controller
             'deliveryPendingCount',
             'canViewNutrition',
             'canViewOncology'
-        ));
+        );
     }
 
     private function parseDate(mixed $value): ?Carbon

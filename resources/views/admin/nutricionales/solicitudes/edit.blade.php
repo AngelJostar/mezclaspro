@@ -108,7 +108,7 @@
             <h1 data-workflow-heading class="mixture-workflow-heading">
                 {{ $isApprovalMode ? 'Aprobación' : 'Nutrición parenteral' }} | {{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->user?->hospital) }}
             </h1>
-            <div class="flex flex-wrap items-center gap-3">
+            <div data-workflow-approval-actions class="ml-auto flex flex-wrap items-center justify-end gap-3">
                 @if ($isApprovalMode && $isPendingApproval)
                     <x-button form="solicitudForm" type="button" class="bg-green-600 hover:bg-green-700"
                         onclick="updateAccion('aprobar')">

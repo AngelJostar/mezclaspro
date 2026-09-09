@@ -46,6 +46,7 @@ class Mezcla extends Model
     ];
 
     protected $casts = [
+        'production_attempt' => 'integer',
         'set_infusion' => 'boolean',
         'volumen_dilucion' => 'decimal:2',
         'fecha_entrega' => 'datetime',
@@ -73,6 +74,16 @@ class Mezcla extends Model
     public function medicamentos()
     {
         return $this->hasMany(MezclaMedicamento::class, 'mezcla_id');
+    }
+
+    public function getRequiresRedispensingAttribute(): bool
+    {
+        return $this->operational_status === 'aprobada' && $this->has_inspection_rejection;
+    }
+
+    public function getHasInspectionRejectionAttribute(): bool
+    {
+        return (int) $this->production_attempt > 1;
     }
 
     public function inspeccion()

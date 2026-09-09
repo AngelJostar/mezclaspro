@@ -2,6 +2,9 @@
     $showCategoryColumn = $category === 'todos';
     $columnOffset = $showCategoryColumn ? 1 : 0;
     $isSuppliesCatalog = $category === 'insumos';
+    $supplySection = $supplySection ?? 'diluyentes';
+    $isConsumablesCatalog = $isSuppliesCatalog && $supplySection === 'consumibles';
+    $supplyName = $isConsumablesCatalog ? 'consumible' : 'diluyente';
     $canEditGenericMedication = auth()->user()?->hasRole('Super Admin');
 @endphp
 
@@ -11,36 +14,61 @@
             'categories' => $categories,
             'category' => $category,
             'mode' => $mode,
+            'catalogRouteQuery' => $isSuppliesCatalog ? ['tipo_insumo' => $supplySection] : [],
         ])
 
-        <div class="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div @class(['mt-6 flex flex-col flex-wrap gap-3 md:flex-row md:items-center md:justify-between', 'supply-catalog-toolbar' => $isSuppliesCatalog])>
+            @if ($isSuppliesCatalog)
+                <nav class="supply-catalog-switch" aria-label="Tipo de insumo">
+                    @foreach (['diluyentes' => 'Diluyentes', 'consumibles' => 'Consumibles'] as $section => $label)
+                        <a href="{{ route('admin.catalogo-listas.catalog', ['category' => 'insumos', 'tipo_insumo' => $section]) }}"
+                            @if ($supplySection === $section) aria-current="page" @endif>{{ $label }}</a>
+                    @endforeach
+                </nav>
+            @else
             <div>
                 <h2 class="text-xl font-bold text-gray-900">
                     Catalogo - {{ $categories[$category]['label'] }}
                 </h2>
                 <p class="text-sm text-gray-500">
-                    {{ $isSuppliesCatalog
-                        ? 'Consulta los insumos registrados por central y subalmacen de insumos.'
-                        : 'Consulta productos, presentaciones y precios de compra registrados.' }}
+                    Consulta productos, presentaciones y precios de compra registrados.
                 </p>
             </div>
+            @endif
 
-            <div class="flex w-full items-center gap-2 md:w-auto">
+            <div @class(['catalog-actions flex w-full min-w-0 max-w-full flex-wrap items-center gap-2 md:w-auto', 'supply-catalog-actions' => $isSuppliesCatalog])>
                 <input type="search" id="catalogSearch"
-                    class="min-w-0 flex-1 rounded-lg border-gray-300 text-sm md:w-80"
-                    placeholder="{{ $isSuppliesCatalog ? 'Buscar insumo...' : 'Buscar producto...' }}">
+                    class="min-w-0 flex-1 basis-48 rounded-lg border-gray-300 text-sm md:w-80"
+                    aria-label="{{ $isSuppliesCatalog ? 'Buscar ' . $supplyName : 'Buscar producto' }}"
+                    placeholder="{{ $isSuppliesCatalog ? 'Buscar ' . $supplyName . '...' : 'Buscar producto...' }}">
 
                 @unless ($showCategoryColumn)
-                    <x-table-action-link href="{{ route('admin.catalogo-listas.products.create', ['category' => $category]) }}" variant="green" icon="fa-solid fa-plus"
+                    <x-table-action-link href="{{ $isConsumablesCatalog ? route('admin.consumables.catalog.create') : route('admin.catalogo-listas.products.create', ['category' => $category]) }}" variant="green" icon="fa-solid fa-plus"
+                        :data-new-diluent="$isSuppliesCatalog && !$isConsumablesCatalog ? 'true' : null"
+                        :data-new-consumable="$isConsumablesCatalog ? 'true' : null"
                         class="shrink-0">
-                        {{ $isSuppliesCatalog ? 'Nuevo insumo' : 'Nuevo producto' }}
+                        {{ $isSuppliesCatalog ? 'Nuevo ' . $supplyName : 'Nuevo producto' }}
                     </x-table-action-link>
                 @endunless
+                <x-table-action-link
+                    href="{{ route('admin.catalogo-listas.catalog.export', ['category' => $category, ...($isSuppliesCatalog ? ['tipo_insumo' => $supplySection] : [])]) }}"
+                    icon="fa-solid fa-download" class="shrink-0"
+                    title="Descargar catalogo completo en Excel">
+                    Descargar
+                </x-table-action-link>
             </div>
         </div>
 
+        @if ($isSuppliesCatalog && !$isConsumablesCatalog)
+            @include('admin.catalogo-listas.partials.diluent-modal')
+        @elseif ($isConsumablesCatalog)
+            @include('admin.catalogo-listas.partials.consumable-modal')
+        @endif
+
         <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
-            @if ($isSuppliesCatalog)
+            @if ($isConsumablesCatalog)
+                @include('admin.catalogo-listas.partials.consumables-table')
+            @elseif ($isSuppliesCatalog)
                 <table class="min-w-[1550px] divide-y divide-gray-200 text-xs" id="catalogTable">
                     <thead class="bg-gray-50 text-gray-700">
                         <tr>
@@ -101,7 +129,7 @@
                         @empty
                             <tr>
                                 <td colspan="{{ 11 + ($canEditGenericMedication ? 1 : 0) }}" class="px-3 py-8 text-center text-sm text-gray-500">
-                                    No hay insumos registrados para esta categoria.
+                                    No hay diluyentes registrados para esta categoria.
                                 </td>
                             </tr>
                         @endforelse
@@ -202,6 +230,7 @@
             </table>
             @endif
         </div>
+        <p id="catalogSearchEmpty" class="hidden py-6 text-center text-sm text-gray-500" role="status">No hay resultados para esta busqueda.</p>
     </div>
 
     @push('js')
@@ -227,6 +256,8 @@
 
                         row.classList.toggle('hidden', !matchesSearch || !matchesColumns);
                     });
+                    document.getElementById('catalogSearchEmpty')?.classList.toggle('hidden',
+                        rows.length === 0 || rows.some((row) => !row.classList.contains('hidden')));
                 };
 
                 window.createExcelColumnFilters({

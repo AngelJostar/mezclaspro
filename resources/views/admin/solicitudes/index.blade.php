@@ -1,30 +1,40 @@
 <x-admin-layout>
+    @php
+        $isHospitalView = auth()->user()?->hasAnyRole(['Cliente', 'Institucion']) ?? false;
+    @endphp
     <div class="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="min-w-0">
             <h1 class="text-2xl font-medium text-gray-800">Lista de Solicitudes</h1>
             @include('admin.solicitudes._type-selector', ['selectedType' => 'todas'])
         </div>
 
-        <div class="relative shrink-0 pb-1" x-data="{ open: false }">
-            <button type="button" @click="open = !open"
-                class="inline-flex items-center gap-2 rounded-full bg-azul-prodifem px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800">
-                <i class="fa-solid fa-plus"></i>
-                Agregar
-                <i class="fa-solid fa-chevron-down text-xs"></i>
-            </button>
-            <div x-cloak x-show="open" @click.outside="open = false"
-                class="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                @if ($canViewNutrition)
-                    <a href="{{ route('admin.nutricionales.solicitudes.create') }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Nutricional</a>
-                @endif
-                @if ($canViewOncology)
-                    <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'oncologicos']) }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Oncologica</a>
-                    <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'antibioticos']) }}"
-                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Antibiotico</a>
-                @endif
+        <div class="flex shrink-0 flex-wrap items-center gap-2 pb-1">
+            <div class="relative" x-data="{ open: false }">
+                <button type="button" @click="open = !open"
+                    class="inline-flex items-center gap-2 rounded-full bg-azul-prodifem px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800">
+                    <i class="fa-solid fa-plus"></i>
+                    Agregar
+                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div x-cloak x-show="open" @click.outside="open = false"
+                    class="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                    @if ($canViewNutrition)
+                        <a href="{{ route('admin.nutricionales.solicitudes.create') }}"
+                            class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Nutricional</a>
+                    @endif
+                    @if ($canViewOncology)
+                        <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'oncologicos']) }}"
+                            class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Oncologica</a>
+                        <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'antibioticos']) }}"
+                            class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Antibiotico</a>
+                    @endif
+                </div>
             </div>
+            <a href="{{ route('admin.solicitudes.exportar', ['estado' => $statusFilter]) }}"
+                class="inline-flex items-center gap-2 rounded-full bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-800 focus:outline-none focus:ring-4 focus:ring-green-300">
+                <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
+                Exportar a Excel
+            </a>
         </div>
     </div>
 
@@ -134,6 +144,7 @@
                             @endhasanyrole
                         </td>
 
+                        @unless ($isHospitalView)
                         <td class="px-2 py-2 text-center whitespace-nowrap">
                             <div class="flex min-w-max items-center justify-center gap-1.5">
                                 @hasanyrole('Admin|Super Admin')
@@ -154,7 +165,7 @@
                                         @elseif ($estado === 'preparada')
                                             <button type="button"
                                                 onclick="window.Livewire.dispatch('abrir-modal-inspeccion-nutricional', { solicitudId: {{ $solicitud->id }} })"
-                                                class="inline-flex items-center justify-center rounded-full bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-200">
+                                                class="inline-flex items-center justify-center rounded-full bg-yellow-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-yellow-300">
                                                 Inspeccionar
                                             </button>
                                         @elseif ($estado === 'revisada')
@@ -167,7 +178,7 @@
                                                 data-confirm-button="Sí, entregar">
                                                 @csrf
                                                 <button type="submit"
-                                                    class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200">
+                                                    class="inline-flex items-center justify-center rounded-full bg-green-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300">
                                                     Entregar
                                                 </button>
                                             </form>
@@ -186,7 +197,8 @@
                                                             'return_to' => $requestListUrl,
                                                         ]) }}"
                                                         data-dispensing-popup="dispensing-{{ $requestRow['type'] }}-{{ $mezcla->id }}"
-                                                        class="inline-flex items-center justify-center rounded-full bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300">
+                                                        title="{{ $mezcla->has_inspection_rejection ? 'Reiniciar fabricación: inspección rechazada' : 'Dispensar mezcla' }}"
+                                                        class="inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 {{ $mezcla->has_inspection_rejection ? 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-300' : 'bg-yellow-400 text-white hover:bg-yellow-500 focus:ring-yellow-300' }}">
                                                         Dispensar
                                                     </a>
                                             @elseif ($estado === 'dispensada')
@@ -202,14 +214,16 @@
                                                     <input type="hidden" name="return_to" value="{{ $requestListUrl }}">
                                                     <input type="hidden" name="accion" value="preparada">
                                                     <button type="submit"
-                                                        class="inline-flex items-center justify-center rounded-full bg-slate-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300">
+                                                        title="{{ $mezcla->has_inspection_rejection ? 'Preparar nuevamente: rechazo previo en inspección' : 'Preparar mezcla' }}"
+                                                        class="inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 {{ $mezcla->has_inspection_rejection ? 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-300' : 'bg-yellow-400 text-gray-900 hover:bg-yellow-500 focus:ring-yellow-300' }}">
                                                         Preparar
                                                     </button>
                                                 </form>
                                             @elseif ($estado === 'preparada')
                                                 <button type="button"
                                                     onclick="window.dispatchEvent(new CustomEvent('abrir-modal-inspeccion', { detail: [{{ $mezcla->id }}] }))"
-                                                    class="inline-flex items-center justify-center rounded-full bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-200">
+                                                    title="{{ $mezcla->has_inspection_rejection ? 'Inspeccionar nuevamente: rechazo previo en inspección' : 'Inspeccionar mezcla' }}"
+                                                    class="inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 {{ $mezcla->has_inspection_rejection ? 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-300' : 'bg-yellow-400 text-white hover:bg-yellow-500 focus:ring-yellow-300' }}">
                                                     Inspeccionar
                                                 </button>
                                             @elseif ($estado === 'revisada')
@@ -225,7 +239,7 @@
                                                     <input type="hidden" name="return_to" value="{{ $requestListUrl }}">
                                                     <input type="hidden" name="accion" value="entregada">
                                                     <button type="submit"
-                                                        class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200">
+                                                        class="inline-flex items-center justify-center rounded-full bg-green-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300">
                                                         Entregar
                                                     </button>
                                                 </form>
@@ -336,10 +350,11 @@
                                 </button>
                             @endif
                         </td>
+                        @endunless
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="19" class="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colspan="{{ $isHospitalView ? 11 : 19 }}" class="px-4 py-10 text-center text-sm text-gray-500">
                             No se encontraron solicitudes.
                         </td>
                     </tr>

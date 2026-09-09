@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\CatalogExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
 use App\Models\PriceListAdditionalCharge;
@@ -24,6 +25,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CatalogoListasController extends Controller
 {
@@ -79,6 +81,10 @@ class CatalogoListasController extends Controller
             : self::DEFAULT_CATEGORY;
         $mode = null;
 
+        if ($category === 'insumos') {
+            return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'insumos']);
+        }
+
         return view('admin.catalogo-listas.index', [
             'category' => $category,
             'mode' => $mode,
@@ -100,11 +106,9 @@ class CatalogoListasController extends Controller
         }
 
         if ($category === 'consumibles') {
-            return view('admin.catalogo-listas.consumables', [
-                'category' => $category,
-                'mode' => 'catalogo',
-                'categories' => $this->browseCategories(),
-                'consumables' => ConsumableItem::query()->with('catalogPresentations')->where('is_active', true)->orderBy('name')->get(),
+            return redirect()->route('admin.catalogo-listas.catalog', [
+                'category' => 'insumos',
+                'tipo_insumo' => 'consumibles',
             ]);
         }
 
@@ -112,8 +116,37 @@ class CatalogoListasController extends Controller
             'category' => $category,
             'mode' => 'catalogo',
             'categories' => $this->browseCategories(),
-            'rows' => $this->browseCatalogRows($category),
+            ...$this->catalogData($category, request()),
         ]);
+    }
+
+    public function exportCatalog(Request $request, string $category)
+    {
+        abort_unless(in_array($category, ['todos', 'oncologicos', 'nutricionales', 'antibioticos', 'insumos'], true), 404);
+        $data = $this->catalogData($category, $request);
+        $section = $category === 'insumos' ? $data['supplySection'] : $category;
+        $rows = $category === 'insumos' && $section === 'consumibles' ? $data['consumables'] : $data['rows'];
+
+        return Excel::download(
+            new CatalogExport($section, $rows),
+            'catalogo_'.$section.'_'.now()->format('Ymd_His').'.xlsx'
+        );
+    }
+
+    private function catalogData(string $category, Request $request): array
+    {
+        $supplySection = $category === 'insumos' && $request->query('tipo_insumo') === 'consumibles'
+            ? 'consumibles'
+            : 'diluyentes';
+        $showConsumables = $category === 'insumos' && $supplySection === 'consumibles';
+
+        return [
+            'supplySection' => $supplySection,
+            'rows' => $showConsumables ? collect() : $this->browseCatalogRows($category),
+            'consumables' => $showConsumables
+                ? ConsumableItem::query()->with('catalogPresentations')->where('is_active', true)->orderBy('name')->get()
+                : collect(),
+        ];
     }
 
     public function lists(string $category)

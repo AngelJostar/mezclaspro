@@ -1,0 +1,79 @@
+.diluent-modal {
+    width: min(800px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 0;
+    border: 1px solid #e1e7ef;
+    border-radius: 8px;
+    background: #fff;
+    color: #172d52;
+    box-shadow: 0 20px 70px #172d5233;
+    overflow: hidden;
+}
+.diluent-modal[open] { display: flex; flex-direction: column; }
+.diluent-modal::backdrop { background: rgb(21 38 58 / 48%); }
+html.diluent-modal-open { overflow: hidden; }
+.diluent-modal [hidden] { display: none !important; }
+.diluent-modal-header { display: flex; align-items: center; gap: 18px; margin: 0 26px; padding: 22px 0 18px; border-bottom: 1px solid #d8e2ef; flex-shrink: 0; }
+.diluent-modal-header > div { min-width: 0; }
+.diluent-modal-header h2 { margin: 0; color: #10274c; font-size: 26px; font-weight: 700; line-height: 1.3; }
+.diluent-modal-header p { margin: 5px 0 0; font-size: 14px; line-height: 1.5; color: #5f7292; }
+.diluent-modal-symbol { display: grid; place-items: center; width: 66px; height: 66px; flex-shrink: 0; border-radius: 8px; background: #dff6f3; color: #00877e; }
+.diluent-modal-symbol svg { width: 32px; height: 32px; stroke-width: 1.7; }
+.diluent-modal-close { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; margin-left: auto; align-self: flex-start; border-radius: 4px; color: #213d66; }
+.diluent-modal-close:hover { background: #eef3f8; }
+.diluent-modal-close svg { width: 22px; height: 22px; }
+.diluent-modal [data-diluent-form-host], .diluent-modal form { display: flex; flex-direction: column; min-height: 0; }
+.diluent-modal-body { padding: 18px 26px; overflow-y: auto; overscroll-behavior: contain; }
+.diluent-modal fieldset { min-width: 0; padding: 0; border: 0; margin: 0; }
+.diluent-modal legend, .diluent-warehouse-section h3 { padding: 0; margin: 0 0 12px; color: #17345e; font-size: 18px; line-height: 1.4; font-weight: 700; }
+.diluent-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
+.diluent-field { min-width: 0; }
+.diluent-field label { display: block; margin-bottom: 6px; color: #334e74; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.diluent-field label > span, .diluent-modal-footer p > span { color: #dc2626; }
+.diluent-field input, .diluent-field select { width: 100%; min-width: 0; height: 42px; border: 1px solid #cbd6e5; border-radius: 5px; background-color: #fff; color: #203b61; padding: 8px 12px; font-size: 14px; line-height: 1.5; box-shadow: 0 1px 2px #172d5208; }
+.diluent-field select { padding-right: 34px; text-overflow: ellipsis; }
+.diluent-field input::placeholder { color: #7487a6; }
+.diluent-field input:focus, .diluent-field select:focus { outline: 2px solid #99ddd7; outline-offset: 1px; border-color: #00988c; box-shadow: none; }
+.diluent-field [aria-invalid="true"] { border-color: #dc2626; }
+.diluent-unit-input { display: flex; }
+.diluent-unit-input input { border-radius: 5px 0 0 5px; }
+.diluent-unit-input > span { display: grid; place-items: center; width: 50px; flex-shrink: 0; border: 1px solid #cbd6e5; border-left: 0; border-radius: 0 5px 5px 0; background: #f4f6f9; color: #425979; font-size: 14px; font-weight: 600; }
+.diluent-warehouse-section { margin-top: 22px; padding: 18px 10px 14px; background: #f2f7fc; }
+.diluent-warehouse-section h3 { margin-bottom: 3px; }
+.diluent-warehouse-section > p { margin: 0 0 14px; color: #7184a3; font-size: 13px; line-height: 1.5; }
+.diluent-warehouse-section [data-diluent-no-warehouse] { margin: 10px 0 0; color: #b45309; }
+.diluent-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 26px; padding: 16px 0; border-top: 1px solid #d8e2ef; flex-shrink: 0; }
+.diluent-modal-footer > p { margin: 0; color: #7184a3; font-size: 12px; }
+.diluent-modal-footer > div { display: flex; gap: 10px; }
+.diluent-modal-footer button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 6px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.diluent-cancel { border: 1px solid #cbd6e5; background: #fff; color: #273f62; }
+.diluent-cancel:hover { background: #f1f5f9; }
+.diluent-save { min-width: 184px; background: #00877e; color: #fff; }
+.diluent-save:hover { background: #006f68; }
+.diluent-save svg { width: 18px; height: 18px; }
+.diluent-modal button:focus-visible { outline: 2px solid #00877e; outline-offset: 3px; }
+.diluent-modal button:disabled, .diluent-field select:disabled, .diluent-modal fieldset:disabled { opacity: .6; cursor: not-allowed; }
+.diluent-form-errors, .diluent-modal-load-error { padding: 12px; background: #fef2f2; color: #b91c1c; font-size: 13px; line-height: 1.5; }
+.diluent-form-errors { margin-bottom: 16px; border-left: 3px solid #dc2626; }
+.diluent-field-error { margin: 5px 0 0; font-size: 12px; line-height: 1.4; color: #b91c1c; }
+.diluent-modal-loading, .diluent-modal-load-error { margin: 24px 26px; }
+.diluent-modal-load-error button { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px; border: 1px solid #e8a4a4; border-radius: 4px; }
+.diluent-modal-load-error svg { width: 18px; height: 18px; }
+@media (max-width: 600px) {
+    .diluent-modal { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
+    .diluent-modal-header { margin: 0 16px; padding: 16px 0; gap: 12px; }
+    .diluent-modal-symbol { width: 44px; height: 48px; }
+    .diluent-modal-symbol svg { width: 26px; height: 26px; }
+    .diluent-modal-header h2 { font-size: 21px; }
+    .diluent-modal-header p { font-size: 12px; }
+    .diluent-modal-body { padding: 16px; }
+    .diluent-form-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .diluent-field input, .diluent-field select { font-size: 16px; }
+    .diluent-modal-footer { flex-wrap: wrap; margin: 0 16px; padding: 12px 0; gap: 8px; }
+    .diluent-modal-footer > div { width: 100%; gap: 8px; }
+    .diluent-modal-footer button { padding: 0 12px; }
+    .diluent-save { flex: 1; min-width: 0; }
+}
