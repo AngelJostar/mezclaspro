@@ -268,6 +268,9 @@
                                 <span class="block text-xs font-normal text-slate-500">paradas</span>
                             </td>
                             <td class="px-4 py-4 text-center">
+                                @if ($distributionRoute->status === \App\Models\DistributionRoute::STATUS_COMPLETED)
+                                    <span class="text-xs font-semibold text-slate-500">Ruta cerrada</span>
+                                @else
                                 <a href="{{ route('admin.distribution.routes.monitor', $distributionRoute) }}"
                                     class="mb-2 inline-flex h-9 items-center justify-center gap-2 rounded-md border border-emerald-600 bg-white px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-300"
                                     title="Monitorear {{ $distributionRoute->name }}">
@@ -287,6 +290,7 @@
                                     <i class="fa-solid fa-pen" aria-hidden="true"></i>
                                     <span>Editar</span>
                                 </button>
+                                @endif
                             </td>
                             @role('Super Admin')
                                 <td class="px-4 py-4 text-center">

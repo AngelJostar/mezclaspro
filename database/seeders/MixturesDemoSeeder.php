@@ -13,6 +13,7 @@ use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Nutricionales\Solicitud;
 use App\Models\Oncologicos\Laboratory;
+use App\Models\Warehouse;
 use App\Models\Oncologicos\MedicineBatch;
 use App\Models\Oncologicos\MedicineList;
 use App\Models\Oncologicos\MedicinePresentation;
@@ -32,6 +33,10 @@ class MixturesDemoSeeder extends Seeder
         $laboratory = Laboratory::query()->updateOrCreate(
             ['nombre' => 'Central de Mezclas Demo'],
             ['estado' => 'Ciudad de Mexico', 'direccion' => 'Av. Salud 100', 'activo' => true]
+        );
+        Warehouse::query()->updateOrCreate(
+            ['laboratory_id' => $laboratory->id, 'name' => 'Almacen principal'],
+            ['state' => $laboratory->estado, 'address' => $laboratory->direccion, 'is_active' => true]
         );
 
         $nptList = NutriMedicineList::query()->updateOrCreate(

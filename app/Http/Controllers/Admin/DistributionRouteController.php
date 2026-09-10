@@ -172,11 +172,19 @@ class DistributionRouteController extends Controller
 
     public function edit(DistributionRoute $distributionRoute): RedirectResponse
     {
+        if ($distributionRoute->status === DistributionRoute::STATUS_COMPLETED) {
+            return $this->completedRouteRedirect();
+        }
+
         return redirect()->route('admin.distribution.routes.index', ['edit' => $distributionRoute->id]);
     }
 
-    public function monitor(DistributionRoute $distributionRoute): View
+    public function monitor(DistributionRoute $distributionRoute): View|RedirectResponse
     {
+        if ($distributionRoute->status === DistributionRoute::STATUS_COMPLETED) {
+            return $this->completedRouteRedirect();
+        }
+
         $distributionRoute->load([
             'hospitals:id,name,short_name,adress,latitude,longitude',
             'messengers:id,name,lastname',
@@ -307,6 +315,10 @@ class DistributionRouteController extends Controller
 
     public function update(Request $request, DistributionRoute $distributionRoute): RedirectResponse
     {
+        if ($distributionRoute->status === DistributionRoute::STATUS_COMPLETED) {
+            return $this->completedRouteRedirect();
+        }
+
         $request->merge([
             'name' => trim((string) $request->input('name')),
             'route_type' => Str::lower(trim((string) $request->input('route_type', $distributionRoute->route_type ?: 'vehicular'))),
@@ -368,6 +380,17 @@ class DistributionRouteController extends Controller
                 'icon' => 'success',
                 'title' => 'Ruta actualizada',
                 'text' => 'La información de la ruta se guardó correctamente.',
+            ]);
+    }
+
+    private function completedRouteRedirect(): RedirectResponse
+    {
+        return redirect()
+            ->route('admin.distribution.routes.index')
+            ->with('swal', [
+                'icon' => 'info',
+                'title' => 'Ruta cerrada',
+                'text' => 'Las rutas completadas solo se conservan como historial y no se pueden editar ni monitorear.',
             ]);
     }
 
