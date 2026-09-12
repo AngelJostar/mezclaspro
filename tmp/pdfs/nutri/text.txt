@@ -1,0 +1,44 @@
+                                                                                PROPUESTA DE FORMATO · DESGLOSE POR PRESENTACIÓN
+
+                                                                                                REMISIÓN
+                                                                           MEZCLAS ESTÉRILES NUTRICIONALES
+
+                                                                  ENTREGA DE LAS MEZCLAS NUTRICIONALES PREPARADAS EN CMP
+
+Fecha de envío: 13/09/2026 00:54                                                       DATOS DEL PACIENTE           Edad                                                                            Género              No. Remisión: PR-NUTRI-F-20260912
+Fecha de solicitud: 12/09/2026 00:54                                                                                  36                                                                           Femenino
+                                                                                    Fecha de nacimiento                                                                                                                      Superficie corporal
+                                        Nombre completo                                    20/02/1990                                                                                                                                    S/D
+                             PACIENTE PRUEBA NUTRI frasco
+
+                            Diagnóstico                                                      Servicio                                                                                                No. de expediente      Médico tratante
+     DATOS FICTICIOS PARA VALIDAR REMISIÓN                                 NUTRICIÓN - PRUEBA DE COBRO                                                                                             PR-NUTRI-F-20260912  MÉDICO DE PRUEBA
+
+                                                                           DETALLE DE MEZCLA Y COBRO POR PRESENTACIÓN
+
+                                                                                    Modalidad de cobro: Por frasco
+
+No.  Medicamento / Servicio                                Dosis           Almacén            Unidad de cobro       Presentación utilizada                                                         Cantidad             Precio unitario     Total
+                                                                                                                                                                                                        3                  $1,165.00     $3,495.00
+1    MULTIVITAMINICO ADULTO FCO AMP                        12 mL           Almacen principal  Frasco                FCO AMP 5ML                                                                         1                    $440.00      $440.00
+     5ML
+
+2    Servicio de mezclado                                  NA              Almacén principal  Servicio                      NA
+                                                                                                                    12 mL
+     IVA incluido
+
+     VOLUMEN TOTAL DE LA MEZCLA
+
+Cantidades según consumo registrado. Precios según la lista del hospital.                                                                                                                                    TOTAL IVA INCLUIDO: $3,935.00
+Importe por presentación = frascos utilizados × precio unitario.
+
+Lote de la mezcla: LOTE-PR-NUTRI-F-20260912
+Observaciones: PRUEBA CONTROLADA: COBRO POR FRASCO
+
+                                   Recepción Institución
+                                   Fecha: ____________________________________ Hora: __________________
+                                   Temperatura: _______________________________
+                                   Nombre completo, firma y sello: __________________________________________
+
+NOTA IMPORTANTE: La institución reconoce que la mezcla estéril entregada debe mantenerse bajo condiciones adecuadas de almacenamiento, asegurando la conservación de la red fría en todo momento.
+

@@ -9,13 +9,16 @@
 
     <style>
         @page {
+            size: 7.5cm 5cm;
             margin: 0;
         }
 
+        html,
         * {
             box-sizing: border-box;
         }
 
+        html,
         body {
             margin: 0;
             padding: 0;
@@ -25,28 +28,29 @@
         }
 
         .label {
-            width: calc(100% - 2pt);
-            height: auto;
-            margin: 1pt;
-            border: 1.2px solid #000;
-            padding: 2pt 3pt 2pt;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 7.5cm;
+            height: 4.98cm;
+            margin: 0;
+            border: 0;
+            padding: 2pt 3pt;
             overflow: hidden;
-            page-break-inside: avoid;
-            page-break-before: avoid;
-            page-break-after: avoid;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
+            page-break-inside: avoid;
         }
 
         td {
             padding: 0;
             vertical-align: top;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 5.1pt;
+            font-size: 4pt;
             line-height: 1.06;
             color: #000;
         }
@@ -57,6 +61,10 @@
             font-size: 6pt;
             line-height: 1;
             padding-bottom: 0.5pt;
+        }
+
+        .header-table {
+            margin-bottom: 7pt;
         }
 
         .row {
@@ -73,7 +81,7 @@
 
         .section {
             font-weight: 700;
-            font-size: 5.45pt;
+            font-size: inherit;
             padding-top: 0.45pt;
         }
 
@@ -89,31 +97,57 @@
             height: 0.45pt;
         }
 
-        .meta-left {
-            width: 58%;
-            padding-right: 0.6pt;
-            font-size: 5.2pt;
-        }
-
-        .meta-right {
-            width: 42%;
-            padding-left: 0.3pt;
-            text-align: right;
-            font-size: 4.7pt;
-            line-height: 1.03;
+        .meta-main {
+            font-size: inherit;
+            line-height: 1.04;
             white-space: normal;
-            word-break: break-word;
             overflow-wrap: anywhere;
+            word-wrap: break-word;
         }
 
+        .meta-side,
         .admin-cell {
             text-align: right;
-            font-weight: 700;
-            font-size: 4.75pt;
+            font-size: inherit;
             line-height: 1.02;
             white-space: normal;
             word-break: break-word;
             overflow-wrap: anywhere;
+        }
+
+        .meta-side {
+            padding-left: 1pt;
+        }
+
+        .main-columns {
+            margin-top: 0.3pt;
+        }
+
+        .column-left {
+            width: 56%;
+            padding-right: 1.5pt;
+        }
+
+        .column-right {
+            width: 44%;
+            padding-left: 1.5pt;
+        }
+
+        .column-left .row,
+        .column-left .med-line,
+        .column-left .dil-line,
+        .column-left .obs-line,
+        .column-left .legend-line,
+        .column-left .cond-line {
+            font-size: inherit;
+            line-height: 1.05;
+        }
+
+        .column-right .row {
+            font-size: inherit;
+            line-height: 1.04;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .med-line,
@@ -127,34 +161,36 @@
         }
 
         .secondary-text {
-            font-size: 4.65pt;
+            font-size: inherit;
             line-height: 1.03;
         }
 
         .tiny-text {
-            font-size: 4.3pt;
+            font-size: inherit;
             line-height: 1.02;
         }
 
         .footer-compact td {
-            font-size: 4.45pt;
+            font-size: inherit;
             line-height: 1.02;
         }
 
         .title-cell {
-            width: 84%;
+            width: 100%;
         }
 
-        .qr-cell {
-            width: 16%;
-            text-align: right;
-            vertical-align: middle;
+        .qr-corner {
+            position: absolute;
+            right: 30pt;
+            bottom: 20pt;
+            width: 42px;
+            height: 42px;
         }
 
-        .qr-cell img {
-            width: 40px;
-            height: 40px;
-            display: inline-block;
+        .qr-corner img {
+            width: 42px;
+            height: 42px;
+            display: block;
         }
     </style>
 </head>
@@ -240,121 +276,52 @@
 
 <body>
     <div class="label">
-        <table>
+        <table class="header-table">
             <tr>
                 <td class="title title-cell">MEZCLAS ESTÉRILES ONCOLÓGICAS</td>
-                <td class="qr-cell">
-                    @if (!empty($qrImage))
-                        <img src="{{ $qrImage }}" alt="QR mezcla">
-                    @endif
-                </td>
             </tr>
         </table>
 
-        <table>
-            <tr>
-                <td class="row meta-left">Institución: {{ $cliente ?? $dash }}</td>
-                <td class="row meta-right">Lote mezcla: {{ $mezcla->lote ?? $dash }}</td>
-            </tr>
-            <tr>
-                <td class="row meta-left">Paciente: {{ $solicitud->nombre_paciente ?? $dash }}</td>
-                <td class="row meta-right">F. Nac: {{ $fmtDate($solicitud->fecha_nacimiento ?? null) }}</td>
-            </tr>
-            <tr>
-                <td class="row meta-left">Edad: {{ $edadTexto }}  Alergias: {{ $solicitud->alergias ?? $dash }}</td>
-                <td class="row meta-right">No. Registro: {{ $solicitud->registro_paciente ?? $dash }}</td>
-            </tr>
-            <tr>
-                <td class="row meta-left">Médico: {{ $solicitud->nombre_medico ?? $dash }}</td>
-                <td class="row meta-right">Género: {{ $solicitud->sexo ?? $dash }}</td>
-            </tr>
-        </table>
+        @if (!empty($qrImage))
+            <div class="qr-corner"><img src="{{ $qrImage }}" alt="QR mezcla"></div>
+        @endif
 
-        <div class="spacer-sm"></div>
-
-        <table>
+        <table class="main-columns">
+            <colgroup><col style="width: 56%;"><col style="width: 44%;"></colgroup>
             <tr>
-                <td class="section">Medicamentos:</td>
-            </tr>
-            @forelse ($medicamentos as $med)
-                <tr>
-                    <td class="med-line row">
-                        {{ $med->nombre ?? $dash }} {{ $fmtMg($med->dosis ?? null) }}
-                        @if ($showLabelLotExpiry ?? false)
-                            | Lote: {{ $med->lote ?? $dash }} | Cad: {{ $fmtDate($med->cad ?? null) }}
-                        @endif
-                    </td>
-                </tr>
-            @empty
-                <tr>
-                    <td class="med-line row">{{ $dash }}</td>
-                </tr>
-            @endforelse
-
-            <tr>
-                <td class="section">Diluyente:</td>
-            </tr>
-            <tr>
-                <td class="dil-line row">
-                    {{ $diluyenteTexto ?? $dash }}
-                    @if ($showLabelLotExpiry ?? false)
-                        | Lote: {{ $diluyenteLote ?? $dash }} | Cad: {{ $fmtDate($diluyenteCad ?? null) }}
-                    @endif
+                <td class="column-left">
+                    <table>
+                        <tr><td class="row"><strong>Institución:</strong> {{ $cliente ?? $dash }}</td></tr>
+                        <tr><td class="row"><strong>Paciente:</strong> {{ $solicitud->nombre_paciente ?? $dash }}</td></tr>
+                        <tr><td class="row"><strong>Edad:</strong> {{ $edadTexto }} · <strong>Alergias:</strong> {{ $solicitud->alergias ?? $dash }}</td></tr>
+                        <tr><td class="row"><strong>Médico:</strong> {{ $solicitud->nombre_medico ?? $dash }}</td></tr>
+                        <tr><td class="section">Medicamentos:</td></tr>
+                        @forelse ($medicamentos as $med)
+                            <tr><td class="med-line row">{{ $med->nombre ?? $dash }} {{ $fmtMg($med->dosis ?? null) }}@if ($showLabelLotExpiry ?? false) | Lote: {{ $med->lote ?? $dash }} | Cad: {{ $fmtDate($med->cad ?? null) }}@endif</td></tr>
+                        @empty
+                            <tr><td class="med-line row">{{ $dash }}</td></tr>
+                        @endforelse
+                        <tr><td class="section">Diluyente:</td></tr>
+                        <tr><td class="dil-line row">{{ $diluyenteTexto ?? $dash }}@if ($showLabelLotExpiry ?? false) | Lote: {{ $diluyenteLote ?? $dash }} | Cad: {{ $fmtDate($diluyenteCad ?? null) }}@endif</td></tr>
+                        <tr><td class="section">Observaciones:</td></tr>
+                        <tr><td class="obs-line row">{{ $observacionTexto }}</td></tr>
+                        <tr><td class="row secondary-text"><strong>Leyenda de protección:</strong></td></tr>
+                        <tr><td class="legend-line row secondary-text">{{ $legend }}</td></tr>
+                        <tr><td class="cond-line row"><span class="strong">Condiciones:</span> {{ count($condiciones) ? implode(' | ', $condiciones) : $dash }}</td></tr>
+                    </table>
                 </td>
-            </tr>
-        </table>
-
-        <div class="spacer-sm"></div>
-
-        <table>
-            <tr>
-                <td class="row" style="width: 52%; white-space: nowrap;">
-                    Fecha y hora de preparación: {{ $prep ? $prep->format('d/m/Y H:i') : $dash }}
-                </td>
-                <td class="admin-cell" style="width: 48%;">
-                    Administrar en: {{ is_numeric($mezcla->tiempo_infusion ?? null) ? $fmtNum($mezcla->tiempo_infusion, 0, ' min') : $dash }}
-                </td>
-            </tr>
-            <tr>
-                <td class="row" style="white-space: nowrap;">
-                    Fecha límite de uso: {{ isset($fechaLimiteUso) && $fechaLimiteUso ? $fechaLimiteUso->format('d/m/Y H:i') : $dash }}
-                </td>
-                <td class="row secondary-text right">
-                    Vel. infusión: {{ $velInf !== null ? $fmtNum($velInf, 3, ' mL/min') : $dash }}
-                </td>
-            </tr>
-        </table>
-
-        <table>
-            <tr>
-                <td class="section">Observaciones:</td>
-            </tr>
-            <tr>
-                <td class="obs-line row">{{ $observacionTexto }}</td>
-            </tr>
-        </table>
-
-        <div class="spacer-md"></div>
-
-        <table>
-            <tr>
-                <td class="row secondary-text">Leyenda de protección:</td>
-            </tr>
-            <tr>
-                <td class="legend-line row secondary-text">{{ $legend }}</td>
-            </tr>
-        </table>
-
-        <div class="spacer-sm"></div>
-
-        <table class="footer-compact">
-            <tr>
-                <td class="cond-line row" style="width: 60%;">
-                    <span class="strong">Condiciones:</span>
-                    {{ count($condiciones) ? implode(' | ', $condiciones) : $dash }}
-                </td>
-                <td class="prep-line row tiny-text right" style="width: 40%; white-space: normal;">
-                    Preparada por: {{ $preparadaPor ?? $dash }}
+                <td class="column-right">
+                    <table>
+                        <tr><td class="row"><span class="strong">Lote mezcla:</span> {{ $mezcla->lote ?? $dash }}</td></tr>
+                        <tr><td class="row"><span class="strong">F. Nac:</span> {{ $fmtDate($solicitud->fecha_nacimiento ?? null) }}</td></tr>
+                        <tr><td class="row"><span class="strong">No. Registro:</span> {{ $solicitud->registro_paciente ?? $dash }}</td></tr>
+                        <tr><td class="row"><span class="strong">Género:</span> {{ $solicitud->sexo ?? $dash }}</td></tr>
+                        <tr><td class="row"><span class="strong">Preparación:</span> {{ $prep ? $prep->format('d/m/Y H:i') : $dash }}</td></tr>
+                        <tr><td class="row"><span class="strong">Límite de uso:</span> {{ isset($fechaLimiteUso) && $fechaLimiteUso ? $fechaLimiteUso->format('d/m/Y H:i') : $dash }}</td></tr>
+                        <tr><td class="row"><span class="strong">Administrar en:</span> {{ is_numeric($mezcla->tiempo_infusion ?? null) ? $fmtNum($mezcla->tiempo_infusion, 0, ' min') : $dash }}</td></tr>
+                        <tr><td class="row"><span class="strong">Vel. infusión:</span> {{ $velInf !== null ? $fmtNum($velInf, 3, ' mL/min') : $dash }}</td></tr>
+                        <tr><td class="row"><span class="strong">Preparada por:</span> {{ $preparadaPor ?? $dash }}</td></tr>
+                    </table>
                 </td>
             </tr>
         </table>

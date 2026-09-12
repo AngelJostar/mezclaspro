@@ -13,8 +13,8 @@
                 </div>
                 <div class="diluent-field">
                     <label for="consumable-unit">Unidad</label>
-                    <input id="consumable-unit" name="unit" type="text" value="pieza" required maxlength="40" aria-describedby="consumable-unit-error">
-                    <p id="consumable-unit-error" class="diluent-field-error" data-field-error="unit" hidden></p>
+                    <input id="consumable-unit" type="text" value="Pieza" readonly aria-readonly="true">
+                    <input name="unit" type="hidden" value="pieza">
                 </div>
             </div>
             <section class="consumable-presentations" aria-labelledby="consumable-presentations-title">

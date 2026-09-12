@@ -100,6 +100,15 @@
     $formTitle = $isApprovalMode
         ? 'Aprobación de mezcla #'.$solicitud->id
         : 'SOLICITUD DE NUTRICIÓN PARENTERAL';
+    $calculationPreview = session('nutrition_calculation_preview', []);
+    $displayOverfill = $calculationPreview['sobrellenado_ml']
+        ?? old('sobrellenado_ml', $solicitud->solicitud_detail->sobrellenado_ml);
+    $displayTotalVolume = $calculationPreview['volumen_total']
+        ?? old('volumen_total', $solicitud->solicitud_detail->volumen_total);
+    $displayCalculatedVolume = $calculationPreview['suma_volumen']
+        ?? $solicitud->solicitud_detail->suma_volumen;
+    $displayFinalVolume = $calculationPreview['volumen_total_final']
+        ?? $solicitud->solicitud_detail->volumen_total_final;
 @endphp
 
 <x-admin-layout>
@@ -110,6 +119,10 @@
             </h1>
             <div data-workflow-approval-actions class="ml-auto flex flex-wrap items-center justify-end gap-3">
                 @if ($isApprovalMode && $isPendingApproval)
+                    <x-button form="solicitudForm" type="submit" class="bg-blue-600 hover:bg-blue-700"
+                        onclick="document.getElementById('accion_input').value = 'actualizar'">
+                        GUARDAR CAMBIOS
+                    </x-button>
                     <x-button form="solicitudForm" type="button" class="bg-green-600 hover:bg-green-700"
                         onclick="updateAccion('aprobar')">
                         APROBAR MEZCLA
@@ -133,34 +146,34 @@
             <div class="mb-4 rounded bg-red-100 p-4 text-red-700 w-full">
                 <ul class="list-disc pl-5">
                     @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
+                        <li class="whitespace-pre-line">{{ $error }}</li>
                     @endforeach
                 </ul>
             </div>
         @endif
 
         <div class="w-full mb-6 text-sm text-gray-700 bg-gray-50 border rounded p-4">
-            @if ($solicitud->solicitud_detail->sobrellenado_ml !== null)
-                <p>Sobrellenado ingresado: <strong>{{ $solicitud->solicitud_detail->sobrellenado_ml }} mL</strong></p>
+            @if ($displayOverfill !== null && $displayOverfill !== '')
+                <p>Sobrellenado ingresado: <strong>{{ $displayOverfill }} mL</strong></p>
             @else
                 <p>El usuario no ingresó sobrellenado.</p>
             @endif
 
-            @if ($solicitud->solicitud_detail->volumen_total !== null)
-                <p>Volumen total ingresado: <strong>{{ $solicitud->solicitud_detail->volumen_total }} mL</strong></p>
+            @if ($displayTotalVolume !== null && $displayTotalVolume !== '')
+                <p>Volumen total ingresado: <strong>{{ $displayTotalVolume }} mL</strong></p>
                 <p>Suma de elementos en mL:
-                    <strong>{{ number_format($solicitud->solicitud_detail->suma_volumen, 3, '.', '') }}</strong>
+                    <strong>{{ number_format((float) $displayCalculatedVolume, 3, '.', '') }}</strong>
                 </p>
 
-                @if ($solicitud->solicitud_detail->volumen_total < $solicitud->solicitud_detail->suma_volumen)
+                @if ((float) $displayTotalVolume < (float) $displayCalculatedVolume)
                     <h2 class="text-red-500 font-bold">
                         El volumen total es menor a la suma calculada. Verifica los valores.
                     </h2>
                 @endif
 
                 @if (
-                    $solicitud->solicitud_detail->volumen_total &&
-                        60 < ($aguaCalculada / $solicitud->solicitud_detail->volumen_total) * 100)
+                    (float) $displayTotalVolume > 0 &&
+                        60 < ($aguaCalculada / (float) $displayTotalVolume) * 100)
                     <h2 class="text-red-500 font-bold">
                         El agua calculada supera el 60% del volumen total. Reajusta el volumen total.
                     </h2>
@@ -170,7 +183,7 @@
             @endif
 
             <p>Volumen total final:
-                <strong>{{ number_format($solicitud->solicitud_detail->volumen_total_final, 2, '.', '') }} mL</strong>
+                <strong>{{ number_format((float) $displayFinalVolume, 2, '.', '') }} mL</strong>
             </p>
         </div>
 

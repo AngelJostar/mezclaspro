@@ -1306,10 +1306,20 @@ class MezclaController extends Controller
                     ]
                 );
 
+                $preparadaEn = now();
+
                 if ($inspeccion->preparo_nombre === '' || $inspeccion->preparo_nombre === null) {
                     $inspeccion->preparo_nombre = $preparoNombre;
-                    $inspeccion->save();
                 }
+
+                // Conservar la primera marca de preparación: una mezcla preparada
+                // no debe modificar posteriormente su trazabilidad.
+                if (! $inspeccion->fecha_preparacion || ! $inspeccion->hora_preparacion) {
+                    $inspeccion->fecha_preparacion = $preparadaEn->toDateString();
+                    $inspeccion->hora_preparacion = $preparadaEn->format('H:i:s');
+                }
+
+                $inspeccion->save();
             });
 
             return $this->redirectAfterMixtureAction($mezcla, $request)
@@ -1627,7 +1637,7 @@ class MezclaController extends Controller
                 }
 
                 $chargeBy = strtolower(trim((string) ($m['charge_by'] ?? ($catalog->charge_by ?? 'mg'))));
-                if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) {
+                if (!in_array($chargeBy, ['mg', 'frasco', 'pieza'], true)) {
                     $chargeBy = 'mg';
                 }
                 if ($chargeBy === 'pieza') {
@@ -2072,6 +2082,8 @@ class MezclaController extends Controller
 
             'equipoInfusion'       => $equipoInfusion,
             'concentracion_final'  => $concentracionFinalFmt,
+            'dosis_total_mg'       => $dosisTotalMg,
+            'volumen_final_ml'     => $volumenFinalMl,
 
             'diluyente_base'       => $diluyenteBase,
             'extraer_ml'           => $extraerTotalFmt,
@@ -2285,10 +2297,10 @@ class MezclaController extends Controller
             $diluyenteCad  = $dp->caducidad ?? null;
         }
 
-        // ✅ PDF (7.5cm x 5cm) en puntos: 212.6 x 141.7
+        // PDF de etiqueta: 7.5 cm x 5 cm en puntos PostScript (72 pt por pulgada).
         // OJO: si pones 'landscape' Dompdf rota y te invierte el tamaño.
         // Para que quede ANCHO 7.5cm y ALTO 5cm, usa 'portrait' con este array:
-        $customPaper = [0, 0, 212.6, 141.7];
+        $customPaper = [0, 0, 212.598425, 141.732283];
 
         $pdf = Pdf::loadView('pdfs.oncologicos.etiqueta', [
             'mezcla'            => $mezcla,

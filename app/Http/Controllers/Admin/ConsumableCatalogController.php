@@ -22,6 +22,7 @@ class ConsumableCatalogController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $data['unit'] = 'pieza';
         DB::transaction(function () use ($data) {
             $item = ConsumableItem::create(['name' => $data['name'], 'unit' => $data['unit'], 'is_active' => true]);
             $item->catalogPresentations()->createMany($data['presentations']);

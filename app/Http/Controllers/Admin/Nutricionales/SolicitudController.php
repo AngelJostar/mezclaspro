@@ -912,7 +912,7 @@ class SolicitudController extends Controller
                             $solicitud_inputs['valor_ml'] = $valor_ml;
                             $solicitud_inputs['input_id'] = $numero;
                             $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentation?->id;
-                            $solicitud_inputs['precio_ml'] = $valor_ml * $precioMlUnitario;
+                            $solicitud_inputs['precio_ml'] = $precioMlUnitario;
 
                             SolicitudInput::create($solicitud_inputs);
                         }
@@ -940,7 +940,7 @@ class SolicitudController extends Controller
                             $solicitud_inputs['valor_ml'] = $valor_ml;
                             $solicitud_inputs['input_id'] = $numero;
                             $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentation?->id;
-                            $solicitud_inputs['precio_ml'] = $valor_ml * $precioMlUnitario;
+                            $solicitud_inputs['precio_ml'] = $precioMlUnitario;
 
                             SolicitudInput::create($solicitud_inputs);
                         } else {
@@ -971,7 +971,7 @@ class SolicitudController extends Controller
                             $solicitud_inputs['valor_ml'] = $valor_ml;
                             $solicitud_inputs['input_id'] = $numero;
                             $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentation?->id;
-                            $solicitud_inputs['precio_ml'] = $valor_ml * $precioMlUnitario;
+                            $solicitud_inputs['precio_ml'] = $precioMlUnitario;
 
                             SolicitudInput::create($solicitud_inputs);
                         }
@@ -1001,7 +1001,7 @@ class SolicitudController extends Controller
                             $presentation = \App\Models\Nutricionales\NutritionMedicinePresentation::find($input_val->nutrition_medicine_presentation_id);
                             if ($presentation) {
                                 $precioMlUnitario = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentation);
-                                $registro_input->precio_ml = $valor_sobrellenado_ml * $precioMlUnitario;
+                                $registro_input->precio_ml = $precioMlUnitario;
                             }
                         }
 
@@ -1031,7 +1031,7 @@ class SolicitudController extends Controller
                             $presentation = \App\Models\Nutricionales\NutritionMedicinePresentation::find($input_val->nutrition_medicine_presentation_id);
                             if ($presentation) {
                                 $precioMlUnitario = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentation);
-                                $registro_input->precio_ml = $valor_sobrellenado_ml * $precioMlUnitario;
+                                $registro_input->precio_ml = $precioMlUnitario;
                             }
                         }
 
@@ -1056,7 +1056,7 @@ class SolicitudController extends Controller
 
                     if ($presentationAgua) {
                         $precioMlAgua = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentationAgua);
-                        $solicitud_inputs['precio_ml'] = $agua_valor_sobrellenado * $precioMlAgua;
+                        $solicitud_inputs['precio_ml'] = $precioMlAgua;
                     } else {
                         $solicitud_inputs['precio_ml'] = 0;
                     }
@@ -1078,7 +1078,7 @@ class SolicitudController extends Controller
 
                     if ($presentationAgua) {
                         $precioMlAgua = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentationAgua);
-                        $solicitud_inputs['precio_ml'] = $agua_inyectable_ml * $precioMlAgua;
+                        $solicitud_inputs['precio_ml'] = $precioMlAgua;
                     } else {
                         $solicitud_inputs['precio_ml'] = 0;
                     }
@@ -1353,6 +1353,7 @@ class SolicitudController extends Controller
     public function update(Request $request, Solicitud $solicitud)
     {
         DB::beginTransaction();
+        $calculationPreview = null;
 
         try {
             $estadoAnterior = $solicitud->estado ?? 'pendiente';
@@ -1567,6 +1568,23 @@ class SolicitudController extends Controller
                 ]);
             }
 
+            if (
+                (float) ($registro->volumen_total ?? 0) > 0
+                && (float) $registro->volumen_total + 0.0001 < $suma_volumen_ml
+            ) {
+                $calculationPreview = [
+                    'sobrellenado_ml' => $registro->sobrellenado_ml,
+                    'volumen_total' => $registro->volumen_total,
+                    'suma_volumen' => $suma_volumen_ml,
+                    'volumen_total_final' => $registro->volumen_total,
+                ];
+
+                throw new \Exception(
+                    'El volumen total de '.number_format((float) $registro->volumen_total, 2).' mL '
+                    .'es menor que la suma calculada de '.number_format($suma_volumen_ml, 2).' mL.'
+                );
+            }
+
             if ($registro->sobrellenado_ml != null) {
                 if ($registro->volumen_total == null || $registro->volumen_total == 0) {
                     $porcentaje_sobrellenado = $suma_volumen_ml > 0
@@ -1673,6 +1691,12 @@ class SolicitudController extends Controller
             }
 
             $registro->suma_volumen = $suma_volumen_ml;
+            $calculationPreview = [
+                'sobrellenado_ml' => $registro->sobrellenado_ml,
+                'volumen_total' => $registro->volumen_total,
+                'suma_volumen' => $registro->suma_volumen,
+                'volumen_total_final' => $registro->volumen_total_final,
+            ];
 
             $presentationBolsaEvaId = $request->input('p_' . $bolsa_eva);
             $presentationBolsaEva = $presentationBolsaEvaId
@@ -1724,7 +1748,9 @@ class SolicitudController extends Controller
                             $hospital,
                             $presentation,
                             (float) $cantidadMlADescontar,
-                            (int) $solicitud->id
+                            (int) $solicitud->id,
+                            null,
+                            $inputFinal->lote
                         );
 
                         $inputFinal->lote = $stockUsado->lote;
@@ -1751,7 +1777,8 @@ class SolicitudController extends Controller
                         $presentation,
                         max(1, (float) ($presentation->presentacion_ml ?? 0)),
                         (int) $solicitud->id,
-                        1
+                        1,
+                        $insumoPieza->lote
                     );
 
                     $insumoPieza->lote = $stockUsado->lote;
@@ -1797,9 +1824,15 @@ class SolicitudController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return redirect()->back()->withErrors([
+            $response = redirect()->back()->withErrors([
                 'stock' => $e->getMessage(),
             ])->withInput();
+
+            if ($calculationPreview !== null) {
+                $response->with('nutrition_calculation_preview', $calculationPreview);
+            }
+
+            return $response;
         }
     }
 
@@ -1856,7 +1889,8 @@ class SolicitudController extends Controller
         NutritionMedicinePresentation $presentation,
         float $cantidadMl,
         int $solicitudId,
-        ?float $cantidadPiezas = null
+        ?float $cantidadPiezas = null,
+        ?string $loteSolicitado = null
     ): MedicineLaboratoryStock {
         if (!$hospital || !$hospital->laboratory_id) {
             throw new \Exception('El hospital no tiene laboratorio asignado.');
@@ -1883,11 +1917,12 @@ class SolicitudController extends Controller
                 $presentation,
                 $cantidadMl,
                 $solicitudId,
-                $presentacionMl
+                $presentacionMl,
+                $loteSolicitado
             );
         }
 
-        $stockQuery = MedicineLaboratoryStock::where('nutrition_medicine_presentation_id', $presentation->id)
+        $stockBaseQuery = MedicineLaboratoryStock::where('nutrition_medicine_presentation_id', $presentation->id)
             ->where('laboratory_id', $hospital->laboratory_id)
             ->where('is_active', 1)
             ->where(function ($q) {
@@ -1895,13 +1930,8 @@ class SolicitudController extends Controller
                     ->orWhereDate('caducidad', '>=', now()->toDateString());
             });
 
-        if ($controlPorPieza) {
-            $stockQuery->where('frascos_actuales', '>=', $cantidadFrascos);
-        } else {
-            $stockQuery->where('stock_ml_actual', '>=', $cantidadMl);
-        }
-
-        $stock = $stockQuery
+        $stock = (clone $stockBaseQuery)
+            ->where('frascos_actuales', '>=', $cantidadFrascos)
             ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
             ->orderBy('caducidad')
             ->orderBy('id')
@@ -1909,10 +1939,21 @@ class SolicitudController extends Controller
             ->first();
 
         if (!$stock) {
-            $unidad = $controlPorPieza ? 'pieza(s)' : 'mL';
-            $cantidad = $controlPorPieza ? $cantidadFrascos : $cantidadMl;
+            $stocksVigentes = (clone $stockBaseQuery)
+                ->with('warehouse')
+                ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('caducidad')
+                ->orderBy('id')
+                ->get();
 
-            throw new \Exception("No hay stock suficiente para la presentación {$presentation->denominacion_comercial} en el laboratorio del hospital. Requerido: {$cantidad} {$unidad}.");
+            throw new \Exception($this->mensajeStockInsuficiente(
+                $hospital,
+                $presentation,
+                $cantidadFrascos,
+                'pieza(s)',
+                $stocksVigentes,
+                $loteSolicitado
+            ));
         }
 
         $stockAntes = (float) $stock->stock_ml_actual;
@@ -1953,7 +1994,8 @@ class SolicitudController extends Controller
         NutritionMedicinePresentation $presentation,
         float $cantidadMl,
         int $solicitudId,
-        float $presentacionMl
+        float $presentacionMl,
+        ?string $loteSolicitado = null
     ): MedicineLaboratoryStock {
         $remainderService = app(MedicineRemainderService::class);
         $remainderResult = $remainderService->consumeAvailable(
@@ -2003,10 +2045,29 @@ class SolicitudController extends Controller
             ->first();
 
         if (!$stock) {
-            throw new \Exception(
-                "No hay envases suficientes para {$presentation->denominacion_comercial}. " .
-                "Se requieren {$frascosAbrir} frasco(s) para completar {$cantidadPendiente} mL."
-            );
+            $stocksVigentes = MedicineLaboratoryStock::query()
+                ->with('warehouse')
+                ->where('nutrition_medicine_presentation_id', $presentation->id)
+                ->where('laboratory_id', $hospital->laboratory_id)
+                ->where('is_active', 1)
+                ->where(function ($query) {
+                    $query->whereNull('caducidad')
+                        ->orWhereDate('caducidad', '>=', now()->toDateString());
+                })
+                ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('caducidad')
+                ->orderBy('id')
+                ->get();
+
+            throw new \Exception($this->mensajeStockInsuficiente(
+                $hospital,
+                $presentation,
+                $frascosAbrir,
+                'frasco(s)',
+                $stocksVigentes,
+                $loteSolicitado,
+                'Volumen pendiente después de usar remanentes: '.$this->formatearCantidadStock($cantidadPendiente).' mL.'
+            ));
         }
 
         $stockAntes = (float) $stock->stock_ml_actual;
@@ -2057,6 +2118,72 @@ class SolicitudController extends Controller
         }
 
         return $stock;
+    }
+
+    private function mensajeStockInsuficiente(
+        ?Hospital $hospital,
+        NutritionMedicinePresentation $presentation,
+        float $cantidadRequerida,
+        string $unidad,
+        $stocksVigentes,
+        ?string $loteSolicitado = null,
+        ?string $detalleAdicional = null
+    ): string {
+        $presentation->loadMissing(['catalog.input', 'catalog.category']);
+
+        $catalogo = $presentation->catalog;
+        $nombreInsumo = trim((string) ($catalogo?->input?->description
+            ?: $catalogo?->denominacion_generica
+            ?: 'Insumo sin nombre'));
+        $seccion = trim((string) ($catalogo?->category?->name ?: 'Sin sección'));
+        $datosPresentacion = array_values(array_filter([
+            trim((string) $presentation->denominacion_comercial),
+            trim((string) $presentation->presentacion),
+        ]));
+        $presentacionCompleta = implode(' — ', $datosPresentacion) ?: 'Sin descripción';
+        $cantidadDisponible = (float) collect($stocksVigentes)->sum('frascos_actuales');
+        $lote = trim((string) $loteSolicitado);
+        $hospitalNombre = trim((string) ($hospital?->name ?: 'Hospital sin nombre'));
+
+        $detalleLotes = collect($stocksVigentes)
+            ->take(4)
+            ->map(function (MedicineLaboratoryStock $stock) {
+                $nombreAlmacen = trim((string) ($stock->warehouse?->name ?: 'almacén no especificado'));
+                $loteStock = trim((string) ($stock->lote ?: 'sin lote'));
+                $caducidad = $stock->caducidad?->format('d/m/Y') ?: 'sin caducidad';
+
+                return $loteStock.' ('.$this->formatearCantidadStock((float) $stock->frascos_actuales)
+                    .' pieza(s), '.$nombreAlmacen.', cad. '.$caducidad.')';
+            })
+            ->implode('; ');
+
+        $partes = [
+            'Stock insuficiente para el insumo "'.$nombreInsumo.'" (sección: '.$seccion.').',
+            'Presentación seleccionada: '.$presentacionCompleta.' [ID '.$presentation->id.'].',
+            'Lote seleccionado: '.($lote !== '' ? $lote : 'sin lote').'.',
+            'Requerido: '.$this->formatearCantidadStock($cantidadRequerida).' '.$unidad
+                .'; existencia vigente total: '.$this->formatearCantidadStock($cantidadDisponible).' pieza(s).',
+            'Hospital: '.$hospitalNombre.'.',
+        ];
+
+        if ($detalleLotes !== '') {
+            $partes[] = 'Lotes vigentes: '.$detalleLotes.'.';
+        } else {
+            $partes[] = 'No existen lotes activos y vigentes de esta presentación en el inventario asignado.';
+        }
+
+        if ($detalleAdicional) {
+            $partes[] = $detalleAdicional;
+        }
+
+        $partes[] = 'Revisa el renglón "'.$nombreInsumo.'" o registra existencia para esa presentación.';
+
+        return implode("\n", $partes);
+    }
+
+    private function formatearCantidadStock(float $cantidad): string
+    {
+        return rtrim(rtrim(number_format($cantidad, 3, '.', ','), '0'), '.');
     }
 
     public function show(Solicitud $solicitud)
@@ -2420,7 +2547,7 @@ class SolicitudController extends Controller
             'priceList',
             'pricingSummary',
             'almacenesPorSolicitudInput'
-        ));
+        ))->setPaper('letter', 'landscape');
 
         return $pdf->stream();
     }

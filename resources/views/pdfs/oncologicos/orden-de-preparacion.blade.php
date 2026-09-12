@@ -483,7 +483,9 @@
                         $rowspan = $grupo->count();
 
                         $dosis = $primerMed->dosis ?? '—';
-                        $vop = $primerMed->volumen_orden_preparacion ?? null;
+                        // Una misma dosis puede surtirse con varias presentaciones o lotes.
+                        // El volumen mostrado debe reflejar la suma total del medicamento.
+                        $vop = $grupo->sum(fn ($med) => (float) ($med->volumen_orden_preparacion ?? 0));
                     @endphp
 
                     @foreach ($grupo as $index => $med)
@@ -704,4 +706,3 @@
 
 
 </html>
-

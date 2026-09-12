@@ -56,7 +56,6 @@
                 <select name="charge_by" id="charge_by"
                     class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
                     <option value="mg" @selected(old('charge_by', 'mg') === 'mg')>Por mg</option>
-                    <option value="ml" @selected(old('charge_by', 'mg') === 'ml')>Por mL</option>
                     <option value="frasco" @selected(old('charge_by', 'mg') === 'frasco')>Por frasco completo</option>
                 </select>
             </div>

@@ -13,6 +13,7 @@ use App\Services\PriceListWarehouseConfigurationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 
 class MedicineController extends Controller
@@ -51,6 +52,9 @@ class MedicineController extends Controller
         PriceListWarehouseConfigurationService $warehouseConfiguration
     ) {
         $catalogCategory = $this->catalogCategoryFromRequest($request);
+        $allowedChargeMethods = $catalogCategory === 'oncologicos'
+            ? ['mg', 'frasco']
+            : ['mg', 'ml', 'frasco'];
 
         if ($request->filled('from_catalogo_listas') && $request->boolean('is_backup_list')) {
             $request->merge([
@@ -65,7 +69,7 @@ class MedicineController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'active_brands' => 'nullable|boolean',
-            'charge_by' => 'required|in:mg,ml,frasco',
+            'charge_by' => ['required', Rule::in($allowedChargeMethods)],
             'show_label_lot_expiry' => 'nullable|boolean',
             'has_mixing_service' => 'nullable|boolean',
             'mixing_service_price' => 'nullable|numeric|min:0',
@@ -74,7 +78,7 @@ class MedicineController extends Controller
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
             'medicamentos.*.precio' => 'required|numeric|min:0',
             'medicamentos.*.precio_mg' => 'nullable|numeric|min:0',
-            'medicamentos.*.charge_by' => 'nullable|in:mg,ml,frasco',
+            'medicamentos.*.charge_by' => ['nullable', Rule::in($allowedChargeMethods)],
             'medicamentos.*.iva_desglosado' => 'nullable|boolean',
             'medicamentos.*.selected' => 'nullable|boolean',
             'medicamentos.*.descripcion_remision' => 'nullable|string|max:500',
@@ -140,8 +144,8 @@ class MedicineController extends Controller
                 true
             );
             $chargeBy = $fromCatalogEditor
-                ? $this->normalizeChargeBy($items->first()['charge_by'] ?? null)
-                : $this->normalizeChargeBy($request->input('charge_by', 'mg'), 'mg');
+                ? $this->normalizeChargeBy($items->first()['charge_by'] ?? null, 'frasco', $catalogCategory)
+                : $this->normalizeChargeBy($request->input('charge_by', 'mg'), 'mg', $catalogCategory);
 
             $lista = MedicineList::create(array_merge([
                 'name' => $request->name,
@@ -190,7 +194,7 @@ class MedicineController extends Controller
                 $precioCapturado = (float) $item['precio'];
                 $precioMg = (float) ($item['precio_mg'] ?? 0);
                 $itemChargeBy = $fromCatalogEditor
-                    ? $this->normalizeChargeBy($item['charge_by'] ?? null, $chargeBy)
+                    ? $this->normalizeChargeBy($item['charge_by'] ?? null, $chargeBy, $catalogCategory)
                     : $chargeBy;
                 $remissionDescription = trim((string) ($item['descripcion_remision'] ?? ''))
                     ?: $defaultDescriptions->get($presentationId);
@@ -344,6 +348,9 @@ class MedicineController extends Controller
         PriceListWarehouseConfigurationService $warehouseConfiguration
     ) {
         $catalogCategory = $this->catalogCategoryFromRequest($request);
+        $allowedChargeMethods = $catalogCategory === 'oncologicos'
+            ? ['mg', 'frasco']
+            : ['mg', 'ml', 'frasco'];
 
         if ($request->filled('from_catalogo_listas') && $request->boolean('is_backup_list')) {
             $request->merge([
@@ -358,7 +365,7 @@ class MedicineController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'active_brands' => 'nullable|boolean',
-            'charge_by' => 'required|in:mg,ml,frasco',
+            'charge_by' => ['required', Rule::in($allowedChargeMethods)],
             'show_label_lot_expiry' => 'nullable|boolean',
             'has_mixing_service' => 'nullable|boolean',
             'mixing_service_price' => 'nullable|numeric|min:0',
@@ -383,7 +390,7 @@ class MedicineController extends Controller
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
             'medicamentos.*.precio' => 'required|numeric|min:0',
             'medicamentos.*.precio_mg' => 'nullable|numeric|min:0',
-            'medicamentos.*.charge_by' => 'nullable|in:mg,ml,frasco',
+            'medicamentos.*.charge_by' => ['nullable', Rule::in($allowedChargeMethods)],
             'medicamentos.*.iva_desglosado' => 'nullable|boolean',
             'medicamentos.*.selected' => 'nullable|boolean',
             'medicamentos.*.descripcion_remision' => 'nullable|string|max:500',
@@ -439,8 +446,8 @@ class MedicineController extends Controller
                 true
             );
             $chargeByGlobal = $fromCatalogEditor
-                ? $this->normalizeChargeBy($rows->first()['charge_by'] ?? null)
-                : $this->normalizeChargeBy($request->input('charge_by', 'mg'), 'mg');
+                ? $this->normalizeChargeBy($rows->first()['charge_by'] ?? null, 'frasco', $catalogCategory)
+                : $this->normalizeChargeBy($request->input('charge_by', 'mg'), 'mg', $catalogCategory);
 
             if (! $this->allPresentationsAreSelectable($rows->pluck('presentation_id'), $catalogCategory)) {
                 DB::rollBack();
@@ -518,7 +525,7 @@ class MedicineController extends Controller
                 $precio = (float) $row['precio'];
                 $precioMg = (float) ($row['precio_mg'] ?? 0);
                 $rowChargeBy = $fromCatalogEditor
-                    ? $this->normalizeChargeBy($row['charge_by'] ?? null, $chargeByGlobal)
+                    ? $this->normalizeChargeBy($row['charge_by'] ?? null, $chargeByGlobal, $catalogCategory)
                     : $chargeByGlobal;
                 $remissionDescription = trim((string) ($row['descripcion_remision'] ?? ''))
                     ?: trim((string) $existingDescriptions->get($presentationId, ''))
@@ -659,11 +666,14 @@ class MedicineController extends Controller
             });
     }
 
-    private function normalizeChargeBy($value, string $fallback = 'frasco'): string
+    private function normalizeChargeBy($value, string $fallback = 'frasco', string $category = 'oncologicos'): string
     {
         $chargeBy = strtolower(trim((string) $value));
+        $allowed = $category === 'oncologicos'
+            ? ['frasco', 'mg']
+            : ['frasco', 'mg', 'ml'];
 
-        return in_array($chargeBy, ['frasco', 'mg', 'ml'], true)
+        return in_array($chargeBy, $allowed, true)
             ? $chargeBy
             : $fallback;
     }

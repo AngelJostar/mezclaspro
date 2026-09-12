@@ -2,13 +2,13 @@
 
 namespace App\Services;
 
-use App\Models\Nutricionales\Medicine as NutricionalMedicine;
 use App\Models\Nutricionales\Solicitud as NutricionalSolicitud;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MedicinePresentation;
 use App\Models\PriceListAdditionalCharge;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Facade;
 
 class InstitutionBillingPricingService
 {
@@ -18,7 +18,9 @@ class InstitutionBillingPricingService
 
     private array $nutritionListConfigs = [];
 
-    private ?float $mixingServicePrice = null;
+    private array $oncoWarehouseNames = [];
+
+    private array $mixingServicePrices = [];
 
     public function priceOncoMix(Mezcla $mezcla): array
     {
@@ -45,8 +47,8 @@ class InstitutionBillingPricingService
         $suppliesTotal = $infusorApplies ? round((float) ($mezcla->infusor?->precio ?? 0), 2) : 0.0;
         $additionalCharges = $this->additionalCharges($isAntibiotic ? 'antibioticos' : 'oncologicos', $medicineListId);
         $additionalTotal = (float) $additionalCharges->sum('total');
-        $serviceTotal = 0.0;
-        $totalIncluded = round($medicationTotalWithVat + $suppliesTotal + $additionalTotal, 2);
+        $serviceTotal = $this->oncoMixingServicePrice($medicineListId);
+        $totalIncluded = round($medicationTotalWithVat + $serviceTotal + $suppliesTotal + $additionalTotal, 2);
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
         $suppliesVat = $this->splitIncludedVat($suppliesTotal);
@@ -116,7 +118,6 @@ class InstitutionBillingPricingService
             $remissionDescription = trim((string) ($listConfig?->descripcion_remision ?? ''));
 
             if ($this->isNutritionService($description)) {
-                continue;
                 $serviceFromInputs += $unitPrice;
                 continue;
             }
@@ -133,7 +134,9 @@ class InstitutionBillingPricingService
                 continue;
             }
 
-            $quantity = $chargeBy === 'frasco' ? 1.0 : $this->nutritionVolume($solicitud, $item);
+            $quantity = $chargeBy === 'frasco'
+                ? $this->nutritionBottleQuantity($solicitud, $item)
+                : $this->nutritionVolume($solicitud, $item);
             $subtotal = round($quantity * $unitPrice, 2);
 
             $medicationLines->push([
@@ -150,8 +153,11 @@ class InstitutionBillingPricingService
         $medicationTotal = round((float) $medicationLines->sum('subtotal'), 2);
         $suppliesTotal = round((float) $supplyLines->sum('subtotal'), 2);
         $minimumTotal = round($medicationTotal + $suppliesTotal, 2);
-        $serviceTotal = 0.0;
+        $serviceTotal = round($serviceFromInputs > 0
+            ? $serviceFromInputs
+            : $this->nutritionMixingServicePrice($medicineListId), 2);
         $totalIncluded = round($minimumTotal + (float) $additionalCharges->sum('total'), 2);
+        $totalIncluded = round($totalIncluded + $serviceTotal, 2);
 
         $serviceVat = $this->splitIncludedVat($serviceTotal);
         $suppliesVat = $this->splitIncludedVat($suppliesTotal);
@@ -237,8 +243,8 @@ class InstitutionBillingPricingService
         $configs = $this->oncoConfigs($medicineListId, $catalogId);
         $usedPresentationIds = $presentationsUsed
             ->map(fn ($used) => (int) (
-                $used->batch?->medicine_presentation_id
-                ?? $used->presentation?->id
+                data_get($used, 'batch.medicine_presentation_id')
+                ?? data_get($used, 'presentation.id')
                 ?? 0
             ))
             ->filter()
@@ -251,6 +257,9 @@ class InstitutionBillingPricingService
         $configuredPricePerMg = $this->oncoPricePerMilligram($firstConfig);
         $chargeBy = $this->resolveOncoChargeMethod($firstConfig, $medicamento);
         $bottleQuantity = $this->resolveBottleQuantity($medicamento, $presentationsUsed, $firstConfig);
+        $configuredWarehouse = $this->oncoWarehouseName($medicineListId);
+
+        $presentationLines = collect();
 
         if ($chargeBy === 'mg') {
             $quantity = (float) ($medicamento->dosis ?? 0);
@@ -275,10 +284,11 @@ class InstitutionBillingPricingService
             $vatBreakdown = (bool) ($firstConfig?->iva_desglosado ?? false);
             $vat = $this->calculateVatFromBase($subtotal, $vatBreakdown);
         } else {
-            [$quantity, $unitPrice, $subtotal, $vat, $vatBreakdown] = $this->resolveBottlePricing(
+            [$quantity, $unitPrice, $subtotal, $vat, $vatBreakdown, $presentationLines] = $this->resolveBottlePricing(
                 $medicamento,
                 $presentationsUsed,
-                $configs
+                $configs,
+                $configuredWarehouse
             );
             $unitLabel = 'frasco';
         }
@@ -292,6 +302,8 @@ class InstitutionBillingPricingService
         $medicamento->setAttribute('iva_desglosado_doc', $vatBreakdown);
         $medicamento->setAttribute('iva_calculado', $vat);
         $medicamento->setAttribute('subtotal_iva_incluido', round($subtotal + $vat, 2));
+        $medicamento->setAttribute('presentation_charge_lines', $presentationLines);
+        $medicamento->setAttribute('warehouse_doc', $configuredWarehouse);
 
         return [
             'description' => $description,
@@ -303,26 +315,52 @@ class InstitutionBillingPricingService
             'vat_breakdown' => $vatBreakdown,
             'vat' => $vat,
             'total_with_vat' => round($subtotal + $vat, 2),
+            'presentation_lines' => $presentationLines,
         ];
     }
 
-    private function resolveBottlePricing($medicamento, Collection $presentationsUsed, Collection $configs): array
+    private function resolveBottlePricing(
+        $medicamento,
+        Collection $presentationsUsed,
+        Collection $configs,
+        string $fallbackWarehouse = '—'
+    ): array
     {
         $quantity = 0.0;
         $subtotal = 0.0;
         $vat = 0.0;
         $vatBreakdown = false;
+        $presentationLines = collect();
 
         foreach ($presentationsUsed as $used) {
             $units = max((float) ($used->unidades_usadas ?? 0), 1.0);
             $config = $configs->firstWhere('medicine_presentation_id', $used->batch?->medicine_presentation_id)
                 ?? $configs->first();
             $lineSubtotal = $used->subtotal;
+            $unitPrice = (float) ($used->precio_frasco_snapshot ?? $config?->precio ?? 0);
 
             if ($lineSubtotal === null) {
-                $unitPrice = (float) ($used->precio_frasco_snapshot ?? $config?->precio ?? 0);
                 $lineSubtotal = $unitPrice * $units;
             }
+
+            if ($unitPrice <= 0 && $units > 0) {
+                $unitPrice = (float) $lineSubtotal / $units;
+            }
+
+            $presentation = trim((string) ($used->presentacion_snapshot
+                ?? $used->batch?->presentation?->presentacion
+                ?? $used->presentation?->presentacion
+                ?? data_get($config, 'presentacion')
+                ?? ''));
+            $warehouse = trim((string) ($used->batch?->warehouse?->name ?? ''));
+
+            $presentationLines->push([
+                'presentation' => $presentation !== '' ? $presentation : 'Sin presentación registrada',
+                'quantity' => round($units, 2),
+                'unit_price' => round($unitPrice, 4),
+                'subtotal' => round((float) $lineSubtotal, 2),
+                'warehouse' => $warehouse !== '' ? $warehouse : $fallbackWarehouse,
+            ]);
 
             $quantity += $units;
             $subtotal += (float) $lineSubtotal;
@@ -341,10 +379,18 @@ class InstitutionBillingPricingService
             $vatBreakdown = (bool) ($config?->iva_desglosado ?? false);
             $vat = $this->calculateVatFromBase($subtotal, $vatBreakdown);
 
-            return [$quantity, $unitPrice, round($subtotal, 2), $vat, $vatBreakdown];
+            $presentationLines->push([
+                'presentation' => trim((string) data_get($config, 'presentacion', '')) ?: 'Sin presentación registrada',
+                'quantity' => round($quantity, 2),
+                'unit_price' => round($unitPrice, 4),
+                'subtotal' => round($subtotal, 2),
+                'warehouse' => $fallbackWarehouse,
+            ]);
+
+            return [$quantity, $unitPrice, round($subtotal, 2), $vat, $vatBreakdown, $presentationLines];
         }
 
-        return [$quantity, $subtotal / $quantity, round($subtotal, 2), round($vat, 2), $vatBreakdown];
+        return [$quantity, $subtotal / $quantity, round($subtotal, 2), round($vat, 2), $vatBreakdown, $presentationLines];
     }
 
     private function resolveBottleQuantity($medicamento, Collection $presentationsUsed, $config): ?float
@@ -358,7 +404,7 @@ class InstitutionBillingPricingService
         }
 
         $presentation = $presentationsUsed
-            ->map(fn ($used) => $used->batch?->presentation ?? $used->presentation)
+            ->map(fn ($used) => data_get($used, 'batch.presentation') ?? data_get($used, 'presentation'))
             ->filter()
             ->first()
             ?? $medicamento->medicamentoOnco?->catalog?->presentations?->first();
@@ -366,7 +412,7 @@ class InstitutionBillingPricingService
             $config?->contenido_valor ?? $presentation?->contenido_valor,
             $config?->contenido_unidad ?? $presentation?->contenido_unidad,
             $config?->cantidad_medicamento ?? $presentation?->cantidad_medicamento,
-            $config?->presentacion ?? $presentation?->presentacion
+            data_get($config, 'presentacion') ?? $presentation?->presentacion
         );
         $dose = (float) ($medicamento->dosis ?? 0);
 
@@ -408,6 +454,50 @@ class InstitutionBillingPricingService
         }
 
         return $this->oncoPresentationConfigs[$cacheKey];
+    }
+
+    private function oncoWarehouseName(int $medicineListId): string
+    {
+        if ($medicineListId <= 0 || ! Facade::getFacadeApplication()) {
+            return '—';
+        }
+
+        if (! array_key_exists($medicineListId, $this->oncoWarehouseNames)) {
+            try {
+                $name = DB::table('medicine_lists as ml')
+                    ->leftJoin('warehouses as primary_w', 'primary_w.id', '=', 'ml.primary_warehouse_id')
+                    ->leftJoin('warehouses as list_w', 'list_w.id', '=', 'ml.warehouse_id')
+                    ->where('ml.id', $medicineListId)
+                    ->value(DB::raw('COALESCE(primary_w.name, list_w.name)'));
+            } catch (\Throwable) {
+                $name = null;
+            }
+
+            $this->oncoWarehouseNames[$medicineListId] = trim((string) $name) ?: '—';
+        }
+
+        return $this->oncoWarehouseNames[$medicineListId];
+    }
+
+    private function oncoMixingServicePrice(int $medicineListId): float
+    {
+        $app = Facade::getFacadeApplication();
+
+        if ($medicineListId <= 0 || ! $app || ! $app->bound('db')) {
+            return 0.0;
+        }
+
+        try {
+            $row = DB::table('medicine_lists')
+                ->where('id', $medicineListId)
+                ->first(['has_mixing_service', 'mixing_service_price']);
+        } catch (\Throwable) {
+            return 0.0;
+        }
+
+        return $row && (bool) $row->has_mixing_service
+            ? round((float) $row->mixing_service_price, 2)
+            : 0.0;
     }
 
     private function oncoPricePerMilligram($config): float
@@ -466,11 +556,26 @@ class InstitutionBillingPricingService
             return $presentationMl > 0 ? round($pricePerMl * $presentationMl, 4) : $pricePerMl;
         }
 
-        if ($snapshot > 0) {
-            return $snapshot;
+        // precio_ml is a price per mL. Older requests sometimes stored the
+        // complete line amount in this column, so prefer the canonical list
+        // price whenever the presentation is still available.
+        if ($listPricePerMl > 0) {
+            return $listPricePerMl;
         }
 
-        return $listPricePerMl;
+        return $snapshot;
+    }
+
+    private function nutritionBottleQuantity(NutricionalSolicitud $solicitud, $item): float
+    {
+        $volume = $this->nutritionVolume($solicitud, $item);
+        $presentationMl = (float) ($item->presentation?->presentacion_ml ?? 0);
+
+        if ($volume > 0 && $presentationMl > 0) {
+            return (float) max(1, (int) ceil($volume / $presentationMl));
+        }
+
+        return 1.0;
     }
 
     private function nutritionListConfig($item, int $medicineListId): ?object
@@ -552,17 +657,35 @@ class InstitutionBillingPricingService
             });
     }
 
-    private function mixingServicePrice(): float
+    private function nutritionMixingServicePrice(int $medicineListId): float
     {
-        if ($this->mixingServicePrice === null) {
-            $this->mixingServicePrice = round((float) (NutricionalMedicine::query()
-                ->where(function ($query) {
-                    $query->where('denominacion_generica', 'like', '%SERVICIO DE MEZCLADO%')
-                        ->orWhere('denominacion_comercial', 'like', '%SERVICIO DE PREPARACIÓN%');
-                })
-                ->value('precio_ml') ?? 0), 2);
+        $app = Facade::getFacadeApplication();
+
+        if ($medicineListId <= 0 || ! $app || ! $app->bound('db')) {
+            return 0.0;
         }
 
-        return $this->mixingServicePrice;
+        if (! array_key_exists($medicineListId, $this->mixingServicePrices)) {
+            try {
+                $price = DB::table('nutri_medicine_list_items as nli')
+                    ->join('nutrition_medicine_presentations as nmp', 'nmp.id', '=', 'nli.nutrition_medicine_presentation_id')
+                    ->join('nutrition_medicines_catalog as nmc', 'nmc.id', '=', 'nmp.nutrition_medicine_catalog_id')
+                    ->leftJoin('inputs as i', 'i.id', '=', 'nmc.input_id')
+                    ->where('nli.nutri_medicine_list_id', $medicineListId)
+                    ->where(function ($query) {
+                        $query->where('nmc.denominacion_generica', 'like', '%SERVICIO DE MEZCLADO%')
+                            ->orWhere('i.description', 'like', '%Preparación para NPT%')
+                            ->orWhere('i.description', 'like', '%Preparacion para NPT%')
+                            ->orWhere('i.description', 'like', '%SERVICIO DE MEZCLADO%');
+                    })
+                    ->value('nli.precio_ml');
+            } catch (\Throwable) {
+                $price = 0;
+            }
+
+            $this->mixingServicePrices[$medicineListId] = round((float) ($price ?? 0), 2);
+        }
+
+        return $this->mixingServicePrices[$medicineListId];
     }
 }

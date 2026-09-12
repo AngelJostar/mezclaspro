@@ -785,10 +785,8 @@ class SolicitudController extends Controller
                             );
                         }
 
-                        $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? ($catalog->charge_by ?? 'mg');
-                        $chargeBy = strtolower(trim((string)$chargeBy));
-                        if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) $chargeBy = 'mg';
-                        if ($chargeBy === 'pieza') $chargeBy = 'frasco';
+                        $chargeBy = strtolower(trim((string) ($medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? ($catalog->charge_by ?? 'mg'))));
+                        $chargeBy = in_array($chargeBy, ['mg', 'frasco'], true) ? $chargeBy : 'mg';
 
                         $mc = DB::table('medicines_catalog as mc')
                             ->where('mc.id', $catalogId)
@@ -1359,14 +1357,8 @@ class SolicitudController extends Controller
                             );
                         }
 
-                        $chargeBy = $medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? 'mg';
-                        $chargeBy = strtolower(trim((string) $chargeBy));
-                        if (!in_array($chargeBy, ['mg', 'ml', 'frasco', 'pieza'], true)) {
-                            $chargeBy = 'mg';
-                        }
-                        if ($chargeBy === 'pieza') {
-                            $chargeBy = 'frasco';
-                        }
+                        $chargeBy = strtolower(trim((string) ($medicamento['charge_by'] ?? ($listaInfoPorCatalogo[$catalogId]['charge_by'] ?? null) ?? 'mg')));
+                        $chargeBy = in_array($chargeBy, ['mg', 'frasco'], true) ? $chargeBy : 'mg';
 
                         MezclaMedicamento::create([
                             'mezcla_id'                  => $mezcla->id,
@@ -1565,6 +1557,7 @@ class SolicitudController extends Controller
 
             'mezclas.infusor',
             'mezclas.billing',
+            'mezclas.diluentPresentation.diluent',
             'mezclas.medicamentos',
             'mezclas.medicamentos.presentacionesUsadas', // snapshots por renglón
 
@@ -1852,7 +1845,7 @@ class SolicitudController extends Controller
             'precioUnitarioServicioMezclado' => $precioUnitarioServicioMezclado,
             'distributor'   => $distributor, // ✅ ahora viene por lista del hospital
             'subdistributorOnly' => $subdistributorOnly,
-        ])->setPaper('letter', 'portrait');
+        ])->setPaper('letter', 'landscape');
 
         $filenameSuffix = $requestedMixtureId > 0
             ? "{$solicitud_onco->id}-mezcla-{$requestedMixtureId}"

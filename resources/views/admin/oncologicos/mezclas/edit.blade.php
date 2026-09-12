@@ -252,7 +252,8 @@
             const raw = med?.charge_by ?? med?.chargeBy ?? infoAdicional?.[catalogId]?.charge_by ?? 'frasco';
             const val = String(raw || 'frasco').toLowerCase().trim();
 
-            if (['mg', 'ml', 'frasco', 'pieza'].includes(val)) return val;
+            if (['mg', 'frasco', 'pieza'].includes(val)) return val === 'pieza' ? 'frasco' : val;
+            if (val === 'ml') return 'mg';
             return 'frasco';
         }
 
@@ -324,9 +325,7 @@
                     precioMgInput.classList.add('bg-gray-100', 'text-gray-400');
                 }
                 if (precioHelp) {
-                    precioHelp.textContent = chargeBy === 'ml'
-                        ? 'El precio se captura por mL en las presentaciones.'
-                        : 'El precio se edita por frasco en presentaciones.';
+                    precioHelp.textContent = 'El precio se edita por frasco en presentaciones.';
                 }
             }
         }

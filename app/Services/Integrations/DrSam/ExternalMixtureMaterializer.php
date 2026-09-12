@@ -293,7 +293,7 @@ class ExternalMixtureMaterializer
             'peso' => data_get($format, 'weight'),
             'cama' => data_get($format, 'bed'),
             'piso' => data_get($format, 'floor'),
-            'registro_paciente' => data_get($payload, 'patient.external_id'),
+            'registro_paciente' => data_get($format, 'patient_identifier', data_get($payload, 'patient.external_id')),
             'fecha_nacimiento' => $birthDate,
             'diagnostico' => data_get($payload, 'clinical.diagnosis', 'Sin diagnostico'),
             'alergias' => data_get($format, 'allergies', ''),
@@ -320,6 +320,10 @@ class ExternalMixtureMaterializer
                 'solicitud_id' => $request->id,
                 'volumen_dilucion' => data_get($clinicalMedication, 'dilution_volume', $presentation->volumen_diluyente ?: 1),
                 'tiempo_infusion' => (string) data_get($clinicalMedication, 'infusion_minutes', 60),
+                'fecha_entrega' => collect(data_get($clinicalMedication, 'delivery_dates', []))->filter()->first()
+                    ?? data_get($payload, 'clinical.required_at'),
+                'set_infusion' => (bool) data_get($clinicalMedication, 'set_infusion', false),
+                'infusor_id' => data_get($clinicalMedication, 'infusor_id'),
                 'estado' => 'pendiente',
             ]);
             MezclaMedicamento::query()->create([
@@ -332,6 +336,8 @@ class ExternalMixtureMaterializer
                 'conc_min_snapshot' => $catalog->conc_min,
                 'conc_max_snapshot' => $catalog->conc_max,
                 'dosis' => $dose,
+                'diluyente_id' => data_get($clinicalMedication, 'diluent_id'),
+                'via_administracion_id' => data_get($clinicalMedication, 'route_id'),
                 'charge_by' => ($pivot?->charge_by ?? 'mg') === 'frasco' ? 'frasco' : 'mg',
                 'precio_mg_snapshot' => $pivot?->precio_mg_override,
             ]);

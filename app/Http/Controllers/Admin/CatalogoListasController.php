@@ -282,6 +282,8 @@ class CatalogoListasController extends Controller
             'category_items.*.*.price_bottle' => ['required', 'numeric', 'min:0'],
             'category_items.*.*.price_unit' => ['nullable', 'numeric', 'min:0'],
             'category_items.*.*.charge_by' => ['nullable', 'in:frasco,mg,ml'],
+            'category_items.oncologicos.*.charge_by' => ['nullable', 'in:frasco,mg'],
+            'category_items.nutricionales.*.charge_by' => ['nullable', 'in:frasco,ml'],
             'category_items.*.*.vat_breakdown' => ['nullable', 'boolean'],
             'category_items.*.*.remission_description' => ['nullable', 'string', 'max:500'],
             'additional_charges' => ['nullable', 'array'],
@@ -1020,7 +1022,11 @@ class CatalogoListasController extends Controller
             ->get()
             ->keyBy('id');
         $hasContract = $request->boolean('has_contract');
-        $defaultChargeBy = $this->normalizeChargeBy($items->first()['charge_by'] ?? null);
+        $defaultChargeBy = $this->normalizeChargeBy(
+            $items->first()['charge_by'] ?? null,
+            'frasco',
+            $category
+        );
 
         $list = MedicineList::create(array_merge([
             'name' => trim((string) $request->input('name')),
@@ -1046,7 +1052,7 @@ class CatalogoListasController extends Controller
             $presentationId = (int) $item['presentation_id'];
             $presentation = $presentations->get($presentationId);
             $priceBottle = (float) $item['price_bottle'];
-            $chargeBy = $this->normalizeChargeBy($item['charge_by'] ?? null, $defaultChargeBy);
+            $chargeBy = $this->normalizeChargeBy($item['charge_by'] ?? null, $defaultChargeBy, $category);
             $unitAmount = (float) ($presentation?->contentInMilligrams() ?: 0);
             $priceUnit = $unitAmount > 0
                 ? $priceBottle / $unitAmount
@@ -1134,11 +1140,14 @@ class CatalogoListasController extends Controller
         return $value === '' ? null : $value;
     }
 
-    private function normalizeChargeBy($value, string $fallback = 'frasco'): string
+    private function normalizeChargeBy($value, string $fallback = 'frasco', ?string $category = null): string
     {
         $chargeBy = strtolower(trim((string) $value));
+        $allowed = $category === 'oncologicos'
+            ? ['frasco', 'mg']
+            : ['frasco', 'mg', 'ml'];
 
-        return in_array($chargeBy, ['frasco', 'mg', 'ml'], true)
+        return in_array($chargeBy, $allowed, true)
             ? $chargeBy
             : $fallback;
     }
