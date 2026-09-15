@@ -2,6 +2,11 @@
 
 return [
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_AGENT_MODEL', 'gpt-4.1-mini'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

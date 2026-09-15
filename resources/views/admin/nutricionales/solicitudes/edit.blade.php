@@ -114,6 +114,8 @@
                         onclick="updateAccion('aprobar')">
                         APROBAR MEZCLA
                     </x-button>
+                    <x-button type="button" class="bg-orange-400 hover:bg-orange-500"
+                        data-adjustment-proposal-open>AJUSTAR MEZCLA</x-button>
                     <x-button form="solicitudForm" type="button" formnovalidate class="bg-red-600 hover:bg-red-700 focus:bg-red-700 active:bg-red-800 focus:ring-red-500"
                         onclick="updateAccion('rechazar')">
                         RECHAZAR MEZCLA
@@ -468,6 +470,37 @@
         </form>
     </div>
 
+    @if ($isApprovalMode && $isPendingApproval)
+        @include('admin.solicitudes._adjustment-proposal', [
+            'proposalId' => $solicitud->id,
+            'proposalHospital' => $solicitud->user?->hospital?->name,
+            'proposalPatient' => trim($solicitud->solicitud_patient->nombre_paciente.' '.$solicitud->solicitud_patient->apellidos_paciente),
+            'proposalService' => $solicitud->solicitud_patient->servicio,
+            'proposalDoctor' => $solicitud->solicitud_detail->nombre_medico,
+        ])
+        @php
+            $proposalFields = [];
+            foreach ($inputs as $input) {
+                if (in_array((int) $input->category_id, [1, 2, 3, 4, 5, 8], true)) {
+                    $proposalFields[] = ['name' => 'i_'.$input->input_id,
+                        'label' => $input->description.' ('.$input->unidad.')',
+                        'value' => renderInputSection($input->input_id, $inputs_solicitud)];
+                }
+            }
+            foreach (['via_administracion' => 'Vía de administración', 'tiempo_infusion_min' => 'Tiempo de infusión (h)',
+                'velocidad_infusion' => 'Velocidad de infusión (ml/h)', 'sobrellenado_ml' => 'Sobrellenado (ml)',
+                'volumen_total' => 'Volumen total (ml)'] as $name => $label) {
+                $proposalFields[] = ['name' => $name, 'label' => $label, 'value' => $solicitud->solicitud_detail->$name];
+            }
+        @endphp
+        <script>
+            window.mixtureProposalConfig = {
+                kind: 'nutricionales', formId: 'solicitudForm', fields: @json($proposalFields),
+                reopen: @json(old('accion') === 'ajustar'), errors: @json($errors->all()),
+            };
+        </script>
+    @endif
+
     <script>
         window.inventarioPorInput = @json($inventarioPorInput);
     </script>
@@ -575,13 +608,17 @@
                 const form = document.getElementById('solicitudForm');
                 const accionInput = document.getElementById('accion_input');
                 const isRejectAction = value === 'rechazar';
+                if (value === 'ajustar') {
+                    document.querySelector('[data-adjustment-proposal-open]')?.click();
+                    return;
+                }
 
                 Swal.fire({
-                    title: `¿Seguro que deseas ${value === 'aprobar' ? 'aprobar' : 'rechazar'} esta mezcla?`,
+                    title: value === 'ajustar' ? '¿Solicitar ajuste al hospital?' : `¿Seguro que deseas ${value === 'aprobar' ? 'aprobar' : 'rechazar'} esta mezcla?`,
                     text: isRejectAction ? 'La mezcla quedará fuera del proceso de preparación.' : '',
                     icon: isRejectAction ? 'warning' : 'question',
                     showCancelButton: true,
-                    confirmButtonText: value === 'aprobar' ? 'Sí, aprobar' : 'Sí, rechazar',
+                    confirmButtonText: value === 'ajustar' ? 'Solicitar ajuste' : (value === 'aprobar' ? 'Sí, aprobar' : 'Sí, rechazar'),
                     cancelButtonText: "Cancelar",
                 }).then((result) => {
                     if (result.isConfirmed) {

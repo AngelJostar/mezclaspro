@@ -39,6 +39,7 @@ class UnifiedRequestExportData
             $table->string('nombre_paciente')->nullable();
             $table->dateTime('fecha_entrega')->nullable();
         });
+        (require database_path('migrations/2026_09_14_000006_create_mixture_adjustments.php'))->up();
 
         foreach ([1, 2] as $id) {
             DB::table('solicitud_patients')->insert(['id' => $id, 'nombre_paciente' => 'Paciente '.$id, 'apellidos_paciente' => 'Nutricion']);

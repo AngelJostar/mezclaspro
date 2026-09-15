@@ -6,4 +6,4 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:', 'session.driver' => 'array']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 
-echo Tests\Fixtures\HospitalRequestTable::render($argv[1] ?? 'todas', 'Institucion', ($argv[2] ?? '') === 'empty');
+echo Tests\Fixtures\HospitalRequestTable::render($argv[1] ?? 'todas', $argv[3] ?? 'Institucion', ($argv[2] ?? '') === 'empty', $argv[4] ?? null);

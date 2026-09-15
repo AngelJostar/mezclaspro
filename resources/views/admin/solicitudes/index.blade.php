@@ -83,6 +83,10 @@
                             in_array($estado, ['cancelada', 'no_aprobada'], true) => 'Rechazada',
                             default => 'Sin acción',
                         };
+                        if (($isNutrition ? $solicitud : $mezcla)?->currentAdjustment()?->isPending()
+                            && ! in_array($estado, ['cancelada', 'no_aprobada'], true)) {
+                            $estado = 'en_ajuste';
+                        }
                     @endphp
                     <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($isNutrition ? $solicitud->id : $mezcla?->id, $isNutrition ? $solicitud->user?->hospital : $solicitud->hospital) }}">
                         <td class="px-2 py-2 text-center whitespace-nowrap">
@@ -90,6 +94,7 @@
                         </td>
                         <td class="px-2 py-2 text-center">{{ $requestRow['id'] ?? '—' }}</td>
                         <td class="px-2 py-2 text-center">{{ $requestRow['request_id'] }}</td>
+                        @include('admin.solicitudes._institution-cell', ['institutionHospital' => $isNutrition ? $solicitud->user?->hospital : $solicitud->hospital])
                         <td class="px-2 py-2 text-center">{{ $requestRow['hospital'] }}</td>
                         <td class="px-2 py-2 text-center">{{ $requestRow['patient'] }}</td>
                         <td class="w-[11rem] min-w-[11rem] max-w-[11rem] px-2 py-2 text-center whitespace-nowrap">
@@ -97,9 +102,6 @@
                         </td>
                         <td class="w-[11rem] min-w-[11rem] max-w-[11rem] px-2 py-2 text-center whitespace-nowrap">
                             {{ $requestRow['delivery_at']?->format('Y-m-d H:i') ?? '—' }}
-                        </td>
-                        <td class="px-2 py-2 text-center">
-                            @include('admin.solicitudes._status-badge', ['status' => $estado])
                         </td>
                         <td class="px-2 py-2 text-center">{{ $requestRow['lot'] ?: '—' }}</td>
 
@@ -114,34 +116,11 @@
                             </a>
                         </td>
 
-                        <td class="px-2 py-2 text-center whitespace-nowrap">
-                            @hasanyrole('Admin|Super Admin')
-                                @if ($approvalUrl)
-                                    <a href="{{ $approvalUrl }}"
-                                        data-approval-popup="approval-{{ $requestRow['type'] }}-{{ $requestRow['id'] ?? $requestRow['request_id'] }}"
-                                        class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
-                                        Aprobar
-                                    </a>
-                                @else
-                                    <button type="button" disabled
-                                        @class([
-                                            'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
-                                            'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
-                                            'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
-                                        ])>
-                                        {{ $approvalStateLabel }}
-                                    </button>
-                                @endif
-                            @else
-                                <button type="button" disabled
-                                    @class([
-                                        'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
-                                        'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
-                                        'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
-                                    ])>
-                                    {{ $approvalStateLabel }}
-                                </button>
-                            @endhasanyrole
+                        @include('admin.solicitudes._messages-cell', ['messageTarget' => $isNutrition ? $solicitud : $mezcla, 'messageKind' => $requestRow['type']])
+                        @include('admin.solicitudes._approval-cell', ['adjustmentTarget' => $isNutrition ? $solicitud : $mezcla])
+
+                        <td class="w-[7rem] px-2 py-2 text-center">
+                            @include('admin.solicitudes._status-badge', ['status' => $estado])
                         </td>
 
                         @unless ($isHospitalView)
@@ -354,7 +333,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $isHospitalView ? 11 : 19 }}" class="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colspan="{{ $isHospitalView ? 14 : 22 }}" class="px-4 py-10 text-center text-sm text-gray-500">
                             No se encontraron solicitudes.
                         </td>
                     </tr>

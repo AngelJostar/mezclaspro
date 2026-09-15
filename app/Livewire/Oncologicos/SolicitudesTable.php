@@ -3,7 +3,9 @@
 namespace App\Livewire\Oncologicos;
 
 use App\Models\Oncologicos\Mezcla;
+use App\Models\MixtureAdjustment;
 use App\Support\SolicitudStatusFilter;
+use App\Support\SolicitudMessageFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\Auth;
@@ -61,6 +63,7 @@ class SolicitudesTable extends Component
             ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
             ->select('mezclas.*')
             ->with([
+                'adjustment',
                 "solicitud.hospital.{$priceListRelation}.distributor",
                 'solicitud.hospital.instituciones',
                 'solicitud.user',
@@ -117,6 +120,19 @@ class SolicitudesTable extends Component
 
     private function applyStatusFilter(Builder $query): void
     {
+        if ($this->statusFilter === SolicitudStatusFilter::MESSAGING) {
+            SolicitudMessageFilter::apply($query, $this->requestType);
+            return;
+        }
+
+        if ($this->statusFilter === SolicitudStatusFilter::ADJUSTMENT) {
+            $query->whereRaw('('.$this->effectiveStatusExpression().') = ?', ['pendiente'])
+                ->whereHas('adjustment', fn (Builder $adjustment) => $adjustment
+                    ->whereIn('status', MixtureAdjustment::PENDING_STATUSES));
+
+            return;
+        }
+
         if ($this->statusFilter === SolicitudStatusFilter::PENDING) {
             $query->whereRaw('('.$this->effectiveStatusExpression().') = ?', ['pendiente']);
 

@@ -38,6 +38,9 @@
                             in_array($estado, ['cancelada', 'no_aprobada'], true) => 'Rechazada',
                             default => 'Sin acción',
                         };
+                        if ($solicitud->currentAdjustment()?->isPending() && ! in_array($estado, ['cancelada', 'no_aprobada'], true)) {
+                            $estado = 'en_ajuste';
+                        }
                     @endphp
 
                     <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->user?->hospital) }}">
@@ -49,6 +52,7 @@
 
                         <td class="px-2 py-2 text-center">{{ $solicitud->id }}</td>
 
+                        @include('admin.solicitudes._institution-cell', ['institutionHospital' => $solicitud->user?->hospital])
                         <td class="px-2 py-2 text-center">
                             {{ $solicitud->user->hospital->name ?? 'N/A' }}
                         </td>
@@ -69,10 +73,6 @@
                         </td>
 
                         <td class="px-2 py-2 text-center">
-                            @include('admin.solicitudes._status-badge', ['status' => $estado])
-                        </td>
-
-                        <td class="px-2 py-2 text-center">
                             {{ $solicitud->lote ?? '' }}
                         </td>
 
@@ -83,34 +83,11 @@
                             </a>
                         </td>
 
-                        <td class="px-2 py-2 text-center whitespace-nowrap">
-                            @hasanyrole('Admin|Super Admin')
-                                @if ($approvalUrl)
-                                    <a href="{{ $approvalUrl }}"
-                                        data-approval-popup="approval-nutricionales-{{ $solicitud->id }}"
-                                        class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
-                                        Aprobar
-                                    </a>
-                                @else
-                                    <button type="button" disabled
-                                        @class([
-                                            'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
-                                            'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
-                                            'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
-                                        ])>
-                                        {{ $approvalStateLabel }}
-                                    </button>
-                                @endif
-                            @else
-                                <button type="button" disabled
-                                    @class([
-                                        'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
-                                        'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
-                                        'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
-                                    ])>
-                                    {{ $approvalStateLabel }}
-                                </button>
-                            @endhasanyrole
+                        @include('admin.solicitudes._messages-cell', ['messageTarget' => $solicitud, 'messageKind' => 'nutricionales'])
+                        @include('admin.solicitudes._approval-cell', ['adjustmentTarget' => $solicitud])
+
+                        <td class="w-[7rem] px-2 py-2 text-center">
+                            @include('admin.solicitudes._status-badge', ['status' => $estado])
                         </td>
 
                         @unless ($isHospitalView)

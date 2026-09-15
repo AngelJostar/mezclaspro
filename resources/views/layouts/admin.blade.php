@@ -1,5 +1,5 @@
 @php
-    $isWorkflowPage = request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit')
+    $isWorkflowPage = request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit', 'admin.solicitudes.ajustes.show')
         && (request()->boolean('approval_popup') || request()->boolean('dispensing_popup'));
     $workflowCompleted = $isWorkflowPage && (session('approval_popup_done') || session('dispensing_popup_done'));
     $workflowPageConfig = [
@@ -66,6 +66,7 @@
 
     @unless ($isWorkflowPage)
         @include('layouts.includes.workflow-modal')
+        @include('admin.solicitudes._messages-dialog')
     @endunless
     <script type="application/json" id="workflow-page-config">@json($workflowPageConfig, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)</script>
 

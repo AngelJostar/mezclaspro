@@ -40,4 +40,33 @@ class SolicitudStatusFilterTest extends TestCase
     {
         $this->assertSame(SolicitudStatusFilter::ALL, SolicitudStatusFilter::normalize('desconocido'));
     }
+
+    public function test_adjustment_requires_a_pending_version_and_an_unapproved_request(): void
+    {
+        $this->assertSame('en_ajuste', SolicitudStatusFilter::normalize('en_ajuste'));
+        foreach (['pendiente', null, ''] as $state) {
+            $this->assertTrue(SolicitudStatusFilter::matches('en_ajuste', $state, false, true));
+            $this->assertFalse(SolicitudStatusFilter::matches('en_ajuste', $state));
+        }
+        foreach (['aprobada', 'dispensada', 'preparada', 'revisada', 'entregada', 'cancelada', 'no_aprobada'] as $state) {
+            $this->assertFalse(SolicitudStatusFilter::matches('en_ajuste', $state, false, true));
+        }
+        $keys = array_keys(SolicitudStatusFilter::options());
+        $index = array_search(SolicitudStatusFilter::ADJUSTMENT, $keys, true);
+        $this->assertSame(SolicitudStatusFilter::MESSAGING, $keys[$index - 1]);
+        $this->assertSame(SolicitudStatusFilter::PREPARATION, $keys[$index + 1]);
+    }
+
+    public function test_messaging_filter_requires_a_conversation_regardless_of_process_state(): void
+    {
+        $this->assertSame('mensajeria', SolicitudStatusFilter::normalize('mensajeria'));
+        foreach ([null, 'pendiente', 'aprobada', 'entregada', 'cancelada'] as $state) {
+            $this->assertTrue(SolicitudStatusFilter::matches('mensajeria', $state, false, false, true));
+            $this->assertFalse(SolicitudStatusFilter::matches('mensajeria', $state));
+        }
+        $keys = array_keys(SolicitudStatusFilter::options());
+        $index = array_search(SolicitudStatusFilter::MESSAGING, $keys, true);
+        $this->assertSame(SolicitudStatusFilter::PENDING, $keys[$index - 1]);
+        $this->assertSame(SolicitudStatusFilter::ADJUSTMENT, $keys[$index + 1]);
+    }
 }

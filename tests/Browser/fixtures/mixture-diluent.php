@@ -48,6 +48,11 @@ $diluentPresentationsPorDiluyente = [
 ];
 $catalogIdPorMedicineOncoId = [101 => 10];
 $presentacionesPorCatalogo = [];
+if (($argv[2] ?? '') === 'proposal-retry') {
+    session()->flashInput(['accion' => 'ajustar', 'adjustment_description' => 'Motivo conservado',
+        'mezcla_json' => json_encode(['volumen_dilucion' => 300, 'tiempo_infusion' => 120,
+            'medicamentos' => [['medicamento_id' => 10, 'dosis' => 175, 'diluyente_id' => 1, 'via_administracion_id' => 1]]])]);
+}
 if (in_array($argv[3] ?? '', ['remainders', 'proposal'], true)) {
     foreach ([10, 20] as $catalogId) {
         $amount = $catalogId === 10 ? 250 : 1000;

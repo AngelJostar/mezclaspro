@@ -24,6 +24,15 @@ class AgentCenter
         });
         (require database_path('migrations/2024_04_11_013606_create_permission_tables.php'))->up();
         (require database_path('migrations/2026_09_08_000003_create_ai_agents_table.php'))->up();
+        (require database_path('migrations/2026_09_11_000001_add_is_active_to_ai_agents_table.php'))->up();
+        (require database_path('migrations/2026_09_14_000005_add_agent_execution.php'))->up();
+        foreach (['clientes' => 'nombre', 'laboratories' => 'nombre', 'warehouses' => 'name'] as $name => $label) {
+            Schema::create($name, function (Blueprint $table) use ($name, $label) {
+                $table->id();
+                $table->string($label);
+                if ($name === 'warehouses') $table->unsignedBigInteger('laboratory_id')->nullable();
+            });
+        }
         $user = User::forceCreate(['name' => 'Administrador de prueba', 'username' => 'agentes-test']);
         $user->assignRole(Role::create(['name' => 'Super Admin', 'guard_name' => 'web']));
         auth()->login($user);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\Oncologicos;
 use App\Exports\Oncologicos\SolicitudesOncoExport as OncologicosSolicitudesOncoExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
+use App\Models\MixtureAdjustment;
 use App\Models\Oncologicos\MedicineOnco;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MezclaMedicamento;
@@ -35,12 +36,14 @@ class SolicitudController extends Controller
     {
         $requestType = $this->requestType($request->route('request_type') ?? $request->query('tipo_solicitud'));
         $pendingApprovalCount = $this->pendingApprovalCount($requestType);
+        $adjustmentPendingCount = $this->adjustmentPendingCount($requestType);
         $routePendingCount = $this->routePendingCount($requestType);
         $deliveryPendingCount = $this->deliveryPendingCount($requestType);
 
         return view('admin.oncologicos.solicitudes.index', compact(
             'requestType',
             'pendingApprovalCount',
+            'adjustmentPendingCount',
             'routePendingCount',
             'deliveryPendingCount'
         ));
@@ -76,6 +79,23 @@ class SolicitudController extends Controller
             ->whereRaw('('.$this->effectiveStatusExpression().') = ?', ['pendiente']);
 
         if (in_array($role, ['Cliente', 'Institucion'], true)) {
+            $query->where('oncology_requests.hospital_id', $user->hospital_id);
+        }
+
+        return (int) $query->count();
+    }
+
+    private function adjustmentPendingCount(string $requestType): int
+    {
+        $user = Auth::user();
+        $query = Mezcla::query()
+            ->join('solicitud_oncos as oncology_requests', 'oncology_requests.id', '=', 'mezclas.solicitud_id')
+            ->where('oncology_requests.tipo_solicitud', $requestType)
+            ->whereRaw('('.$this->effectiveStatusExpression().') = ?', ['pendiente'])
+            ->whereHas('adjustment', fn ($adjustment) => $adjustment
+                ->whereIn('status', MixtureAdjustment::AWAITING_APPROVAL_STATUSES));
+
+        if ($user->hasAnyRole(['Cliente', 'Institucion'])) {
             $query->where('oncology_requests.hospital_id', $user->hospital_id);
         }
 
@@ -1076,7 +1096,10 @@ class SolicitudController extends Controller
             $solicitud = SolicitudOnco::with([
                 'mezclas.medicamentos',
                 'mezclas.medicamentos.medicamentoOnco.catalog',
-            ])->findOrFail($id);
+            ])->lockForUpdate()->findOrFail($id);
+            foreach ($solicitud->mezclas()->lockForUpdate()->get() as $existingMixture) {
+                app(\App\Services\MixtureAdjustmentService::class)->assertWritable($existingMixture, $request);
+            }
 
             // =====================================================
             // Seguridad por hospital

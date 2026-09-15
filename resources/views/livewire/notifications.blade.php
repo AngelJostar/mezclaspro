@@ -22,7 +22,7 @@
                     <ul class="divide-y">
                         @foreach ($this->notifications as $notification)
                             <li @class(['bg-gray-200' => !$notification->read_at]) wire:click="readNotification('{{ $notification->id }}')">
-                                <x-dropdown-link href="{{ route('admin.nutricionales.solicitudes.index') }}">
+                                <x-dropdown-link href="{{ isset($notification->data['adjustment_id']) ? route('admin.solicitudes.ajustes.show', $notification->data['adjustment_id']) : route('admin.nutricionales.solicitudes.index') }}">
                                     {{ $notification->data['message'] }}
                                     <br>
                                     <span class="text-xs font-semibold">

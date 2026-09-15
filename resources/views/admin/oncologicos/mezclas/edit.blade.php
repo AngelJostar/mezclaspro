@@ -24,6 +24,10 @@
                         onclick="document.getElementById('accion').value='aprobar'">
                         APROBAR MEZCLA
                     </x-button>
+                    <x-button type="button" class="bg-orange-400 hover:bg-orange-500"
+                        data-adjustment-proposal-open>
+                        AJUSTAR MEZCLA
+                    </x-button>
                     <x-button form="formularioMezcla" type="submit" formnovalidate class="bg-red-600 hover:bg-red-700 focus:bg-red-700 active:bg-red-800 focus:ring-red-500"
                         onclick="document.getElementById('accion').value='rechazar'">
                         RECHAZAR MEZCLA
@@ -205,6 +209,16 @@
         </div>
     </form>
 
+    @if ($isApprovalMode && $isPendingApproval)
+        @include('admin.solicitudes._adjustment-proposal', [
+            'proposalId' => $mezcla->id,
+            'proposalHospital' => $solicitud->hospital?->name,
+            'proposalPatient' => $solicitud->nombre_paciente,
+            'proposalService' => $solicitud->servicio,
+            'proposalDoctor' => $solicitud->nombre_medico,
+        ])
+    @endif
+
     <script>
         const medicamentos = @json($medicamentos); // medicines_catalog (id=catalog_id)
         const infoAdicional = @json($infoAdicional); // indexado por catalog_id
@@ -214,6 +228,15 @@
         const diluentPresentationsPorDiluyente = @json($diluentPresentationsPorDiluyente ?? []);
         const catalogIdPorMedicineOncoId = @json($catalogIdPorMedicineOncoId ?? []); // { onco_id : catalog_id }
         const isDispensingMode = @json($isDispensingMode);
+        @if ($isApprovalMode && $isPendingApproval)
+            window.mixtureProposalConfig = {
+                kind: 'oncologicos', formId: 'formularioMezcla', original: mezcla,
+                medicines: medicamentos, info: infoAdicional, infusors, catalogIds: catalogIdPorMedicineOncoId,
+                previous: @json(old('accion') === 'ajustar' ? old('mezcla_json') : null),
+                reopen: @json(old('accion') === 'ajustar'),
+                errors: @json($errors->all()),
+            };
+        @endif
 
         let contadorFilas = 0;
 
@@ -1542,6 +1565,10 @@
             e.preventDefault();
 
             const accion = document.getElementById('accion')?.value || 'actualizar';
+            if (accion === 'ajustar') {
+                document.querySelector('[data-adjustment-proposal-open]')?.click();
+                return;
+            }
 
             if (accion === 'rechazar') {
                 if (!window.Swal) {
@@ -1720,15 +1747,15 @@
 
             const confirmTitle = requiresInventorySelection
                 ? '¿Guardar dispensacion?'
-                : (accion === 'aprobar' ? '¿Aprobar mezcla?' : '¿Actualizar mezcla?');
+                : (accion === 'aprobar' ? '¿Aprobar mezcla?' : (accion === 'ajustar' ? '¿Solicitar ajuste al hospital?' : '¿Actualizar mezcla?'));
             const confirmText = requiresInventorySelection
                 ? 'Se guardara la seleccion de presentaciones y la mezcla quedara dispensada.'
                 : (accion === 'aprobar'
                     ? 'La mezcla se marcara como aprobada sin seleccionar presentacion.'
-                    : 'Se guardaran los cambios realizados.');
+                    : (accion === 'ajustar' ? 'Se enviara una nueva version al hospital para su autorizacion.' : 'Se guardaran los cambios realizados.'));
             const confirmButtonText = requiresInventorySelection
                 ? 'Guardar Dispensacion'
-                : (accion === 'aprobar' ? 'Si, aprobar' : 'Si, actualizar');
+                : (accion === 'aprobar' ? 'Si, aprobar' : (accion === 'ajustar' ? 'Solicitar ajuste' : 'Si, actualizar'));
 
             Swal.fire({
                 title: confirmTitle,
@@ -1746,7 +1773,7 @@
             });
         });
 
-        @if ($errors->any())
+        @if ($errors->any() && old('accion') !== 'ajustar')
             Swal.fire({
                 icon: 'error',
                 title: 'Error al actualizar',

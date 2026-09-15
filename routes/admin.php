@@ -10,6 +10,9 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\Nutricionales\SolicitudController;
 use App\Http\Controllers\Admin\UnifiedSolicitudController;
+use App\Http\Controllers\Admin\SolicitudValidationController;
+use App\Http\Controllers\Admin\MixtureAdjustmentController;
+use App\Http\Controllers\Admin\MixtureMessageController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Admin\TrainingPersonnelController;
@@ -44,6 +47,10 @@ use Maatwebsite\Excel\Facades\Excel;
 
 //Debemos avisarle a laravel que hemos creado un nuevo archivo de rutas en providers
 Route::get('/dashboard', function () {
+    if (auth()->user()?->hasAnyRole(['Cliente', 'Institucion'])) {
+        return redirect()->route('admin.solicitudes.index');
+    }
+
     //     session()->flash('swal', [
     //         'icon'=>"error",
     //         'title'=>"Oops...",
@@ -56,8 +63,29 @@ Route::get('/dashboard', function () {
 Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
     ->name('solicitudes.index');
 
+Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
+Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
+Route::prefix('solicitudes/mensajes/{kind}/{target}')
+    ->where(['kind' => 'nutricionales|oncologicos|antibioticos', 'target' => '[0-9]+'])
+    ->group(function () {
+        Route::get('/', [MixtureMessageController::class, 'show'])->name('solicitudes.mensajes.show');
+        Route::post('/', [MixtureMessageController::class, 'store'])->middleware('throttle:30,1')->name('solicitudes.mensajes.store');
+        Route::post('/leidos', [MixtureMessageController::class, 'read'])->name('solicitudes.mensajes.read');
+    });
+Route::post('solicitudes/ajustes/{adjustment}/autorizar', [MixtureAdjustmentController::class, 'hospitalAuthorize'])->name('solicitudes.ajustes.authorize');
+Route::post('solicitudes/ajustes/{adjustment}/aprobar', [MixtureAdjustmentController::class, 'approve'])->name('solicitudes.ajustes.approve');
+Route::post('solicitudes/ajustes/{adjustment}/cancelar', [MixtureAdjustmentController::class, 'cancel'])->name('solicitudes.ajustes.cancel');
+Route::post('solicitudes/ajustes/{adjustment}/no-autorizar', [MixtureAdjustmentController::class, 'decline'])->name('solicitudes.ajustes.decline');
+Route::post('solicitudes/ajustes/{adjustment}/rechazar', [MixtureAdjustmentController::class, 'reject'])->name('solicitudes.ajustes.reject');
+
 Route::get('solicitudes/exportar', [UnifiedSolicitudController::class, 'exportarExcel'])
     ->name('solicitudes.exportar');
+
+Route::get('solicitudes/validaciones', [SolicitudValidationController::class, 'index'])
+    ->name('solicitudes.validaciones.index');
+
+Route::get('solicitudes/validaciones/exportar', [SolicitudValidationController::class, 'exportarExcel'])
+    ->name('solicitudes.validaciones.exportar');
 
 
 Route::get('nutricionales/solicitudes/exportar', [SolicitudController::class, 'exportarExcel'])
@@ -554,21 +582,34 @@ Route::patch('instituciones-reportes/formatos/{reportTemplate}/nombre', [Institu
     ->name('instituciones.reportes.formatos.rename')
     ->middleware($administrationReportsMiddleware);
 
-Route::get('instituciones-facturacion', [InstitucionBillingController::class, 'index'])
+Route::get('instituciones-reportes/facturacion', [InstitucionBillingController::class, 'index'])
     ->name('instituciones.billing.index')
     ->middleware($billingPendingMiddleware);
 
-Route::get('instituciones-facturacion/por-cobrar', [InstitucionBillingController::class, 'receivable'])
+Route::get('instituciones-reportes/facturacion/por-cobrar', [InstitucionBillingController::class, 'receivable'])
     ->name('instituciones.billing.receivable')
     ->middleware($billingReceivableMiddleware);
 
-Route::get('instituciones-facturacion/historial', [InstitucionBillingController::class, 'history'])
+Route::get('instituciones-reportes/facturacion/historial', [InstitucionBillingController::class, 'history'])
     ->name('instituciones.billing.history')
     ->middleware($billingHistoryMiddleware);
 
-Route::get('instituciones-facturacion/bitacora', [InstitucionBillingController::class, 'movementLog'])
+Route::get('instituciones-reportes/facturacion/bitacora', [InstitucionBillingController::class, 'movementLog'])
     ->name('instituciones.billing.movements')
     ->middleware($billingMovementsMiddleware);
+
+// Keep saved links working without changing their original access requirements.
+foreach ([
+    ['path' => '', 'section' => 'index', 'middleware' => $billingPendingMiddleware],
+    ['path' => '/por-cobrar', 'section' => 'receivable', 'middleware' => $billingReceivableMiddleware],
+    ['path' => '/historial', 'section' => 'history', 'middleware' => $billingHistoryMiddleware],
+    ['path' => '/bitacora', 'section' => 'movements', 'middleware' => $billingMovementsMiddleware],
+] as $legacyBillingRoute) {
+    Route::get('instituciones-facturacion'.$legacyBillingRoute['path'],
+        fn (\Illuminate\Http\Request $request) => redirect()->route('admin.instituciones.billing.'.$legacyBillingRoute['section'], $request->query()))
+        ->name('instituciones.billing.'.$legacyBillingRoute['section'].'.legacy')
+        ->middleware($legacyBillingRoute['middleware']);
+}
 
 Route::get('instituciones-facturacion/exportar', [InstitucionBillingController::class, 'exportarExcel'])
     ->name('instituciones.billing.export')

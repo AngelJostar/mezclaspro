@@ -3,6 +3,7 @@
 namespace Tests\Fixtures;
 
 use App\Models\Hospital;
+use App\Models\Institucion;
 use App\Models\Nutricionales\Solicitud;
 use App\Models\Nutricionales\SolicitudDetail;
 use App\Models\Nutricionales\SolicitudPatient;
@@ -16,11 +17,13 @@ use Spatie\Permission\Models\Role;
 
 class HospitalRequestTable
 {
-    public static function render(string $category, string $role, bool $empty = false): string
+    public static function render(string $category, string $role, bool $empty = false, ?string $adjustmentState = null, array $institutionNames = ['Institucion de prueba']): string
     {
         // Render real views with unsaved models; never change hospital or request records.
         $hospital = (new Hospital())->forceFill(['id' => 1, 'name' => 'Hospital de prueba']);
-        $hospital->setRelation('instituciones', new Collection());
+        $hospital->setRelation('instituciones', new Collection(array_map(
+            fn ($name) => (new Institucion())->forceFill(['nombre' => $name]), $institutionNames
+        )));
         $user = (new User())->forceFill(['id' => 1, 'name' => 'Usuario de prueba', 'hospital_id' => 1]);
         $user->setRelation('hospital', $hospital);
         $user->setRelation('roles', new Collection([(new Role())->forceFill(['name' => $role, 'guard_name' => 'web'])]));
@@ -42,6 +45,15 @@ class HospitalRequestTable
                 'lote' => 'LOTE-'.$type, 'fecha_entrega' => now()->addDay(), 'production_attempt' => 1,
             ])->setRelation('solicitud', $request)];
         });
+
+        if ($adjustmentState) {
+            foreach (collect([$nutrition])->concat($mixtures->values()) as $target) {
+                $target->adjustment_id = 1;
+                $target->estado = $adjustmentState === 'approved' ? 'aprobada' : 'pendiente';
+                $target->setRelation('adjustment', (new \App\Models\MixtureAdjustment())->forceFill(['id' => 1, 'status' => $adjustmentState]));
+                if ($target instanceof Mezcla) $target->solicitud->estado = $target->estado;
+            }
+        }
 
         if ($category === 'todas') {
             $requests = collect(['nutricionales', 'oncologicos', 'antibioticos'])->map(function ($type) use ($nutrition, $mixtures, $hospital) {

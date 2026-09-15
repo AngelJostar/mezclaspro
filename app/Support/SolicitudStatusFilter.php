@@ -8,6 +8,10 @@ final class SolicitudStatusFilter
 
     public const PENDING = 'pendientes';
 
+    public const MESSAGING = 'mensajeria';
+
+    public const ADJUSTMENT = 'en_ajuste';
+
     public const PREPARATION = 'preparacion';
 
     public const IN_ROUTE = 'ruta';
@@ -42,6 +46,8 @@ final class SolicitudStatusFilter
         return [
             self::ALL => 'Todas',
             self::PENDING => 'Pendientes',
+            self::MESSAGING => 'Mensajería',
+            self::ADJUSTMENT => 'En Ajuste',
             self::PREPARATION => 'En preparación',
             self::IN_ROUTE => 'En ruta',
             self::DELIVERED => 'Entregadas',
@@ -56,13 +62,15 @@ final class SolicitudStatusFilter
             : self::ALL;
     }
 
-    public static function matches(string $filter, ?string $status, bool $isInRoute = false): bool
+    public static function matches(string $filter, ?string $status, bool $isInRoute = false, bool $hasPendingAdjustment = false, bool $hasMessages = false): bool
     {
         $filter = self::normalize($filter);
         $status = self::normalizeStatus($status);
 
         return match ($filter) {
             self::PENDING => $status === 'pendiente',
+            self::MESSAGING => $hasMessages,
+            self::ADJUSTMENT => $status === 'pendiente' && $hasPendingAdjustment,
             self::PREPARATION => ! $isInRoute && in_array($status, self::PREPARATION_STATES, true),
             self::IN_ROUTE => $isInRoute && in_array($status, self::PREPARATION_STATES, true),
             self::DELIVERED => in_array($status, self::DELIVERED_STATES, true),

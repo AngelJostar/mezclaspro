@@ -30,6 +30,7 @@ class AgentCenterTest extends TestCase
         $this->assertSame('Revision de prueba', $agent->name);
         $this->assertSame("Paso uno\nPaso dos", $agent->instructions);
         $this->assertSame(auth()->id(), (int) $agent->created_by);
+        $this->assertFalse($agent->is_active);
         $component->assertSet('selection', (string) $agent->id);
         Livewire::test(AgentCenter::class)->assertSet('selection', '')->assertSee($agent->name)
             ->assertDontSee($agent->instructions)->call('selectAgent', (string) $agent->id)->assertSee($agent->instructions);
@@ -105,5 +106,67 @@ class AgentCenterTest extends TestCase
     public function test_invalid_selection_does_not_expose_another_record(): void
     {
         Livewire::test(AgentCenter::class)->call('selectAgent', 'unknown')->assertNotFound();
+    }
+
+    public function test_activation_persists_independently_and_repeated_requests_are_idempotent(): void
+    {
+        $agent = AiAgent::create(['name' => 'Auditoria', 'instructions' => 'Solo consultar']);
+        $other = AiAgent::create(['name' => 'Inventario']);
+        $component = Livewire::test(AgentCenter::class)->call('selectAgent', (string) $agent->id)
+            ->assertSeeHtml('aria-checked="false"')
+            ->call('setAgentActive', $agent->id, true)->assertSet('status', '')
+            ->assertDontSee('Agente activo')->assertDontSee('Agente inactivo')
+            ->assertSet('selection', (string) $agent->id)->assertSeeHtml('aria-checked="true"');
+        $this->assertTrue($agent->fresh()->is_active);
+        $this->assertFalse($other->fresh()->is_active);
+        $this->assertSame('Solo consultar', $agent->fresh()->instructions);
+        $component->call('setAgentActive', $agent->id, true);
+        $this->assertTrue($agent->fresh()->is_active);
+
+        Livewire::test(AgentCenter::class)->assertSet('selection', '')
+            ->call('selectAgent', 'all')->assertSeeHtml('aria-checked="true"')->assertSeeHtml('aria-checked="false"')
+            ->call('setAgentActive', $agent->id, false)->assertSet('selection', 'all')
+            ->assertSet('status', '')->assertSeeHtml('aria-checked="false"')
+            ->assertDontSee('Agente activo')->assertDontSee('Agente inactivo');
+        $this->assertFalse($agent->fresh()->is_active);
+        $this->assertSame(2, AiAgent::count());
+    }
+
+    public function test_editing_does_not_reset_activation(): void
+    {
+        $agent = AiAgent::create(['name' => 'Auditoria', 'is_active' => true]);
+        Livewire::test(AgentCenter::class)->call('editAgent', $agent->id)
+            ->set('agentDescription', 'Nueva descripcion')->call('saveAgent')->assertHasNoErrors();
+        $this->assertTrue($agent->fresh()->is_active);
+        $this->assertSame('Nueva descripcion', $agent->fresh()->description);
+    }
+
+    public function test_activation_requires_super_admin_on_every_request(): void
+    {
+        $agent = AiAgent::create(['name' => 'Auditoria']);
+        $component = Livewire::test(AgentCenter::class);
+        $this->actingAs(User::forceCreate(['name' => 'Sin permiso']));
+        $component->call('setAgentActive', $agent->id, true)->assertForbidden();
+        $this->assertFalse($agent->fresh()->is_active);
+    }
+
+    public function test_activation_of_a_missing_agent_is_not_found(): void
+    {
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        Livewire::test(AgentCenter::class)->call('setAgentActive', 999, true);
+    }
+
+    public function test_migration_preserves_existing_profiles_and_initializes_them_inactive(): void
+    {
+        $migration = require database_path('migrations/2026_09_11_000001_add_is_active_to_ai_agents_table.php');
+        $migration->down();
+        $id = \Illuminate\Support\Facades\DB::table('ai_agents')->insertGetId([
+            'name' => 'Perfil existente', 'description' => 'Descripcion existente', 'instructions' => 'Sin motor',
+        ]);
+        $migration->up();
+        $agent = AiAgent::findOrFail($id);
+        $this->assertFalse($agent->is_active);
+        $this->assertSame('Descripcion existente', $agent->description);
+        $this->assertSame('Sin motor', $agent->instructions);
     }
 }

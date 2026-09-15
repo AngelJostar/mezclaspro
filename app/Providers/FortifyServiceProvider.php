@@ -23,7 +23,8 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\Laravel\Fortify\Contracts\LoginResponse::class, \App\Http\Responses\LoginResponse::class);
+        $this->app->singleton(\Laravel\Fortify\Contracts\TwoFactorLoginResponse::class, \App\Http\Responses\TwoFactorLoginResponse::class);
     }
 
     /**
@@ -78,6 +79,7 @@ class FortifyServiceProvider extends ServiceProvider
                 ->first();
 
             if ($trainingUser
+                && ! $trainingUser->hasAnyRole(['Cliente', 'Institucion'])
                 && filled($trainingUser->training_password)
                 && Hash::check($password, $trainingUser->training_password)) {
                 if (! $trainingUser->is_active) {

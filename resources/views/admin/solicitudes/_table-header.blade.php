@@ -8,14 +8,17 @@
         ['key' => 'type', 'lines' => ['Tipo']],
         ['key' => 'id', 'lines' => ['ID mezcla']],
         ['key' => 'request_id', 'lines' => ['No. solicitud']],
+        ['key' => 'institution', 'lines' => ['Institución']],
         ['key' => 'hospital', 'lines' => ['Hospital']],
         ['key' => 'patient', 'lines' => ['Paciente']],
         ['key' => 'requested_at', 'lines' => ['Fecha y hora', 'de solicitud'], 'date' => true],
         ['key' => 'delivery_at', 'lines' => ['Fecha y hora', 'programada de entrega'], 'date' => true],
-        ['key' => 'status', 'lines' => ['Estado operativo']],
         ['key' => 'lot', 'lines' => ['Lote']],
         ['key' => 'view', 'lines' => ['Ver'], 'action' => true],
+        ['key' => 'messages', 'lines' => ['Mensajes'], 'action' => true],
         ['key' => 'edit', 'lines' => ['Aprobación']],
+        ['key' => 'adjustment', 'lines' => ['Ajustes']],
+        ['key' => 'status', 'lines' => ['Estado de', 'proceso']],
         ['key' => 'process', 'lines' => ['Próximo', 'proceso']],
         ['key' => 'complete_request', 'lines' => ['Solicitud completa'], 'action' => true],
         ['key' => 'inspection', 'lines' => ['Inspección'], 'action' => true],
@@ -28,8 +31,8 @@
 
     if ($isHospitalView) {
         $columns = array_filter($columns, fn ($column) => in_array($column['key'], [
-            'type', 'id', 'request_id', 'hospital', 'patient', 'requested_at',
-            'delivery_at', 'status', 'lot', 'view', 'edit',
+            'type', 'id', 'request_id', 'institution', 'hospital', 'patient', 'requested_at',
+            'delivery_at', 'status', 'lot', 'view', 'messages', 'edit', 'adjustment',
         ], true));
     }
 @endphp
@@ -45,6 +48,7 @@
             @class([
                 'px-2 py-2 text-center whitespace-nowrap',
                 'w-[13rem] min-w-[13rem] max-w-[13rem] leading-tight' => $column['date'] ?? false,
+                'w-[7rem] leading-tight' => $column['key'] === 'status',
                 'cursor-pointer' => $isSortable,
             ])
             @if ($column['action'] ?? false) data-command-column @endif

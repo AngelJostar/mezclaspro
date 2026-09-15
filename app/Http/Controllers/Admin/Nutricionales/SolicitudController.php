@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Nutricionales;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
+use App\Models\MixtureAdjustment;
 use App\Models\Warehouse;
 use App\Models\Nutricionales\Input;
 use App\Models\Nutricionales\Medicine;
@@ -128,6 +129,13 @@ class SolicitudController extends Controller
             $pendingApprovalCountQuery->where('user_id', $user->id);
         }
 
+        $adjustmentPendingCount = Solicitud::query()
+            ->when($user->hasAnyRole(['Cliente', 'Institucion']), fn ($query) => $query->where('user_id', $user->id))
+            ->where(fn ($query) => $query->whereNull('estado')->orWhereIn('estado', ['pendiente', '']))
+            ->whereHas('adjustment', fn ($adjustment) => $adjustment
+                ->whereIn('status', MixtureAdjustment::AWAITING_APPROVAL_STATUSES))
+            ->count();
+
         $pendingApprovalCount = $pendingApprovalCountQuery
             ->where(function ($query) {
                 $query->whereNull('estado')
@@ -185,6 +193,7 @@ class SolicitudController extends Controller
         return view('admin.nutricionales.solicitudes.index', compact(
             'solicitudes',
             'pendingApprovalCount',
+            'adjustmentPendingCount',
             'routePendingCount',
             'deliveryPendingCount'
         ));
@@ -1352,12 +1361,21 @@ class SolicitudController extends Controller
 
     public function update(Request $request, Solicitud $solicitud)
     {
+        $adjustments = app(\App\Services\MixtureAdjustmentService::class);
+        if (in_array($request->input('accion'), ['aprobar', 'rechazar', 'ajustar'], true)) {
+            $adjustments->assertCentral($request->user(), $solicitud);
+        }
         DB::beginTransaction();
 
         try {
+            $solicitud = Solicitud::lockForUpdate()->findOrFail($solicitud->id);
+            $adjustments->assertWritable($solicitud, $request);
             $estadoAnterior = $solicitud->estado ?? 'pendiente';
 
             $accion = $request->input('accion', 'actualizar');
+            if (in_array($accion, ['aprobar', 'ajustar'], true)) {
+                $adjustments->assertPending($solicitud);
+            }
 
             if ($accion === 'rechazar') {
                 if (($solicitud->estado ?? 'pendiente') !== 'pendiente') {
@@ -1478,6 +1496,16 @@ class SolicitudController extends Controller
 
             $solicitud_paciente['edad'] = $edad;
             $solicitud_detalles['tiempo_infusion_min'] = $tiempo_infusion_min;
+
+            if ($accion === 'ajustar') {
+                $adjustment = $adjustments->requestAdjustment($solicitud, $request);
+                DB::commit();
+                return redirect()->route('admin.solicitudes.ajustes.show', [
+                    'adjustment' => $adjustment, 'approval_popup' => $request->boolean('approval_popup') ? 1 : null,
+                ])->with('success', 'Ajuste solicitado al hospital.')
+                    ->with('approval_popup_done', $request->boolean('approval_popup'))
+                    ->with('approval_popup_return_to', route('admin.solicitudes.index'));
+            }
 
             $solicitud_patient_u = SolicitudPatient::findOrFail($solicitud->solicitud_patient_id);
             $solicitud_detail_u = SolicitudDetail::findOrFail($solicitud->solicitud_detail_id);
@@ -1763,6 +1791,7 @@ class SolicitudController extends Controller
             $registro->save();
 
             if ($accion === 'aprobar' && $estadoAnterior === 'pendiente') {
+                $adjustments->completeApproval($solicitud, $request);
                 $solicitud->estado = 'aprobada';
 
                 $this->generarLoteNutricional($solicitud);

@@ -421,12 +421,9 @@
 
     #logo-sidebar a,
     #logo-sidebar button {
+        justify-content: flex-start;
+        text-align: left;
         transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
-    }
-
-    #logo-sidebar a:hover,
-    #logo-sidebar button:hover {
-        transform: translateX(2px);
     }
 
     #logo-sidebar i {
@@ -436,6 +433,13 @@
 
     #logo-sidebar span {
         font-size: 0.95rem;
+    }
+
+    #logo-sidebar a,
+    #logo-sidebar button,
+    #logo-sidebar span:not([aria-label]) {
+        font-size: 0.8125rem;
+        text-align: left;
     }
 
     .oncology-mixture {

@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\AiAgent;
+use App\Services\Agents\AgentConfiguration;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +20,21 @@ class PromesaAiAgentsSeeder extends Seeder
                     'instructions' => $this->instructions($profile),
                 ]);
                 if ($agent->wasRecentlyCreated) $created++;
+                if ($agent->configuration === null) {
+                    $agent->configuration = AgentConfiguration::defaults($agent);
+                    $agent->save();
+                }
+                if ($agent->configured_by === null && $agent->configuration['rules'] === ['invoicing'] && $agent->configuration['sources'] === ['onco', 'nutri']) {
+                    $configuration = $agent->configuration;
+                    $configuration['sources'][] = 'billing';
+                    $agent->configuration = $configuration;
+                    $agent->save();
+                }
+                $legacy = 'Estado de ejecución: perfil configurado; sin motor de revisión ni programación automática conectados. Estas instrucciones definen su comportamiento cuando se habilite la ejecución.';
+                if (str_contains((string) $agent->instructions, $legacy)) {
+                    $agent->instructions = str_replace($legacy, $this->executionNote(), $agent->instructions);
+                    $agent->save();
+                }
             }
         });
 
@@ -29,7 +45,7 @@ class PromesaAiAgentsSeeder extends Seeder
     {
         return implode("\n\n", [
             'PROMESA | '.$profile['name'],
-            'Estado de ejecución: perfil configurado; sin motor de revisión ni programación automática conectados. Estas instrucciones definen su comportamiento cuando se habilite la ejecución.',
+            $this->executionNote(),
             'Prioridad de implementación: '.$profile['phase'],
             'Objetivo: '.$profile['description'],
             'Fuentes y alcance: '.$profile['sources'].' Consultar únicamente las centrales, subalmacenes y registros autorizados para la ejecución. No ampliar permisos ni consultar información ajena al alcance asignado.',
@@ -60,6 +76,11 @@ Formato de cada alerta:
 Evitar duplicados con una clave estable formada por agente, regla, registro, lote/intento y alcance; actualizar la evidencia de la misma incidencia en vez de generar otra. Informar la fecha de corte, fuentes consultadas y limitaciones. "Sin hallazgos" solo procede si la revisión se ejecutó con evidencia suficiente; sin acceso, informar "Revisión no ejecutada".
 TEXT,
         ]);
+    }
+
+    private function executionNote(): string
+    {
+        return 'Estado de ejecución: motor de auditoría disponible. Las reglas, fuentes, alcance, activación y permisos efectivos son los guardados en la configuración del agente. La interpretación de instrucciones con OpenAI requiere seleccionar ese motor y configurar una clave API. Las capacidades no conectadas se indican en la cobertura y límites de cada ejecución.';
     }
 
     private function profiles(): array

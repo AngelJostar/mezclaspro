@@ -7,6 +7,7 @@ config(['database.default' => 'sqlite', 'database.connections.sqlite.database' =
 Illuminate\Support\Facades\DB::purge('sqlite');
 Tests\Fixtures\InspectionWorkflow::seed();
 (require database_path('migrations/2026_09_08_000003_create_ai_agents_table.php'))->up();
+(require database_path('migrations/2026_09_14_000005_add_agent_execution.php'))->up();
 Spatie\Permission\Models\Role::create(['name' => 'Admin', 'guard_name' => 'web']);
 foreach ([90, 200] as $index => $dose) {
     App\Models\InspectionWaste::create([

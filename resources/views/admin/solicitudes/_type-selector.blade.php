@@ -33,47 +33,57 @@
             'visible' => $canViewOncology,
         ],
     ])->where('visible')->values();
+
+    if (isset($typeSelectorRoute)) {
+        $requestTypes = $requestTypes->map(fn (array $type) => array_replace($type, [
+            'route' => route($typeSelectorRoute, array_merge($typeQuery, $type['key'] === 'todas' ? [] : ['tipo' => $type['key']])),
+        ]));
+    }
 @endphp
 
-@once
-    <style>
-        .request-type-selector__item--active {
-            background-color: #2f4382 !important;
-            border-color: #2f4382 !important;
-            color: #ffffff !important;
-        }
-    </style>
-@endonce
-
-<nav class="mt-4 flex max-w-3xl items-center gap-2" aria-label="Tipo de solicitudes">
+<nav class="mt-4 flex max-w-4xl items-center gap-2" aria-label="Tipo de solicitudes" data-request-type-selector>
     <button type="button"
         onclick="document.getElementById('{{ $selectorId }}').scrollBy({ left: -240, behavior: 'smooth' })"
-        class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-blue-900 hover:bg-gray-50"
+        class="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-blue-900 shadow-sm transition hover:bg-gray-50"
         title="Anterior" aria-label="Tipo anterior">
-        <span class="text-lg leading-none" aria-hidden="true">&lsaquo;</span>
+        <i data-request-navigation-icon="chevron-left" class="h-4 w-4" aria-hidden="true"></i>
     </button>
 
     <div id="{{ $selectorId }}"
-        class="request-selector-scroll flex min-w-0 gap-2 overflow-x-auto scroll-smooth pb-1"
+        class="request-selector-scroll flex min-w-0 gap-2 overflow-x-auto scroll-smooth py-1"
         data-disable-sticky-x>
         @foreach ($requestTypes as $requestType)
             @php($isSelected = $selectedType === $requestType['key'])
             <a href="{{ $requestType['route'] }}"
                 @if ($isSelected) aria-current="page" @endif
                 @class([
-                    'flex h-11 min-w-32 shrink-0 items-center justify-center rounded-md border px-4 text-sm font-semibold transition',
-                    'request-type-selector__item--active' => $isSelected,
-                    'border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50' => !$isSelected,
+                    'flex h-16 w-48 shrink-0 items-center gap-3 rounded-lg border px-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600',
+                    'border-cyan-500 bg-cyan-50 text-gray-900 shadow-sm ring-1 ring-cyan-300' => $isSelected,
+                    'border-gray-200 bg-white text-gray-700 hover:border-cyan-300 hover:bg-gray-50' => !$isSelected,
                 ])>
-                {{ $requestType['label'] }}
+                <span aria-hidden="true"
+                    @class([
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-50 text-xs font-bold',
+                        'text-cyan-700' => $isSelected,
+                        'text-gray-500' => !$isSelected,
+                    ])>{{ Str::upper(Str::substr($requestType['label'], 0, 1)) }}</span>
+                <span class="min-w-0">
+                    <span class="block text-sm font-bold">{{ $requestType['label'] }}</span>
+                    @if ($isSelected)
+                        <span class="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">
+                            <i data-request-navigation-icon="check" class="h-3 w-3 shrink-0" aria-hidden="true"></i>
+                            Seleccionada
+                        </span>
+                    @endif
+                </span>
             </a>
         @endforeach
     </div>
 
     <button type="button"
         onclick="document.getElementById('{{ $selectorId }}').scrollBy({ left: 240, behavior: 'smooth' })"
-        class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-blue-900 hover:bg-gray-50"
+        class="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-blue-900 shadow-sm transition hover:bg-gray-50"
         title="Siguiente" aria-label="Tipo siguiente">
-        <span class="text-lg leading-none" aria-hidden="true">&rsaquo;</span>
+        <i data-request-navigation-icon="chevron-right" class="h-4 w-4" aria-hidden="true"></i>
     </button>
 </nav>

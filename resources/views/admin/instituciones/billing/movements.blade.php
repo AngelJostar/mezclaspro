@@ -21,11 +21,14 @@
     @endphp
 
     <div class="mb-4 mt-2">
-        <h1 class="text-2xl font-medium text-gray-800">Facturación / Bitácora</h1>
-        <p class="mt-1 text-sm text-gray-500">Consulta los movimientos de las remisiones y el usuario que los realizó.</p>
+        <h1 class="text-2xl font-medium text-gray-800">Panel Administrativo</h1>
     </div>
 
-    <section class="border border-slate-200 bg-white p-5 shadow-sm">
+    @include('admin.instituciones.partials.administration-carousel', ['administrationSection' => 'facturacion'])
+
+    <section class="border border-slate-200 bg-white p-5 shadow-sm" data-billing-section="movements">
+        @include('admin.instituciones.billing._navigation', ['billingSection' => 'movements'])
+
         <form method="GET" action="{{ route('admin.instituciones.billing.movements') }}"
             class="mb-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div class="xl:col-span-2">

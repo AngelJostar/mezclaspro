@@ -42,6 +42,17 @@ class InstitucionController extends Controller
 
     public function reportes(Request $request, InstitutionReportTemplateService $templates)
     {
+        $administrationSection = $request->query('seccion', 'reportes');
+        if ($administrationSection === 'facturacion') {
+            $billingSections = \App\Support\AdministrationNavigation::billingSections($request->user());
+            abort_if($billingSections === [], 403);
+
+            return redirect()->route(reset($billingSections)['route'], $request->only(['search', 'date_from', 'date_to']));
+        }
+        if (in_array($administrationSection, ['conciliacion', 'pagos'], true)) {
+            return view('admin.instituciones.administration-section', compact('administrationSection'));
+        }
+
         $dateRange = $request->validate([
             'daily_from' => ['nullable', 'required_with:daily_to', 'date_format:Y-m-d'],
             'daily_to' => ['nullable', 'required_with:daily_from', 'date_format:Y-m-d', 'after_or_equal:daily_from'],

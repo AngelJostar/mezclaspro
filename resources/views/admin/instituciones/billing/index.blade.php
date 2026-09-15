@@ -18,24 +18,13 @@
             'receivable' => route('admin.instituciones.billing.receivable'),
             default => route('admin.instituciones.billing.index'),
         };
-        $billingSectionLabel = match ($billingSection) {
-            'history' => 'Historial',
-            'receivable' => 'Por Cobrar',
-            default => 'Pendiente',
-        };
-        $billingSectionDescription = match ($billingSection) {
-            'history' => 'Consulta las solicitudes cuya facturacion ya fue concluida.',
-            'receivable' => 'Consulta las remisiones facturadas que estan listas para cobrar.',
-            default => 'Administra las solicitudes pendientes de concluir su facturacion.',
-        };
     @endphp
 
     <div class="mt-2 mb-4">
-        <h1 class="text-2xl font-medium text-gray-800">Facturacion / {{ $billingSectionLabel }}</h1>
-        <p class="text-sm text-gray-500 mt-1">
-            {{ $billingSectionDescription }}
-        </p>
+        <h1 class="text-2xl font-medium text-gray-800">Panel Administrativo</h1>
     </div>
+
+    @include('admin.instituciones.partials.administration-carousel', ['administrationSection' => 'facturacion'])
 
     <div id="billing-toast"
         class="pointer-events-none hidden"
@@ -95,6 +84,8 @@
                 'name' => $hospital->name,
             ])->values(),
         ])), @js($institucionId), @js($hospitalId))">
+        @include('admin.instituciones.billing._navigation')
+
         <div class="mb-3 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
             <div class="flex min-h-[58px] items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5">
                 <div class="min-w-0">

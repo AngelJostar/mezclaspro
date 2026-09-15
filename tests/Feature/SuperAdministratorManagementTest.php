@@ -1233,6 +1233,7 @@ class SuperAdministratorManagementTest extends TestCase
     private function createTestSchema(): void
     {
         (require database_path('migrations/2026_09_08_000003_create_ai_agents_table.php'))->up();
+        (require database_path('migrations/2026_09_14_000005_add_agent_execution.php'))->up();
 
         Schema::create('laboratory_purchase_orders', function (Blueprint $table) {
             $table->id();

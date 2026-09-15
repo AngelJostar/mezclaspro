@@ -2,6 +2,7 @@
     $normalizedStatus = Illuminate\Support\Str::lower(Illuminate\Support\Str::ascii($status ?? 'pendiente'));
 
     $statusKey = match (true) {
+        $normalizedStatus === 'en_ajuste' => 'en_ajuste',
         str_contains($normalizedStatus, 'no_aprob') => 'no_aprobada',
         str_contains($normalizedStatus, 'cancel') => 'cancelada',
         str_contains($normalizedStatus, 'entreg'), str_contains($normalizedStatus, 'finaliz') => 'entregada',
@@ -13,6 +14,7 @@
     };
 
     $statusClass = match ($statusKey) {
+        'en_ajuste' => 'bg-blue-100 text-blue-700',
         'aprobada' => 'bg-green-100 text-green-700',
         'dispensada', 'preparada', 'revisada' => 'bg-blue-100 text-blue-700',
         'entregada' => 'bg-gray-200 text-gray-700',
@@ -22,6 +24,7 @@
     };
 
     $statusLabel = match ($statusKey) {
+        'en_ajuste' => 'En ajuste',
         'aprobada' => 'Aprobada',
         'dispensada' => 'Dispensada',
         'preparada' => 'Preparada',
