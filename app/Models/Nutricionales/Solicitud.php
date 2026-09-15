@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Solicitud extends Model
 {
+    use \App\Models\Concerns\HasMixtureAdjustment;
     use HasFactory;
 
     protected $fillable = [
@@ -63,4 +64,3 @@ class Solicitud extends Model
             ->where('origen_tipo', 'nutricional_solicitud');
     }
 }
-

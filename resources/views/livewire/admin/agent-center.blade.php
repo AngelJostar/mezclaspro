@@ -15,6 +15,13 @@
     <div class="agent-center-heading">
         <h2 id="agent-center-title">Centro de agentes</h2>
         <span class="agent-count">{{ $agents->count() }}</span>
+        <button type="button" class="agent-edit" wire:click="toggleProviderForm" title="Configurar OpenAI" aria-label="Configurar OpenAI">
+            <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="settings"></i></span>
+        </button>
+        <div class="agent-state-legend" aria-label="Estados de los agentes">
+            <span><i class="agent-state-dot" data-active="true" aria-hidden="true"></i> Activo</span>
+            <span><i class="agent-state-dot" data-active="false" aria-hidden="true"></i> Inactivo</span>
+        </div>
     </div>
 
     <div class="agent-carousel">
@@ -33,9 +40,13 @@
             @foreach ($agents as $agent)
                 <button type="button" class="agent-choice" wire:key="agent-button-{{ $agent->id }}"
                     wire:click="selectAgent('{{ $agent->id }}')" data-agent-select="{{ $agent->id }}"
+                    data-active="{{ $agent->is_active ? 'true' : 'false' }}"
                     aria-pressed="{{ $selection === (string) $agent->id ? 'true' : 'false' }}"
                     aria-expanded="{{ $selection === 'all' || $selection === (string) $agent->id ? 'true' : 'false' }}"
-                    aria-controls="agent-information" title="{{ $agent->name }}">
+                    aria-controls="agent-information" aria-label="{{ $agent->name }}" aria-describedby="agent-state-{{ $agent->id }}"
+                    title="{{ $agent->name }}: {{ $agent->is_active ? 'Activo' : 'Inactivo' }}">
+                    <span class="agent-state-dot agent-choice-state" data-active="{{ $agent->is_active ? 'true' : 'false' }}" aria-hidden="true"></span>
+                    <span class="sr-only" id="agent-state-{{ $agent->id }}">{{ $agent->is_active ? 'Activo' : 'Inactivo' }}</span>
                     <span class="agent-choice-icon" aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="bot"></i></span>
                     <span class="agent-choice-name">{{ $agent->name }}</span>
                 </button>
@@ -54,21 +65,43 @@
     @if ($status)
         <p class="agent-status" role="status">{{ $status }}</p>
     @endif
+    @error('execution')<p class="agent-error" role="alert">{{ $message }}</p>@enderror
+    @error('agentConfig')<p class="agent-error" role="alert">{{ $message }}</p>@enderror
     <div id="agent-information" aria-live="polite">
         @if ($selection !== '')
             @forelse ($agents->filter(fn ($agent) => $selection === 'all' || $selection === (string) $agent->id) as $agent)
                 <article class="agent-information" wire:key="agent-information-{{ $agent->id }}" data-agent-information="{{ $agent->id }}">
                     <div class="agent-information-heading">
-                        <h3>{{ $agent->name }}</h3>
+                        <div class="agent-information-title">
+                            <h3>{{ $agent->name }}</h3>
+                            <div class="agent-activation" data-active="{{ $agent->is_active ? 'true' : 'false' }}">
+                                <button type="button" class="agent-switch" role="switch"
+                                    aria-checked="{{ $agent->is_active ? 'true' : 'false' }}"
+                                    aria-label="Estado de {{ $agent->name }}"
+                                    title="{{ $agent->is_active ? 'Desactivar agente' : 'Activar agente' }}"
+                                    wire:click="setAgentActive({{ $agent->id }}, {{ $agent->is_active ? 'false' : 'true' }})"
+                                    wire:loading.attr="disabled" wire:target="setAgentActive">
+                                    <span class="agent-switch-text" aria-hidden="true">{{ $agent->is_active ? 'ON' : 'OFF' }}</span>
+                                    <span class="agent-switch-thumb" aria-hidden="true"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="agent-heading-actions">
+                        <button type="button" class="agent-command" wire:click="runAgent({{ $agent->id }})" wire:loading.attr="disabled" wire:target="runAgent" @disabled(! $agent->is_active)>
+                            <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="play"></i></span>
+                            <span wire:loading.remove wire:target="runAgent({{ $agent->id }})">Ejecutar ahora</span><span wire:loading wire:target="runAgent({{ $agent->id }})">Ejecutando...</span>
+                        </button>
                         <button type="button" class="agent-edit" wire:click="editAgent({{ $agent->id }})"
                             aria-label="Editar agente {{ $agent->name }}" title="Editar agente">
                             <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="pencil"></i></span>
                         </button>
+                        </div>
                     </div>
                     <dl class="agent-information-grid">
                         <div><dt>Descripción</dt><dd>{{ $agent->description ?? 'Sin descripción' }}</dd></div>
                         <div><dt>Instrucciones</dt><dd class="agent-instructions" tabindex="0">{{ $agent->instructions ?? 'Sin instrucciones' }}</dd></div>
                     </dl>
+                    @include('livewire.admin.agent-center-details')
                 </article>
             @empty
                 <p class="agent-empty">No hay agentes registrados.</p>
@@ -107,6 +140,7 @@
                                 aria-invalid="{{ $errors->has('agentInstructions') ? 'true' : 'false' }}" aria-describedby="agent-instructions-error"></textarea>
                             <p id="agent-instructions-error" class="agent-error" role="alert">@error('agentInstructions'){{ $message }}@enderror</p>
                         </div>
+                        @include('livewire.admin.agent-center-config')
                     </div>
                     <footer class="agent-modal-actions">
                         <button type="button" class="agent-cancel" wire:click="closeAgentForm" wire:loading.attr="disabled" wire:target="saveAgent">Cancelar</button>
@@ -119,4 +153,5 @@
             </section>
         </div>
     @endif
+    @include('livewire.admin.agent-center-dialogs')
 </section>

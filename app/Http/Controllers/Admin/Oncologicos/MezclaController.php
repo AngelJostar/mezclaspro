@@ -1208,6 +1208,11 @@ class MezclaController extends Controller
 
         $user = auth()->user();
         $accion = (string) $request->input('accion', 'actualizar');
+        $adjustments = app(\App\Services\MixtureAdjustmentService::class);
+        $adjustments->assertWritable($mezcla, $request);
+        if (in_array($accion, ['aprobar', 'rechazar', 'ajustar'], true)) {
+            $adjustments->assertCentral($user, $mezcla);
+        }
 
         $hospitalUserId      = (int) ($user->hospital_id ?? 0);
         $hospitalSolicitudId = (int) ($mezcla->solicitud->hospital_id ?? 0);
@@ -1222,7 +1227,10 @@ class MezclaController extends Controller
                 return back()->withErrors(['error' => 'Solo una mezcla pendiente puede rechazarse.']);
             }
 
-            DB::transaction(function () use ($mezcla) {
+            DB::transaction(function () use ($mezcla, $request, $adjustments) {
+                $mezcla = Mezcla::lockForUpdate()->findOrFail($mezcla->id);
+                $adjustments->assertWritable($mezcla, $request);
+                $adjustments->assertPending($mezcla);
                 $mezcla->estado = 'cancelada';
                 $mezcla->save();
             });
@@ -1392,6 +1400,15 @@ class MezclaController extends Controller
             'fecha_entrega.after_or_equal' => 'La fecha de entrega no puede ser anterior a hoy.',
         ]);
 
+        if ($accion === 'ajustar') {
+            $adjustment = $adjustments->requestAdjustment($mezcla, $request);
+            return redirect()->route('admin.solicitudes.ajustes.show', [
+                'adjustment' => $adjustment, 'approval_popup' => $request->boolean('approval_popup') ? 1 : null,
+            ])->with('success', 'Ajuste solicitado al hospital.')
+                ->with('approval_popup_done', $request->boolean('approval_popup'))
+                ->with('approval_popup_return_to', route('admin.solicitudes.index'));
+        }
+
         $mezclaData = json_decode($request->mezcla_json, true);
 
         $resolverMedicineOnco = function (int $idRecibido) {
@@ -1414,6 +1431,10 @@ class MezclaController extends Controller
         try {
             $shouldDispense = $accion === 'dispensar';
             $mezcla = Mezcla::query()->lockForUpdate()->findOrFail($mezcla->id);
+            $adjustments->assertWritable($mezcla, $request);
+            if ($accion === 'aprobar') {
+                $adjustments->assertPending($mezcla);
+            }
             if ($request->filled('production_attempt')
                 && (int) $request->input('production_attempt') !== (int) $mezcla->production_attempt) {
                 throw new \Exception('La mezcla inició otro intento de fabricación. Vuelve a abrirla.');
@@ -1738,6 +1759,7 @@ class MezclaController extends Controller
             }
 
             if ($accion === 'aprobar') {
+                $adjustments->completeApproval($mezcla, $request);
                 $mezcla->estado = 'aprobada';
                 $generarLotePorMezcla($mezcla);
                 $mezcla->save();

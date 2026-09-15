@@ -75,6 +75,9 @@
                             </button>
                         </div>
                     </th>
+                    @if ($canViewHospitalCredentials)
+                        <th scope="col" class="px-6 py-3" data-command-column>Usuario y contrase&ntilde;a</th>
+                    @endif
                     <th scope="col" class="px-6 py-3 text-center">Editar</th>
                 </tr>
             </thead>
@@ -130,6 +133,11 @@
                                 </button>
                             </form>
                         </td>
+                        @if ($canViewHospitalCredentials)
+                            <td class="px-6 py-4 hospital-credentials" data-column-filter-value="">
+                                @include('admin.hospitals._credentials', ['users' => $hospital->users])
+                            </td>
+                        @endif
                         <td class="px-6 py-4 text-center whitespace-nowrap">
                             <x-table-action-link href="{{ route('admin.hospitals.edit', $hospital) }}" icon="fa-solid fa-pen">
                                 Editar
@@ -193,6 +201,32 @@
 
     @push('css')
         <style>
+            .hospital-credentials {
+                min-width: 220px;
+            }
+
+            .hospital-credential + .hospital-credential {
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 1px solid #e5e7eb;
+            }
+
+            .hospital-credential dt {
+                margin-top: 4px;
+                color: #64748b;
+                font-size: 11px;
+            }
+
+            .hospital-credential dd {
+                margin: 0;
+                max-width: 280px;
+                color: #172b4d;
+                font-size: 12px;
+                line-height: 1.5;
+                overflow-wrap: anywhere;
+                white-space: pre-wrap;
+            }
+
             #change-institution-dialog {
                 margin: auto;
                 width: min(440px, calc(100vw - 32px));
@@ -219,6 +253,9 @@
     @endpush
 
     @push('js')
+        @php
+            $hospitalActionColumns = $canViewHospitalCredentials ? [3, 6, 7] : [3, 6];
+        @endphp
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 const institutionDialog = document.getElementById('change-institution-dialog');
@@ -273,7 +310,7 @@
                     paging: false,
                     lengthChange: false,
                     info: false,
-                    columnDefs: [{ targets: [3, 6], orderable: false, searchable: false }],
+                    columnDefs: [{ targets: @json($hospitalActionColumns), orderable: false, searchable: false }],
                     order: [
                         [0, 'desc']
                     ],

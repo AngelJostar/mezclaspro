@@ -24,7 +24,7 @@
                                 'bg-blue-50' => !$notification->read_at && ($notification->data['severity'] ?? null) !== 'error',
                                 'bg-red-50' => !$notification->read_at && ($notification->data['severity'] ?? null) === 'error',
                             ]) wire:click="readNotification('{{ $notification->id }}')">
-                                <x-dropdown-link href="{{ $notification->data['url'] ?? route('admin.nutricionales.solicitudes.index') }}">
+                                <x-dropdown-link href="{{ $notification->data['url'] ?? (isset($notification->data['adjustment_id']) ? route('admin.solicitudes.ajustes.show', $notification->data['adjustment_id']) : route('admin.nutricionales.solicitudes.index')) }}">
                                     <span class="flex items-start gap-2">
                                         <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full {{ ($notification->data['severity'] ?? null) === 'error' ? 'bg-red-500' : (($notification->data['severity'] ?? null) === 'success' ? 'bg-emerald-500' : 'bg-blue-500') }}"></span>
                                         <span>

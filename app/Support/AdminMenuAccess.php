@@ -73,7 +73,7 @@ final class AdminMenuAccess
                 'label' => 'Instituciones',
                 'icon' => 'fa-building-columns',
                 'children' => [
-                    ['permission' => 'menu.instituciones.list', 'label' => 'Lista de instituciones'],
+                    ['permission' => 'menu.instituciones.list', 'label' => 'Instituciones'],
                     ['permission' => 'menu.instituciones.hospitals', 'label' => 'Hospitales'],
                 ],
             ],
@@ -262,6 +262,11 @@ final class AdminMenuAccess
             return false;
         }
 
+        if ($user->hasAnyRole(['Cliente', 'Institucion'])
+            && ($permission === 'menu.capacitaciones' || str_starts_with($permission, 'menu.capacitaciones.'))) {
+            return false;
+        }
+
         return $user->hasRole(self::GENERAL_ROLE)
             ? $user->can($permission)
             : $legacyAccess;
@@ -276,6 +281,7 @@ final class AdminMenuAccess
         }
 
         if (str_starts_with($routeName, 'admin.instituciones.billing.')) {
+            $routeName = str_ends_with($routeName, '.legacy') ? substr($routeName, 0, -7) : $routeName;
             return match ($routeName) {
                 'admin.instituciones.billing.receivable' => 'menu.facturacion.receivable',
                 'admin.instituciones.billing.history',

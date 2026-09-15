@@ -54,6 +54,7 @@ class InstitucionBillingController extends Controller
         $toStage = trim((string) $request->query('to_stage', ''));
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
+        $billingDueCounts = $this->pendingBilling?->counts() ?? ['yellow' => 0, 'red' => 0];
         $stages = [
             InstitutionBilling::STAGE_PENDING,
             InstitutionBilling::STAGE_RECEIVABLE,
@@ -91,7 +92,8 @@ class InstitucionBillingController extends Controller
             'fromStage',
             'toStage',
             'dateFrom',
-            'dateTo'
+            'dateTo',
+            'billingDueCounts'
         ));
     }
 

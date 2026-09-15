@@ -23,13 +23,14 @@ class PromesaAiAgentsTest extends TestCase
         $agents = AiAgent::all();
         $this->assertCount(12, $agents);
         foreach ($agents as $agent) {
+            $this->assertFalse($agent->is_active);
             $this->assertNotEmpty($agent->description);
             $this->assertLessThanOrEqual(120, mb_strlen($agent->name));
             $this->assertLessThanOrEqual(1000, mb_strlen($agent->description));
             $this->assertLessThanOrEqual(20000, mb_strlen($agent->instructions));
             foreach (['Fuentes y alcance:', 'Cuándo revisar', 'Reglas de alerta:', 'Cálculo del impacto:',
                 'Responsable de seguimiento sugerido:', 'Acciones permitidas', 'Formato de cada alerta:',
-                'Evidencia:', 'Prioridad y motivo:', 'Seguimiento:', 'sin motor de revisión',
+                'Evidencia:', 'Prioridad y motivo:', 'Seguimiento:', 'motor de auditoría disponible',
                 'No ejecutar ajustes de inventario', 'No convertir los ejemplos', 'No inventar costos',
             ] as $requirement) {
                 $this->assertStringContainsString($requirement, $agent->instructions, $agent->name);
@@ -42,7 +43,7 @@ class PromesaAiAgentsTest extends TestCase
 
     public function test_repeating_the_seed_preserves_existing_profiles_and_user_edits(): void
     {
-        $existing = AiAgent::create(['name' => 'Auditoría de consumos', 'description' => 'Configuración propia', 'instructions' => 'No sobrescribir']);
+        $existing = AiAgent::create(['name' => 'Auditoría de consumos', 'description' => 'Configuración propia', 'instructions' => 'No sobrescribir', 'is_active' => true]);
         $custom = AiAgent::create(['name' => 'Agente personalizado']);
         (new PromesaAiAgentsSeeder())->run();
         $snapshot = AiAgent::orderBy('id')->get()->toArray();
@@ -51,6 +52,7 @@ class PromesaAiAgentsTest extends TestCase
         $this->assertSame(13, AiAgent::count());
         $this->assertSame('Configuración propia', $existing->fresh()->description);
         $this->assertSame('No sobrescribir', $existing->fresh()->instructions);
+        $this->assertTrue($existing->fresh()->is_active);
         $this->assertNotNull($custom->fresh());
     }
 

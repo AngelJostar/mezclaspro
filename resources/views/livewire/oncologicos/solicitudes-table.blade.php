@@ -44,6 +44,9 @@
                             in_array($estado, ['cancelada', 'no_aprobada'], true) => 'Rechazada',
                             default => 'Sin acción',
                         };
+                        if ($mezcla->currentAdjustment()?->isPending() && ! in_array($estado, ['cancelada', 'no_aprobada'], true)) {
+                            $estado = 'en_ajuste';
+                        }
                     @endphp
 
                     <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($mezcla->id, $solicitud->hospital) }}">
@@ -53,6 +56,7 @@
 
                         <td class="px-2 py-2 text-center">{{ $mezcla->id }}</td>
                         <td class="px-2 py-2 text-center">{{ $solicitud->id }}</td>
+                        @include('admin.solicitudes._institution-cell', ['institutionHospital' => $solicitud->hospital])
                         <td class="px-2 py-2 text-center">{{ $solicitud->hospital->name ?? 'N/A' }}</td>
                         <td class="px-2 py-2 text-center">{{ $solicitud->nombre_paciente }}</td>
 
@@ -66,9 +70,6 @@
                                 : '—' }}
                         </td>
 
-                        <td class="px-2 py-2 text-center">
-                            @include('admin.solicitudes._status-badge', ['status' => $estado])
-                        </td>
                         <td class="px-2 py-2 text-center">{{ $mezcla->lote ?? '—' }}</td>
 
                         <td class="whitespace-nowrap px-2 py-2 text-center">
@@ -78,34 +79,11 @@
                             </a>
                         </td>
 
-                        <td class="whitespace-nowrap px-2 py-2 text-center">
-                            @hasanyrole('Admin|Super Admin')
-                                @if ($approvalUrl)
-                                    <a href="{{ $approvalUrl }}"
-                                        data-approval-popup="approval-{{ $solicitud->tipo_solicitud ?? 'oncologicos' }}-{{ $mezcla->id }}"
-                                        class="inline-flex items-center justify-center rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200">
-                                        Aprobar
-                                    </a>
-                                @else
-                                    <button type="button" disabled
-                                        @class([
-                                            'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
-                                            'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
-                                            'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
-                                        ])>
-                                        {{ $approvalStateLabel }}
-                                    </button>
-                                @endif
-                            @else
-                                <button type="button" disabled
-                                    @class([
-                                        'inline-flex cursor-not-allowed items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
-                                        'bg-green-600 text-white' => $approvalStateLabel === 'Aprobada',
-                                        'bg-gray-300 text-gray-500 opacity-80' => $approvalStateLabel !== 'Aprobada',
-                                    ])>
-                                    {{ $approvalStateLabel }}
-                                </button>
-                            @endhasanyrole
+                        @include('admin.solicitudes._messages-cell', ['messageTarget' => $mezcla, 'messageKind' => $solicitud->tipo_solicitud])
+                        @include('admin.solicitudes._approval-cell', ['adjustmentTarget' => $mezcla])
+
+                        <td class="w-[7rem] px-2 py-2 text-center">
+                            @include('admin.solicitudes._status-badge', ['status' => $estado])
                         </td>
 
                         @unless ($isHospitalView)
@@ -226,7 +204,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $isHospitalView ? 11 : 19 }}" class="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colspan="{{ $isHospitalView ? 14 : 22 }}" class="px-4 py-10 text-center text-sm text-gray-500">
                             No se encontraron mezclas para esta vista.
                         </td>
                     </tr>

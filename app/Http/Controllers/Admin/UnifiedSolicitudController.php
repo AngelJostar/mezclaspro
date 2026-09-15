@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\UnifiedSolicitudesExport;
 use App\Http\Controllers\Controller;
 use App\Models\DistributionDeliverySchedule;
+use App\Models\MixtureAdjustment;
 use App\Models\Nutricionales\Solicitud as NutritionSolicitud;
 use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\SolicitudOnco;
 use App\Support\SolicitudStatusFilter;
+use App\Support\SolicitudMessageFilter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -41,7 +43,7 @@ class UnifiedSolicitudController extends Controller
 
         if ($canViewNutrition) {
             $nutritionQuery = NutritionSolicitud::query()
-                ->with(['user.hospital.instituciones', 'solicitud_detail', 'solicitud_patient']);
+                ->with(['user.hospital.instituciones', 'solicitud_detail', 'solicitud_patient', 'adjustment']);
 
             if ($isHospitalUser) {
                 $nutritionQuery->where('user_id', $user->id);
@@ -81,7 +83,8 @@ class UnifiedSolicitudController extends Controller
                     'hospital.instituciones',
                     'user',
                     'mezclas' => fn ($query) => $query
-                        ->select('id', 'solicitud_id', 'lote', 'estado', 'remision', 'fecha_entrega', 'production_attempt')
+                        ->select('id', 'solicitud_id', 'lote', 'estado', 'remision', 'fecha_entrega', 'production_attempt', 'adjustment_id')
+                        ->with('adjustment')
                         ->orderBy('id'),
                 ])
                 ->whereIn('tipo_solicitud', ['oncologicos', 'antibioticos']);
@@ -134,6 +137,17 @@ class UnifiedSolicitudController extends Controller
             ))
             ->count();
 
+        $adjustmentPendingCount = $requests->filter(function (array $row) {
+            $target = $row['mixture'] ?? ($row['type'] === 'nutricionales' ? $row['model'] : null);
+
+            return SolicitudStatusFilter::matches(
+                SolicitudStatusFilter::ADJUSTMENT,
+                $row['status'],
+                false,
+                in_array($target?->currentAdjustment()?->status, MixtureAdjustment::AWAITING_APPROVAL_STATUSES, true)
+            );
+        })->count();
+
         $routeScheduleKeys = $this->routeScheduleKeys($requests);
         $routePendingCount = $requests
             ->filter(function (array $row) use ($routeScheduleKeys) {
@@ -158,14 +172,27 @@ class UnifiedSolicitudController extends Controller
             })
             ->count();
 
+        $messageKeys = collect();
+        if ($statusFilter === SolicitudStatusFilter::MESSAGING) {
+            foreach ($requests->groupBy('type') as $kind => $rows) {
+                $query = $kind === 'nutricionales' ? NutritionSolicitud::query() : Mezcla::query();
+                $query->whereKey($rows->pluck('id')->filter()->unique()->all());
+                SolicitudMessageFilter::apply($query, $kind);
+                foreach ($query->pluck('id') as $id) $messageKeys->put($kind.':'.$id, true);
+            }
+        }
+
         if ($statusFilter !== SolicitudStatusFilter::ALL) {
-            $requests = $requests->filter(function (array $row) use ($routeScheduleKeys, $statusFilter) {
+            $requests = $requests->filter(function (array $row) use ($routeScheduleKeys, $statusFilter, $messageKeys) {
                 $routeKey = $this->routeKey($row['hospital_id'], $row['delivery_at']);
+                $target = $row['mixture'] ?? ($row['type'] === 'nutricionales' ? $row['model'] : null);
 
                 return SolicitudStatusFilter::matches(
                     $statusFilter,
                     $row['status'],
-                    $routeKey !== null && $routeScheduleKeys->has($routeKey)
+                    $routeKey !== null && $routeScheduleKeys->has($routeKey),
+                    (bool) $target?->currentAdjustment()?->isPending(),
+                    $messageKeys->has($row['type'].':'.$row['id'])
                 );
             });
         }
@@ -178,6 +205,7 @@ class UnifiedSolicitudController extends Controller
             'requests',
             'statusFilter',
             'pendingApprovalCount',
+            'adjustmentPendingCount',
             'routePendingCount',
             'deliveryPendingCount',
             'canViewNutrition',

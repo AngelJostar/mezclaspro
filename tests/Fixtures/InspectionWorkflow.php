@@ -16,6 +16,11 @@ class InspectionWorkflow
         if (DB::getDriverName() !== 'sqlite' || DB::connection()->getDatabaseName() !== ':memory:') {
             throw new \RuntimeException('Inspection fixtures require an in-memory database.');
         }
+        // Browser fixtures must never populate the application's permission cache.
+        config(['permission.cache.store' => 'array']);
+        app(\Spatie\Permission\PermissionRegistrar::class)->initializeCache();
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+
         foreach ([
             'users' => ['name', 'lastname', 'username', 'hospital_id', 'email', 'password'],
             'personnel_profiles' => ['user_id', 'positions'],

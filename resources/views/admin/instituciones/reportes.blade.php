@@ -6,11 +6,13 @@
     @endphp
 
     <div class="mt-2 mb-4">
-        <h1 class="text-2xl font-medium text-gray-800">Reportes de instituciones</h1>
+        <h1 class="text-2xl font-medium text-gray-800">Panel Administrativo</h1>
         <p class="text-sm text-gray-500 mt-1">
             Desde aqui puedes descargar los reportes generales por institucion.
         </p>
     </div>
+
+    @include('admin.instituciones.partials.administration-carousel', ['administrationSection' => 'reportes'])
 
     <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-3">
         <div class="mb-3 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">

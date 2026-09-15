@@ -12,10 +12,10 @@ class SolicitudColumnFiltersTest extends TestCase
         $document = new \DOMDocument();
         @$document->loadHTML('<?xml encoding="UTF-8"><table><thead>'.$html.'</thead></table>');
         $headers = $document->getElementsByTagName('th');
-        $this->assertSame(19, $headers->length);
-        foreach (range(0, 18) as $index) {
+        $this->assertSame(22, $headers->length);
+        foreach (range(0, 21) as $index) {
             $header = $headers->item($index);
-            $filterable = $index < 9 || in_array($index, [10, 11], true);
+            $filterable = $index <= 14 && !in_array($index, [9, 10], true);
             $this->assertSame($filterable, $header->hasAttribute('data-force-column-filter'));
             $this->assertSame(! $filterable, $header->hasAttribute('data-command-column'));
         }

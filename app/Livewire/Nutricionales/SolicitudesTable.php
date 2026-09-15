@@ -3,7 +3,9 @@
 namespace App\Livewire\Nutricionales;
 
 use App\Models\Nutricionales\Solicitud as NutricionalesSolicitud;
+use App\Models\MixtureAdjustment;
 use App\Support\SolicitudStatusFilter;
+use App\Support\SolicitudMessageFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\Auth;
@@ -50,6 +52,7 @@ class SolicitudesTable extends Component
 
         $query = NutricionalesSolicitud::query()
             ->with([
+                'adjustment',
                 'user.hospital.instituciones',
                 'solicitud_detail',
                 'solicitud_patient',
@@ -104,6 +107,20 @@ class SolicitudesTable extends Component
 
     private function applyStatusFilter(Builder $query): void
     {
+        if ($this->statusFilter === SolicitudStatusFilter::MESSAGING) {
+            SolicitudMessageFilter::apply($query, 'nutricionales');
+            return;
+        }
+
+        if ($this->statusFilter === SolicitudStatusFilter::ADJUSTMENT) {
+            $query->where(fn (Builder $pending) => $pending
+                ->whereNull('solicituds.estado')->orWhereIn('solicituds.estado', ['pendiente', '']))
+                ->whereHas('adjustment', fn (Builder $adjustment) => $adjustment
+                    ->whereIn('status', MixtureAdjustment::PENDING_STATUSES));
+
+            return;
+        }
+
         if ($this->statusFilter === SolicitudStatusFilter::PENDING) {
             $query->where(function (Builder $query) {
                 $query->whereNull('solicituds.estado')

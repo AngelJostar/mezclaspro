@@ -11,6 +11,8 @@ if (($argv[1] ?? '') === 'promesa') {
 } else {
     Tests\Fixtures\AgentCenter::seed((int) ($argv[1] ?? 8));
 }
+Tests\Fixtures\AgentAuditData::seed();
+Illuminate\Support\Facades\DB::table('medicine_batches')->insert(['lote' => 'LOTE-PRUEBA', 'stock_actual' => 3, 'stock_reservado' => 0, 'caducidad' => now()->addDays(5)->toDateString(), 'is_active' => 1, 'costo_unitario' => 100, 'laboratory_id' => 1, 'warehouse_id' => 1]);
 
 // Keep the synthetic database alive while the browser exercises real Livewire updates.
 while (($line = fgets(STDIN)) !== false) {

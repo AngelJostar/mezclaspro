@@ -22,6 +22,7 @@ class HospitalController extends Controller
 {
     public function index(Request $request)
     {
+        $canViewHospitalCredentials = $request->user()?->hasRole('Super Admin') ?? false;
         $institutionId = (string) $request->query('institution_id', 'all');
         $instituciones = Institucion::orderBy('nombre')->get(['id', 'nombre']);
 
@@ -30,6 +31,12 @@ class HospitalController extends Controller
         }
 
         $hospitals = Hospital::with('instituciones')
+            ->when($canViewHospitalCredentials, function ($query) {
+                $query->with(['users' => fn ($users) => $users
+                    ->whereHas('roles', fn ($roles) => $roles->where('guard_name', 'web')->whereIn('name', ['Cliente', 'Institucion']))
+                    ->select(['id', 'hospital_id', 'username', 'password', 'credential_password'])
+                    ->orderBy('username')]);
+            })
             ->when($institutionId !== 'all', function ($query) use ($institutionId) {
                 $query->whereHas('instituciones', function ($subquery) use ($institutionId) {
                     $subquery->where('clientes.id', (int) $institutionId);
@@ -38,7 +45,9 @@ class HospitalController extends Controller
             ->latest()
             ->get();
 
-        return view('admin.hospitals.index', compact('hospitals', 'instituciones', 'institutionId'));
+        return response()->view('admin.hospitals.index', compact(
+            'hospitals', 'instituciones', 'institutionId', 'canViewHospitalCredentials'
+        ))->header('Cache-Control', 'private, no-store');
     }
 
     public function createForInstitution(Institucion $institucion)

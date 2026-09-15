@@ -19,6 +19,7 @@ class Kernel extends ConsoleKernel
             ->everyMinute()
             ->withoutOverlapping();
 
+        $schedule->command('agents:run-due')->everyMinute()->withoutOverlapping(10);
         $schedule->command('inventory:expire-remainders')
             ->everyFiveMinutes()
             ->withoutOverlapping();

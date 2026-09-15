@@ -12,6 +12,12 @@ class RestrictCapacitacionAccess
     {
         $user = $request->user();
 
+        if ($user?->hasAnyRole(['Cliente', 'Institucion'])) {
+            abort_if($request->routeIs('admin.capacitaciones.*', 'admin.users.*'), 403);
+
+            return $next($request);
+        }
+
         $usesTrainingCredentials = $request->session()->get('access_context') === 'training';
 
         if (($usesTrainingCredentials || $user?->hasRole('Capacitacion'))

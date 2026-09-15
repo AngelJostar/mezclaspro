@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Mezcla extends Model
 {
+    use \App\Models\Concerns\HasMixtureAdjustment;
     use HasFactory;
 
     private const TERMINAL_REQUEST_STATUSES = [
