@@ -101,7 +101,7 @@ class AdministrationBillingNavigationTest extends TestCase
         $this->actingAs($this->generalUser(['menu.administracion.reports']));
         $this->assertSame([], AdministrationNavigation::billingSections(auth()->user()));
         $response = $this->get(route('admin.instituciones.reportes', ['seccion' => 'pagos']))->assertOk();
-        $this->assertNavigationLinks($response->getContent(), 3, 0);
+        $this->assertNavigationLinks($response->getContent(), 4, 0);
         $this->get(route('admin.instituciones.reportes', ['seccion' => 'facturacion']))->assertForbidden();
         $this->get(route('admin.instituciones.billing.index'))->assertForbidden();
     }
@@ -121,6 +121,23 @@ class AdministrationBillingNavigationTest extends TestCase
             if ($index === 3) $this->assertArrayNotHasKey('institucion_id', $actual);
             else $this->assertSame('4', $actual['institucion_id']);
         }
+    }
+
+    public function test_adjustment_log_button_is_between_billing_and_payments_and_opens_its_section(): void
+    {
+        $url = route('admin.instituciones.reportes', ['seccion' => 'ajustes']);
+        $response = $this->get($url)->assertOk()->assertViewHas('administrationSection', 'ajustes')->assertSee('Panel Administrativo');
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
+        $xpath = new \DOMXPath($dom);
+        $links = $xpath->query('//nav[@aria-label="Secciones de administración"]//a');
+        $this->assertSame(['Reportes', 'Conciliación', 'Facturación', 'Bitácora de ajustes', 'Pagos'],
+            array_map(fn ($link) => trim($link->textContent), iterator_to_array($links)));
+        $this->assertSame($url, $links[3]->getAttribute('href'));
+        $this->assertSame('page', $links[3]->getAttribute('aria-current'));
+        $this->actingAs($this->generalUser(['menu.facturacion.receivable']));
+        $this->get($url)->assertForbidden();
+        $this->get(route('admin.instituciones.billing.receivable'))->assertDontSee('Bitácora de ajustes');
     }
 
     private function generalUser(array $permissions): User

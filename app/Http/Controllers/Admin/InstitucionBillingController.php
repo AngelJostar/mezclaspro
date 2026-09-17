@@ -86,6 +86,9 @@ class InstitucionBillingController extends Controller
             ->paginate(50)
             ->withQueryString();
 
+        $paymentIds = $movements->pluck('details.payment_id')->filter()->unique();
+        $hospitalPayments = $paymentIds->isEmpty() ? collect() : \App\Models\HospitalInvoicePayment::whereIn('id', $paymentIds)->get()->keyBy('id');
+
         return view('admin.instituciones.billing.movements', compact(
             'movements',
             'search',
@@ -93,7 +96,8 @@ class InstitucionBillingController extends Controller
             'toStage',
             'dateFrom',
             'dateTo',
-            'billingDueCounts'
+            'billingDueCounts',
+            'hospitalPayments'
         ));
     }
 

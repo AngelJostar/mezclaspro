@@ -16,6 +16,7 @@ class AgentConfiguration
         'onco' => 'Mezclas oncológicas y antibióticos', 'nutri' => 'Solicitudes nutricionales',
         'supply_requests' => 'Abasto a producción', 'billing' => 'Facturación', 'orders' => 'Compras',
         'maintenance' => 'Servicios y equipos', 'deliveries' => 'Entregas', 'findings' => 'Hallazgos de agentes',
+        'conciliations' => 'Conciliaciones recibidas de hospitales',
     ];
     public const TOOLS = ['audit' => 'Consultar y calcular', 'alerts' => 'Registrar alertas internas'];
     public const RESULTS = ['evidence' => 'Folios y evidencia', 'impact' => 'Impacto y cálculo', 'action' => 'Acción sugerida'];
@@ -23,6 +24,7 @@ class AgentConfiguration
     public static function rules(): array
     {
         return [
+            'conciliation' => ['name' => 'Agente de conciliación', 'label' => 'Revisar conciliaciones recibidas y datos faltantes', 'sources' => ['conciliations'], 'owner' => 'Administración / Conciliaciones', 'limit' => 'Revisión de los datos guardados al enviar. No aprueba conciliaciones ni valida precios. Las mezclas reenviadas en distintos folios se cuentan por envío.'],
             'consumption' => ['name' => 'Auditoría de consumos', 'label' => 'Conciliar salidas y existencias de medicamentos', 'sources' => ['movements'], 'owner' => 'Producción / Almacén', 'limit' => 'No reconstruye reprocesos ni consumos de insumos sin movimientos vinculados.'],
             'production' => ['name' => 'Producción y tiempos', 'label' => 'Detectar entregas próximas o atrasadas', 'sources' => ['onco', 'nutri'], 'owner' => 'Coordinación de producción', 'limit' => 'No estima duración de etapas ni capacidad de producción.'],
             'inventory' => ['name' => 'Inventarios y abasto', 'label' => 'Revisar reservas y abasto aprobado a producción', 'sources' => ['batches', 'nutrition', 'diluents', 'consumables', 'supply_requests'], 'owner' => 'Almacén / Abasto', 'limit' => 'La demanda considera requisiciones de insumos aprobadas; no convierte prescripciones en necesidades futuras de medicamentos.'],
@@ -62,7 +64,7 @@ class AgentConfiguration
             'scope_all' => ['required', 'boolean'], 'activation' => ['required', Rule::in(array_keys(self::ACTIVATIONS))],
             'priority' => ['required', Rule::in(['high', 'medium', 'low'])],
             'analysis' => ['required', Rule::in(['rules', 'openai'])],
-            'rules' => ['present', 'array', 'max:12'], 'rules.*' => ['string', 'distinct', Rule::in(array_keys(self::rules()))],
+            'rules' => ['present', 'array', 'max:13'], 'rules.*' => ['string', 'distinct', Rule::in(array_keys(self::rules()))],
             'sources' => ['present', 'array'], 'sources.*' => ['string', 'distinct', Rule::in(array_keys(self::SOURCES))],
             'tools' => ['present', 'array'], 'tools.*' => ['string', 'distinct', Rule::in(array_keys(self::TOOLS))],
             'results' => ['present', 'array'], 'results.*' => ['string', 'distinct', Rule::in(array_keys(self::RESULTS))],

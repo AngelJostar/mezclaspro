@@ -1,0 +1,1 @@
+<span class="ht-invoice-status ht-payment-{{ $invoice['state'] }}">{{ ['pending' => 'Pendiente', 'partial' => 'Pago parcial', 'paid' => 'Pagada', 'unknown' => 'Sin importe'][$invoice['state']] }}</span>

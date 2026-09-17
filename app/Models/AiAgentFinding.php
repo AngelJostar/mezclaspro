@@ -17,6 +17,7 @@ class AiAgentFinding extends Model
     public static function recordUrl(array $record): ?string
     {
         return match ($record['record_type']) {
+            'hospital_conciliation_submissions' => route('admin.instituciones.conciliaciones.show', $record['id']),
             'oncologica_mezcla' => route('admin.oncologicos.mezclas.show', $record['id']),
             'nutricional_solicitud' => route('admin.nutricionales.solicitudes.show', $record['id']),
             'production_supply_request_lines' => route('admin.production-supplies.show', $record['request_id']),

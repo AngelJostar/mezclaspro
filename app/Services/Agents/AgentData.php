@@ -31,7 +31,7 @@ class AgentData
             }
             $items = $query->orderByDesc($key)->limit(self::LIMIT + 1)->get();
             if ($items->count() > self::LIMIT) $issues[] = 'Límite de '.self::LIMIT.' registros por consulta; revisión parcial.';
-            foreach ($items->take(self::LIMIT) as $item) $rows[] = (array) $item;
+            foreach ($items->take(self::LIMIT) as $item) $rows[] = $source === 'conciliations' ? ConciliationAgentData::project((array) $item) : (array) $item;
         }
         return ['rows' => $rows, 'issues' => array_values(array_unique($issues))];
     }
@@ -69,6 +69,9 @@ class AgentData
         $billing = in_array('invoicing', $config['rules']) && in_array('billing', $config['sources']);
         // Each tuple declares which scope dimensions the source can enforce. Unsupported scopes fail closed.
         return match ($source) {
+            'conciliations' => [[\App\Support\ConciliationInboxFilters::apply(DB::table('hospital_conciliation_submissions as s')
+                ->leftJoin('hospitals as h', 'h.id', '=', 's.hospital_id')->select(['s.id', 's.hospital_id', 'h.laboratory_id', 's.snapshot'])
+                ->selectRaw("'hospital_conciliation_submissions' as record_type"), $config['run_context']['filters'] ?? [], 's.'), 's.id', 's.hospital_id', 'h.laboratory_id', null]],
             'batches' => [[$this->stockQuery('medicine_batches', ['s.id', 's.lote as lot', 's.medicine_presentation_id as product_id', 's.stock_actual as quantity', 's.stock_reservado as reserved', 's.caducidad as expires_at', 's.costo_unitario', 's.is_active', 's.laboratory_id', 's.warehouse_id']), 's.id', null, 's.laboratory_id', 's.warehouse_id']],
             'nutrition' => [[$this->stockQuery('medicine_laboratory_stocks', ['s.id', 's.lote as lot', 's.nutrition_medicine_presentation_id as product_id', 's.frascos_actuales as quantity', 's.caducidad as expires_at', 's.is_active', 's.laboratory_id', 's.warehouse_id']), 's.id', null, 's.laboratory_id', 's.warehouse_id']],
             'diluents' => [[$this->stockQuery('diluent_presentations', ['s.id', 's.lote as lot', 's.diluent_id as product_id', 's.stock_actual as quantity', 's.stock_reservado as reserved', 's.caducidad as expires_at', 's.is_active', 's.laboratory_id', 's.warehouse_id']), 's.id', null, 's.laboratory_id', 's.warehouse_id']],

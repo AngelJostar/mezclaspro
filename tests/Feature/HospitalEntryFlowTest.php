@@ -24,8 +24,11 @@ class HospitalEntryFlowTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+        \Illuminate\Support\Facades\DB::purge('sqlite');
         $this->previousBackButtonCache = \Livewire\Features\SupportDisablingBackButtonCache\SupportDisablingBackButtonCache::$disableBackButtonCache;
         $this->hospital = UnifiedRequestExportData::seed();
+        \Tests\Fixtures\HospitalToolsData::addBilling();
         foreach (['users' => 'is_active', 'hospitals' => 'access_is_active', 'clientes' => 'is_active'] as $table => $column) {
             Schema::table($table, fn (Blueprint $schema) => $schema->boolean($column)->default(true));
         }
@@ -68,6 +71,32 @@ class HospitalEntryFlowTest extends TestCase
             $this->actingAs($this->hospital)->get(route('admin.dashboard'))
                 ->assertRedirect(route('admin.solicitudes.index'));
         }
+    }
+
+    public function test_tools_menu_and_page_are_available_to_both_hospital_roles(): void
+    {
+        foreach (['Cliente', 'Institucion'] as $role) {
+            $this->hospital->syncRoles(Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']));
+            $this->actingAs($this->hospital)->get(route('admin.solicitudes.index'))->assertOk()
+                ->assertSee(route('admin.hospital.herramientas'))->assertSeeText('Herramientas');
+            $response = $this->get(route('admin.hospital.herramientas'))->assertOk()
+                ->assertViewIs('admin.hospital.herramientas')->assertSeeText('Herramientas')
+                ->assertDontSeeText('Personal y Capacitaciones');
+            $document = new \DOMDocument();
+            @$document->loadHTML($response->getContent());
+            $xpath = new \DOMXPath($document);
+            $this->assertSame(1, $xpath->query('//aside//a[@aria-current="page" and @href="'.route('admin.hospital.herramientas').'"]')->length);
+        }
+    }
+
+    public function test_tools_are_not_exposed_to_internal_users_or_guests(): void
+    {
+        $this->get(route('admin.hospital.herramientas'))->assertRedirect(route('login'));
+        $this->hospital->syncRoles(Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']));
+        $this->actingAs($this->hospital)->get(route('admin.dashboard'))->assertOk()->assertDontSeeText('Herramientas');
+        $this->get(route('admin.hospital.herramientas'))->assertForbidden();
+        $this->hospital->syncRoles('Super Admin');
+        $this->get(route('admin.hospital.herramientas'))->assertForbidden();
     }
 
     public function test_hospital_cannot_access_internal_personnel_even_with_a_legacy_permission(): void

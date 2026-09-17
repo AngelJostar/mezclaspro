@@ -59,6 +59,10 @@ test('hospital starts in Listado without internal personnel menus', async () => 
             assert.equal(await list.getAttribute('aria-current'), 'page');
             assert.equal(await list.getAttribute('href'), 'http://localhost/admin/solicitudes');
             assert.equal(await sidebar.getByRole('button').count(), 1);
+            const tools = sidebar.getByRole('link', { name: 'Herramientas', exact: true });
+            assert.equal(await tools.count(), 1);
+            assert.equal(await tools.getAttribute('href'), 'http://localhost/admin/herramientas');
+            assert.equal(await tools.locator('[data-request-navigation-icon]').count(), 0);
             assert.equal(await sidebar.getByText('Personal y Capacitaciones', { exact: true }).count(), 0);
             assert.equal(await sidebar.locator('a[href*="/capacitaciones"]').count(), 0);
             assert.equal(await page.getByRole('heading', { name: 'Lista de Solicitudes', exact: true }).count(), 1);
@@ -66,6 +70,41 @@ test('hospital starts in Listado without internal personnel menus', async () => 
             assert.equal(await page.getByRole('navigation', { name: 'Tipo de solicitudes' }).getByRole('link').count(), 4);
             await assertLeftAlignedLabels(page);
             if (process.env.SIDEBAR_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.SIDEBAR_SCREENSHOTS, `hospital-entry-${width}.png`) });
+            await page.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('hospital tools menu opens its section and allows returning to Listado', async () => {
+    const pages = Object.fromEntries(['solicitudes', 'herramientas'].map(section => [section, execFileSync('php',
+        ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3', 'tests/Browser/fixtures/hospital-entry.php', section],
+        { cwd: root, encoding: 'utf8' })]));
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    try {
+        for (const width of [1440, 390]) {
+            const page = await browser.newPage({ viewport: { width, height: 960 } });
+            await page.route('**/*', route => {
+                const url = new URL(route.request().url());
+                if (url.pathname === '/img/promesa-logo.png') return route.fulfill({ contentType: 'image/png', body: readFileSync(path.join(root, 'public/img/promesa-logo.png')) });
+                const section = url.pathname.split('/').pop();
+                if (!pages[section]) return route.abort();
+                return route.fulfill({ contentType: 'text/html', body: `<meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><div x-data="{ open: true }">${pages[section]}</div>` });
+            });
+            await page.goto('http://localhost/admin/solicitudes');
+            await page.addScriptTag({ content: script });
+            await page.getByRole('link', { name: 'Herramientas', exact: true }).click();
+            await page.waitForURL('**/admin/herramientas');
+            await page.addScriptTag({ content: script });
+            assert.equal(await page.getByRole('heading', { name: 'Herramientas', exact: true }).count(), 1);
+            const tools = page.locator('#logo-sidebar').getByRole('link', { name: 'Herramientas', exact: true });
+            assert.equal(await tools.getAttribute('aria-current'), 'page');
+            assert.equal(await tools.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+            await assertLeftAlignedLabels(page);
+            if (process.env.SIDEBAR_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.SIDEBAR_SCREENSHOTS, `hospital-tools-${width}.png`) });
+            await page.locator('#logo-sidebar button[aria-controls="solicitudes-submenu"]').click();
+            await page.getByRole('link', { name: 'Listado', exact: true }).click();
+            await page.waitForURL('**/admin/solicitudes');
+            assert.equal(await page.getByRole('heading', { name: 'Lista de Solicitudes', exact: true }).count(), 1);
             await page.close();
         }
     } finally { await browser.close(); }

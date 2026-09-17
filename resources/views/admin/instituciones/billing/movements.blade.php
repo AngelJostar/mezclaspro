@@ -128,7 +128,20 @@
                                 {{ $movement->user_name ?: ($movement->user?->username ?? 'Sistema') }}
                             </td>
                             <td class="border border-slate-200 px-3 py-2 text-slate-600">
-                                @if ($clearedFields->isNotEmpty())
+                                @if (in_array($movement->details['source'] ?? '', ['hospital_payment_reported', 'hospital_payment_reviewed'], true))
+                                    @php $payment = $hospitalPayments->get($movement->details['payment_id'] ?? null); @endphp
+                                    <p>Pago de hospital · Factura {{ $movement->details['folio'] ?? '—' }}</p>
+                                    <p>${{ $movement->details['importe'] ?? '—' }} MXN · {{ $movement->details['referencia'] ?? '' }}</p>
+                                    @if ($payment)<p>Fecha de pago: {{ $payment->paid_at?->format('d/m/Y') }}</p><p class="whitespace-pre-wrap">{{ $payment->notes }}</p>@endif
+                                    <p>{{ ['pending' => 'Pendiente de validación', 'approved' => 'Aplicado', 'rejected' => 'Rechazado'][$payment?->status ?? 'pending'] }}</p>
+                                    @if ($payment?->status === 'pending' && (auth()->user()->hasAnyRole(['Super Admin', 'Administracion y facturacion']) || auth()->user()->can('menu.facturacion.pending')) && !auth()->user()->hasAnyRole(['Cliente', 'Institucion']))
+                                        <form method="POST" action="{{ route('admin.instituciones.billing.payment-review', $payment) }}" class="mt-2 flex gap-2">
+                                            @csrf
+                                            <button type="submit" name="decision" value="approved" class="rounded border border-green-300 bg-green-50 px-3 py-2 text-green-800">Validar pago</button>
+                                            <button type="submit" name="decision" value="rejected" class="rounded border border-red-300 bg-red-50 px-3 py-2 text-red-800">Rechazar pago</button>
+                                        </form>
+                                    @endif
+                                @elseif ($clearedFields->isNotEmpty())
                                     Se limpiaron: {{ $clearedFields->join(', ') }}.
                                 @elseif (($movement->details['source'] ?? '') === 'billing_update')
                                     Cambio generado durante la actualización de facturación.

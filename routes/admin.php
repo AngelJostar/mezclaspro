@@ -63,6 +63,37 @@ Route::get('/dashboard', function () {
 Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
     ->name('solicitudes.index');
 
+Route::get('herramientas', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'index'])
+    ->middleware('role:Cliente|Institucion')
+    ->name('hospital.herramientas');
+
+Route::patch('herramientas/conciliacion/{kind}/{target}', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'conciliable'])
+    ->where(['kind' => 'nutricionales|oncologicos|antibioticos', 'target' => '[0-9]+'])
+    ->middleware('role:Cliente|Institucion')->name('hospital.conciliable');
+
+Route::get('herramientas/ajustes/exportar', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'exportAdjustments'])
+    ->middleware('role:Cliente|Institucion')->name('hospital.ajustes.exportar');
+
+Route::get('herramientas/conciliacion/exportar', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'exportConciliation'])
+    ->middleware('role:Cliente|Institucion')->name('hospital.conciliacion.exportar');
+Route::get('herramientas/conciliacion/resumen', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'previewConciliation'])
+    ->middleware('role:Cliente|Institucion')->name('hospital.conciliacion.resumen');
+Route::post('herramientas/conciliacion/enviar', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'sendConciliation'])
+    ->middleware(['role:Cliente|Institucion', 'throttle:10,1'])->name('hospital.conciliacion.enviar');
+
+Route::prefix('herramientas/facturacion')->name('hospital.facturacion.')->middleware('role:Cliente|Institucion')->group(function () {
+    Route::get('exportar', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'exportInvoices'])->name('exportar');
+    Route::get('estado-cuenta', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'statement'])->name('estado-cuenta');
+    Route::get('{invoice}', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'invoiceDetail'])->where('invoice', '[a-f0-9]{64}')->name('detalle');
+    Route::get('{invoice}/documento/{format}', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'invoiceDocument'])
+        ->where('invoice', '[a-f0-9]{64}')->where('format', 'pdf|xml')->name('documento');
+    Route::post('{invoice}/pagos', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'reportPayment'])
+        ->where('invoice', '[a-f0-9]{64}')->middleware('throttle:20,1')->name('pago');
+});
+Route::get('herramientas/ajustes/{kind}/{target}', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'adjustmentHistory'])
+    ->where(['kind' => 'nutricionales|oncologicos|antibioticos', 'target' => '[0-9]+'])
+    ->middleware('role:Cliente|Institucion')->name('hospital.ajustes.historial');
+
 Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
 Route::prefix('solicitudes/mensajes/{kind}/{target}')
@@ -542,6 +573,14 @@ Route::resource('/instituciones', InstitucionController::class)
     ->middleware(['role_or_permission:Super Admin|menu.instituciones.list']);
 
 $administrationReportsMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.administracion.reports'];
+Route::get('instituciones-reportes/agente-conciliacion', [\App\Http\Controllers\Admin\ConciliationAgentController::class, 'show'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.agent');
+Route::post('instituciones-reportes/agente-conciliacion', [\App\Http\Controllers\Admin\ConciliationAgentController::class, 'run'])
+    ->middleware(array_merge($administrationReportsMiddleware, ['throttle:10,1']))->name('instituciones.conciliaciones.agent.run');
+Route::get('instituciones-reportes/conciliaciones/{submission}', [\App\Http\Controllers\Admin\ConciliationSubmissionController::class, 'show'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.show');
+Route::get('instituciones-reportes/conciliaciones/{submission}/descargar', [\App\Http\Controllers\Admin\ConciliationSubmissionController::class, 'download'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.download');
 $billingPendingMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.pending'];
 $billingReceivableMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.receivable'];
 $billingHistoryMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.history'];
@@ -622,6 +661,9 @@ Route::post('instituciones-facturacion/exportar-ampliado', [InstitucionBillingCo
 Route::post('instituciones-facturacion', [InstitucionBillingController::class, 'store'])
     ->name('instituciones.billing.store')
     ->middleware($billingPendingMiddleware);
+
+Route::post('instituciones-facturacion/pagos-hospital/{payment}/revisar', [\App\Http\Controllers\Admin\HospitalInvoicePaymentReviewController::class, 'update'])
+    ->name('instituciones.billing.payment-review')->middleware($billingPendingMiddleware);
 
 Route::post('instituciones-facturacion/{billing}/mover', [InstitucionBillingController::class, 'moveFromHistory'])
     ->name('instituciones.billing.move')

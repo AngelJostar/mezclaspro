@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '../..');
 const manifest = JSON.parse(readFileSync(path.join(root, 'public/build/manifest.json')));
 const css = [manifest['resources/css/app.css'].file, ...manifest['resources/js/app.js'].css]
     .map(file => readFileSync(path.join(root, 'public/build', file), 'utf8')).join('\n');
-const filters = readFileSync(path.join(root, 'resources/js/table-column-filters.js'), 'utf8');
+const filters = buildSync({ entryPoints: [path.join(root, 'resources/js/table-column-filters.js')], bundle: true, write: false, format: 'iife' }).outputFiles[0].text;
 const navigation = buildSync({
     entryPoints: [path.join(root, 'resources/js/request-navigation.js')],
     bundle: true, write: false, format: 'iife',

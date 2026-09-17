@@ -1,4 +1,5 @@
 import './bootstrap';
+import './hospital-tools';
 import '../css/catalog-supplies.css';
 import './corporate-header';
 import './personnel-editor';
@@ -16,6 +17,7 @@ import './mixture-adjustments';
 import './mixture-messages';
 import './adjustment-proposal';
 import './agent-center';
+import './conciliation-agent';
 import './diluent-modal';
 import './consumable-modal';
 import './institution-report-template-editor';

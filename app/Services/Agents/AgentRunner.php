@@ -16,10 +16,19 @@ class AgentRunner
 {
     public function __construct(private AgentData $data, private AgentRules $rules) {}
 
-    public function run(AiAgent $agent, User $actor, string $trigger = 'manual'): ?AiAgentRun
+    public function run(AiAgent $agent, User $actor, string $trigger = 'manual', array $context = []): ?AiAgentRun
     {
-        abort_unless($actor->hasRole('Super Admin'), 403);
+        $agent->refresh();
+        $sectionAccess = $agent->integration_key === 'admin_conciliation'
+            && !$actor->hasAnyRole(['Cliente', 'Institucion']) && \App\Support\AdministrationNavigation::canViewReports($actor)
+            && ($agent->configuration['rules'] ?? []) === ['conciliation'] && ($agent->configuration['sources'] ?? []) === ['conciliations'];
+        abort_unless($actor->hasRole('Super Admin') || ($sectionAccess && $trigger === 'manual'), 403);
         abort_if(isset($actor->is_active) && ! $actor->is_active, 403);
+        if ($context) {
+            abort_unless($sectionAccess && $trigger === 'manual', 403);
+            $context = \Illuminate\Support\Facades\Validator::make($context, ['filters' => 'present|array', 'instructions' => 'nullable|string|max:2000'])->validate();
+            $context['filters'] = \App\Support\ConciliationInboxFilters::validate($context['filters']);
+        }
         $lock = Cache::lock('ai-agent-run:'.$agent->id, 600);
         if (! $lock->get()) throw ValidationException::withMessages(['execution' => 'Este agente ya tiene una ejecución en curso.']);
         try {
@@ -27,6 +36,8 @@ class AgentRunner
             if (! $agent->is_active) throw ValidationException::withMessages(['execution' => 'Activa el agente antes de ejecutarlo.']);
             if (! $agent->configuration) throw ValidationException::withMessages(['execution' => 'Configura y guarda el alcance y las reglas del agente.']);
             $config = AgentConfiguration::validate($agent->configuration, true);
+            if ($context || !$actor->hasRole('Super Admin')) abort_unless($agent->configuration['rules'] === ['conciliation'] && $agent->configuration['sources'] === ['conciliations'], 403);
+            if ($context) $config['run_context'] = $context;
             if ($trigger !== 'manual' && ($config['activation'] === 'manual' || $agent->next_run_at?->isFuture())) return null;
             $now = CarbonImmutable::now();
             $sources = [];
@@ -76,12 +87,14 @@ class AgentRunner
                 $analysis = null;
                 if ($config['analysis'] === 'openai') {
                     try {
-                        $analysis = app(OpenAiAgentAnalysis::class)->analyze($agent, $found, $issues, $coverage);
+                        $analysisAgent = clone $agent;
+                        if (!empty($context['instructions'])) $analysisAgent->instructions .= "\nInstrucciones adicionales de esta ejecución (no amplían el alcance): ".$context['instructions'];
+                        $analysis = app(OpenAiAgentAnalysis::class)->analyze($analysisAgent, $found, $issues, $coverage);
                     } catch (\RuntimeException $e) {
                         $issues[] = $e->getMessage();
                     }
                 }
-                DB::transaction(function () use ($agent, $run, $config, $found, $issues, $coverage, $fingerprint, $analysis) {
+                DB::transaction(function () use ($agent, $run, $config, $found, $issues, $coverage, $fingerprint, $analysis, $sources) {
                     $stored = 0;
                     foreach ($found as $finding) {
                         if (! in_array('alerts', $config['tools'])) continue;
@@ -95,6 +108,7 @@ class AgentRunner
                     }
                     $run->update(['status' => $issues ? ($coverage ? 'partial' : 'failed') : 'completed', 'finished_at' => now(),
                         'result' => ['engine' => 'Reglas del sistema', 'analysis' => $analysis, 'coverage' => $coverage, 'issues' => $issues, 'findings' => $found, 'alerts' => $stored,
+                            'draft' => array_key_exists('conciliations', $sources) ? ConciliationAgentData::draft($sources['conciliations']) : null,
                             'limits' => array_map(fn ($rule) => AgentConfiguration::rules()[$rule]['limit'], $config['rules'])]]);
                     $agent->source_fingerprint = $config['analysis'] === 'openai' && ! $analysis ? null : $fingerprint;
                     $agent->next_run_at = match ($config['activation']) {

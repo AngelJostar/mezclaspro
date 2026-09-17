@@ -4,12 +4,13 @@ const { readFileSync } = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const { buildSync } = require('esbuild');
 
 const root = path.resolve(__dirname, '../..');
 const manifest = JSON.parse(readFileSync(path.join(root, 'public/build/manifest.json')));
 const styles = [manifest['resources/css/app.css'].file, ...manifest['resources/js/app.js'].css]
     .map(file => readFileSync(path.join(root, 'public/build', file), 'utf8')).join('\n');
-const script = readFileSync(path.join(root, 'resources/js/table-column-filters.js'), 'utf8');
+const script = buildSync({ entryPoints: [path.join(root, 'resources/js/table-column-filters.js')], bundle: true, write: false, format: 'iife' }).outputFiles[0].text;
 
 test('empty request lists keep searchable header filters without treating the empty message as a record', async () => {
     const html = execFileSync('php', ['tests/Browser/fixtures/request-scrollbar.php'], { cwd: root, encoding: 'utf8' });
@@ -24,7 +25,7 @@ test('empty request lists keep searchable header filters without treating the em
             const triggers = page.locator('thead button[data-column]');
             await triggers.first().waitFor();
             assert.deepEqual(await triggers.evaluateAll(buttons => buttons.map(button => Number(button.dataset.column))),
-                [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11]);
+                [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14]);
             assert.equal(await page.locator('thead [data-command-column] button[data-column]').count(), 0);
             const panel = page.locator('[id^="automatic-table-filter-"][id$="-panel"]');
             for (const trigger of await triggers.all()) {
@@ -43,12 +44,12 @@ test('empty request lists keep searchable header filters without treating the em
             // Simulate records arriving after the empty state without changing real hospital data.
             await page.locator('tbody').evaluate(tbody => {
                 const records = [
-                    ['Oncologica', '38', '24', 'Hospital Norte', 'Maria Perez', '2026-09-08 09:00', '2026-09-08 15:00', 'Aprobada', 'L001', 'Ver', 'Aprobada', 'Dispensar'],
-                    ['Nutricional', '39', '25', 'Hospital Sur', 'Jose Lopez', '2026-09-08 10:00', '2026-09-08 16:00', 'Pendiente', 'L002', 'Ver', 'Sin accion', 'Proceso'],
+                    ['Oncologica', '38', '24', 'Institucion de prueba', 'Hospital Norte', 'Maria Perez', '2026-09-08 09:00', '2026-09-08 15:00', 'L001', 'Ver', 'Mensajes', 'Aprobada', 'Sin Ajustes', 'Aprobada', 'Dispensar'],
+                    ['Nutricional', '39', '25', 'Institucion de prueba', 'Hospital Sur', 'Jose Lopez', '2026-09-08 10:00', '2026-09-08 16:00', 'L002', 'Ver', 'Mensajes', 'Sin accion', 'Sin Ajustes', 'Pendiente', 'Proceso'],
                 ];
                 tbody.replaceChildren(...records.map(values => {
                     const row = document.createElement('tr');
-                    for (let i = 0; i < 19; i++) row.insertCell().textContent = values[i] || 'Documento';
+                    for (let i = 0; i < tbody.closest('table').tHead.rows[0].cells.length; i++) row.insertCell().textContent = values[i] || 'Documento';
                     return row;
                 }));
             });
@@ -69,7 +70,7 @@ test('empty request lists keep searchable header filters without treating the em
             await panel.getByRole('checkbox', { name: '(Todos)', exact: true }).check();
             await panel.getByRole('button', { name: 'Aceptar', exact: true }).click();
             assert.equal(await page.locator('tbody tr:visible').count(), 2);
-            assert.equal(await triggers.count(), 11);
+            assert.equal(await triggers.count(), 13);
             assert.deepEqual(errors, []);
             await page.close();
         }

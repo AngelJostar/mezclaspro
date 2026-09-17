@@ -1,5 +1,5 @@
 @php
-    $isWorkflowPage = request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit', 'admin.solicitudes.ajustes.show')
+    $isWorkflowPage = request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit', 'admin.solicitudes.ajustes.show', 'admin.hospital.ajustes.historial', 'admin.hospital.facturacion.detalle')
         && (request()->boolean('approval_popup') || request()->boolean('dispensing_popup'));
     $workflowCompleted = $isWorkflowPage && (session('approval_popup_done') || session('dispensing_popup_done'));
     $workflowPageConfig = [

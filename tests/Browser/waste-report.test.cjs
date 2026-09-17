@@ -4,12 +4,13 @@ const { readFileSync } = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const { buildSync } = require('esbuild');
 
 const root = path.resolve(__dirname, '../..');
 const manifest = JSON.parse(readFileSync(path.join(root, 'public/build/manifest.json')));
 const styles = [manifest['resources/css/app.css'].file, ...manifest['resources/js/app.js'].css]
     .map(file => readFileSync(path.join(root, 'public/build', file), 'utf8')).join('\n');
-const filters = readFileSync(path.join(root, 'resources/js/table-column-filters.js'), 'utf8');
+const filters = buildSync({ entryPoints: [path.join(root, 'resources/js/table-column-filters.js')], bundle: true, write: false, format: 'iife' }).outputFiles[0].text;
 const livewire = readFileSync(path.join(root, 'vendor/livewire/livewire/dist/livewire.js'), 'utf8');
 
 test('waste totals follow column filters and active sections without mixing units or requests', async () => {
