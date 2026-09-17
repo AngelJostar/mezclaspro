@@ -17,6 +17,12 @@ class AgentRules
         if ($rule === 'invoicing') $rows = $rows->whereIn('record_type', ['oncologica_mezcla', 'nutricional_solicitud']);
         if ($rule === 'summary') $rows = $rows->sortBy(fn ($r) => ['high' => 0, 'medium' => 1, 'low' => 2][$r['priority']] ?? 3);
         foreach ($rows as $r) {
+            if ($rule === 'conciliation') {
+                if ($r['no']) $add($r, 'Conciliación con mezclas no conciliables', $r['no'].' registros marcados como No en el envío.', $r['no'], 'registros de mezcla', 'Revisar los motivos con el responsable de conciliación.');
+                foreach (['missing_amounts' => 'Importes sin registrar', 'missing_fields' => 'Datos de conciliación incompletos', 'missing_reasons' => 'No conciliables sin motivo'] as $field => $title) {
+                    if ($r[$field]) $add($r, $title, $r[$field].' registros con información pendiente en el envío.', $r[$field], 'registros de mezcla', 'Consultar la conciliación y solicitar la documentación faltante; no sustituir datos ausentes por valores supuestos.');
+                }
+            }
             if ($rule === 'consumption') {
                 if ($r['before'] === null || $r['after'] === null || $r['quantity'] === null) {
                     $add($r, 'Salida con trazabilidad incompleta', 'Falta cantidad o existencia anterior/posterior.', null, $r['unit'], 'Revisar el movimiento y su registro de origen.');

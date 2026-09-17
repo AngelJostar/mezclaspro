@@ -3,6 +3,7 @@
         'reportes' => 'Reportes',
         'conciliacion' => 'Conciliación',
         'facturacion' => 'Facturación',
+        'ajustes' => 'Bitácora de ajustes',
         'pagos' => 'Pagos',
     ];
     $billingSections = \App\Support\AdministrationNavigation::billingSections(auth()->user());

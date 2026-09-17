@@ -29,6 +29,11 @@ test('all billing screens keep the administration carousel and usable billing ta
                 const billing = page.getByRole('navigation', { name: 'Secciones de facturación', exact: true });
                 await administration.locator('svg').first().waitFor();
                 assert.equal(await administration.locator('a[aria-current="page"]').innerText(), 'Facturación');
+                assert.deepEqual(await administration.locator('a').allTextContents().then(labels => labels.map(label => label.trim())),
+                    ['Reportes', 'Conciliación', 'Facturación', 'Bitácora de ajustes', 'Pagos']);
+                const adjustmentLog = administration.getByRole('link', { name: 'Bitácora de ajustes', exact: true });
+                assert.match(await adjustmentLog.getAttribute('href'), /seccion=ajustes/);
+                assert.equal(await adjustmentLog.evaluate(link => link.scrollWidth <= link.clientWidth), true);
                 assert.equal(await billing.locator('a').count(), 4);
                 assert.equal(await billing.locator('a[aria-current="page"]').count(), 1);
                 for (const tab of await billing.locator('a').all()) {

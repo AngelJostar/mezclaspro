@@ -49,7 +49,10 @@ class InstitucionController extends Controller
 
             return redirect()->route(reset($billingSections)['route'], $request->only(['search', 'date_from', 'date_to']));
         }
-        if (in_array($administrationSection, ['conciliacion', 'pagos'], true)) {
+        if ($administrationSection === 'conciliacion') {
+            return app(ConciliationSubmissionController::class)->index($request);
+        }
+        if (in_array($administrationSection, ['ajustes', 'pagos'], true)) {
             return view('admin.instituciones.administration-section', compact('administrationSection'));
         }
 

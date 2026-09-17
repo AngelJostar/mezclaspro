@@ -23,7 +23,7 @@ class InstitutionBillingDueDateService
         $today = $asOf
             ? CarbonImmutable::parse($asOf)->startOfDay()
             : CarbonImmutable::today();
-        $countFrom = CarbonImmutable::parse($deliveryDate)->startOfMonth()->addMonth();
+        $countFrom = $this->dueDate($deliveryDate, $billingStatus)->addDay();
 
         if ($today->lessThan($countFrom)) {
             return $this->withoutExpiration();
@@ -33,6 +33,12 @@ class InstitutionBillingDueDateService
             'status' => $today->greaterThanOrEqualTo($countFrom->addMonth()) ? 'red' : 'yellow',
             'days' => $countFrom->diffInDays($today) + 1,
         ];
+    }
+
+    public function dueDate(CarbonInterface|DateTimeInterface|string|null $deliveryDate, ?string $billingStatus = null): ?CarbonImmutable
+    {
+        return ! $deliveryDate || $this->isCompleted($billingStatus)
+            ? null : CarbonImmutable::parse($deliveryDate)->endOfMonth()->startOfDay();
     }
 
     private function isCompleted(?string $billingStatus): bool

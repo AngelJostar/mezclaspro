@@ -9,6 +9,7 @@
     $priorityLabels = ['high' => 'Alta', 'medium' => 'Media', 'low' => 'Baja'];
 @endphp
 <dl class="agent-criteria">
+    @if($agent->integration_key === 'admin_conciliation')<div><dt>Sección</dt><dd><a href="{{ route('admin.instituciones.reportes', ['seccion' => 'conciliacion']) }}">Administración · Conciliación</a></dd></div>@endif
     <div><dt>Objetivo</dt><dd>{{ $configuration['objective'] ?: 'Sin definir' }}</dd></div>
     <div><dt>Alcance</dt><dd>@if (!$agent->configuration) Pendiente de configurar @elseif ($configuration['scope_all']) Todo el sistema @elseif (! $configuration['institutions'] && ! $configuration['laboratories'] && ! $configuration['warehouses']) Sin alcance seleccionado @else Instituciones: {{ implode(', ', $configuration['institutions']) ?: 'Sin filtro' }} · Centrales: {{ implode(', ', $configuration['laboratories']) ?: 'Sin filtro' }} · Almacenes: {{ implode(', ', $configuration['warehouses']) ?: 'Sin filtro' }} @endif</dd></div>
     <div><dt>Datos</dt><dd>{{ collect($configuration['sources'])->map(fn ($key) => $configOptions::SOURCES[$key] ?? $key)->implode(', ') ?: 'Sin fuentes' }}</dd></div>
@@ -25,6 +26,10 @@
             <summary>#{{ $run->id }} · {{ $run->started_at->format('d/m/Y H:i:s') }} · {{ \App\Models\AiAgentRun::statusLabels()[$run->status] }} · {{ count($run->result['findings'] ?? []) }} hallazgos</summary>
             <div class="agent-run-content">
                 <p>Motor: reglas del sistema · {{ $run->trigger === 'manual' ? 'Manual' : 'Programada' }} · {{ array_sum($run->result['coverage'] ?? []) }} registros revisados · {{ $run->result['alerts'] ?? 0 }} alertas registradas/actualizadas</p>
+                @if($run->result['draft'] ?? null)<h4>Resumen de conciliación</h4><p>{{ $run->result['draft'] }}</p>@endif
+                @if($run->configuration['run_context'] ?? null)
+                    <details><summary>Filtros de la ejecución e instrucciones adicionales</summary><pre>{{ json_encode($run->configuration['run_context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre></details>
+                @endif
                 @foreach ($run->result['issues'] ?? [] as $issue)<p class="agent-error">{{ $issue }}</p>@endforeach
                 <details><summary>Cobertura y límites</summary>
                     @foreach ($run->result['coverage'] ?? [] as $source => $count)<p>{{ $configOptions::SOURCES[$source] ?? $source }}: {{ $count }}</p>@endforeach

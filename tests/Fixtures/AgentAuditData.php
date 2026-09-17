@@ -48,5 +48,7 @@ class AgentAuditData
         DB::table('clientes')->insert([['id' => 1, 'nombre' => 'Institución A'], ['id' => 2, 'nombre' => 'Institución B']]);
         DB::table('hospitals')->insert([['id' => 1, 'name' => 'Hospital A', 'laboratory_id' => 1], ['id' => 2, 'name' => 'Hospital B', 'laboratory_id' => 2]]);
         DB::table('cliente_hospital')->insert([['cliente_id' => 1, 'hospital_id' => 1], ['cliente_id' => 2, 'hospital_id' => 2]]);
+        (require database_path('migrations/2026_09_15_130000_create_hospital_conciliation_submissions.php'))->up();
+        (require database_path('migrations/2026_09_15_150000_add_confirmation_to_hospital_conciliation_submissions.php'))->up();
     }
 }

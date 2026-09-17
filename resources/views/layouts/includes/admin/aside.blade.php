@@ -62,6 +62,16 @@
                 </li>
             @endif
 
+            @if ($sidebarUser?->hasAnyRole(['Cliente', 'Institucion']))
+                <li class="rounded-lg border border-cyan-200 bg-cyan-50 p-1 dark:border-cyan-700 dark:bg-cyan-900/20">
+                    <a href="{{ route('admin.hospital.herramientas') }}" x-on:click="open = false"
+                        @if (request()->routeIs('admin.hospital.herramientas')) aria-current="page" @endif
+                        class="flex w-full items-center rounded-lg p-2 text-gray-900 hover:bg-cyan-100 dark:text-white dark:hover:bg-cyan-800/50 {{ request()->routeIs('admin.hospital.herramientas') ? 'bg-cyan-100' : '' }}">
+                        <span class="min-w-0 flex-1 text-left font-bold">Herramientas</span>
+                    </a>
+                </li>
+            @endif
+
             <!-- Catalogo y listas de precios -->
             @if ($menuAllows('menu.catalogo', $sidebarUser?->can('medicamentos_nutricionales') || $sidebarUser?->can('nutricionales_listas') || $sidebarUser?->can('medicamentos_oncologicos')))
                 <li

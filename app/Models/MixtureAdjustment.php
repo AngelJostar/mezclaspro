@@ -49,4 +49,13 @@ class MixtureAdjustment extends Model
     {
         return in_array($this->status, self::PENDING_STATUSES, true);
     }
+
+    public function getLogLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'declined', 'rejected' => 'Rechazado',
+            'cancelled' => 'Cancelado',
+            default => $this->label,
+        };
+    }
 }

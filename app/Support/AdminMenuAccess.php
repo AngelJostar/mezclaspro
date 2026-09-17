@@ -292,6 +292,7 @@ final class AdminMenuAccess
         }
 
         if (str_starts_with($routeName, 'admin.instituciones.reportes')
+            || str_starts_with($routeName, 'admin.instituciones.conciliaciones.')
             || str_starts_with($routeName, 'admin.instituciones.exportar')) {
             return 'menu.administracion.reports';
         }

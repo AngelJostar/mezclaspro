@@ -1,4 +1,7 @@
+import { createIcons, ArrowUp, ArrowDown } from 'lucide';
+
 const instances = new Map();
+const serverConfigurations = new WeakMap();
 let sequence = 0;
 let scanTimer = null;
 
@@ -80,10 +83,21 @@ function valuesForColumn(table, columnIndex) {
         .map((row) => cellValue(row, columnIndex))
         .filter(Boolean);
 
-    return [...new Set(values)].sort((left, right) => left.localeCompare(right, 'es', {
+    const config = serverConfiguration(table);
+    const serverValues = config?.options[config.columns[columnIndex]] || [];
+    return [...new Set([...serverValues, ...values])].sort((left, right) => left.localeCompare(right, 'es', {
         numeric: true,
         sensitivity: 'base',
     }));
+}
+
+function serverConfiguration(table) {
+    if (!table.dataset.serverColumnFilters) return null;
+    if (!serverConfigurations.has(table)) {
+        const source = document.getElementById(table.dataset.serverColumnFilters);
+        serverConfigurations.set(table, source ? JSON.parse(source.textContent) : null);
+    }
+    return serverConfigurations.get(table);
 }
 
 function isCommandColumn(table, header, columnIndex) {
@@ -111,7 +125,7 @@ function isCommandColumn(table, header, columnIndex) {
     return commandCells.length / populatedCells.length >= 0.8;
 }
 
-function createTrigger(header, columnIndex, triggerClass) {
+function createTrigger(header, columnIndex, triggerClass, server) {
     const label = normalize(header.textContent);
     const wrapper = document.createElement('div');
     const content = document.createElement('span');
@@ -124,8 +138,8 @@ function createTrigger(header, columnIndex, triggerClass) {
     trigger.type = 'button';
     trigger.dataset.column = String(columnIndex);
     trigger.className = `${triggerClass} inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-200 hover:text-slate-800`;
-    trigger.title = `Filtrar ${label}`;
-    trigger.setAttribute('aria-label', `Filtrar ${label}`);
+    trigger.title = `${server ? 'Ordenar y filtrar' : 'Filtrar'} ${label}`;
+    trigger.setAttribute('aria-label', trigger.title);
     trigger.setAttribute('aria-expanded', 'false');
     trigger.innerHTML = '<span aria-hidden="true" class="text-sm font-black leading-none text-slate-800">&#9660;</span>';
 
@@ -136,11 +150,15 @@ function createTrigger(header, columnIndex, triggerClass) {
     return trigger;
 }
 
-function createPanel(instanceId) {
+function createPanel(instanceId, server) {
     const panel = document.createElement('div');
     panel.id = `${instanceId}-panel`;
     panel.className = 'fixed z-[100] hidden w-72 overflow-hidden rounded-md border border-slate-300 bg-white text-sm normal-case text-slate-700 shadow-xl';
     panel.innerHTML = `
+        ${server ? `<div class="border-b border-slate-200 p-2 flex flex-col gap-1">
+            <button type="button" data-column-order="asc" class="inline-flex items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-slate-100"><i data-filter-sort-icon="arrow-up" class="h-4 w-4"></i>Ordenar ascendente</button>
+            <button type="button" data-column-order="desc" class="inline-flex items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-slate-100"><i data-filter-sort-icon="arrow-down" class="h-4 w-4"></i>Ordenar descendente</button>
+        </div>` : ''}
         <div class="border-b border-slate-200 p-2">
             <input type="search" data-filter-search placeholder="Buscar (Todos)"
                 class="h-9 w-full rounded-sm border-slate-300 px-2 text-sm focus:border-blue-500 focus:ring-blue-500">
@@ -159,6 +177,7 @@ function createPanel(instanceId) {
         </div>
     `;
     document.body.appendChild(panel);
+    if (server) createIcons({ icons: { ArrowUp, ArrowDown }, nameAttr: 'data-filter-sort-icon' });
 
     return panel;
 }
@@ -189,13 +208,17 @@ function enhanceTable(table) {
 
     if (!filterableColumns.length) return;
 
+    const server = serverConfiguration(table);
     const triggers = filterableColumns.map(({ header, columnIndex }) => (
-        createTrigger(header, columnIndex, triggerClass)
+        createTrigger(header, columnIndex, triggerClass, server)
     ));
-    const panel = createPanel(instanceId);
+    const panel = createPanel(instanceId, server);
     const controller = new AbortController();
     const listenerOptions = { signal: controller.signal };
     const appliedFilters = new Map();
+    if (server) Object.entries(server.selected).forEach(([field, values]) => {
+        appliedFilters.set(server.columns.indexOf(field), new Set(values));
+    });
     const searchInput = panel.querySelector('[data-filter-search]');
     const allCheckbox = panel.querySelector('[data-filter-all]');
     const optionsContainer = panel.querySelector('[data-filter-options]');
@@ -212,6 +235,7 @@ function enhanceTable(table) {
     });
 
     const applyFilters = () => {
+        if (server) return;
         getRows(table).forEach((row) => {
             row.classList.toggle('automatic-column-filter-hidden', !rowMatches(row));
         });
@@ -267,7 +291,7 @@ function enhanceTable(table) {
         activeTrigger = trigger;
         activeColumn = Number(trigger.dataset.column);
         const values = valuesForColumn(table, activeColumn);
-        draftValues = new Set(appliedFilters.get(activeColumn) || values);
+        draftValues = new Set([...(appliedFilters.get(activeColumn) || values)].filter(value => values.includes(value)));
 
         searchInput.value = '';
         renderOptions();
@@ -285,12 +309,29 @@ function enhanceTable(table) {
 
     const updateTriggerStates = () => {
         triggers.forEach((trigger) => {
-            const active = appliedFilters.has(Number(trigger.dataset.column));
+            const active = appliedFilters.has(Number(trigger.dataset.column)) || (server && server.sort === server.columns[Number(trigger.dataset.column)]);
             trigger.classList.toggle('border-blue-400', active);
             trigger.classList.toggle('bg-blue-100', active);
             trigger.classList.toggle('text-blue-700', active);
         });
     };
+
+    const navigate = (sort = server.sort, direction = server.direction) => {
+        const url = new URL(server.url, location.href);
+        url.searchParams.delete('page');
+        [...url.searchParams.keys()].filter(key => key.startsWith('columnas[')).forEach(key => url.searchParams.delete(key));
+        url.searchParams.set('orden', sort);
+        url.searchParams.set('direccion', direction);
+        appliedFilters.forEach((values, index) => {
+            const field = server.columns[index];
+            (values.size ? [...values] : ['']).forEach(value => url.searchParams.append(`columnas[${field}][]`, value));
+        });
+        window.location.assign(url.href);
+    };
+    panel.querySelectorAll('[data-column-order]').forEach(button => button.addEventListener('click', () => {
+        navigate(server.columns[activeColumn], button.dataset.columnOrder);
+    }, listenerOptions));
+    updateTriggerStates();
 
     triggers.forEach((trigger) => {
         trigger.addEventListener('pointerdown', (event) => event.stopPropagation(), listenerOptions);
@@ -322,6 +363,7 @@ function enhanceTable(table) {
         const values = valuesForColumn(table, activeColumn);
         if (draftValues.size === values.length) appliedFilters.delete(activeColumn);
         else appliedFilters.set(activeColumn, new Set(draftValues));
+        if (server) { navigate(); return; }
         applyFilters();
         updateTriggerStates();
         closePanel();
@@ -332,6 +374,13 @@ function enhanceTable(table) {
         if (!panel.contains(event.target) && !event.target.closest(`.${triggerClass}`)) closePanel();
     }, listenerOptions);
     window.addEventListener('resize', closePanel, listenerOptions);
+    panel.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            const trigger = activeTrigger;
+            closePanel();
+            trigger?.focus();
+        }
+    }, listenerOptions);
 
     instances.set(table, {
         refresh: applyFilters,

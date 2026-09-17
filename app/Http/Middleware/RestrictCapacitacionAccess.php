@@ -28,6 +28,7 @@ class RestrictCapacitacionAccess
         if ($user?->hasRole('Administracion y facturacion')
             && ! $request->routeIs([
                 'admin.instituciones.reportes',
+                'admin.instituciones.conciliaciones.*',
                 'admin.instituciones.exportar*',
                 'admin.instituciones.billing.*',
             ])) {
