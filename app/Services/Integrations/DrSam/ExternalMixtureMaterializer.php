@@ -304,6 +304,7 @@ class ExternalMixtureMaterializer
             'estado' => 'pendiente',
         ]);
 
+        $materializedMixtures = [];
         foreach ($payload['items'] as $index => $item) {
             $presentation = MedicinePresentation::query()
                 ->with('catalog')
@@ -312,11 +313,12 @@ class ExternalMixtureMaterializer
             $catalog = $presentation->catalog;
             $medicine = MedicineOnco::query()->firstOrCreate(['catalog_id' => $catalog->id], ['precio' => 0]);
             $clinicalMedication = data_get($format, "medications.{$index}", []);
+            $mixtureIndex = (int) data_get($clinicalMedication, 'mixture_index', $index);
             $dose = $item['unit'] === 'mg'
                 ? (float) $item['quantity']
                 : ((float) $item['quantity']) * (float) $presentation->contenido_valor;
             $pivot = $presentation->lists()->whereKey($external->hospital->onco_medicine_list_id)->first()?->pivot;
-            $mixture = Mezcla::query()->create([
+            $mixture = $materializedMixtures[$mixtureIndex] ??= Mezcla::query()->create([
                 'solicitud_id' => $request->id,
                 'volumen_dilucion' => data_get($clinicalMedication, 'dilution_volume', $presentation->volumen_diluyente ?: 1),
                 'tiempo_infusion' => (string) data_get($clinicalMedication, 'infusion_minutes', 60),
