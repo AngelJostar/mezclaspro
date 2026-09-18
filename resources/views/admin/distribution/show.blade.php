@@ -106,7 +106,7 @@
                 <section class="rounded-md border border-gray-200 p-4" aria-labelledby="route-messengers-title">
                     <h2 id="route-messengers-title" class="font-bold text-gray-950">Mensajeros asignados</h2>
                     <div class="mt-3 space-y-3">
-                        @foreach ($distributionRoute->messengers as $messenger)
+                        @forelse ($distributionRoute->messengers as $messenger)
                             <div class="flex items-center gap-3">
                                 <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-800">
                                     {{ mb_strtoupper(mb_substr($messenger->name, 0, 1).mb_substr($messenger->lastname ?: $messenger->name, 0, 1)) }}
@@ -116,7 +116,12 @@
                                     <p class="truncate text-xs text-gray-500">{{ $messenger->username }}</p>
                                 </div>
                             </div>
-                        @endforeach
+                        @empty
+                            <div class="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                                <i class="fa-solid fa-users mr-1" aria-hidden="true"></i>
+                                Todos los mensajeros pueden tomar esta ruta
+                            </div>
+                        @endforelse
                     </div>
                 </section>
 

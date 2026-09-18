@@ -305,17 +305,22 @@
                             </td>
                             <td class="whitespace-nowrap px-4 py-4 font-medium text-gray-700"
                                 data-filter-value="{{ $routeSchedule }}" data-sort-value="{{ $routeSchedule }}">{{ $routeSchedule }}</td>
-                            <td class="px-4 py-4" data-filter-value="{{ $messengerNames ?: 'Sin mensajeros' }}"
+                            <td class="px-4 py-4" data-filter-value="{{ $messengerNames ?: 'Todos' }}"
                                 data-sort-value="{{ $messengerNames }}">
                                 <div class="space-y-2">
-                                    @foreach ($distributionRoute->messengers as $messenger)
+                                    @forelse ($distributionRoute->messengers as $messenger)
                                         <div class="flex items-center gap-2">
                                             <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-800">
                                                 {{ mb_strtoupper(mb_substr($messenger->name, 0, 1).mb_substr($messenger->lastname ?: $messenger->name, 0, 1)) }}
                                             </span>
                                             <span class="whitespace-nowrap font-medium text-gray-800">{{ trim($messenger->name.' '.$messenger->lastname) }}</span>
                                         </div>
-                                    @endforeach
+                                    @empty
+                                        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                            <i class="fa-solid fa-users" aria-hidden="true"></i>
+                                            Todos
+                                        </span>
+                                    @endforelse
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-center" data-filter-value="{{ $distributionRoute->code }}"

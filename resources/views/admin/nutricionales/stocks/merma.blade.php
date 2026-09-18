@@ -1,12 +1,13 @@
 <x-admin-layout>
     @php
         $volumePerContainer = (float) ($stock->presentation->presentacion_ml ?? 0);
-        $availableContainers = $volumePerContainer > 0
+        $totalContainers = $volumePerContainer > 0
             ? max(0, (int) floor(min(
                 (float) $stock->frascos_actuales,
                 (float) $stock->stock_ml_actual / $volumePerContainer
             )))
             : 0;
+        $availableContainers = max(0, $totalContainers - (int) ($pendingContainers ?? 0));
     @endphp
 
     <h1 class="text-2xl font-semibold text-gray-800 mb-6">Solicitar merma de frasco</h1>
@@ -29,7 +30,23 @@
             <strong>Caducidad:</strong>
             {{ $stock->caducidad ? \Carbon\Carbon::parse($stock->caducidad)->format('Y-m-d') : '—' }}
         </p>
-        <p><strong>Stock actual:</strong> {{ number_format($stock->stock_ml_actual, 2) }} ml</p>
+        <p>
+            <strong>Stock actual:</strong>
+            {{ number_format($totalContainers) }} {{ $totalContainers === 1 ? 'frasco' : 'frascos' }}
+            <span class="text-sm text-gray-500">({{ number_format((float) $stock->stock_ml_actual, 2) }} mL)</span>
+        </p>
+        @if (($pendingContainers ?? 0) > 0)
+            <p class="text-amber-700">
+                <strong>Pendientes de autorización:</strong>
+                {{ number_format((int) $pendingContainers) }}
+                {{ (int) $pendingContainers === 1 ? 'frasco' : 'frascos' }}
+            </p>
+        @endif
+    </div>
+
+    <div class="mb-6 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <p><strong>Destino:</strong> Superadministrador → Reporte de mermas → Solicitudes de Merma.</p>
+        <p class="mt-1">El stock no se descuenta al enviar la solicitud. Se actualiza automáticamente cuando el Superadministrador la autoriza.</p>
     </div>
 
     <form action="{{ route('admin.nutricionales.stocks.registrarMerma', $stock) }}" method="POST">

@@ -292,14 +292,14 @@
                     <x-label class="mb-2 font-bold">Tiempo de infusión (h):</x-label>
                     <x-input-solicitud type="number"
                         value="{{ $hasVelocidad ? '' : old('tiempo_infusion_min', $solicitud->solicitud_detail->tiempo_infusion_min) }}"
-                        name="tiempo_infusion_min" class="w-full" />
+                        min="0.001" max="1000" name="tiempo_infusion_min" class="w-full" />
                 </div>
 
                 <div>
                     <x-label class="mb-2 font-bold">Velocidad de infusión ml/hr:</x-label>
                     <x-input-solicitud type="number"
                         value="{{ old('velocidad_infusion', $solicitud->solicitud_detail->velocidad_infusion) }}"
-                        step="0.001" name="velocidad_infusion" class="w-full" />
+                        step="0.001" min="0.001" max="100000" name="velocidad_infusion" class="w-full" />
                 </div>
 
                 <div>

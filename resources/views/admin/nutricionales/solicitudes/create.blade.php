@@ -4,12 +4,21 @@
         <div class="mt-2 mb-4 flex w-full items-start justify-between gap-4">
             <span class="h-10 w-10 shrink-0" aria-hidden="true"></span>
             <h1 class="flex-1 text-center text-2xl font-medium text-gray-800">SOLICITUD DE NUTRICIÓN PARENTERAL</h1>
-            <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
-                class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
-                title="Cerrar formato de solicitud"
-                aria-label="Cerrar formato de solicitud">
-                <span aria-hidden="true">&times;</span>
-            </a>
+            <div class="flex shrink-0 items-center gap-2">
+                @role('Super Admin')
+                    <button type="button" id="toggle-macro-layout"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-emerald-600 text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        title="Editar acomodo del formulario" aria-label="Editar acomodo del formulario">
+                        <i class="fa-solid fa-pen text-sm" aria-hidden="true"></i>
+                    </button>
+                @endrole
+                <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    title="Cerrar formato de solicitud"
+                    aria-label="Cerrar formato de solicitud">
+                    <span aria-hidden="true">&times;</span>
+                </a>
+            </div>
         </div>
 
         @if ($errors->any())
@@ -22,7 +31,7 @@
             </div>
         @endif
 
-        <form action="{{ route('admin.nutricionales.solicitudes.store') }}" method="POST"
+        <form id="nutrition-request-form" action="{{ route('admin.nutricionales.solicitudes.store') }}" method="POST"
             class="bg-white rounded-lg p-6 shadow-lg">
             @csrf
 
@@ -119,7 +128,7 @@
                     </x-label>
                     <div class="flex flex-col w-full">
                         <div class="flex">
-                            <x-input-solicitud type="number" value="{{ old('peso') }}" step="0.001" name="peso" class="w-full" placeholder="" />
+                            <x-input-solicitud type="number" value="{{ old('peso') }}" step="0.001" min="0.001" max="1000" name="peso" class="w-full" placeholder="" />
                             <div>Kg</div>
                         </div>
                         @error('peso')
@@ -176,7 +185,7 @@
                         Tiempo de infusión (h):
                     </x-label>
                     <x-input-solicitud type="number" value="{{ old('tiempo_infusion_min') }}"
-                        name="tiempo_infusion_min" class="w-full" placeholder="" />
+                        min="0.001" max="1000" name="tiempo_infusion_min" class="w-full" placeholder="" />
                     @error('tiempo_infusion_min')
                         <div class="text-red-500 text-sm">{{ $message }}</div>
                     @enderror
@@ -187,7 +196,7 @@
                         Velocidad de infusión ml/hr:
                     </x-label>
                     <x-input-solicitud type="number" value="{{ old('velocidad_infusion') }}" step="0.001"
-                        name="velocidad_infusion" class="w-full" placeholder="" />
+                        min="0.001" max="100000" name="velocidad_infusion" class="w-full" placeholder="" />
                     @error('velocidad_infusion')
                         <div class="text-red-500 text-sm">{{ $message }}</div>
                     @enderror
@@ -201,7 +210,7 @@
                             Sobrellenado (mL):
                         </x-label>
                         <x-input-solicitud type="number" value="{{ old('sobrellenado_ml') }}" step="0.0001"
-                            name="sobrellenado_ml" class="w-32" placeholder="" />
+                            min="0" max="100000" name="sobrellenado_ml" class="w-32" placeholder="" />
                         @error('sobrellenado_ml')
                             <div class="text-red-500 text-sm">{{ $message }}</div>
                         @enderror
@@ -213,10 +222,12 @@
                         Volumen total (mL):
                     </x-label>
                     <x-input-solicitud type="number" value="{{ old('volumen_total') }}" name="volumen_total"
-                        step="0.0001" class="w-full" placeholder="" />
+                        step="0.0001" min="0" max="100000" class="w-full" placeholder="" />
                     @error('volumen_total')
                         <div class="text-red-500 text-sm">{{ $message }}</div>
                     @enderror
+                    <div id="volume-components-error" class="mt-1 hidden text-sm font-semibold text-red-600"
+                        role="alert"></div>
                 </div>
 
                 <div class="mb-4 flex items-stretch gap-2 w-full">
@@ -237,51 +248,45 @@
             <h2 class="mb-4">MACRONUTRIENTES:</h2>
             <hr>
 
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-                <div class="w-full">
-                    <h3 class="mt-4">AMINOÁCIDOS</h3>
-
-                    @foreach ($inputs as $input)
-                        @if ($input->category_id == 1)
-                            @include('admin.nutricionales.solicitudes.partials.input-row-create', ['input' => $input, 'oldPrefix' => 'i_'])
-                        @endif
-                    @endforeach
-
-                    @foreach ($inputs as $input)
-                        @if ($input->category_id == 8)
-                            @include('admin.nutricionales.solicitudes.partials.input-row-create', ['input' => $input, 'oldPrefix' => 'i_'])
-                        @endif
-                    @endforeach
-                </div>
-
-                <div class="w-full">
-                    <h3>CARBOHIDRATOS:</h3>
-
-                    @foreach ($inputs as $input)
-                        @if ($input->category_id == 2)
-                            @include('admin.nutricionales.solicitudes.partials.input-row-create', ['input' => $input, 'oldPrefix' => 'i_'])
-                        @endif
-                    @endforeach
-
-                    <h3>LÍPIDOS:</h3>
-
-                    @foreach ($inputs as $input)
-                        @if ($input->category_id == 3)
-                            @include('admin.nutricionales.solicitudes.partials.input-row-create', ['input' => $input, 'oldPrefix' => 'i_'])
-                        @endif
-                    @endforeach
-                </div>
+            <div id="macro-layout-grid" data-layout-grid="macronutrients" class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                @foreach ([1 => 'left', 2 => 'right'] as $columnNumber => $columnName)
+                    <div data-layout-column="{{ $columnName }}" class="flex min-h-24 flex-col gap-4 rounded-md">
+                        @foreach ($inputs->whereIn('category_id', [1, 2, 3, 8])->where('layout_column', $columnNumber)->sortBy('orden_enum') as $input)
+                            @php
+                                $macroCategoryLabel = match ((int) $input->category_id) {
+                                    1, 8 => 'Aminoácidos',
+                                    2 => 'Carbohidratos',
+                                    3 => 'Lípidos',
+                                    default => 'Macronutriente',
+                                };
+                            @endphp
+                            @include('admin.nutricionales.solicitudes.partials.input-row-create', [
+                                'input' => $input,
+                                'oldPrefix' => 'i_',
+                                'layoutSortable' => true,
+                                'layoutCategoryLabel' => $macroCategoryLabel,
+                            ])
+                        @endforeach
+                    </div>
+                @endforeach
             </div>
 
             <h2 class="mb-4">ELECTROLITOS</h2>
             <hr>
 
             <div class="mt-4">
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    @foreach ($inputs as $input)
-                        @if ($input->category_id == 4)
-                            @include('admin.nutricionales.solicitudes.partials.input-row-create', ['input' => $input, 'oldPrefix' => 'i_'])
-                        @endif
+                <div id="electrolyte-layout-grid" data-layout-grid="electrolytes" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    @foreach ([1 => 'left', 2 => 'right'] as $columnNumber => $columnName)
+                        <div data-layout-column="{{ $columnName }}" class="flex min-h-24 flex-col gap-4 rounded-md">
+                            @foreach ($inputs->where('category_id', 4)->where('layout_column', $columnNumber)->sortBy('orden_enum') as $input)
+                                @include('admin.nutricionales.solicitudes.partials.input-row-create', [
+                                    'input' => $input,
+                                    'oldPrefix' => 'i_',
+                                    'layoutSortable' => true,
+                                    'layoutCategoryLabel' => 'Electrolito',
+                                ])
+                            @endforeach
+                        </div>
                     @endforeach
                 </div>
             </div>
@@ -290,11 +295,18 @@
             <hr>
 
             <div class="mt-4">
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 w-full">
-                    @foreach ($inputs as $input)
-                        @if ($input->category_id == 5)
-                            @include('admin.nutricionales.solicitudes.partials.input-row-create', ['input' => $input, 'oldPrefix' => 'i_'])
-                        @endif
+                <div id="additive-layout-grid" data-layout-grid="additives" class="grid grid-cols-1 xl:grid-cols-2 gap-4 w-full">
+                    @foreach ([1 => 'left', 2 => 'right'] as $columnNumber => $columnName)
+                        <div data-layout-column="{{ $columnName }}" class="flex min-h-24 flex-col gap-4 rounded-md">
+                            @foreach ($inputs->where('category_id', 5)->where('layout_column', $columnNumber)->sortBy('orden_enum') as $input)
+                                @include('admin.nutricionales.solicitudes.partials.input-row-create', [
+                                    'input' => $input,
+                                    'oldPrefix' => 'i_',
+                                    'layoutSortable' => true,
+                                    'layoutCategoryLabel' => 'Aditivo',
+                                ])
+                            @endforeach
+                        </div>
                     @endforeach
 
                     @foreach ($inputs as $input)
@@ -339,7 +351,7 @@
                             </x-label>
                             <div class="flex flex-col w-full">
                                 <x-input-solicitud type="datetime-local" value="{{ old('fecha_hora_entrega') }}"
-                                    min="{{ \Carbon\Carbon::now()->format('Y-m-d\TH:i') }}" name="fecha_hora_entrega"
+                                    min="{{ \Carbon\Carbon::now()->addMinutes(210)->format('Y-m-d\TH:i') }}" name="fecha_hora_entrega"
                                     class="" placeholder="" />
                                 @error('fecha_hora_entrega')
                                     <div class="text-red-500 text-sm">{{ $message }}</div>
@@ -384,7 +396,7 @@
             </div>
 
             <div class="flex justify-end gap-5">
-                <x-button>
+                <x-button id="nutrition-request-submit">
                     GUARDAR SOLICITUD
                 </x-button>
             </div>
@@ -393,6 +405,89 @@
 
     @push('js')
         <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.getElementById('nutrition-request-form');
+                const submitButton = document.getElementById('nutrition-request-submit');
+                const totalVolumeInput = form?.querySelector('[name="volumen_total"]');
+                const patientWeightInput = form?.querySelector('[name="peso"]');
+                const nptSelect = form?.querySelector('[name="npt"]');
+                const volumeError = document.getElementById('volume-components-error');
+
+                if (!form || !submitButton) return;
+
+                const calculatedComponentsVolume = () => {
+                    const weight = Number.parseFloat(patientWeightInput?.value || '0');
+                    const isAdult = nptSelect?.value === 'ADULT';
+
+                    return Array.from(form.querySelectorAll('[data-nutrition-component]')).reduce((sum, card) => {
+                        const inputId = Number.parseInt(card.dataset.inputId || '0', 10);
+                        if (inputId === 40) return sum;
+
+                        const input = card.querySelector('input[name^="i_"]');
+                        const quantity = Number.parseFloat(input?.value || '0');
+                        const multiplier = Number.parseFloat(card.dataset.mult || '0');
+                        const divisor = Number.parseFloat(card.dataset.div || '0');
+                        const category = Number.parseInt(card.dataset.categoryId || '0', 10);
+                        if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(divisor) || divisor === 0) {
+                            return sum;
+                        }
+
+                        const usesPatientWeight = !isAdult && [1, 2, 3, 4, 8].includes(category);
+                        const weightFactor = usesPatientWeight ? weight : 1;
+                        const componentVolume = quantity * weightFactor * multiplier / divisor;
+
+                        return Number.isFinite(componentVolume) && componentVolume > 0
+                            ? sum + componentVolume
+                            : sum;
+                    }, 0);
+                };
+
+                const validateTotalVolume = () => {
+                    if (!totalVolumeInput || totalVolumeInput.value === '') {
+                        totalVolumeInput?.setCustomValidity('');
+                        volumeError?.classList.add('hidden');
+                        return true;
+                    }
+
+                    const totalVolume = Number.parseFloat(totalVolumeInput.value);
+                    const componentsVolume = calculatedComponentsVolume();
+                    const invalid = Number.isFinite(totalVolume) && totalVolume + 0.0001 < componentsVolume;
+                    const message = invalid
+                        ? `El volumen total no puede ser menor que la suma calculada de los componentes (${componentsVolume.toFixed(2)} mL).`
+                        : '';
+
+                    totalVolumeInput.setCustomValidity(message);
+                    if (volumeError) {
+                        volumeError.textContent = message;
+                        volumeError.classList.toggle('hidden', !invalid);
+                    }
+
+                    return !invalid;
+                };
+
+                totalVolumeInput?.addEventListener('input', validateTotalVolume);
+                patientWeightInput?.addEventListener('input', validateTotalVolume);
+                nptSelect?.addEventListener('change', validateTotalVolume);
+                form.querySelectorAll('[data-nutrition-component] input[name^="i_"]').forEach((input) => {
+                    input.addEventListener('input', validateTotalVolume);
+                });
+
+                form.addEventListener('submit', function(event) {
+                    if (!validateTotalVolume()) {
+                        event.preventDefault();
+                        totalVolumeInput.reportValidity();
+                        totalVolumeInput.focus();
+                        return;
+                    }
+
+                    if (!form.checkValidity() || submitButton.disabled) return;
+
+                    submitButton.disabled = true;
+                    submitButton.classList.add('cursor-not-allowed', 'opacity-60');
+                    submitButton.textContent = 'GUARDANDO...';
+                });
+            });
+
             function calcularEdad(fechaNacimiento) {
                 var fechaNacimiento = new Date(fechaNacimiento);
                 var fechaActual = new Date();
@@ -490,6 +585,179 @@
 
                 actualizarUnidadesElectrolitos();
                 selectNPT.addEventListener('change', actualizarUnidadesElectrolitos);
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const toggle = document.getElementById('toggle-macro-layout');
+                const grids = Array.from(document.querySelectorAll('[data-layout-grid]'));
+                if (!toggle || grids.length === 0) return;
+
+                let editing = false;
+                let draggedCard = null;
+                let activeGrid = null;
+                let dropColumn = null;
+                let dropTarget = null;
+                let dropPosition = null;
+                const cards = (grid) => Array.from(grid.querySelectorAll('[data-layout-card]'));
+                const clearDropIndicators = () => {
+                    grids.forEach((layoutGrid) => cards(layoutGrid).forEach((card) => {
+                        card.style.borderTop = '';
+                        card.style.borderBottom = '';
+                        delete card.dataset.dropPosition;
+                    }));
+                    grids.forEach((layoutGrid) => layoutGrid.querySelectorAll('[data-layout-column]').forEach((column) => {
+                        column.classList.remove('bg-emerald-50', 'ring-2', 'ring-emerald-400');
+                    }));
+                };
+
+                const setEditing = (enabled) => {
+                    editing = enabled;
+                    toggle.innerHTML = enabled
+                        ? '<i class="fa-solid fa-check text-sm" aria-hidden="true"></i>'
+                        : '<i class="fa-solid fa-pen text-sm" aria-hidden="true"></i>';
+                    toggle.title = enabled ? 'Guardar acomodo' : 'Editar acomodo del formulario';
+                    toggle.setAttribute('aria-label', toggle.title);
+                    grids.forEach((grid) => {
+                        grid.classList.toggle('rounded-lg', enabled);
+                        grid.classList.toggle('ring-2', enabled);
+                        grid.classList.toggle('ring-emerald-400', enabled);
+                        grid.classList.toggle('p-2', enabled);
+
+                        cards(grid).forEach((card) => {
+                            const handle = card.querySelector('[data-drag-handle]');
+                            card.classList.toggle('shadow-md', enabled);
+                            if (!handle) return;
+                            handle.classList.toggle('hidden', !enabled);
+                            handle.classList.toggle('flex', enabled);
+                            handle.style.cursor = enabled ? 'grab' : '';
+                            handle.style.touchAction = enabled ? 'none' : '';
+                        });
+                    });
+                };
+
+                grids.forEach((grid) => {
+                    grid.querySelectorAll('[data-drag-handle]').forEach((handle) => {
+                        handle.addEventListener('pointerdown', (event) => {
+                            if (!editing || (event.button !== undefined && event.button !== 0)) return;
+                            event.preventDefault();
+                            draggedCard = handle.closest('[data-layout-card]');
+                            activeGrid = grid;
+                            dropColumn = null;
+                            dropTarget = null;
+                            dropPosition = null;
+                            draggedCard.classList.add('opacity-50');
+                            handle.style.cursor = 'grabbing';
+                            document.body.style.userSelect = 'none';
+                            document.body.style.cursor = 'grabbing';
+                        });
+                    });
+                });
+
+                document.addEventListener('pointermove', (event) => {
+                    if (!editing || !draggedCard || !activeGrid) return;
+                    event.preventDefault();
+
+                    if (event.clientY < 90) window.scrollBy(0, -14);
+                    if (event.clientY > window.innerHeight - 90) window.scrollBy(0, 14);
+
+                    const pointedElement = document.elementFromPoint(event.clientX, event.clientY);
+                    const target = pointedElement?.closest?.('[data-layout-card]');
+                    const pointedColumn = pointedElement?.closest?.('[data-layout-column]');
+                    if (!pointedColumn || pointedColumn.closest('[data-layout-grid]') !== activeGrid) {
+                        clearDropIndicators();
+                        dropColumn = null;
+                        dropTarget = null;
+                        dropPosition = null;
+                        return;
+                    }
+
+                    clearDropIndicators();
+                    dropColumn = pointedColumn;
+                    if (target === draggedCard) {
+                        dropTarget = null;
+                        dropPosition = null;
+                        return;
+                    }
+                    if (!target) {
+                        dropTarget = null;
+                        dropPosition = 'append';
+                        pointedColumn.classList.add('bg-emerald-50', 'ring-2', 'ring-emerald-400');
+                        return;
+                    }
+
+                    const rect = target.getBoundingClientRect();
+                    dropPosition = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                    dropTarget = target;
+                    if (dropPosition === 'before') {
+                        target.style.borderTop = '5px solid #10B981';
+                    } else {
+                        target.style.borderBottom = '5px solid #10B981';
+                    }
+                }, { passive: false });
+
+                const finishPointerDrag = () => {
+                    if (!draggedCard) return;
+
+                    if (dropTarget && dropColumn) {
+                        dropColumn.insertBefore(
+                            draggedCard,
+                            dropPosition === 'before' ? dropTarget : dropTarget.nextSibling,
+                        );
+                    } else if (dropColumn && dropPosition === 'append') {
+                        dropColumn.appendChild(draggedCard);
+                    }
+
+                    draggedCard.classList.remove('opacity-50');
+                    draggedCard.querySelector('[data-drag-handle]').style.cursor = 'grab';
+                    document.body.style.userSelect = '';
+                    document.body.style.cursor = '';
+                    draggedCard = null;
+                    activeGrid = null;
+                    dropColumn = null;
+                    dropTarget = null;
+                    dropPosition = null;
+                    clearDropIndicators();
+                };
+
+                document.addEventListener('pointerup', finishPointerDrag);
+                document.addEventListener('pointercancel', finishPointerDrag);
+
+                toggle.addEventListener('click', async () => {
+                    if (!editing) {
+                        setEditing(true);
+                        return;
+                    }
+
+                    toggle.disabled = true;
+                    try {
+                        const response = await fetch(@json(route('admin.nutricionales.inputs.reorder-form-layout')), {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                            },
+                            body: JSON.stringify({
+                                sections: Object.fromEntries(grids.map((grid) => [
+                                    grid.dataset.layoutGrid,
+                                    Object.fromEntries(Array.from(grid.querySelectorAll('[data-layout-column]')).map((column) => [
+                                        column.dataset.layoutColumn,
+                                        cards(column).map((card) => Number(card.dataset.inputId)),
+                                    ])),
+                                ])),
+                            }),
+                        });
+                        if (!response.ok) throw new Error('No fue posible guardar el acomodo.');
+                        setEditing(false);
+                        if (window.Swal) {
+                            Swal.fire({ icon: 'success', title: 'Acomodo guardado', timer: 1400, showConfirmButton: false });
+                        }
+                    } catch (error) {
+                        if (window.Swal) Swal.fire({ icon: 'error', title: 'No se guardó el acomodo', text: error.message });
+                    } finally {
+                        toggle.disabled = false;
+                    }
+                });
             });
         </script>
     @endpush

@@ -34,19 +34,7 @@
                 </x-select>
             </div>
 
-            <div class="mb-4">
-                <x-label class="mb-2">
-                    Input
-                </x-label>
-                <x-select class="w-full" name="input_id">
-                    <option value="">Seleccione un input</option>
-                    @foreach ($inputs as $input)
-                        <option @selected(old('input_id', $medicine->input_id) == $input->id) value="{{ $input->id }}">
-                            {{ $input->description }}
-                        </option>
-                    @endforeach
-                </x-select>
-            </div>
+            @include('admin.nutricionales.medicines._request-field', ['medicine' => $medicine])
 
             <div class="mb-4">
                 <x-label class="mb-2">
@@ -55,6 +43,22 @@
                 <x-input type="number" step="0.001" min="0"
                     value="{{ old('osmolaridad', $medicine->osmolaridad) }}" name="osmolaridad" class="w-full"
                     placeholder="Escriba la osmolaridad" />
+            </div>
+
+            <div class="mb-4">
+                <x-label class="mb-2">
+                    Calorías (kcal/mL)
+                </x-label>
+                <x-input type="number" step="0.0001" min="0"
+                    value="{{ old('calorias', $medicine->calorias) }}" name="calorias" class="w-full"
+                    placeholder="Escriba las calorías" />
+            </div>
+
+            <div class="mb-4">
+                <x-label class="mb-2">Densidad (g/mL)</x-label>
+                <x-input type="number" step="0.0001" min="0.0001" max="100"
+                    value="{{ old('densidad', $medicine->densidad) }}" name="densidad" class="w-full"
+                    placeholder="Escriba la densidad" />
             </div>
 
             <div class="mb-4">
@@ -87,6 +91,7 @@
                 $oldPresentations = $medicine->presentations
                     ->map(function ($presentation) {
                         return [
+                            'id' => $presentation->id,
                             'denominacion_comercial' => $presentation->denominacion_comercial,
                             'fabricante' => $presentation->fabricante,
                             'presentacion' => $presentation->presentacion,
@@ -115,6 +120,9 @@
         <div id="presentations-container" class="space-y-4">
             @foreach ($oldPresentations as $index => $presentation)
                 <div class="presentation-item border rounded-lg p-4 bg-gray-50">
+                    @if (!empty($presentation['id']))
+                        <input type="hidden" name="presentations[{{ $index }}][id]" value="{{ $presentation['id'] }}">
+                    @endif
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-semibold text-gray-700">Presentación #{{ $index + 1 }}</h3>
                         <button type="button"

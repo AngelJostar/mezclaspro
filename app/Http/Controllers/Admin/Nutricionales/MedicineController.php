@@ -15,30 +15,12 @@ class MedicineController extends Controller
 {
     public function index()
     {
-        $medicines = NutritionMedicineCatalog::with([
-            'category',
-            'input',
-            'presentations' => function ($query) {
-                $query->orderBy('denominacion_comercial');
-            }
-        ])
-            ->orderBy('denominacion_generica')
-            ->get();
-
-        return view('admin.nutricionales.medicines.index', compact('medicines'));
+        return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'nutricionales']);
     }
 
     public function create()
     {
-        $categories = Category::orderBy('name')->get();
-
-        $inputs = Input::leftJoin('nutrition_medicines_catalog', 'inputs.id', '=', 'nutrition_medicines_catalog.input_id')
-            ->whereNull('nutrition_medicines_catalog.id')
-            ->select('inputs.*')
-            ->orderBy('description')
-            ->get();
-
-        return view('admin.nutricionales.medicines.create', compact('categories', 'inputs'));
+        return redirect()->route('admin.catalogo-listas.products.create', ['category' => 'nutricionales']);
     }
 
     public function store(Request $request)
@@ -46,8 +28,15 @@ class MedicineController extends Controller
         $request->validate([
             'denominacion_generica' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
-            'input_id' => 'required|exists:inputs,id|unique:nutrition_medicines_catalog,input_id',
+            'request_field.unidad' => 'required|string|max:50',
+            'request_field.tipo_input' => ['required', Rule::in(['adulto', 'niño', 'ambos'])],
+            'request_field.orden_enum' => 'required|integer|min:0',
+            'request_field.is_active' => 'required|boolean',
+            'request_field.mult' => 'required|numeric|min:0',
+            'request_field.div' => 'required|numeric|min:0.00001',
             'osmolaridad' => 'nullable|numeric|min:0',
+            'calorias' => 'nullable|numeric|min:0',
+            'densidad' => 'nullable|numeric|gt:0|max:100',
             'is_active' => 'nullable|boolean',
 
             'presentations' => 'required|array|min:1',
@@ -74,11 +63,15 @@ class MedicineController extends Controller
         DB::beginTransaction();
 
         try {
+            $input = Input::create($this->requestFieldData($request));
+
             $catalog = NutritionMedicineCatalog::create([
-                'denominacion_generica' => $request->denominacion_generica,
+                'denominacion_generica' => trim($request->denominacion_generica),
                 'category_id' => $request->category_id,
-                'input_id' => $request->input_id,
+                'input_id' => $input->id,
                 'osmolaridad' => $request->osmolaridad,
+                'calorias' => $request->calorias,
+                'densidad' => $request->densidad,
                 'is_active' => $request->boolean('is_active', true),
             ]);
 
@@ -104,7 +97,7 @@ class MedicineController extends Controller
                 'icon' => 'success'
             ]);
 
-            return redirect()->route('admin.nutricionales.medicines.index');
+            return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'nutricionales']);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -119,6 +112,7 @@ class MedicineController extends Controller
         $this->ensureSuperAdminCanEdit();
 
         $medicine->load([
+            'input',
             'presentations' => function ($query) {
                 $query->orderBy('denominacion_comercial');
             }
@@ -126,9 +120,7 @@ class MedicineController extends Controller
 
         $categories = Category::orderBy('name')->get();
 
-        $inputs = Input::orderBy('description')->get();
-
-        return view('admin.nutricionales.medicines.edit', compact('medicine', 'categories', 'inputs'));
+        return view('admin.nutricionales.medicines.edit', compact('medicine', 'categories'));
     }
 
     public function update(Request $request, NutritionMedicineCatalog $medicine)
@@ -138,12 +130,15 @@ class MedicineController extends Controller
         $request->validate([
             'denominacion_generica' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
-            'input_id' => [
-                'required',
-                'exists:inputs,id',
-                Rule::unique('nutrition_medicines_catalog', 'input_id')->ignore($medicine->id),
-            ],
+            'request_field.unidad' => 'required|string|max:50',
+            'request_field.tipo_input' => ['required', Rule::in(['adulto', 'niño', 'ambos'])],
+            'request_field.orden_enum' => 'required|integer|min:0',
+            'request_field.is_active' => 'required|boolean',
+            'request_field.mult' => 'required|numeric|min:0',
+            'request_field.div' => 'required|numeric|min:0.00001',
             'osmolaridad' => 'nullable|numeric|min:0',
+            'calorias' => 'nullable|numeric|min:0',
+            'densidad' => 'nullable|numeric|gt:0|max:100',
             'is_active' => 'nullable|boolean',
 
             'presentations' => 'required|array|min:1',
@@ -153,6 +148,7 @@ class MedicineController extends Controller
             'presentations.*.presentacion_ml' => 'nullable|numeric|min:0',
             'presentations.*.stability_hours' => 'nullable|integer|min:1|max:8760',
             'presentations.*.is_available' => 'nullable|boolean',
+            'presentations.*.id' => 'nullable|integer|exists:nutrition_medicine_presentations,id',
 
         ]);
 
@@ -171,19 +167,26 @@ class MedicineController extends Controller
         DB::beginTransaction();
 
         try {
+            $input = $medicine->input;
+            if ($input) {
+                $input->update($this->requestFieldData($request));
+            } else {
+                $input = Input::create($this->requestFieldData($request));
+            }
+
             $medicine->update([
-                'denominacion_generica' => $request->denominacion_generica,
+                'denominacion_generica' => trim($request->denominacion_generica),
                 'category_id' => $request->category_id,
-                'input_id' => $request->input_id,
+                'input_id' => $input->id,
                 'osmolaridad' => $request->osmolaridad,
+                'calorias' => $request->calorias,
+                'densidad' => $request->densidad,
                 'is_active' => $request->boolean('is_active', true),
             ]);
 
-            // Como aún no hay producción, hacemos replace completo de presentaciones
-            $medicine->presentations()->delete();
-
+            $retainedPresentationIds = [];
             foreach ($request->presentations as $presentation) {
-                NutritionMedicinePresentation::create([
+                $presentationData = [
                     'nutrition_medicine_catalog_id' => $medicine->id,
                     'denominacion_comercial' => trim($presentation['denominacion_comercial']),
                     'fabricante' => isset($presentation['fabricante']) ? trim($presentation['fabricante']) : null,
@@ -193,8 +196,24 @@ class MedicineController extends Controller
                     'is_available' => isset($presentation['is_available'])
                         ? (bool) $presentation['is_available']
                         : true,
-                ]);
+                ];
+
+                $presentationModel = !empty($presentation['id'])
+                    ? $medicine->presentations()->find($presentation['id'])
+                    : null;
+
+                if ($presentationModel) {
+                    $presentationModel->update($presentationData);
+                } else {
+                    $presentationModel = NutritionMedicinePresentation::create($presentationData);
+                }
+
+                $retainedPresentationIds[] = $presentationModel->id;
             }
+
+            $medicine->presentations()
+                ->whereNotIn('id', $retainedPresentationIds)
+                ->update(['is_available' => false]);
 
             DB::commit();
 
@@ -204,7 +223,7 @@ class MedicineController extends Controller
                 'icon' => 'success'
             ]);
 
-            return redirect()->route('admin.nutricionales.medicines.index');
+            return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'nutricionales']);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -230,7 +249,7 @@ class MedicineController extends Controller
                 'icon' => 'success'
             ]);
 
-            return redirect()->route('admin.nutricionales.medicines.index');
+            return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'nutricionales']);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -243,5 +262,21 @@ class MedicineController extends Controller
     private function ensureSuperAdminCanEdit(): void
     {
         abort_unless(auth()->user()?->hasRole('Super Admin'), 403);
+    }
+
+    private function requestFieldData(Request $request): array
+    {
+        $field = $request->input('request_field', []);
+
+        return [
+            'description' => trim((string) $request->input('denominacion_generica')),
+            'unidad' => trim((string) ($field['unidad'] ?? 'mL')),
+            'is_active' => (bool) ($field['is_active'] ?? true),
+            'tipo_input' => $field['tipo_input'] ?? 'ambos',
+            'orden_enum' => (int) ($field['orden_enum'] ?? (((int) Input::max('orden_enum')) + 1)),
+            'category_id' => (int) $request->input('category_id'),
+            'mult' => (float) ($field['mult'] ?? 1),
+            'div' => (float) ($field['div'] ?? 1),
+        ];
     }
 }

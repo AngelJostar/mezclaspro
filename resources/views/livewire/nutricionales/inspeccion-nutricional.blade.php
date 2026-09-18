@@ -6,7 +6,7 @@
                 <div class="flex items-start justify-between border-b pb-4 mb-6">
                     <div>
                         <h2 class="mixture-workflow-heading">
-                            Inspección nutricional | {{ $mixtureContext }}
+                            Inspección nutricional | Mezcla #{{ $solicitudId }}
                         </h2>
                         <p class="text-sm text-gray-500 mt-1">
                             Verificacion fisica del contenedor, contenido y liberacion de la solicitud nutricional.
@@ -36,6 +36,22 @@
                         </ul>
                     </div>
                 @endif
+
+                <section class="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div class="mb-4">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</span>
+                        <p class="font-semibold text-gray-900">{{ $inspectionSummary['client'] ?? '—' }}</p>
+                    </div>
+                    <h3 class="mb-3 text-base font-semibold text-gray-800">Datos del paciente</h3>
+                    <dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                        @foreach (['name' => 'Paciente', 'record' => 'Registro', 'sex' => 'Sexo', 'age' => 'Edad', 'weight' => 'Peso', 'service' => 'Servicio', 'location' => 'Piso / Cama'] as $key => $label)
+                            <div>
+                                <dt class="text-gray-500">{{ $label }}</dt>
+                                <dd class="font-medium text-gray-900">{{ $inspectionSummary['patient'][$key] ?? '—' }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                </section>
 
                 <div class="flex justify-end mb-4">
                     <button type="button" onclick="marcarDefaultNutricional()"
@@ -98,6 +114,7 @@
                                         'contenido_homogeneo' => 'Contenido homogeneo?',
                                         'presenta_particulas' => 'Presenta particulas?',
                                         'presenta_turbidez' => 'Presenta turbidez?',
+                                        'volumen_correcto' => 'Volumen correcto?',
                                         'aprueba_contenido' => 'Aprueba la inspeccion del contenido?',
                                         'aprueba_contenedor' => 'Aprueba contenedor?',
                                     ] as $field => $label)
@@ -123,21 +140,23 @@
 
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">
-                                    Dosis / volumen total (mL)
+                                <label for="nutrition-theoretical-weight" class="block text-sm font-medium text-gray-700">
+                                    Peso teórico (g)
                                 </label>
-
-                                <input type="number" step="0.01" min="0.01" wire:model.defer="dosis_volumen" required
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200">
-
-                                @error('dosis_volumen')
-                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                @enderror
+                                <input id="nutrition-theoretical-weight" type="text"
+                                    value="{{ $peso_teorico !== null ? number_format((float) $peso_teorico, 2, '.', '') : 'S/D' }}" readonly
+                                    class="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm">
+                                <p class="mt-1 text-xs text-gray-500">Suma del volumen final × densidad de cada componente.</p>
+                                @if ($densidades_faltantes !== [])
+                                    <p class="mt-1 text-xs font-semibold text-amber-700">
+                                        Falta configurar densidad: {{ implode(', ', $densidades_faltantes) }}.
+                                    </p>
+                                @endif
                             </div>
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">
-                                    Peso de la nutricion (g)
+                                    Peso medido de la nutrición (g)
                                 </label>
 
                                 <input type="number" step="0.01" min="0.01" wire:model.defer="peso_mezcla" required
@@ -182,12 +201,22 @@
 
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">
-                                        Aprobo
+                                        Aprobó
                                     </label>
 
-                                    <input type="text" wire:model.defer="aprobo_nombre"
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200 bg-gray-100"
-                                        readonly>
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        Solo Responsable sanitario o Auxiliar de responsable sanitario.
+                                    </p>
+                                    <select wire:model.defer="aprobo_nombre"
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200">
+                                        <option value="">Seleccione quién aprobó...</option>
+                                        @foreach ($aprobadores as $valor => $etiqueta)
+                                            <option value="{{ $valor }}">{{ $etiqueta }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('aprobo_nombre')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
                                 </div>
                             </div>
 

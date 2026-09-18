@@ -579,6 +579,15 @@
     @endunless
         {{-- separar hojas --}}
         <div class="{{ ($soloInspeccion ?? false) ? '' : 'salto-pagina' }} contenedor border-1">
+            @php
+                $inspectionMark = static fn ($value, bool $expected): string => $value !== null && (bool) $value === $expected ? 'X' : '';
+                $inspectionDate = $inspeccion?->fecha_inspeccion
+                    ? \Carbon\Carbon::parse($inspeccion->fecha_inspeccion)->format('d-m-Y')
+                    : 'S/D';
+                $inspectionTime = $inspeccion?->hora_inspeccion
+                    ? \Carbon\Carbon::parse($inspeccion->hora_inspeccion)->format('H:i')
+                    : 'S/D';
+            @endphp
             <div class="introduccion">
                 <table>
                     <tr>
@@ -608,16 +617,16 @@
                 <table>
                     <tr>
                         <td class="border-0" style="width: 50%">Fecha:
-                            <span>{{ date('d-m-Y', strtotime($solicitud_detalles->created_at)) }}</span>
+                            <span>{{ $inspectionDate }}</span>
                         </td>
-                        <td class="border-0 text-right" style="width: 50%">Hora de inspección: _____________ </td>
+                        <td class="border-0 text-right" style="width: 50%">Hora de inspección: {{ $inspectionTime }}</td>
                     </tr>
                 </table>
                 <table>
                     <tr>
                         <td style="width: 15%" class="border-0"><strong>Tipo de contenedor</strong></td>
-                        <td style="width: 10%" class="border-0">Bolsa</td>
-                        <td style="width: 5%"></td>
+                        <td style="width: 10%" class="border-0">{{ $inspeccion?->tipo_contenedor ?: 'S/D' }}</td>
+                        <td style="width: 5%">{{ $inspeccion?->tipo_contenedor ? 'X' : '' }}</td>
                         <td class="border-0" style="widows: 70%"></td>
                     </tr>
                 </table>
@@ -635,52 +644,52 @@
                                 </tr>
                                 <tr>
                                     <td>¿Esta rotulado?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->esta_rotulado, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->esta_rotulado, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>No. De lote</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->numero_lote, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->numero_lote, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>Rubrica del preparador</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->rubrica_preparador, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->rubrica_preparador, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>Tiene sello de seguridad?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->sello_seguridad, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->sello_seguridad, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>¿Presenta fugas?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->presenta_fugas, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->presenta_fugas, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td colspan="3" class="text-center"><strong>Inspección física del set de
                                             infusión</strong></td>
                                 </tr>
                                 <tr>
-                                    <td>¿Set conectado?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td>¿Incluye medicamento correcto?</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->medicamento, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->medicamento, false) }}</td>
                                 </tr>
                                 <tr>
-                                    <td>¿Pinza de seguridad cerrada?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td>¿Dosis y volumen total correctos?</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->dosis_volumen_total, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->dosis_volumen_total, false) }}</td>
                                 </tr>
                                 <tr>
-                                    <td>¿Regulador de goteo cerrado?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td>¿Volumen de medicamento correcto?</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->volumen_medicamento, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->volumen_medicamento, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>¿Aprueba la inspección física del contenedor?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->aprueba_contenedor, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->aprueba_contenedor, false) }}</td>
                                 </tr>
                             </table>
                         </td>
@@ -698,39 +707,45 @@
                                 </tr>
                                 <tr>
                                     <td>¿La coloración es apropiada?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->coloracion_apropiada, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->coloracion_apropiada, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>¿Es homogéneo?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->contenido_homogeneo, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->contenido_homogeneo, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>¿Presenta partículas?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->presenta_particulas, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->presenta_particulas, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>¿Presenta turbidez?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->presenta_turbidez, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->presenta_turbidez, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>¿Volumen correcto?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->volumen_correcto, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->volumen_correcto, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td>¿Aprueba la inspección del contenido?</td>
-                                    <td></td>
-                                    <td></td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->aprueba_contenido, true) }}</td>
+                                    <td class="text-center">{{ $inspectionMark($inspeccion?->aprueba_contenido, false) }}</td>
                                 </tr>
                                 <tr>
                                     <td colspan="3" class="border-0"></td>
                                 </tr>
                                 <tr>
-                                    <td colspan="3" class="border-0">Peso de la mezcla (g): ______________</td>
+                                    <td colspan="3" class="border-0">
+                                        Peso teórico (g): {{ ($theoreticalWeight['value'] ?? null) !== null ? number_format((float) $theoreticalWeight['value'], 2) : 'S/D' }} &nbsp;&nbsp;
+                                        Peso medido (g): {{ is_numeric($inspeccion?->peso_mezcla) ? number_format((float) $inspeccion->peso_mezcla, 2) : 'S/D' }}
+                                        @if (!empty($theoreticalWeight['missing']))
+                                            <br><span style="font-size: 8px;">Falta configurar densidad: {{ implode(', ', $theoreticalWeight['missing']) }}</span>
+                                        @endif
+                                    </td>
                                 </tr>
                             </table>
                         </td>
@@ -739,13 +754,13 @@
                 <table style="width: 70%; border-collapse: collapse; padding: 0.5rem">
                     <tr>
                         <td class="text-right"><strong>LA MEZCLA SE CONSIDERA APROBADA:</strong></td>
-                        <td>SI</td>
-                        <td>NO</td>
+                        <td class="text-center">SI {{ $inspectionMark($inspeccion?->mezcla_aprobada, true) }}</td>
+                        <td class="text-center">NO {{ $inspectionMark($inspeccion?->mezcla_aprobada, false) }}</td>
                     </tr>
                 </table>
                 <table style="margin-top: 0.5rem; padding: 0.5rem">
                     <tr>
-                        <td colspan="1">Observaciones:</td>
+                        <td colspan="1">Observaciones: {{ $inspeccion?->observaciones ?: 'S/D' }}</td>
                     </tr>
                     <tr>
                         <td class="border-0"></td>
@@ -757,6 +772,9 @@
                             <table>
                                 <tr>
                                     <td class="border-0 border-t-1" style="margin: 0; padding: 0;"></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center border-0" style="margin: 0; padding: 0">{{ $revisoNombre ?: 'S/D' }}</td>
                                 </tr>
                                 <tr>
                                     <td class="text-center border-0" style="margin: 0; padding: 0">
@@ -777,6 +795,9 @@
                             <table>
                                 <tr>
                                     <td class="border-0 border-t-1" style="margin: 0; padding: 0"></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center border-0" style="margin: 0; padding: 0">{{ $validoNombre ?: 'S/D' }}</td>
                                 </tr>
                                 <tr>
                                     <td class="text-center border-0" style="margin: 0; padding: 0">

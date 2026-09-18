@@ -644,7 +644,7 @@ function initializeDistributionRouteModal() {
         }
 
         nameInput.value = String(routeData?.name || '');
-        messengerSelect.value = routeData?.messenger_id ? String(routeData.messenger_id) : '';
+        messengerSelect.value = 'all';
         selectedIds = normalizeHospitalIds(routeData?.hospital_ids);
         searchInput.value = '';
         hideSuggestions();

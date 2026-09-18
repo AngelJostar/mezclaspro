@@ -1035,8 +1035,12 @@ class NutritionStockController extends Controller
     public function mermaForm(MedicineLaboratoryStock $stock)
     {
         $stock->load(['presentation.catalog', 'laboratory', 'warehouse']);
+        $pendingContainers = (int) \App\Models\WasteAuthorizationRequest::query()
+            ->pending()
+            ->where('medicine_laboratory_stock_id', $stock->id)
+            ->sum('quantity_containers');
 
-        return view('admin.nutricionales.stocks.merma', compact('stock'));
+        return view('admin.nutricionales.stocks.merma', compact('stock', 'pendingContainers'));
     }
 
     public function registrarMerma(
@@ -1059,7 +1063,7 @@ class NutritionStockController extends Controller
 
         session()->flash('swal', [
             'title' => 'Solicitud enviada',
-            'text' => 'La merma del frasco quedó pendiente de autorización.',
+            'text' => 'La solicitud fue enviada al Superadministrador. El inventario se descontará cuando la autorice en Reporte de mermas > Solicitudes de Merma.',
             'icon' => 'success',
         ]);
 

@@ -4,21 +4,22 @@
     <meta charset="utf-8"><title>Remisión nutricional</title>
     <style>
         @page { margin: 3mm; } * { box-sizing: border-box; }
-        body { margin: 0; color: #172033; font-family: Arial, sans-serif; font-size: 10px; }
-        table { width: 100%; border-collapse: collapse; } td, th { padding: 4px 6px; vertical-align: middle; }
+        body { margin: 0; color: #172033; font-family: Arial, sans-serif; font-size: 9px; }
+        table { width: 100%; border-collapse: collapse; } td, th { padding: 3px 4px; vertical-align: middle; }
         .document { border: 1px solid #1f5b88; }
         .header td { height: 15mm; padding: 1px 5px; } .logo { width: 34mm; max-height: 13mm; object-fit: contain; }
-        .title { color: #0d2c55; font-size: 15px; font-weight: bold; line-height: .95; }
-        .blue-band, .section-title { padding: 3px; background: #07598c; color: white; text-align: center; font-size: 12px; font-weight: bold; }
-        .meta td { padding: 2px 6px; font-size: 10px; }
-        .grid th { border: 1px solid #356b91; background: #dceeff; text-align: center; font-size: 10px; }
+        .title { color: #0d2c55; font-size: 13px; font-weight: bold; line-height: .95; }
+        .blue-band, .section-title { padding: 2px; background: #07598c; color: white; text-align: center; font-size: 10px; font-weight: bold; }
+        .meta td { padding: 2px 4px; font-size: 9px; }
+        .grid th { border: 1px solid #356b91; background: #dceeff; text-align: center; font-size: 9px; }
         .grid td { border: 1px solid #356b91; text-align: center; }
         .detail th { background: #07598c; color: white; } .detail td, .detail th { border: 1px solid #356b91; text-align: center; }
         .mode-row { border: 1px solid #356b91; padding: 2px 5px; text-align: center; font-weight: bold; }
-        .detail-note { padding: 5px 8px; line-height: 1.25; } .total { background: #dceeff; font-size: 13px; font-weight: bold; }
-        .footer-row td { border: 1px solid #356b91; padding: 4px 8px; }
+        .detail-note { padding: 4px 5px; line-height: 1.2; } .total { background: #dceeff; font-size: 11px; font-weight: bold; }
+        .footer-row td { border: 1px solid #356b91; padding: 3px 5px; }
         .receipt { margin: 4px auto 0; width: 76%; line-height: 1.15; }
         .important { margin: 2px 8px; font-size: 7px; line-height: 1.05; }
+        .receipt, .footer-row, .important { page-break-inside: avoid; }
         .page-break { page-break-after: always; } .text-left { text-align: left !important; } .text-right { text-align: right !important; }
         .muted { color: #5d6878; font-size: 9px; }
     </style>

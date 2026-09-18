@@ -40,6 +40,7 @@ class MedicalUnitCatalogController extends Controller
                         'category' => $catalog->category?->name,
                         'input' => $catalog->input?->name,
                         'osmolarity' => $catalog->osmolaridad !== null ? (float) $catalog->osmolaridad : null,
+                        'density_g_ml' => $catalog->densidad !== null ? (float) $catalog->densidad : null,
                         'price_per_ml' => (float) $item->precio_ml,
                     ];
                 })

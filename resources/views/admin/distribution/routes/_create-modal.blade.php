@@ -5,7 +5,6 @@
         : collect($editingRoute?->hospitals?->pluck('id') ?? [])->map(fn ($id) => (int) $id)->values();
     $initialRouteName = old('name', $editingRoute?->name ?? '');
     $initialRouteType = old('route_type', $editingRoute?->route_type ?? 'vehicular');
-    $initialMessengerId = (int) old('messenger_id', $editingRoute?->messengers->first()?->id ?? 0);
     $initialRouteType = in_array($initialRouteType, ['vehicular', 'dron'], true) ? $initialRouteType : 'vehicular';
     $initialUpdateUrl = $editingRoute
         ? route('admin.distribution.routes.update', $editingRoute)
@@ -16,7 +15,6 @@
         'route_id' => $editingRoute?->id,
         'name' => $initialRouteName,
         'route_type' => $initialRouteType,
-        'messenger_id' => $initialMessengerId,
         'update_url' => $initialUpdateUrl,
         'hospital_ids' => $initialHospitalIds,
     ];
@@ -75,17 +73,12 @@
                     </div>
 
                     <div>
-                        <label for="route-messenger" class="mb-1 block text-sm font-semibold text-slate-700">Mensajero asignado *</label>
-                        <select id="route-messenger" name="messenger_id" required
+                        <label for="route-messenger" class="mb-1 block text-sm font-semibold text-slate-700">Mensajero asignado</label>
+                        <select id="route-messenger" aria-describedby="route-messenger-help"
                             class="h-10 w-full rounded-md border-slate-300 px-3 text-sm focus:border-blue-600 focus:ring-blue-600">
-                            <option value="">Selecciona un mensajero</option>
-                            @foreach ($mobileMessengers as $messenger)
-                                <option value="{{ $messenger->id }}" @selected($initialMessengerId === $messenger->id)>
-                                    {{ trim($messenger->name.' '.$messenger->lastname) }} ({{ $messenger->username }})
-                                </option>
-                            @endforeach
+                            <option value="all" selected>Todos</option>
                         </select>
-                        @error('messenger_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        <p id="route-messenger-help" class="mt-1 text-xs text-slate-500">Todos los mensajeros podrán ver y tomar esta ruta.</p>
                     </div>
 
                     <div class="relative">

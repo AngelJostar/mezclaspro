@@ -51,7 +51,7 @@
 
         body {
             margin: 0;
-            padding: 20px;
+            padding: 8px 10px;
             background-color: white;
         }
 
@@ -380,25 +380,33 @@
                         } else {
                             $vol_total = (float) $solicitud_detalles->solicitud_detail['volumen_total'];
                         }
+
+                        $velocidadInfusion = (float) ($solicitud_detalles->solicitud_detail['velocidad_infusion'] ?? 0);
+                        $tiempoInfusion = (float) ($solicitud_detalles->solicitud_detail['tiempo_infusion_min'] ?? 0);
+                        $tiempoAdministracion = $velocidadInfusion > 0
+                            ? ceil($vol_total / $velocidadInfusion)
+                            : ($tiempoInfusion > 0 ? $tiempoInfusion : null);
+                        $velocidadCalculada = $velocidadInfusion > 0
+                            ? $velocidadInfusion
+                            : ($tiempoInfusion > 0 ? $vol_total / $tiempoInfusion : null);
                     @endphp
 
                     <td style="border: none; padding: 0; margin: 0">
                         <strong>Administrar en:</strong>
-                        @isset($solicitud_detalles->solicitud_detail['velocidad_infusion'])
-                            {{ ceil($vol_total / $solicitud_detalles->solicitud_detail['velocidad_infusion']) }} h
+                        @if ($tiempoAdministracion !== null)
+                            {{ number_format($tiempoAdministracion, 2) }} h
                         @else
-                            {{ $solicitud_detalles->solicitud_detail['tiempo_infusion_min'] }} h
-                        @endisset
+                            No especificado
+                        @endif
                     </td>
 
                     <td style="border: none; padding: 0; margin: 0">
                         <strong>Vel. Infusión:</strong>
-                        @isset($solicitud_detalles->solicitud_detail['velocidad_infusion'])
-                            {{ $solicitud_detalles->solicitud_detail['velocidad_infusion'] }}
+                        @if ($velocidadCalculada !== null)
+                            {{ number_format($velocidadCalculada, 2) }} ml/hr
                         @else
-                            {{ number_format($vol_total / $solicitud_detalles->solicitud_detail['tiempo_infusion_min'], 2) }}
-                        @endisset
-                        ml/hr
+                            No especificada
+                        @endif
                     </td>
                 </tr>
             </table>
@@ -446,5 +454,3 @@
 </body>
 
 </html>
-
-

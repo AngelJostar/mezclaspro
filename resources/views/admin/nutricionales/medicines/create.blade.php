@@ -32,19 +32,7 @@
                 </x-select>
             </div>
 
-            <div class="mb-4">
-                <x-label class="mb-2">
-                    Input
-                </x-label>
-                <x-select class="w-full" name="input_id">
-                    <option value="">Seleccione un input</option>
-                    @foreach ($inputs as $input)
-                        <option @selected(old('input_id') == $input->id) value="{{ $input->id }}">
-                            {{ $input->description }}
-                        </option>
-                    @endforeach
-                </x-select>
-            </div>
+            @include('admin.nutricionales.medicines._request-field')
 
             <div class="mb-4">
                 <x-label class="mb-2">
@@ -52,6 +40,20 @@
                 </x-label>
                 <x-input type="number" step="0.001" min="0" value="{{ old('osmolaridad') }}"
                     name="osmolaridad" class="w-full" placeholder="Escriba la osmolaridad" />
+            </div>
+
+            <div class="mb-4">
+                <x-label class="mb-2">
+                    Calorías (kcal/mL)
+                </x-label>
+                <x-input type="number" step="0.0001" min="0" value="{{ old('calorias') }}"
+                    name="calorias" class="w-full" placeholder="Escriba las calorías" />
+            </div>
+
+            <div class="mb-4">
+                <x-label class="mb-2">Densidad (g/mL)</x-label>
+                <x-input type="number" step="0.0001" min="0.0001" max="100" value="{{ old('densidad') }}"
+                    name="densidad" class="w-full" placeholder="Escriba la densidad" />
             </div>
 
             <div class="mb-4">

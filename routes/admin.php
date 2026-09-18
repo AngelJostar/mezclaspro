@@ -251,6 +251,10 @@ Route::resource('nutricionales/inputs', InputController::class)
     ->middleware(['can:medicamentos_nutricionales'])
     ->names('nutricionales.inputs');
 
+Route::post('nutricionales/inputs/reorder-form-layout', [InputController::class, 'reorderNutritionFields'])
+    ->name('nutricionales.inputs.reorder-form-layout')
+    ->middleware(['role:Super Admin']);
+
 Route::prefix('catalogo-listas')
     ->name('catalogo-listas.')
     ->group(function () {

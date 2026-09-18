@@ -30,6 +30,8 @@
                     <th scope="col" class="px-6 py-3">Input</th>
                     <th scope="col" class="px-6 py-3">Categoría</th>
                     <th scope="col" class="px-6 py-3">Osmolaridad</th>
+                    <th scope="col" class="px-6 py-3">Calorías</th>
+                    <th scope="col" class="px-6 py-3">Densidad</th>
                     <th scope="col" class="px-6 py-3 text-center">Activo</th>
                     @if ($canEditGenericMedication)
                         <th scope="col" class="px-6 py-3 text-center">Editar</th>
@@ -96,6 +98,14 @@
 
                         <td class="px-6 py-4 align-top">
                             {{ $medicine->osmolaridad ?? '—' }}
+                        </td>
+
+                        <td class="px-6 py-4 align-top">
+                            {{ $medicine->calorias !== null ? $medicine->calorias . ' kcal/mL' : '—' }}
+                        </td>
+
+                        <td class="px-6 py-4 align-top">
+                            {{ $medicine->densidad !== null ? $medicine->densidad . ' g/mL' : '—' }}
                         </td>
 
                         <td class="px-6 py-4 text-center align-top">

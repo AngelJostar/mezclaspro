@@ -57,6 +57,19 @@ class CatalogProductFormTest extends TestCase
         }
     }
 
+    public function test_nutrition_product_uses_nutrition_fields_without_diluents_or_routes(): void
+    {
+        $html = $this->renderForm('nutricionales');
+
+        $this->assertStringContainsString('name="osmolaridad"', $html);
+        $this->assertStringContainsString('name="calorias"', $html);
+        $this->assertStringContainsString('name="densidad"', $html);
+        $this->assertStringNotContainsString('name="diluents[]"', $html);
+        $this->assertStringNotContainsString('name="routes[]"', $html);
+        $this->assertStringNotContainsString('Diluyentes', $html);
+        $this->assertStringNotContainsString('V&iacute;a de administraci&oacute;n', $html);
+    }
+
     private function renderForm(string $category, ?Collection $laboratories = null): string
     {
         // Exercise the actual form and its script without the database-backed admin shell.

@@ -26,8 +26,19 @@
     );
 @endphp
 
-<div>
+<div data-nutrition-component
+    data-input-id="{{ $input->input_id }}"
+    data-category-id="{{ $input->category_id }}"
+    data-mult="{{ $input->mult }}"
+    data-div="{{ $input->div }}"
+    @if ($layoutSortable ?? false) data-layout-card @endif>
     <div class="mb-4 flex flex-col gap-2 w-full border rounded-lg p-3 bg-gray-50">
+        @if ($layoutSortable ?? false)
+            <div data-drag-handle class="hidden items-center justify-between rounded-md bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-800">
+                <span><i class="fa-solid fa-grip-vertical mr-2"></i>Arrastra y suelta arriba o abajo de otra tarjeta</span>
+                <span>{{ $layoutCategoryLabel ?? 'Campo nutricional' }}</span>
+            </div>
+        @endif
         <div class="flex flex-col lg:flex-row lg:items-baseline gap-2 w-full">
             <x-label class="mb-2 whitespace-nowrap font-bold">
                 {{ $input->description }}:
@@ -35,7 +46,7 @@
 
             <div class="flex w-full min-w-0">
                 <x-input-solicitud type="number" class="w-full" value="{{ $oldValue }}" name="{{ $fieldName }}"
-                    id="{{ $fieldName }}" step="0.0001" placeholder="" />
+                    id="{{ $fieldName }}" step="0.0001" min="0" max="1000000" placeholder="" />
 
                 <span
                     @if ($input->category_id == 4) data-original-unidad="{{ $input->unidad }}" class="unidad-span-electrolitos"

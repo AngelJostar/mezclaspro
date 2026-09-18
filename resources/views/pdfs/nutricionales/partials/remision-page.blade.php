@@ -46,7 +46,23 @@
         <tr><td class="detail-note text-left" colspan="{{ $remissionMode === 'frasco' ? 7 : 6 }}">@if ($remissionMode === 'frasco') Cantidades según consumo registrado. Precios según la lista del hospital.<br>Importe por presentación = frascos utilizados × precio unitario. @else Cantidad = mililitros registrados en la solicitud.<br>Precio unitario = precio por mL de la lista del hospital.<br>Precio total = mililitros de la solicitud × precio por mL. @endif</td><td class="total" colspan="3">TOTAL IVA INCLUIDO: {{ $money($pricingSummary['total_iva_included'] ?? 0) }}</td></tr>
         </tbody>
     </table>
-    <table class="footer-row"><tr><td><strong>Lote de la mezcla:</strong> {{ $solicitud_detalles->lote ?: '—' }}</td></tr><tr><td><strong>Observaciones:</strong> {{ $detail?->observaciones ?: '—' }}</td></tr></table>
+    <table class="footer-row">
+        <tr>
+            <td>
+                <strong>Peso teórico:</strong>
+                @if (($theoreticalWeight['value'] ?? null) !== null)
+                    {{ $number($theoreticalWeight['value'], 2) }} g
+                @else
+                    S/D
+                    @if (!empty($theoreticalWeight['missing']))
+                        <span class="muted">(falta configurar densidad: {{ implode(', ', $theoreticalWeight['missing']) }})</span>
+                    @endif
+                @endif
+            </td>
+        </tr>
+        <tr><td><strong>Lote de la mezcla:</strong> {{ $solicitud_detalles->lote ?: '—' }}</td></tr>
+        <tr><td><strong>Observaciones:</strong> {{ $detail?->observaciones ?: '—' }}</td></tr>
+    </table>
     <div class="receipt"><strong>Recepción Institución</strong><br>Fecha: ____________________________________ &nbsp; Hora: __________________<br>Temperatura: _______________________________<br>Nombre completo, firma y sello: __________________________________________</div>
     <div class="important"><strong>NOTA IMPORTANTE:</strong> La institución reconoce que la mezcla estéril entregada debe mantenerse bajo condiciones adecuadas de almacenamiento, asegurando la conservación de la red fría en todo momento.</div>
 </div>

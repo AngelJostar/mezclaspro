@@ -23,7 +23,7 @@ class MobileAuthController extends Controller
         $user = User::query()
             ->whereRaw('LOWER(username) = ?', [strtolower(trim($credentials['username']))])
             ->with([
-                'personnelProfile:id,user_id,positions,employment_status',
+                'personnelProfile:id,user_id,positions,employment_status,phone,personal_email,department,hire_date',
                 'hospital:id,name,short_name,is_active,access_is_active',
             ])
             ->first();
@@ -56,7 +56,7 @@ class MobileAuthController extends Controller
         /** @var User $user */
         $user = $request->user();
         $user->loadMissing([
-            'personnelProfile:id,user_id,positions,employment_status',
+            'personnelProfile:id,user_id,positions,employment_status,phone,personal_email,department,hire_date',
             'hospital:id,name,short_name,is_active,access_is_active',
         ]);
 
@@ -111,6 +111,13 @@ class MobileAuthController extends Controller
             'name' => trim($user->name.' '.$user->lastname),
             'username' => $user->username,
             'module' => $module,
+            'profile' => $module === 'courier' ? [
+                'position' => $user->personnelProfile?->positions[0] ?? 'Mensajero',
+                'email' => $user->personnelProfile?->personal_email,
+                'phone' => $user->personnelProfile?->phone,
+                'department' => $user->personnelProfile?->department,
+                'hire_date' => $user->personnelProfile?->hire_date?->toDateString(),
+            ] : null,
             'hospital' => $module === 'hospital' ? [
                 'id' => $user->hospital?->id,
                 'name' => $user->hospital?->name,

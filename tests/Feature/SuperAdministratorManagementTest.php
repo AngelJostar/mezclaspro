@@ -283,6 +283,14 @@ class SuperAdministratorManagementTest extends TestCase
         ]);
 
         $this->actingAs($requester)
+            ->get(route('admin.nutricionales.stocks.merma', $stockId))
+            ->assertOk()
+            ->assertSee('4 frascos')
+            ->assertSee('1,000.00 mL')
+            ->assertSee('Superadministrador')
+            ->assertSee('El stock no se descuenta al enviar la solicitud');
+
+        $this->actingAs($requester)
             ->post(route('admin.nutricionales.stocks.registrarMerma', $stockId), [
                 'quantity' => 1,
                 'notes' => 'Frasco reportado con sello irregular.',

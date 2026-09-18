@@ -38,6 +38,8 @@ class InspeccionNutricional extends Model
         'aprueba_contenedor',
         'dosis_volumen',
         'peso_mezcla',
+        'densidad',
+        'peso_teorico',
         'mezcla_aprobada',
         'observaciones',
         'reviso_nombre',
@@ -68,6 +70,8 @@ class InspeccionNutricional extends Model
         'aprueba_contenedor' => 'boolean',
         'mezcla_aprobada' => 'boolean',
         'fecha_inspeccion' => 'date',
+        'densidad' => 'decimal:4',
+        'peso_teorico' => 'decimal:2',
     ];
 
     public function solicitud()

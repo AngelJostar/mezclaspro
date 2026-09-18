@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Mobile\MobileAuthController;
 use App\Http\Controllers\Api\Mobile\MobileHospitalController;
+use App\Http\Controllers\Api\Mobile\MobileNotificationController;
 use App\Http\Controllers\Api\Mobile\MobileRouteController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -45,8 +46,12 @@ Route::prefix('mobile')->middleware('throttle:api')->group(function (): void {
         Route::get('/me', [MobileAuthController::class, 'me']);
         Route::post('/auth/logout', [MobileAuthController::class, 'logout']);
         Route::get('/hospital/dashboard', [MobileHospitalController::class, 'dashboard']);
+        Route::get('/notifications', [MobileNotificationController::class, 'index']);
+        Route::post('/notifications/read-all', [MobileNotificationController::class, 'readAll']);
         Route::get('/routes/assigned', [MobileRouteController::class, 'assigned']);
         Route::get('/routes/available', [MobileRouteController::class, 'available']);
+        Route::get('/routes/catalog', [MobileRouteController::class, 'catalog']);
+        Route::get('/routes/history', [MobileRouteController::class, 'history']);
         Route::get('/routes/{distributionRoute}', [MobileRouteController::class, 'show']);
         Route::post('/routes/{distributionRoute}/accept', [MobileRouteController::class, 'accept']);
         Route::post('/routes/{distributionRoute}/release', [MobileRouteController::class, 'release']);

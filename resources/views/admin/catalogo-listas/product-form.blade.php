@@ -128,8 +128,82 @@
                                 class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                     @endif
+
+                    @if ($category === 'nutricionales')
+                        <div>
+                            <label for="osmolaridad" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Osmolaridad (mOsm/L)
+                            </label>
+                            <input type="number" id="osmolaridad" name="osmolaridad"
+                                value="{{ old('osmolaridad') }}" min="0" step="0.0001"
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label for="calorias" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Calorías (kcal/mL)
+                            </label>
+                            <input type="number" id="calorias" name="calorias"
+                                value="{{ old('calorias') }}" min="0" step="0.0001"
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label for="densidad" class="mb-1 block text-sm font-semibold text-gray-700">
+                                Densidad (g/mL)
+                            </label>
+                            <input type="number" id="densidad" name="densidad"
+                                value="{{ old('densidad') }}" min="0.0001" max="100" step="0.0001"
+                                class="w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    @endif
                 </div>
             </section>
+
+            @if ($category === 'nutricionales')
+                <section class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                    <h3 class="text-sm font-bold text-gray-900">Configuración en la solicitud nutricional</h3>
+                    <p class="mb-3 mt-1 text-xs text-gray-600">El campo se creará automáticamente con el mismo nombre del producto.</p>
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Unidad</label>
+                            <input name="request_field[unidad]" value="{{ old('request_field.unidad', 'mL') }}" required
+                                class="w-full rounded-md border-gray-300 text-sm">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Aplica para</label>
+                            <select name="request_field[tipo_input]" required class="w-full rounded-md border-gray-300 text-sm">
+                                <option value="ambos" @selected(old('request_field.tipo_input', 'ambos') === 'ambos')>Adulto y pediátrico</option>
+                                <option value="adulto" @selected(old('request_field.tipo_input') === 'adulto')>Adulto</option>
+                                <option value="niño" @selected(old('request_field.tipo_input') === 'niño')>Pediátrico</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Orden en la solicitud</label>
+                            <input type="number" min="0" name="request_field[orden_enum]"
+                                value="{{ old('request_field.orden_enum', ((int) \App\Models\Nutricionales\Input::max('orden_enum')) + 1) }}"
+                                required class="w-full rounded-md border-gray-300 text-sm">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Mostrar en solicitudes</label>
+                            <select name="request_field[is_active]" required class="w-full rounded-md border-gray-300 text-sm">
+                                <option value="1" @selected((string) old('request_field.is_active', '1') === '1')>Sí</option>
+                                <option value="0" @selected((string) old('request_field.is_active') === '0')>No</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Multiplicador</label>
+                            <input type="number" step="0.001" min="0" name="request_field[mult]"
+                                value="{{ old('request_field.mult', 1) }}" required class="w-full rounded-md border-gray-300 text-sm">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Divisor</label>
+                            <input type="number" step="0.00001" min="0.00001" name="request_field[div]"
+                                value="{{ old('request_field.div', 1) }}" required class="w-full rounded-md border-gray-300 text-sm">
+                        </div>
+                    </div>
+                </section>
+            @endif
 
             @if ($isSupplies)
                 <section class="border-t border-gray-200 pt-5">
@@ -168,7 +242,7 @@
                 </section>
             @endif
 
-            @unless ($isSupplies)
+            @if (! $isSupplies && $category !== 'nutricionales')
                 <section class="grid gap-5 border-t border-gray-200 pt-5 lg:grid-cols-2">
                     <div>
                         <h3 class="text-sm font-bold text-gray-900">Diluyentes</h3>
@@ -206,7 +280,7 @@
                         </div>
                     </div>
                 </section>
-            @endunless
+            @endif
 
             <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:justify-end">
                 <a href="{{ route('admin.catalogo-listas.catalog', ['category' => $category]) }}"

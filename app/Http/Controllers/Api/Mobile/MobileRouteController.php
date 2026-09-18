@@ -74,6 +74,73 @@ class MobileRouteController extends Controller
         ]);
     }
 
+    public function catalog(Request $request): JsonResponse
+    {
+        /** @var User $messenger */
+        $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
+        $date = $request->date('date')?->toDateString() ?? now('America/Mexico_City')->toDateString();
+
+        $routes = DistributionRoute::query()
+            ->withCount('hospitals')
+            ->withCount(['messengers as messengers_count'])
+            ->withCount(['hospitals as deliveries_count' => function ($query) use ($date): void {
+                $query->whereExists(function ($scheduleQuery) use ($date): void {
+                    $scheduleQuery->selectRaw('1')
+                        ->from('distribution_delivery_schedules as catalog_schedules')
+                        ->whereColumn('catalog_schedules.hospital_id', 'hospitals.id')
+                        ->whereColumn('catalog_schedules.distribution_route_id', 'distribution_routes.id')
+                        ->whereDate('catalog_schedules.scheduled_date', $date)
+                        ->where('catalog_schedules.status', 'sent');
+                });
+            }])
+            ->orderBy('schedule_start')
+            ->get()
+            ->map(fn (DistributionRoute $route): array => [
+                'id' => $route->id,
+                'code' => $route->code,
+                'name' => $route->name,
+                'schedule_start' => Carbon::parse($route->schedule_start)->format('H:i'),
+                'schedule_end' => Carbon::parse($route->schedule_end)->format('H:i'),
+                'status' => $route->status === DistributionRoute::STATUS_COMPLETED ? 'inactive' : 'active',
+                'hospitals_count' => (int) $route->hospitals_count,
+                'deliveries_count' => (int) $route->deliveries_count,
+                'is_taken' => (int) $route->messengers_count > 0,
+            ])
+            ->values();
+
+        return response()->json(['date' => $date, 'routes' => $routes]);
+    }
+
+    public function history(Request $request): JsonResponse
+    {
+        /** @var User $messenger */
+        $messenger = $request->user();
+        $this->ensureMobileMessenger($messenger);
+        $requestedDate = $request->date('date')?->toDateString();
+
+        $routes = DistributionRoute::query()
+            ->whereHas('messengers', fn ($query) => $query->whereKey($messenger->id))
+            ->with([
+                'hospitals:id,name,adress,short_name,latitude,longitude',
+                'messengers:id,name,lastname',
+            ])
+            ->latest('updated_at')
+            ->get()
+            ->map(function (DistributionRoute $route) use ($messenger, $requestedDate): array {
+                $date = $requestedDate ?? DistributionDeliverySchedule::query()
+                    ->where('distribution_route_id', $route->id)
+                    ->latest('scheduled_date')
+                    ->value('scheduled_date') ?? now('America/Mexico_City')->toDateString();
+
+                return $this->routeData($route, $messenger, Carbon::parse($date)->toDateString());
+            })
+            ->filter(fn (array $route) => $route['stops_count'] > 0)
+            ->values();
+
+        return response()->json(['routes' => $routes]);
+    }
+
     public function accept(Request $request, DistributionRoute $distributionRoute): JsonResponse
     {
         /** @var User $messenger */

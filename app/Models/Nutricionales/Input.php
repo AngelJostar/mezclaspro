@@ -15,6 +15,7 @@ class Input extends Model
         'is_active',
         'tipo_input',
         'orden_enum',
+        'layout_column',
         'category_id',
         'mult',
         'div',

@@ -4,18 +4,28 @@ namespace App\Livewire\Nutricionales;
 
 use App\Models\Nutricionales\InspeccionNutricional as NutricionalesInspeccionNutricional;
 use App\Models\Nutricionales\Solicitud;
+use App\Models\User;
+use App\Services\NutritionTheoreticalWeightService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 class InspeccionNutricional extends Component
 {
+    private const APPROVER_POSITIONS = [
+        'Responsable sanitario',
+        'Auxiliar de responsable sanitario',
+    ];
+
     public $mostrarModalInspeccion = false;
 
     public $solicitudId;
     public $lote_mezcla = '';
     #[\Livewire\Attributes\Locked]
     public string $mixtureContext = '';
+    #[\Livewire\Attributes\Locked]
+    public array $inspectionSummary = [];
 
     public $es_limpia = 0;
     public $es_libre = 0;
@@ -42,10 +52,13 @@ class InspeccionNutricional extends Component
 
     public $dosis_volumen;
     public $peso_mezcla;
+    public $peso_teorico;
+    public array $densidades_faltantes = [];
     public $observaciones = '';
 
     public $reviso_nombre = '';
     public $aprobo_nombre = '';
+    public $aprobadores = [];
 
     private function nombreUsuarioActual(): string
     {
@@ -56,10 +69,60 @@ class InspeccionNutricional extends Component
             ?: ($nombreCompleto !== '' ? $nombreCompleto : '');
     }
 
+    private function cargarAprobadores(): void
+    {
+        $aprobadores = User::query()
+            ->whereHas('personnelProfile', function ($query) {
+                $query->where(function ($positionsQuery) {
+                    foreach (self::APPROVER_POSITIONS as $position) {
+                        $positionsQuery->orWhereJsonContains('positions', $position);
+                    }
+                });
+            })
+            ->orderBy('name')->orderBy('lastname')->get();
+
+        if ($aprobadores->isEmpty()) {
+            $aprobadores = User::query()->whereIn('username', ['gcortes', 'hcarbajal'])
+                ->orderBy('name')->orderBy('lastname')->get();
+        }
+
+        $this->aprobadores = $aprobadores->mapWithKeys(function (User $usuario) {
+            $nombre = trim(($usuario->name ?? '').' '.($usuario->lastname ?? ''));
+            $valor = trim((string) ($usuario->username ?: $nombre));
+
+            return $valor === '' ? [] : [$valor => ($nombre !== '' ? "{$nombre} ({$valor})" : $valor)];
+        })->all();
+    }
+
+    private function cargarResumen(Solicitud $solicitud): void
+    {
+        $patient = $solicitud->solicitud_patient;
+        $hospital = $solicitud->user?->hospital;
+        $text = static fn ($value) => filled($value) ? trim((string) $value) : '—';
+
+        $this->inspectionSummary = [
+            'client' => $hospital?->instituciones->pluck('nombre')->filter()->unique()->implode(', ') ?: 'Sin cliente',
+            'patient' => [
+                'name' => $text(trim(($patient?->nombre_paciente ?? '').' '.($patient?->apellidos_paciente ?? ''))),
+                'record' => $text($patient?->registro),
+                'sex' => $text($patient?->sexo),
+                'age' => $patient?->edad !== null ? $patient->edad.' años' : '—',
+                'weight' => is_numeric($patient?->peso) ? number_format((float) $patient->peso, 2).' kg' : '—',
+                'service' => $text($patient?->servicio),
+                'location' => $text(collect([$patient?->piso, $patient?->cama])->filter(fn ($value) => filled($value))->implode(' / ')),
+            ],
+        ];
+
+        $theoreticalWeight = app(NutritionTheoreticalWeightService::class)->calculate($solicitud->input);
+        $this->peso_teorico = $theoreticalWeight['value'];
+        $this->densidades_faltantes = $theoreticalWeight['missing'];
+
+    }
+
     public function mount()
     {
+        $this->cargarAprobadores();
         $this->reviso_nombre = $this->nombreUsuarioActual();
-        $this->aprobo_nombre = $this->nombreUsuarioActual();
         $this->observaciones = 'N.A.';
     }
 
@@ -76,9 +139,17 @@ class InspeccionNutricional extends Component
 
         $this->solicitudId = (int) $solicitudId;
         $this->mostrarModalInspeccion = true;
-        $solicitud = Solicitud::with('user.hospital.instituciones')->find($this->solicitudId);
+        $solicitud = Solicitud::with([
+            'user.hospital.instituciones',
+            'solicitud_patient',
+            'solicitud_detail',
+            'input.input.nutritionMedicineCatalog',
+            'input.presentation.catalog',
+        ])
+            ->findOrFail($this->solicitudId);
         $this->lote_mezcla = (string) ($solicitud?->lote ?? '');
         $this->mixtureContext = \App\Support\MixtureWorkflowContext::label($this->solicitudId, $solicitud?->user?->hospital);
+        $this->cargarResumen($solicitud);
 
         $ins = NutricionalesInspeccionNutricional::where('solicitud_id', $this->solicitudId)->first();
 
@@ -112,10 +183,10 @@ class InspeccionNutricional extends Component
             $this->observaciones = $ins->observaciones ?? 'N.A.';
 
             $this->reviso_nombre = $ins->reviso_nombre ?: ($this->reviso_nombre ?: $this->nombreUsuarioActual());
-            $this->aprobo_nombre = $ins->aprobo_nombre ?: ($this->aprobo_nombre ?: $this->nombreUsuarioActual());
+            $this->aprobo_nombre = $ins->aprobo_nombre ?: '';
         } else {
             $this->reviso_nombre = $this->nombreUsuarioActual();
-            $this->aprobo_nombre = $this->nombreUsuarioActual();
+            $this->aprobo_nombre = '';
             $this->observaciones = 'N.A.';
         }
     }
@@ -123,22 +194,17 @@ class InspeccionNutricional extends Component
     public function guardarInspeccion()
     {
         $this->reviso_nombre = $this->reviso_nombre ?: $this->nombreUsuarioActual();
-        $this->aprobo_nombre = $this->aprobo_nombre ?: $this->nombreUsuarioActual();
-
         $this->validate([
             'tipo_contenedor' => 'nullable|string|in:Frasco,Bolsa,Jeringa,Infusor',
-            'dosis_volumen' => 'required|numeric|gt:0',
             'peso_mezcla' => 'required|numeric|gt:0',
             'observaciones' => 'nullable|string',
             'reviso_nombre' => 'required|string|max:255',
-            'aprobo_nombre' => 'required|string|max:255',
+            'aprobo_nombre' => ['required', 'string', 'max:255', Rule::in(array_keys($this->aprobadores))],
         ], [
-            'dosis_volumen.required' => 'El campo dosis / volumen total es obligatorio.',
-            'dosis_volumen.numeric' => 'El campo dosis / volumen total debe ser numerico.',
-            'dosis_volumen.gt' => 'El campo dosis / volumen total debe ser mayor a 0.',
             'peso_mezcla.required' => 'El campo peso de la mezcla es obligatorio.',
             'peso_mezcla.numeric' => 'El campo peso de la mezcla debe ser numerico.',
             'peso_mezcla.gt' => 'El campo peso de la mezcla debe ser mayor a 0.',
+            'aprobo_nombre.in' => 'Selecciona a una persona autorizada para aprobar la mezcla.',
         ]);
 
         $solicitud = Solicitud::findOrFail($this->solicitudId);
@@ -173,7 +239,7 @@ class InspeccionNutricional extends Component
                 'volumen_correcto' => (bool) $this->volumen_correcto,
                 'aprueba_contenido' => (bool) $this->aprueba_contenido,
                 'aprueba_contenedor' => (bool) $this->aprueba_contenedor,
-                'dosis_volumen' => $this->dosis_volumen,
+                'dosis_volumen' => 0,
                 'peso_mezcla' => $this->peso_mezcla,
                 'mezcla_aprobada' => (bool) $this->mezcla_aprobada,
                 'observaciones' => $this->observaciones ?: 'N.A.',

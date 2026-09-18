@@ -2,10 +2,33 @@
 
 namespace Tests\Feature;
 
+use App\Services\NutritionTheoreticalWeightService;
 use Tests\TestCase;
 
 class NutritionRemissionTemplateTest extends TestCase
 {
+    public function test_theoretical_weight_sums_each_component_volume_times_its_density(): void
+    {
+        $items = collect([
+            (object) [
+                'valor_ml' => 100,
+                'valor_sobrellenado' => null,
+                'input' => (object) ['description' => 'Componente A', 'nutritionMedicineCatalog' => (object) ['densidad' => 1.1]],
+                'presentation' => null,
+            ],
+            (object) [
+                'valor_ml' => 40,
+                'valor_sobrellenado' => 50,
+                'input' => (object) ['description' => 'Componente B', 'nutritionMedicineCatalog' => (object) ['densidad' => 0.8]],
+                'presentation' => null,
+            ],
+        ]);
+        $result = app(NutritionTheoreticalWeightService::class)->calculate($items);
+
+        $this->assertSame(150.0, $result['value']);
+        $this->assertSame([], $result['missing']);
+    }
+
     public function test_it_renders_the_nutrition_bottle_template_with_the_presentation(): void
     {
         $html = $this->renderRemission('frasco');
@@ -16,6 +39,8 @@ class NutritionRemissionTemplateTest extends TestCase
         $this->assertStringContainsString('$120.00', $html);
         $this->assertStringContainsString('Servicio de mezclado', $html);
         $this->assertStringContainsString('$440.00', $html);
+        $this->assertStringContainsString('Peso teórico:', $html);
+        $this->assertStringContainsString('262.5 g', $html);
         $this->assertStringNotContainsString('VOLUMEN TOTAL DE LA MEZCLA', $html);
     }
 
@@ -74,6 +99,7 @@ class NutritionRemissionTemplateTest extends TestCase
             'set_infusion' => null, 'imprimirMarcas' => false, 'distributor' => $distributor, 'priceList' => null,
             'pricingSummary' => ['lines' => collect([['unit_label' => $unit, 'quantity' => $unit === 'frasco' ? 1 : 250, 'unit_price' => $unit === 'frasco' ? 120 : .48, 'subtotal' => 120]]), 'supply_lines' => collect(), 'additional_charge_lines' => collect(), 'service_total' => 440, 'total_iva_included' => 560],
             'almacenesPorSolicitudInput' => collect([10 => 'Almacén principal']),
+            'theoreticalWeight' => ['value' => 262.5, 'missing' => []],
         ])->render();
     }
 }

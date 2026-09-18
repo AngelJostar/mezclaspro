@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Notifications\MessageSent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -36,6 +37,7 @@ use App\Models\Nutricionales\InspeccionNutricional;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Services\InstitutionBillingPricingService;
 use App\Services\MedicineRemainderService;
+use App\Services\NutritionTheoreticalWeightService;
 use App\Support\SolicitudStatusFilter;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -767,45 +769,101 @@ class SolicitudController extends Controller
 
     public function store(Request $request)
     {
+        $dynamicRules = [];
+        $inputQuantities = [];
+
+        foreach ($request->all() as $key => $value) {
+            if (!preg_match('/^i_(\d+)_[^\s]+$/', (string) $key, $matches)) {
+                continue;
+            }
+
+            $inputId = (int) $matches[1];
+
+            if (array_key_exists($inputId, $inputQuantities)) {
+                return redirect()->back()->withErrors([
+                    $key => 'El componente nutricional está duplicado en la solicitud.',
+                ])->withInput();
+            }
+
+            $dynamicRules[$key] = ['nullable', 'numeric', 'min:0', 'max:1000000'];
+            $dynamicRules['l_'.$inputId] = ['nullable', 'string', 'max:255'];
+            $dynamicRules['c_'.$inputId] = ['nullable', 'date', 'after_or_equal:today'];
+            $inputQuantities[$inputId] = $value;
+        }
+
+        $request->validate(array_merge([
+            'nombre_paciente' => 'required|string|max:255',
+            'apellidos_paciente' => 'required|string|max:255',
+            'servicio' => 'required|string|max:100',
+            'cama' => 'nullable|string|max:50',
+            'piso' => 'nullable|string|max:50',
+            'registro' => 'nullable|string|max:50',
+            'diagnostico' => 'nullable|string|max:255',
+            'peso' => 'required|numeric|gt:0|max:1000',
+            'fecha_nacimiento' => 'required|date|before_or_equal:today',
+            'edad' => 'nullable',
+            'sexo' => 'nullable|in:Femenino,Masculino',
+            'via_administracion' => 'required|in:Central,Periférica',
+            'tiempo_infusion_min' => 'nullable|numeric|gt:0|max:1000',
+            'sobrellenado_ml' => 'nullable|numeric|min:0|max:100000',
+            'volumen_total' => 'nullable|numeric|min:0|max:100000',
+            'npt' => 'required|in:INF,ADULT',
+            'observaciones' => 'nullable|string|max:500',
+            'fecha_hora_entrega' => 'required|date_format:Y-m-d\TH:i',
+            'nombre_medico' => 'required|string|max:255',
+            'cedula' => 'required|string|max:50',
+            'velocidad_infusion' => 'nullable|numeric|gt:0|max:100000',
+            'hospital_destino' => 'nullable|string|max:255'
+        ], $dynamicRules));
+
+        $fechaHoraEntrega = \Carbon\Carbon::createFromFormat('Y-m-d\TH:i', $request->input('fecha_hora_entrega'));
+        $horaMinima = \Carbon\Carbon::now()->addMinutes(210);
+
+        if ($fechaHoraEntrega->lt($horaMinima)) {
+            return redirect()->back()->withErrors([
+                'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos después de la hora actual.'
+            ])->withInput();
+        }
+
+        $fecha_nacimiento = $request->input('fecha_nacimiento');
+        $edad = $this->calcularEdad($fecha_nacimiento);
+
+        $user = Auth::user();
+        $user?->loadMissing('hospital');
+        $hospital = $user?->hospital;
+
+        if (!$hospital) {
+            return redirect()->back()->withErrors([
+                'store' => 'Tu usuario no tiene hospital asignado.',
+            ])->withInput();
+        }
+
+        if (!$hospital->nutri_medicine_list_id) {
+            return redirect()->back()->withErrors([
+                'store' => 'Tu hospital no tiene lista nutricional asignada.',
+            ])->withInput();
+        }
+
+        if (!$hospital->laboratory_id) {
+            return redirect()->back()->withErrors([
+                'store' => 'Tu hospital no tiene centro de mezclas asignado.',
+            ])->withInput();
+        }
+
+        $submissionFingerprint = hash('sha256', json_encode([
+            'user_id' => $user->id,
+            'payload' => $request->except(['_token']),
+        ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION));
+
+        if (!Cache::add('nutrition-request-submission:'.$submissionFingerprint, true, now()->addSeconds(15))) {
+            return redirect()->back()->withErrors([
+                'store' => 'Esta solicitud ya está siendo procesada. Evita enviarla nuevamente.',
+            ])->withInput();
+        }
+
         DB::beginTransaction();
 
         try {
-            $fecha_nacimiento = $request->input('fecha_nacimiento');
-            $edad = $this->calcularEdad($fecha_nacimiento);
-
-            $request->validate([
-                'nombre_paciente' => 'required|string|max:255',
-                'apellidos_paciente' => 'required|string|max:255',
-                'servicio' => 'required|string|max:100',
-                'cama' => 'nullable|string|max:50',
-                'piso' => 'nullable|string|max:50',
-                'registro' => 'nullable|string|max:50',
-                'diagnostico' => 'nullable|string|max:255',
-                'peso' => 'required|numeric',
-                'fecha_nacimiento' => 'required|date',
-                'edad' => 'nullable',
-                'sexo' => 'nullable',
-                'via_administracion' => 'required',
-                'tiempo_infusion_min' => 'nullable|numeric',
-                'sobrellenado_ml' => 'nullable|numeric',
-                'volumen_total' => 'nullable|numeric',
-                'npt' => 'required',
-                'observaciones' => 'nullable|string|max:500',
-                'fecha_hora_entrega' => 'required|date_format:Y-m-d\TH:i',
-                'nombre_medico' => 'required|string|max:255',
-                'cedula' => 'required|string|max:50',
-                'velocidad_infusion' => 'nullable|numeric',
-                'hospital_destino' => 'nullable|string|max:255'
-            ]);
-
-            $fechaHoraEntrega = \Carbon\Carbon::createFromFormat('Y-m-d\TH:i', $request->input('fecha_hora_entrega'));
-            $horaMinima = \Carbon\Carbon::now()->addMinutes(210);
-
-            if ($fechaHoraEntrega->lt($horaMinima)) {
-                return redirect()->back()->withErrors([
-                    'fecha_hora_entrega' => 'La fecha y hora de entrega debe ser al menos 3 horas y 30 minutos después de la hora actual.'
-                ])->withInput();
-            }
 
             $solicitud_paciente = $request->only([
                 'nombre_paciente',
@@ -841,22 +899,6 @@ class SolicitudController extends Controller
 
             $peso_paciente = $solicitud_paciente_resp->peso;
 
-            $user = Auth::user();
-            $user->loadMissing('hospital');
-            $hospital = $user->hospital;
-
-            if (!$hospital) {
-                throw new \Exception('Tu usuario no tiene hospital asignado.');
-            }
-
-            if (!$hospital->nutri_medicine_list_id) {
-                throw new \Exception('Tu hospital no tiene lista nutricional asignada.');
-            }
-
-            if (!$hospital->laboratory_id) {
-                throw new \Exception('Tu hospital no tiene centro de mezclas asignado.');
-            }
-
             $solicitud = [];
             $solicitud['user_id'] = $user->id;
             $solicitud['solicitud_detail_id'] = $solicitud_detalles_resp->id;
@@ -864,132 +906,86 @@ class SolicitudController extends Controller
 
             $solicitud_nueva = Solicitud::create($solicitud);
 
-            $only_inputs = $request->except([
-                'nombre_paciente',
-                'apellidos_paciente',
-                'servicio',
-                'cama',
-                'piso',
-                'registro',
-                'diagnostico',
-                'peso',
-                'fecha_nacimiento',
-                'sexo',
-                'via_administracion',
-                'tiempo_infusion_min',
-                'sobrellenado_ml',
-                'volumen_total',
-                'npt',
-                'observaciones',
-                'fecha_hora_entrega',
-                'nombre_medico',
-                'cedula',
-                'hospital_destino',
-                'velocidad_infusion'
-            ]);
-
-            $filtered_inputs = array_filter($only_inputs, function ($value) {
-                return $value !== null && $value !== '';
-            });
-
             $registro = SolicitudDetail::find($solicitud_detalles_resp->id);
-            $suma_volumen_ml = 0;
+            $suma_volumen_ml = 0.0;
 
-            foreach ($filtered_inputs as $key => $value) {
-                preg_match('/_(\d+)_/', $key, $matches);
-
-                if (isset($matches[1])) {
-                    $numero = (int) $matches[1];
-
-                    if ($numero == 40) {
-                        if ($value == 1) {
-                            $resultado = Input::select('id', 'description', 'mult', 'div')
-                                ->where('id', $numero)
-                                ->first();
-
-                            $valor_ml = 1;
-                            $suma_volumen_ml += 0;
-
-                            $presentation = $this->obtenerPresentacionActivaPorInput($hospital, $numero);
-                            $precioMlUnitario = $presentation
-                                ? $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentation)
-                                : 0;
-
-                            $solicitud_inputs = [];
-                            $solicitud_inputs['solicitud_id'] = $solicitud_nueva->id;
-                            $solicitud_inputs['valor'] = $value;
-                            $solicitud_inputs['valor_ml'] = $valor_ml;
-                            $solicitud_inputs['input_id'] = $numero;
-                            $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentation?->id;
-                            $solicitud_inputs['precio_ml'] = $precioMlUnitario;
-
-                            SolicitudInput::create($solicitud_inputs);
-                        }
-                    } else {
-                        if ($registro->npt == 'ADULT') {
-                            $resultado = Input::select('id', 'description', 'mult', 'div')
-                                ->where('id', $numero)
-                                ->first();
-
-                            if (!$resultado) {
-                                continue;
-                            }
-
-                            $valor_ml = ($value) * $resultado->mult / $resultado->div;
-                            $suma_volumen_ml += $valor_ml;
-
-                            $presentation = $this->obtenerPresentacionActivaPorInput($hospital, $numero);
-                            $precioMlUnitario = $presentation
-                                ? $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentation)
-                                : 0;
-
-                            $solicitud_inputs = [];
-                            $solicitud_inputs['solicitud_id'] = $solicitud_nueva->id;
-                            $solicitud_inputs['valor'] = $value;
-                            $solicitud_inputs['valor_ml'] = $valor_ml;
-                            $solicitud_inputs['input_id'] = $numero;
-                            $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentation?->id;
-                            $solicitud_inputs['precio_ml'] = $precioMlUnitario;
-
-                            SolicitudInput::create($solicitud_inputs);
-                        } else {
-                            $resultado = Input::select('id', 'description', 'category_id', 'mult', 'div')
-                                ->where('id', $numero)
-                                ->first();
-
-                            if (!$resultado) {
-                                continue;
-                            }
-
-                            if (in_array($resultado->category_id, [1, 8, 2, 3, 4])) {
-                                $valor_ml = ($value) * $peso_paciente * $resultado->mult / $resultado->div;
-                            } else {
-                                $valor_ml = ($value) * $resultado->mult / $resultado->div;
-                            }
-
-                            $suma_volumen_ml += $valor_ml;
-
-                            $presentation = $this->obtenerPresentacionActivaPorInput($hospital, $numero);
-                            $precioMlUnitario = $presentation
-                                ? $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentation)
-                                : 0;
-
-                            $solicitud_inputs = [];
-                            $solicitud_inputs['solicitud_id'] = $solicitud_nueva->id;
-                            $solicitud_inputs['valor'] = $value;
-                            $solicitud_inputs['valor_ml'] = $valor_ml;
-                            $solicitud_inputs['input_id'] = $numero;
-                            $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentation?->id;
-                            $solicitud_inputs['precio_ml'] = $precioMlUnitario;
-
-                            SolicitudInput::create($solicitud_inputs);
-                        }
-                    }
+            foreach ($inputQuantities as $numero => $rawValue) {
+                if ($rawValue === null || $rawValue === '') {
+                    continue;
                 }
+
+                $value = (float) $rawValue;
+
+                if ($numero === 40 && (int) $value !== 1) {
+                    continue;
+                }
+
+                $resultado = Input::select('id', 'description', 'category_id', 'mult', 'div', 'is_active')
+                    ->where('id', $numero)
+                    ->first();
+
+                if (!$resultado || !$resultado->is_active) {
+                    throw new \DomainException('La solicitud contiene un componente nutricional inexistente o inactivo.');
+                }
+
+                if ($numero === 40) {
+                    $valor_ml = 1.0;
+                } else {
+                    $divisor = (float) $resultado->div;
+
+                    if (abs($divisor) < 0.0000001) {
+                        throw new \DomainException('El componente '.$resultado->description.' tiene una configuración inválida.');
+                    }
+
+                    $factorPeso = $registro->npt !== 'ADULT'
+                        && in_array((int) $resultado->category_id, [1, 2, 3, 4, 8], true)
+                            ? (float) $peso_paciente
+                            : 1.0;
+
+                    $valor_ml = $value * $factorPeso * (float) $resultado->mult / $divisor;
+
+                    if (!is_finite($valor_ml) || $valor_ml < 0) {
+                        throw new \DomainException('No fue posible calcular una cantidad válida para '.$resultado->description.'.');
+                    }
+
+                    $suma_volumen_ml += $valor_ml;
+                }
+
+                $presentation = $this->obtenerPresentacionActivaPorInput($hospital, $numero);
+                $precioMlUnitario = $presentation
+                    ? $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentation)
+                    : 0;
+
+                SolicitudInput::create([
+                    'solicitud_id' => $solicitud_nueva->id,
+                    'valor' => $value,
+                    'valor_ml' => $valor_ml,
+                    'input_id' => $numero,
+                    'nutrition_medicine_presentation_id' => $presentation?->id,
+                    'precio_ml' => $precioMlUnitario,
+                    'lote' => $request->input('l_'.$numero),
+                    'caducidad' => $request->input('c_'.$numero),
+                ]);
+            }
+
+            if (
+                $registro->volumen_total !== null
+                && $suma_volumen_ml > (float) $registro->volumen_total + 0.0001
+            ) {
+                throw new \DomainException(
+                    'El volumen total de '.number_format((float) $registro->volumen_total, 2).' mL '
+                    .'es menor que la suma calculada de '.number_format($suma_volumen_ml, 2).' mL.'
+                );
             }
 
             if ($registro->sobrellenado_ml != null) {
                 if ($registro->volumen_total == null || $registro->volumen_total == 0) {
+                    if ($suma_volumen_ml <= 0) {
+                        throw new \DomainException(
+                            'No es posible calcular el sobrellenado sin volumen total ni componentes con volumen.'
+                        );
+                    }
+
                     $porcentaje_sobrellenado = ($registro->sobrellenado_ml * 100) / $suma_volumen_ml;
 
                     $inputs_valores = SolicitudInput::select('id', 'valor_ml', 'valor_sobrellenado', 'input_id', 'nutrition_medicine_presentation_id')
@@ -1062,6 +1058,8 @@ class SolicitudController extends Controller
                     $solicitud_inputs['input_id'] = 37;
                     $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentationAgua?->id;
                     $solicitud_inputs['valor_sobrellenado'] = $agua_valor_sobrellenado;
+                    $solicitud_inputs['lote'] = $request->input('l_37');
+                    $solicitud_inputs['caducidad'] = $request->input('c_37');
 
                     if ($presentationAgua) {
                         $precioMlAgua = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentationAgua);
@@ -1084,6 +1082,8 @@ class SolicitudController extends Controller
                     $solicitud_inputs['valor_ml'] = $agua_inyectable_ml;
                     $solicitud_inputs['input_id'] = 37;
                     $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentationAgua?->id;
+                    $solicitud_inputs['lote'] = $request->input('l_37');
+                    $solicitud_inputs['caducidad'] = $request->input('c_37');
 
                     if ($presentationAgua) {
                         $precioMlAgua = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentationAgua);
@@ -1133,11 +1133,18 @@ class SolicitudController extends Controller
             );
 
             return redirect()->route('admin.nutricionales.solicitudes.index');
-        } catch (\Exception $e) {
+        } catch (\DomainException $e) {
             DB::rollBack();
 
             return redirect()->back()->withErrors([
                 'store' => $e->getMessage()
+            ])->withInput();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+
+            return redirect()->back()->withErrors([
+                'store' => 'No fue posible guardar la solicitud. Verifica los datos e inténtalo nuevamente.',
             ])->withInput();
         }
     }
@@ -1433,7 +1440,7 @@ class SolicitudController extends Controller
                 'fecha_nacimiento' => 'required|date',
                 'sexo' => 'nullable',
                 'via_administracion' => 'required',
-                'tiempo_infusion_min' => 'nullable|numeric',
+                'tiempo_infusion_min' => 'nullable|numeric|gt:0|max:1000',
                 'sobrellenado_ml' => 'nullable|numeric',
                 'volumen_total' => 'nullable|numeric',
                 'npt' => 'required',
@@ -1442,7 +1449,7 @@ class SolicitudController extends Controller
                 'nombre_medico' => 'required|string|max:255',
                 'cedula' => 'required|string|max:50',
                 'bolsa_eva' => 'required',
-                'velocidad_infusion' => 'nullable|numeric',
+                'velocidad_infusion' => 'nullable|numeric|gt:0|max:100000',
                 'hospital_destino' => 'nullable|string|max:255',
             ]);
 
@@ -1597,7 +1604,7 @@ class SolicitudController extends Controller
             }
 
             if (
-                (float) ($registro->volumen_total ?? 0) > 0
+                $registro->volumen_total !== null
                 && (float) $registro->volumen_total + 0.0001 < $suma_volumen_ml
             ) {
                 $calculationPreview = [
@@ -2334,6 +2341,7 @@ class SolicitudController extends Controller
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
         $inspeccion = $solicitud->inspeccionNutricional;
         $elaboroNombre = $this->nombreUsuario($solicitud->user);
+        $revisoNombre = $this->nombreUsuarioDesdeTexto($inspeccion?->reviso_nombre);
         $validoNombre = $this->nombreUsuarioDesdeTexto($inspeccion?->aprobo_nombre);
         $preparoNombre = $this->nombreUsuarioDesdeTexto($inspeccion?->preparo_nombre);
 
@@ -2389,6 +2397,8 @@ class SolicitudController extends Controller
             ])
             ->first();
 
+        $theoreticalWeight = app(NutritionTheoreticalWeightService::class)->calculate($inputs_solicitud);
+
         $presentationIds = $inputs_solicitud
             ->concat([$bolsa_eva, $set_infusion])
             ->filter()
@@ -2437,8 +2447,10 @@ class SolicitudController extends Controller
             'lotesPorPresentacion',
             'inspeccion',
             'elaboroNombre',
+            'revisoNombre',
             'validoNombre',
             'preparoNombre',
+            'theoreticalWeight',
             'soloInspeccion'
         ));
 
@@ -2559,6 +2571,7 @@ class SolicitudController extends Controller
             ->first();
 
         $pricingSummary = $pricing->priceNutritionRequest($solicitud_detalles);
+        $theoreticalWeight = app(NutritionTheoreticalWeightService::class)->calculate($inputs_solicitud);
         $almacenesPorSolicitudInput = $this->almacenesPorSolicitudInput(
             $solicitud_detalles,
             $inputs_solicitud
@@ -2575,8 +2588,9 @@ class SolicitudController extends Controller
             'distributor',
             'priceList',
             'pricingSummary',
+            'theoreticalWeight',
             'almacenesPorSolicitudInput'
-        ))->setPaper('letter', 'landscape');
+        ))->setPaper('letter', 'portrait');
 
         return $pdf->stream();
     }

@@ -94,8 +94,18 @@ class CatalogProductController extends Controller
             'routes.*' => ['integer', 'exists:administration_routes,id'],
             'conc_min' => ['nullable', 'numeric', 'min:0'],
             'conc_max' => ['nullable', 'numeric', 'min:0'],
+            'osmolaridad' => [$category === 'nutricionales' ? 'nullable' : 'prohibited', 'numeric', 'min:0'],
+            'calorias' => [$category === 'nutricionales' ? 'nullable' : 'prohibited', 'numeric', 'min:0'],
+            'densidad' => [$category === 'nutricionales' ? 'nullable' : 'prohibited', 'numeric', 'gt:0', 'max:100'],
             'laboratory_id' => [$isSupplies ? 'required' : 'nullable', 'integer', 'exists:laboratories,id'],
             'warehouse_id' => [$isSupplies ? 'required' : 'nullable', 'integer', 'exists:warehouses,id'],
+            'request_field' => [$category === 'nutricionales' ? 'required' : 'nullable', 'array'],
+            'request_field.unidad' => [$category === 'nutricionales' ? 'required' : 'nullable', 'string', 'max:50'],
+            'request_field.tipo_input' => [$category === 'nutricionales' ? 'required' : 'nullable', 'in:adulto,niño,ambos'],
+            'request_field.orden_enum' => [$category === 'nutricionales' ? 'required' : 'nullable', 'integer', 'min:0'],
+            'request_field.is_active' => [$category === 'nutricionales' ? 'required' : 'nullable', 'boolean'],
+            'request_field.mult' => [$category === 'nutricionales' ? 'required' : 'nullable', 'numeric', 'min:0'],
+            'request_field.div' => [$category === 'nutricionales' ? 'required' : 'nullable', 'numeric', 'min:0.00001'],
         ], [
             'generic_description.required' => $isSupplies
                 ? 'Captura el nombre genérico del diluyente.'
@@ -190,12 +200,13 @@ class CatalogProductController extends Controller
             $catalog = MedicinesCatalog::create([
                 'denominacion' => trim($data['generic_description']),
                 'catalog_category' => $category,
-                'conc_min' => $data['conc_min'],
-                'conc_max' => $data['conc_max'],
+                'conc_min' => $data['conc_min'] ?? null,
+                'conc_max' => $data['conc_max'] ?? null,
                 'requires_infusor' => false,
                 'state' => true,
             ]);
         } else {
+            $requestField = $data['request_field'] ?? [];
             $catalog->update([
                 'conc_min' => $data['conc_min'] ?? $catalog->conc_min,
                 'conc_max' => $data['conc_max'] ?? $catalog->conc_max,
@@ -234,41 +245,70 @@ class CatalogProductController extends Controller
         $catalog = NutritionMedicineCatalog::query()
             ->where('denominacion_generica', $genericDescription)
             ->first();
+        $requestField = $data['request_field'] ?? [];
 
         if (!$catalog) {
             $defaultCategory = Category::query()->firstOrCreate(['name' => 'Otra']);
             $input = Input::create([
                 'description' => $genericDescription,
-                'unidad' => 'mL',
-                'is_active' => true,
-                'tipo_input' => 'ambos',
-                'orden_enum' => ((int) Input::max('orden_enum')) + 1,
+                'unidad' => $requestField['unidad'] ?? 'mL',
+                'is_active' => (bool) ($requestField['is_active'] ?? true),
+                'tipo_input' => $requestField['tipo_input'] ?? 'ambos',
+                'orden_enum' => (int) ($requestField['orden_enum'] ?? (((int) Input::max('orden_enum')) + 1)),
                 'category_id' => $defaultCategory->id,
-                'mult' => 1,
-                'div' => 1,
+                'mult' => (float) ($requestField['mult'] ?? 1),
+                'div' => (float) ($requestField['div'] ?? 1),
             ]);
 
             $catalog = NutritionMedicineCatalog::create([
                 'denominacion_generica' => $genericDescription,
                 'category_id' => $defaultCategory->id,
                 'input_id' => $input->id,
-                'conc_min' => $data['conc_min'],
-                'conc_max' => $data['conc_max'],
-                'diluent_ids' => array_values($data['diluents'] ?? []),
-                'administration_route_ids' => array_values($data['routes'] ?? []),
+                'conc_min' => $data['conc_min'] ?? null,
+                'conc_max' => $data['conc_max'] ?? null,
+                'osmolaridad' => $data['osmolaridad'] ?? null,
+                'calorias' => $data['calorias'] ?? null,
+                'densidad' => $data['densidad'] ?? null,
+                'diluent_ids' => null,
+                'administration_route_ids' => null,
                 'is_active' => true,
             ]);
         } else {
             $catalog->update([
                 'conc_min' => $data['conc_min'] ?? $catalog->conc_min,
                 'conc_max' => $data['conc_max'] ?? $catalog->conc_max,
-                'diluent_ids' => $this->mergedIds($catalog->diluent_ids, $data['diluents'] ?? []),
-                'administration_route_ids' => $this->mergedIds(
-                    $catalog->administration_route_ids,
-                    $data['routes'] ?? []
-                ),
+                'osmolaridad' => $data['osmolaridad'] ?? $catalog->osmolaridad,
+                'calorias' => $data['calorias'] ?? $catalog->calorias,
+                'densidad' => $data['densidad'] ?? $catalog->densidad,
+                'diluent_ids' => null,
+                'administration_route_ids' => null,
                 'is_active' => true,
             ]);
+
+            if ($catalog->input) {
+                $catalog->input->update([
+                    'description' => $catalog->denominacion_generica,
+                    'category_id' => $catalog->category_id,
+                    'unidad' => $requestField['unidad'] ?? $catalog->input->unidad,
+                    'is_active' => (bool) ($requestField['is_active'] ?? $catalog->input->is_active),
+                    'tipo_input' => $requestField['tipo_input'] ?? $catalog->input->tipo_input,
+                    'orden_enum' => (int) ($requestField['orden_enum'] ?? $catalog->input->orden_enum),
+                    'mult' => (float) ($requestField['mult'] ?? $catalog->input->mult),
+                    'div' => (float) ($requestField['div'] ?? $catalog->input->div),
+                ]);
+            } else {
+                $input = Input::create([
+                    'description' => $catalog->denominacion_generica,
+                    'unidad' => $requestField['unidad'] ?? 'mL',
+                    'is_active' => (bool) ($requestField['is_active'] ?? true),
+                    'tipo_input' => $requestField['tipo_input'] ?? 'ambos',
+                    'orden_enum' => (int) ($requestField['orden_enum'] ?? (((int) Input::max('orden_enum')) + 1)),
+                    'category_id' => $catalog->category_id,
+                    'mult' => (float) ($requestField['mult'] ?? 1),
+                    'div' => (float) ($requestField['div'] ?? 1),
+                ]);
+                $catalog->update(['input_id' => $input->id]);
+            }
         }
 
         $presentationExists = $catalog->presentations()
