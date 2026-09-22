@@ -9,7 +9,11 @@
                     <button type="button" id="toggle-macro-layout"
                         class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-emerald-600 text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         title="Editar acomodo del formulario" aria-label="Editar acomodo del formulario">
-                        <i class="fa-solid fa-pen text-sm" aria-hidden="true"></i>
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
                     </button>
                 @endrole
                 <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
@@ -311,7 +315,7 @@
 
                     @foreach ($inputs as $input)
                         @if ($input->category_id == 10)
-                            <div>
+                            <div data-npt-field data-tipo-input="{{ $input->tipo_input ?: 'ambos' }}">
                                 <div class="mb-4 flex items-baseline gap-2 w-full">
                                     <x-label class="mb-2 whitespace-nowrap font-bold">
                                         {{ $input->description }}:
@@ -424,6 +428,8 @@
                         if (inputId === 40) return sum;
 
                         const input = card.querySelector('input[name^="i_"]');
+                        if (!input || input.disabled) return sum;
+
                         const quantity = Number.parseFloat(input?.value || '0');
                         const multiplier = Number.parseFloat(card.dataset.mult || '0');
                         const divisor = Number.parseFloat(card.dataset.div || '0');
@@ -588,6 +594,37 @@
             });
 
             document.addEventListener('DOMContentLoaded', function() {
+                const selectNPT = document.getElementById('npt-select');
+                const fields = Array.from(document.querySelectorAll('[data-npt-field]'));
+
+                const normalize = (value) => String(value || '')
+                    .trim()
+                    .toLocaleLowerCase('es-MX')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '');
+
+                function actualizarCamposPorNpt() {
+                    const npt = selectNPT?.value || '';
+
+                    fields.forEach((field) => {
+                        const type = normalize(field.dataset.tipoInput || 'ambos');
+                        const allowed = npt === ''
+                            || type === 'ambos'
+                            || (npt === 'ADULT' && type === 'adulto')
+                            || (npt === 'INF' && ['nino', 'pediatrico'].includes(type));
+
+                        field.classList.toggle('hidden', !allowed);
+                        field.querySelectorAll('input, select, textarea').forEach((control) => {
+                            control.disabled = !allowed;
+                        });
+                    });
+                }
+
+                actualizarCamposPorNpt();
+                selectNPT?.addEventListener('change', actualizarCamposPorNpt);
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
                 const toggle = document.getElementById('toggle-macro-layout');
                 const grids = Array.from(document.querySelectorAll('[data-layout-grid]'));
                 if (!toggle || grids.length === 0) return;
@@ -613,8 +650,8 @@
                 const setEditing = (enabled) => {
                     editing = enabled;
                     toggle.innerHTML = enabled
-                        ? '<i class="fa-solid fa-check text-sm" aria-hidden="true"></i>'
-                        : '<i class="fa-solid fa-pen text-sm" aria-hidden="true"></i>';
+                        ? '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>'
+                        : '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>';
                     toggle.title = enabled ? 'Guardar acomodo' : 'Editar acomodo del formulario';
                     toggle.setAttribute('aria-label', toggle.title);
                     grids.forEach((grid) => {

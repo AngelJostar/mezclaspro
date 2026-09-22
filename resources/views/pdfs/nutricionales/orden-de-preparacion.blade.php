@@ -208,11 +208,6 @@
             </table>
         </div>
         <table>
-            <tr>
-                <td style="text-align: right; color: blue; padding: 2px 8px;">
-                    FTO-NPT-025-005
-                </td>
-            </tr>
             <tr style="background-color: #1F4E78; color: white; font-weight: bold;">
                 <td style="text-align: center;">ORDEN DE PREPARACIÓN DE NUTRICIÓN PARENTERAL TOTAL</td>
             </tr>
@@ -307,61 +302,7 @@
                     </tr>
                 </thead>
                 @php
-                    // Definimos el orden deseado
-                    $orden = [
-                        4,
-                        5,
-                        6,
-                        7,
-                        8,
-                        9,
-                        10,
-                        11,
-                        12,
-                        13,
-                        14,
-                        15,
-                        16,
-                        17,
-                        18,
-                        19,
-                        20,
-                        21,
-                        22,
-                        23,
-                        24,
-                        25,
-                        26,
-                        27,
-                        28,
-                        29,
-                        30,
-                        31,
-                        32,
-                        33,
-                        34,
-                        35,
-                        36,
-                        37,
-                        38,
-                        39,
-                        40,
-                        41,
-                        42,
-                        43,
-                        44,
-                        45,
-                        46,
-                        47,
-                    ];
-
-                    // Creamos un mapa para localizar rápido el índice de cada input_id
-                    $ordenMap = array_flip($orden);
-
-                    // Reordenamos la colección según ese mapa
-                    $inputs_ordenados = $inputs_solicitud->sortBy(function ($item) use ($ordenMap) {
-                        return $ordenMap[$item->input_id] ?? PHP_INT_MAX; // si no está en la lista, lo manda al final
-                    });
+                    $inputs_ordenados = $inputs_solicitud;
                 @endphp
                 <tbody>
                     @foreach ($inputs_ordenados as $input_completo)
@@ -540,36 +481,35 @@
                 </tr>
             </table>
             <div style="border: 1px solid black; margin-bottom: 0rem; border-top: none;">
-                <table class="firmas" style="padding-top: 2rem">
+                @php
+                    $auditDate = static fn ($value): string => $value
+                        ? \Carbon\Carbon::parse($value)->format('d/m/Y H:i')
+                        : 'Pendiente';
+                    $auditUser = static fn ($value): string => filled($value) ? $value : 'Pendiente';
+                @endphp
+                <table style="font-size: 7px; padding: 0; margin: 0; page-break-inside: avoid;">
                     <tr>
-                        <td style="width: 2%; border: none;"></td>
-                        <td style="border: none; border-top: 1px solid black;">
-                            Elaboró <br>
-                            {{ $elaboroNombre ?: 'Nombre y firma' }}
-                        </td>
-                        <td style="width: 2%; border: none;"></td>
-                        <td style="border: none; border-top: 1px solid black;">
-                            Validó <br>
-                            {{ $validoNombre ?: 'Nombre y firma' }}
-                        </td>
-                        <td style="width: 2%; border: none;"></td>
-                        <td style="border: none; border-top: 1px solid black;">
-                            Preparó <br>
-                            {{ $preparoNombre ?: 'Nombre y firma' }}
-                        </td>
-                        <td style="width: 2%; border: none;"></td>
+                        <td style="border: none; padding: 1px 8px;"><strong>Captura:</strong> {{ $auditUser($elaboroNombre) }} - {{ $auditDate($solicitud_detalles->created_at) }} (Cliente)</td>
                     </tr>
-                </table>
-
-
-                <table class="border:none">
                     <tr>
-                        <td style="width: 60%; border: none;"></td>
-                        <td style="width: 40%; border: none; border-top: 0 solid black;"><strong>Fecha y hora de preparación:
-                                {{ $solicitud_detalles->fecha_hora_preparacion
-                                    ? \Carbon\Carbon::parse($solicitud_detalles->fecha_hora_preparacion)->format('d/m/Y H:i')
-                                    : 'N/A' }}</strong>
+                        <td style="border: none; padding: 1px 8px;"><strong>Validación:</strong>
+                            @if ($validacionNombre && $solicitud_detalles->validated_at)
+                                {{ $validacionNombre }} - {{ $auditDate($solicitud_detalles->validated_at) }}
+                            @elseif ($solicitud_detalles->estado === 'pendiente')
+                                Pendiente
+                            @else
+                                Sin registro histórico de usuario y hora
+                            @endif
                         </td>
+                    </tr>
+                    <tr>
+                        <td style="border: none; padding: 1px 8px;"><strong>Preparación:</strong> {{ $auditUser($preparoNombre) }} - {{ $auditDate($solicitud_detalles->fecha_hora_preparacion) }}</td>
+                    </tr>
+                    <tr>
+                        <td style="border: none; padding: 1px 8px;"><strong>Inspección:</strong> {{ $auditUser($revisoNombre) }} - {{ $auditDate($inspeccion?->inspection_completed_at) }}</td>
+                    </tr>
+                    <tr>
+                        <td style="border: none; padding: 1px 8px;"><strong>Aprobación:</strong> {{ $auditUser($validoNombre) }} - {{ $auditDate($inspeccion?->inspection_completed_at) }}</td>
                     </tr>
                 </table>
 
@@ -577,16 +517,16 @@
 
         </div>
     @endunless
-        {{-- separar hojas --}}
-        <div class="{{ ($soloInspeccion ?? false) ? '' : 'salto-pagina' }} contenedor border-1">
+    @if ($soloInspeccion ?? false)
+        <div class="contenedor border-1">
             @php
                 $inspectionMark = static fn ($value, bool $expected): string => $value !== null && (bool) $value === $expected ? 'X' : '';
                 $inspectionDate = $inspeccion?->fecha_inspeccion
                     ? \Carbon\Carbon::parse($inspeccion->fecha_inspeccion)->format('d-m-Y')
-                    : 'S/D';
+                    : '';
                 $inspectionTime = $inspeccion?->hora_inspeccion
                     ? \Carbon\Carbon::parse($inspeccion->hora_inspeccion)->format('H:i')
-                    : 'S/D';
+                    : '';
             @endphp
             <div class="introduccion">
                 <table>
@@ -625,7 +565,7 @@
                 <table>
                     <tr>
                         <td style="width: 15%" class="border-0"><strong>Tipo de contenedor</strong></td>
-                        <td style="width: 10%" class="border-0">{{ $inspeccion?->tipo_contenedor ?: 'S/D' }}</td>
+                        <td style="width: 10%" class="border-0">{{ $inspeccion?->tipo_contenedor ?: '' }}</td>
                         <td style="width: 5%">{{ $inspeccion?->tipo_contenedor ? 'X' : '' }}</td>
                         <td class="border-0" style="widows: 70%"></td>
                     </tr>
@@ -741,7 +681,7 @@
                                 <tr>
                                     <td colspan="3" class="border-0">
                                         Peso teórico (g): {{ ($theoreticalWeight['value'] ?? null) !== null ? number_format((float) $theoreticalWeight['value'], 2) : 'S/D' }} &nbsp;&nbsp;
-                                        Peso medido (g): {{ is_numeric($inspeccion?->peso_mezcla) ? number_format((float) $inspeccion->peso_mezcla, 2) : 'S/D' }}
+                                        Peso medido (g): {{ is_numeric($inspeccion?->peso_mezcla) ? number_format((float) $inspeccion->peso_mezcla, 2) : '' }}
                                         @if (!empty($theoreticalWeight['missing']))
                                             <br><span style="font-size: 8px;">Falta configurar densidad: {{ implode(', ', $theoreticalWeight['missing']) }}</span>
                                         @endif
@@ -760,7 +700,7 @@
                 </table>
                 <table style="margin-top: 0.5rem; padding: 0.5rem">
                     <tr>
-                        <td colspan="1">Observaciones: {{ $inspeccion?->observaciones ?: 'S/D' }}</td>
+                        <td colspan="1">Observaciones: {{ $inspeccion?->observaciones ?: '' }}</td>
                     </tr>
                     <tr>
                         <td class="border-0"></td>
@@ -774,7 +714,7 @@
                                     <td class="border-0 border-t-1" style="margin: 0; padding: 0;"></td>
                                 </tr>
                                 <tr>
-                                    <td class="text-center border-0" style="margin: 0; padding: 0">{{ $revisoNombre ?: 'S/D' }}</td>
+                                    <td class="text-center border-0" style="margin: 0; padding: 0">{{ $revisoNombre ?: '' }}</td>
                                 </tr>
                                 <tr>
                                     <td class="text-center border-0" style="margin: 0; padding: 0">
@@ -797,7 +737,7 @@
                                     <td class="border-0 border-t-1" style="margin: 0; padding: 0"></td>
                                 </tr>
                                 <tr>
-                                    <td class="text-center border-0" style="margin: 0; padding: 0">{{ $validoNombre ?: 'S/D' }}</td>
+                                    <td class="text-center border-0" style="margin: 0; padding: 0">{{ $validoNombre ?: '' }}</td>
                                 </tr>
                                 <tr>
                                     <td class="text-center border-0" style="margin: 0; padding: 0">
@@ -818,6 +758,7 @@
                 </table>
             </div>
         </div>
+    @endif
 
 
 

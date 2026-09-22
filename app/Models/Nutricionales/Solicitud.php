@@ -19,6 +19,8 @@ class Solicitud extends Model
         'is_active',
         'fecha_hora_preparacion',
         'fecha_hora_limite_uso',
+        'validated_by',
+        'validated_at',
         'estado',
         'lote',
         'remision',
@@ -28,6 +30,7 @@ class Solicitud extends Model
     protected $casts = [
 
         'fecha_hora_preparacion' => 'datetime',
+        'validated_at' => 'datetime',
     ];
 
     public function user()

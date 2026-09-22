@@ -27,6 +27,8 @@
 @endphp
 
 <div data-nutrition-component
+    data-npt-field
+    data-tipo-input="{{ $input->tipo_input ?: 'ambos' }}"
     data-input-id="{{ $input->input_id }}"
     data-category-id="{{ $input->category_id }}"
     data-mult="{{ $input->mult }}"

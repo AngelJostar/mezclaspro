@@ -17,6 +17,7 @@ class InspeccionNutricional extends Model
         'es_libre',
         'fecha_inspeccion',
         'hora_inspeccion',
+        'inspection_completed_at',
         'tipo_contenedor',
         'tipo_contenedor_otro',
         'esta_rotulado',
@@ -70,6 +71,7 @@ class InspeccionNutricional extends Model
         'aprueba_contenedor' => 'boolean',
         'mezcla_aprobada' => 'boolean',
         'fecha_inspeccion' => 'date',
+        'inspection_completed_at' => 'datetime',
         'densidad' => 'decimal:4',
         'peso_teorico' => 'decimal:2',
     ];

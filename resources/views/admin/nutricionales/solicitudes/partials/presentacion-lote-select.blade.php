@@ -1,4 +1,4 @@
-<div class="flex w-[18%]">
+<div class="flex flex-col" style="min-width: 180px; flex: 1 1 180px;">
     <x-label class="mb-2 whitespace-nowrap font-bold">Presentación:</x-label>
 
     <select name="p_{{ $input->input_id }}"
@@ -19,7 +19,7 @@
     </select>
 </div>
 
-<div class="flex w-[12%]">
+<div class="flex flex-col" style="min-width: 130px; flex: 0 1 150px;">
     <x-label class="mb-2 whitespace-nowrap font-bold">Lote:</x-label>
 
     <select name="l_{{ $input->input_id }}"
@@ -31,7 +31,7 @@
     </select>
 </div>
 
-<div class="flex w-[15%]">
+<div class="flex flex-col" style="min-width: 155px; flex: 0 1 170px;">
     <x-label class="mb-2 whitespace-nowrap font-bold">Caducidad:</x-label>
 
     <x-input-solicitud type="date"

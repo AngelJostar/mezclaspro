@@ -24,6 +24,7 @@ class NutritionRequestFlowTest extends TestCase
         $this->actingAs($user)->post(route('admin.nutricionales.solicitudes.preparar', $request))->assertRedirect();
         $this->assertSame('preparada', $request->fresh()->estado);
         $this->assertNotNull($request->fresh()->fecha_hora_preparacion);
+        $this->assertNull($request->inspeccionNutricional()->first()?->inspection_completed_at);
 
         $this->actingAs($user)->post(route('admin.nutricionales.solicitudes.revisar', $request))->assertRedirect();
         $this->assertSame('revisada', $request->fresh()->estado);
@@ -33,6 +34,7 @@ class NutritionRequestFlowTest extends TestCase
         $this->assertNotNull($request->inspeccionNutricional()->first()?->preparo_nombre);
         $this->assertNotNull($request->inspeccionNutricional()->first()?->reviso_nombre);
         $this->assertNotNull($request->inspeccionNutricional()->first()?->libero_nombre);
+        $this->assertNull($request->inspeccionNutricional()->first()?->inspection_completed_at);
     }
 
     public function test_nutrition_request_cannot_skip_preparation(): void
@@ -46,4 +48,5 @@ class NutritionRequestFlowTest extends TestCase
         $this->actingAs($user)->post(route('admin.nutricionales.solicitudes.entregar', $request))->assertSessionHasErrors('error');
         $this->assertSame('aprobada', $request->fresh()->estado);
     }
+
 }

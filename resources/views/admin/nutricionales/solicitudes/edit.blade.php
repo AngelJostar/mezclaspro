@@ -348,35 +348,36 @@
                             }
                         @endphp
 
-                        <div
-                            class="mb-4 flex flex-wrap items-baseline gap-2 w-full {{ $row['hasData'] ? 'bg-yellow-200' : '' }} p-2 rounded">
-                            <div class="flex w-[28%]">
-                                <x-label class="mb-2 whitespace-nowrap font-bold">
+                        <div data-npt-field data-tipo-input="{{ $input->tipo_input ?: 'ambos' }}"
+                            class="mb-4 flex flex-wrap items-end gap-3 w-full {{ $row['hasData'] ? 'bg-yellow-200' : '' }} p-2 rounded">
+                            <div class="flex flex-col" style="min-width: 320px; flex: 2 1 320px;">
+                                <x-label class="mb-2 whitespace-normal break-words font-bold leading-tight"
+                                    style="min-height: 2.5rem; max-width: 100%;">
                                     {{ $input->description }}:
                                 </x-label>
 
-                                <div class="flex w-full">
-                                    <x-input-solicitud type="number" class="w-full"
+                                <div class="flex w-full min-w-0 items-center gap-1">
+                                    <x-input-solicitud type="number" class="min-w-0 w-full"
                                         value="{{ $row['inputValue'] }}" name="i_{{ $input->input_id }}"
                                         id="i_{{ $input->input_id }}" step="0.0001" />
 
-                                    <span class="{{ $unidadClass }}"
+                                    <span class="{{ $unidadClass }} inline-flex shrink-0 items-center whitespace-nowrap"
                                         @if ($unidadData !== '') data-original-unidad="{{ $unidadData }}" @endif>
                                         {{ $input->unidad }}
                                     </span>
                                 </div>
                             </div>
 
-                            <div class="flex w-[8%] justify-center items-stretch">
+                            <div class="flex flex-col" style="min-width: 105px; flex: 0 1 105px;">
                                 <x-label class="mb-2 whitespace-nowrap font-bold">ML:</x-label>
-                                <p class="flex border-b-2 border-dotted h-5 w-full pl-2 border-[#6b7280]">
+                                <p class="flex min-h-6 w-full items-center border-b-2 border-dotted px-2 border-[#6b7280]">
                                     {{ fmt3(renderInputMLSection($input->input_id, $inputs_solicitud)) }}
                                 </p>
                             </div>
 
-                            <div class="flex w-[14%] justify-center items-stretch">
+                            <div class="flex flex-col" style="min-width: 135px; flex: 0 1 135px;">
                                 <x-label class="mb-2 whitespace-nowrap font-bold">Sobrellenado:</x-label>
-                                <p class="flex border-b-2 border-dotted h-5 w-full pl-2 border-[#6b7280]">
+                                <p class="flex min-h-6 w-full items-center border-b-2 border-dotted px-2 border-[#6b7280]">
                                     {{ fmt3(renderInputMLSobrellenadoSection($input->input_id, $inputs_solicitud)) }}
                                 </p>
                             </div>
@@ -395,7 +396,8 @@
 
                     <h2 class="mb-4 mt-6 font-bold text-lg">MATERIAL</h2>
 
-                    <div class="mb-4 flex flex-wrap items-baseline gap-2 w-full p-2 rounded">
+                    <div data-npt-field data-tipo-input="{{ $input->tipo_input ?: 'ambos' }}"
+                        class="mb-4 flex flex-wrap items-baseline gap-2 w-full p-2 rounded">
                         <div class="flex w-[25%]">
                             <x-label class="mb-2 whitespace-nowrap font-bold">
                                 {{ $input->description }}:
@@ -698,6 +700,37 @@
 
                 actualizarUnidades();
                 selectNPT?.addEventListener('change', actualizarUnidades);
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const selectNPT = document.getElementById('npt-select');
+                const fields = Array.from(document.querySelectorAll('[data-npt-field]'));
+
+                const normalize = (value) => String(value || '')
+                    .trim()
+                    .toLocaleLowerCase('es-MX')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '');
+
+                function actualizarCamposPorNpt() {
+                    const npt = selectNPT?.value || '';
+
+                    fields.forEach((field) => {
+                        const type = normalize(field.dataset.tipoInput || 'ambos');
+                        const allowed = npt === ''
+                            || type === 'ambos'
+                            || (npt === 'ADULT' && type === 'adulto')
+                            || (npt === 'INF' && ['nino', 'pediatrico'].includes(type));
+
+                        field.classList.toggle('hidden', !allowed);
+                        field.querySelectorAll('input, select, textarea').forEach((control) => {
+                            control.disabled = !allowed;
+                        });
+                    });
+                }
+
+                actualizarCamposPorNpt();
+                selectNPT?.addEventListener('change', actualizarCamposPorNpt);
             });
         </script>
     @endpush

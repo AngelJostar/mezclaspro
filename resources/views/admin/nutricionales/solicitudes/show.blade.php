@@ -432,7 +432,7 @@
                                     <div class="mb-4 flex items-baseline gap-2 w-full">
                                         <div class="flex w-[40%]">
                                             <x-label
-                                                class="mb-2 whitespace-nowrap">{{ $input->description }}:</x-label>
+                                                class="mb-2 whitespace-normal break-words leading-tight">{{ $input->description }}:</x-label>
                                             <div class="flex w-full">
                                                 <x-input-solicitud type="number" class="w-full"
                                                     value="{{ old('i_' . $input->input_id, renderInputSection($input->input_id, $inputs_solicitud)) }}"
@@ -499,7 +499,7 @@
                                     <div class="mb-4 flex items-baseline gap-2 w-full">
                                         <div class="flex w-[40%]">
                                             <x-label
-                                                class="mb-2 whitespace-nowrap">{{ $input->description }}:</x-label>
+                                                class="mb-2 whitespace-normal break-words leading-tight">{{ $input->description }}:</x-label>
                                             <div class="flex w-full">
                                                 <x-input-solicitud type="number" class="w-full"
                                                     value="{{ old('i_' . $input->input_id, renderInputSection($input->input_id, $inputs_solicitud)) }}"
@@ -566,7 +566,7 @@
                                         <div class="mb-4 flex flex-wrap items-baseline gap-2 w-full">
                                             <div class="flex w-[40%]">
                                                 <x-label
-                                                    class="mb-2 whitespace-nowrap">{{ $input->description }}:</x-label>
+                                                    class="mb-2 whitespace-normal break-words leading-tight">{{ $input->description }}:</x-label>
                                                 <div class="flex w-full">
                                                     <x-input-solicitud type="number" class="w-full"
                                                         value="{{ old('i_' . $input->input_id, renderInputSection($input->input_id, $inputs_solicitud)) }}"
@@ -640,7 +640,7 @@
                                     <div class="mb-4 flex items-baseline gap-2 w-full">
                                         <div class="flex w-[40%]">
                                             <x-label
-                                                class="mb-2 whitespace-nowrap">{{ $input->description }}:</x-label>
+                                                class="mb-2 whitespace-normal break-words leading-tight">{{ $input->description }}:</x-label>
                                             <div class="flex w-full">
                                                 <x-input-solicitud type="number" class="w-full"
                                                     value="{{ $inputValue }}" name="i_{{ $input->input_id }}"
@@ -713,7 +713,7 @@
                                     <div class="mb-4 flex items-baseline gap-2 w-full">
                                         <div class="flex w-[40%]">
                                             <x-label
-                                                class="mb-2 whitespace-nowrap">{{ $input->description }}:</x-label>
+                                                class="mb-2 whitespace-normal break-words leading-tight">{{ $input->description }}:</x-label>
                                             <div class="flex w-full">
                                                 <x-input-solicitud type="number" class="w-full"
                                                     value="{{ $inputValue }}" name="i_{{ $input->input_id }}"

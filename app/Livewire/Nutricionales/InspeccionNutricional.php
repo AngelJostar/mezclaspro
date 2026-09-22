@@ -214,13 +214,16 @@ class InspeccionNutricional extends Component
             return;
         }
 
+        $inspectionTimestamp = now();
+
         NutricionalesInspeccionNutricional::updateOrCreate(
             ['solicitud_id' => $this->solicitudId],
             [
                 'es_limpia' => (bool) $this->es_limpia,
                 'es_libre' => (bool) $this->es_libre,
-                'fecha_inspeccion' => now()->toDateString(),
-                'hora_inspeccion' => now()->format('H:i:s'),
+                'fecha_inspeccion' => $inspectionTimestamp->toDateString(),
+                'hora_inspeccion' => $inspectionTimestamp->format('H:i:s'),
+                'inspection_completed_at' => $inspectionTimestamp,
                 'tipo_contenedor' => $this->tipo_contenedor ?: null,
                 'esta_rotulado' => (bool) $this->esta_rotulado,
                 'numero_lote' => (bool) $this->numero_lote,

@@ -920,12 +920,16 @@ class SolicitudController extends Controller
                     continue;
                 }
 
-                $resultado = Input::select('id', 'description', 'category_id', 'mult', 'div', 'is_active')
+                $resultado = Input::select('id', 'description', 'category_id', 'mult', 'div', 'is_active', 'tipo_input')
                     ->where('id', $numero)
                     ->first();
 
                 if (!$resultado || !$resultado->is_active) {
                     throw new \DomainException('La solicitud contiene un componente nutricional inexistente o inactivo.');
+                }
+
+                if ($value > 0 && ! $this->inputIsAllowedForNpt($resultado->tipo_input, $registro->npt)) {
+                    throw new \DomainException('El componente '.$resultado->description.' no está autorizado para la NPT seleccionada.');
                 }
 
                 if ($numero === 40) {
@@ -1553,7 +1557,7 @@ class SolicitudController extends Controller
             foreach ($tripletas as $numero => $tripleta) {
                 $numero = (int) $numero;
 
-                $resultado = Input::select('description', 'category_id', 'mult', 'div')
+                $resultado = Input::select('description', 'category_id', 'mult', 'div', 'tipo_input')
                     ->where('id', $numero)
                     ->first();
 
@@ -1562,6 +1566,10 @@ class SolicitudController extends Controller
                 }
 
                 $valor_unidad = $tripleta["i_{$numero}"];
+
+                if ((float) $valor_unidad > 0 && ! $this->inputIsAllowedForNpt($resultado->tipo_input, $registro->npt)) {
+                    throw new \DomainException('El componente '.$resultado->description.' no está autorizado para la NPT seleccionada.');
+                }
 
                 if ($numero === 40) {
                     $valor_ml = 1;
@@ -1827,15 +1835,11 @@ class SolicitudController extends Controller
             if ($accion === 'aprobar' && $estadoAnterior === 'pendiente') {
                 $adjustments->completeApproval($solicitud, $request);
                 $solicitud->estado = 'aprobada';
+                $solicitud->validated_by = $this->nombreUsuarioActual();
+                $solicitud->validated_at = now();
 
                 $this->generarLoteNutricional($solicitud);
                 $this->generarRemisionNutricional($solicitud);
-
-                $inspeccion = $this->obtenerOCrearInspeccionNutricional($solicitud);
-                $inspeccion->aprobo_nombre = $this->nombreUsuarioActual();
-                $inspeccion->fecha_inspeccion = $inspeccion->fecha_inspeccion ?: now()->toDateString();
-                $inspeccion->hora_inspeccion = $inspeccion->hora_inspeccion ?: now()->format('H:i:s');
-                $inspeccion->save();
             }
 
             $solicitud->save();
@@ -1870,6 +1874,16 @@ class SolicitudController extends Controller
 
             return $response;
         }
+    }
+
+    private function inputIsAllowedForNpt(?string $inputType, string $npt): bool
+    {
+        $normalizedType = mb_strtolower(trim((string) ($inputType ?: 'ambos')));
+        $normalizedType = str_replace(['ñ', 'á', 'é', 'í', 'ó', 'ú'], ['n', 'a', 'e', 'i', 'o', 'u'], $normalizedType);
+
+        return $normalizedType === 'ambos'
+            || ($npt === 'ADULT' && $normalizedType === 'adulto')
+            || ($npt === 'INF' && in_array($normalizedType, ['nino', 'pediatrico'], true));
     }
 
     private function obtenerPresentacionActivaPorInput($hospital, int $inputId): ?NutritionMedicinePresentation
@@ -2339,11 +2353,19 @@ class SolicitudController extends Controller
         $solicitud->load('user.hospital.nutriMedicineList', 'inspeccionNutricional');
         $hospital = $solicitud->user?->hospital;
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
-        $inspeccion = $solicitud->inspeccionNutricional;
+        $inspectionWorkflow = $solicitud->inspeccionNutricional;
+        $inspeccion = $inspectionWorkflow;
+        if (! $inspeccion?->inspection_completed_at
+            || ! is_numeric($inspeccion->peso_mezcla)
+            || (float) $inspeccion->peso_mezcla <= 0
+            || blank($inspeccion->aprobo_nombre)) {
+            $inspeccion = null;
+        }
         $elaboroNombre = $this->nombreUsuario($solicitud->user);
+        $validacionNombre = $this->nombreUsuarioDesdeTexto($solicitud->validated_by);
         $revisoNombre = $this->nombreUsuarioDesdeTexto($inspeccion?->reviso_nombre);
         $validoNombre = $this->nombreUsuarioDesdeTexto($inspeccion?->aprobo_nombre);
-        $preparoNombre = $this->nombreUsuarioDesdeTexto($inspeccion?->preparo_nombre);
+        $preparoNombre = $this->nombreUsuarioDesdeTexto($inspectionWorkflow?->preparo_nombre);
 
         $inputs_solicitud = SolicitudInput::where('solicitud_id', $solicitud->id)
             ->whereNotIn('input_id', function ($query) {
@@ -2368,6 +2390,8 @@ class SolicitudController extends Controller
                 'presentation.catalog',
             ])
             ->get();
+
+        $inputs_solicitud = \App\Support\NutritionAdditionOrder::sort($inputs_solicitud);
 
         $solicitud_detalles = Solicitud::with([
             'user.hospital',
@@ -2447,6 +2471,7 @@ class SolicitudController extends Controller
             'lotesPorPresentacion',
             'inspeccion',
             'elaboroNombre',
+            'validacionNombre',
             'revisoNombre',
             'validoNombre',
             'preparoNombre',
