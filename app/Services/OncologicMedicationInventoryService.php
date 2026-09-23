@@ -37,7 +37,8 @@ class OncologicMedicationInventoryService
                 ->where('mp.is_available', 1)
                 ->whereExists(function ($query) use ($listId) {
                     $query->selectRaw('1')->from('medicine_list_presentation as mlp')
-                        ->whereColumn('mlp.medicine_presentation_id', 'mp.id')->where('mlp.medicine_list_id', $listId);
+                        ->whereColumn('mlp.medicine_presentation_id', 'mp.id')->where('mlp.medicine_list_id', $listId)
+                        ->where('mlp.is_active', true);
                 })
                 ->where(fn ($query) => $query->whereNull('mb.caducidad')->orWhereDate('mb.caducidad', '>=', now()->toDateString()))
                 ->orderBy('mb.id')->lockForUpdate()
@@ -124,6 +125,7 @@ class OncologicMedicationInventoryService
             ->where('mb.stock_actual', '>', 0)
             ->where('mp.catalog_id', $catalogId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->where(function ($query) {
                 $query->whereNull('mb.caducidad')->orWhereDate('mb.caducidad', '>=', now()->toDateString());
             })
@@ -164,6 +166,7 @@ class OncologicMedicationInventoryService
             ->where('mb.laboratory_id', $laboratoryId)
             ->where('mp.catalog_id', $catalogId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->where(function ($query) {
                 $query->whereNull('mb.caducidad')
                     ->orWhereDate('mb.caducidad', '>=', now()->toDateString());

@@ -54,6 +54,9 @@ class LaboratoryPurchaseOrder extends Model
         'prepared_by',
         'status',
         'created_by',
+        'is_automatic',
+        'automatic_open_key',
+        'reorder_snapshot',
     ];
 
     protected $casts = [
@@ -65,6 +68,8 @@ class LaboratoryPurchaseOrder extends Model
         'tax_rate' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'is_automatic' => 'boolean',
+        'reorder_snapshot' => 'array',
     ];
 
     public function laboratory(): BelongsTo

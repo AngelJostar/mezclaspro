@@ -2,38 +2,31 @@
     <div class="rounded-lg bg-white p-5 shadow-sm md:p-6">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-2xl font-medium text-gray-900">Compras / {{ $sectionMeta['title'] }}</h1>
-                <p class="mt-1 text-sm text-gray-500">{{ $sectionMeta['description'] }}</p>
+                <h1 class="text-2xl font-medium text-gray-900">Compras</h1>
             </div>
-            @if ($section === 'mine')
+            @if ($section === 'mine' && \App\Support\AdminMenuAccess::allows(auth()->user(), 'menu.warehouses', auth()->user()?->can('laboratorios')))
                 <a href="{{ route('admin.warehouses.index', ['laboratory_id' => $selectedLaboratory?->id]) }}"
                     class="inline-flex items-center justify-center gap-2 rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                     <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
                     Volver a almacenes
                 </a>
-            @else
+            @elseif ($section !== 'mine' && \App\Support\AdminMenuAccess::allows(auth()->user(), 'menu.compras.mine'))
                 <a href="{{ route('admin.warehouses.purchase-orders.index', array_filter(['section' => 'mine', 'laboratory_id' => $selectedLaboratory?->id])) }}"
                     class="inline-flex items-center justify-center gap-2 rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                     <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                    Volver a Mis &Oacute;rdenes de Compra
+                    Volver a &Oacute;rdenes de compra
                 </a>
             @endif
         </div>
 
-        @if ($selectedLaboratory)
-            <div class="mt-6 flex flex-col gap-3 border-y border-gray-200 py-4 sm:flex-row sm:items-end sm:justify-between">
-                <form method="GET" action="{{ route('admin.warehouses.purchase-orders.index') }}" class="w-full max-w-xl">
-                    <input type="hidden" name="section" value="{{ $section }}">
-                    <label for="laboratory_id" class="mb-1 block text-sm font-medium text-gray-700">Central de mezclas</label>
-                    <select id="laboratory_id" name="laboratory_id" onchange="this.form.submit()"
-                        class="w-full rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                        @foreach ($laboratories as $laboratory)
-                            <option value="{{ $laboratory->id }}" @selected($selectedLaboratory->id === $laboratory->id)>{{ $laboratory->nombre }}</option>
-                        @endforeach
-                    </select>
-                </form>
-            </div>
+        <div class="mt-5">
+            @include('admin.warehouses.partials.purchase-navigation')
+        </div>
 
+        <h2 class="text-lg font-semibold text-gray-900">{{ $sectionMeta['title'] }}</h2>
+        <p class="mt-1 text-sm text-gray-500">{{ $sectionMeta['description'] }}</p>
+
+        @if ($selectedLaboratory)
             <div class="mt-5 overflow-x-auto border border-gray-200">
                 <table id="purchase-orders-table" class="w-full min-w-[1650px] text-left text-sm text-gray-600">
                     <thead class="bg-gray-50 text-xs uppercase text-gray-700">
@@ -71,6 +64,8 @@
                             @php
                                 $normalizedStatus = mb_strtolower(trim((string) $order->status));
                                 $statusMeta = match ($normalizedStatus) {
+                                    'pendiente_revision' => ['Pendiente de revision', 'bg-amber-100 text-amber-800'],
+                                    'cancelada' => ['Cancelada', 'bg-gray-100 text-gray-700'],
                                     'pagada', 'pagado' => ['Pagada', 'bg-emerald-100 text-emerald-800'],
                                     'pendiente_pago', 'pendiente de pago' => ['Pendiente de pago', 'bg-amber-100 text-amber-800'],
                                     'rechazada', 'rechazado' => ['Rechazada', 'bg-red-100 text-red-800'],
@@ -82,6 +77,8 @@
                                     : 'Sin pago';
                                 $receivingWarehouse = $order->warehouse?->name
                                     ?: ($order->delivery_attention ?: 'Sin almacen asignado');
+                                $pricingPending = $order->is_automatic && ($order->reorder_snapshot['pricing_pending'] ?? false);
+                                $documentLabel = $pricingPending ? 'Por cotizar' : 'Descargar';
                             @endphp
                             <tr class="js-purchase-order-filter-row border-t border-gray-200">
                                 <td class="px-3 py-2 font-semibold text-gray-900" data-sort-value="{{ $order->folio }}">
@@ -89,8 +86,8 @@
                                 </td>
                                 <td class="px-3 py-2" data-sort-value="{{ $company }}">{{ $company }}</td>
                                 <td class="px-3 py-2">{{ $order->supplier }}</td>
-                                <td class="px-3 py-2 text-right" data-sort-value="{{ (float) $order->total }}">
-                                    ${{ number_format((float) $order->total, 2) }}
+                                <td class="px-3 py-2 text-right" data-sort-value="{{ $pricingPending ? '' : (float) $order->total }}">
+                                    {{ $pricingPending ? 'Por cotizar' : '$'.number_format((float) $order->total, 2) }}
                                 </td>
                                 <td class="px-3 py-2" data-filter-value="{{ $statusMeta[0] }}"
                                     data-sort-value="{{ $statusMeta[0] }}">
@@ -111,12 +108,16 @@
                                 <td class="px-3 py-2" data-sort-value="{{ $order->inventoryDestinationLabel() }}">
                                     {{ $order->inventoryDestinationLabel() }}
                                 </td>
-                                <td class="px-3 py-2 text-center" data-filter-value="Descargar" data-sort-value="Descargar">
+                                <td class="px-3 py-2 text-center" data-filter-value="{{ $documentLabel }}" data-sort-value="{{ $documentLabel }}">
+                                    @if ($pricingPending)
+                                        <span class="text-gray-500">{{ $documentLabel }}</span>
+                                    @else
                                     <a href="{{ route('admin.oncologicos.laboratory.purchase-orders.download', [$selectedLaboratory, $order]) }}"
                                         class="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900">
                                         <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
                                         Descargar
                                     </a>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

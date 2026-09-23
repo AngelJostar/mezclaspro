@@ -34,6 +34,7 @@ class DispensingProposalTest extends TestCase
     {
         RemainderInventory::seed();
         Schema::create('medicine_list_presentation', function (Blueprint $table) {
+            $table->boolean('is_active')->default(true);
             $table->integer('medicine_presentation_id');
             $table->integer('medicine_list_id');
             $table->decimal('precio');

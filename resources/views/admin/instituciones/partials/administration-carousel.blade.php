@@ -6,10 +6,19 @@
         'ajustes' => 'Bitácora de ajustes',
         'pagos' => 'Pagos',
     ];
-    $billingSections = \App\Support\AdministrationNavigation::billingSections(auth()->user());
-    $canViewReports = \App\Support\AdministrationNavigation::canViewReports(auth()->user());
-    $administrationTabs = array_filter($administrationTabs, fn ($key) => $key === 'facturacion' ? count($billingSections) > 0 : $canViewReports, ARRAY_FILTER_USE_KEY);
-    $administrationQuery = request()->only(['search', 'daily_from', 'daily_to']);
+    if (!isset($administrationLinks)) {
+        $billingSections = \App\Support\AdministrationNavigation::billingSections(auth()->user());
+        $canViewReports = \App\Support\AdministrationNavigation::canViewReports(auth()->user());
+        $administrationTabs = array_filter($administrationTabs, fn ($key) => $key === 'facturacion' ? count($billingSections) > 0 : $canViewReports, ARRAY_FILTER_USE_KEY);
+        $administrationQuery = request()->only(['search', 'daily_from', 'daily_to']);
+        $administrationLinks = [];
+        foreach ($administrationTabs as $key => $label) {
+            $administrationLinks[$key] = $key === 'facturacion'
+                ? route(reset($billingSections)['route'], request()->only(['search', 'date_from', 'date_to']))
+                : route('admin.instituciones.reportes', array_merge($administrationQuery, $key === 'reportes' ? [] : ['seccion' => $key]));
+        }
+    }
+    $administrationTabs = array_intersect_key($administrationTabs, $administrationLinks);
 @endphp
 
 <style>
@@ -20,7 +29,7 @@
     }
 </style>
 
-<nav class="mb-4 flex max-w-3xl items-center gap-2" aria-label="Secciones de administración" data-administration-carousel>
+<nav class="mb-4 flex max-w-3xl items-center gap-2" aria-label="{{ $navigationLabel ?? 'Secciones de administración' }}" data-administration-carousel>
     <button type="button"
         data-carousel-direction="-1"
         class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-blue-900 hover:bg-gray-50"
@@ -32,9 +41,7 @@
         class="request-selector-scroll flex min-w-0 gap-2 overflow-x-auto scroll-smooth pb-1"
         data-disable-sticky-x>
         @foreach ($administrationTabs as $key => $label)
-            <a href="{{ $key === 'facturacion'
-                ? route(reset($billingSections)['route'], request()->only(['search', 'date_from', 'date_to']))
-                : route('admin.instituciones.reportes', array_merge($administrationQuery, $key === 'reportes' ? [] : ['seccion' => $key])) }}"
+            <a href="{{ $administrationLinks[$key] }}"
                 @if ($administrationSection === $key) aria-current="page" @endif
                 class="administration-carousel__item flex h-11 min-w-32 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:bg-blue-50">
                 {{ $label }}

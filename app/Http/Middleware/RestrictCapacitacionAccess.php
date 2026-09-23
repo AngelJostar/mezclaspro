@@ -20,9 +20,14 @@ class RestrictCapacitacionAccess
 
         $usesTrainingCredentials = $request->session()->get('access_context') === 'training';
 
-        if (($usesTrainingCredentials || $user?->hasRole('Capacitacion'))
+        if (($usesTrainingCredentials || ($user?->hasRole('Capacitacion') && ! $user->isSalesperson()))
             && ! $request->routeIs('admin.capacitaciones.*')) {
             return redirect()->route('admin.capacitaciones.index');
+        }
+
+        if ($user?->hasSalesOnlyAccess()
+            && ! $request->routeIs('admin.solicitudes.cotizacion.*', 'admin.capacitaciones.index', 'admin.capacitaciones.programas')) {
+            return redirect()->route($usesTrainingCredentials ? 'admin.capacitaciones.index' : 'admin.solicitudes.cotizacion.index');
         }
 
         if ($user?->hasRole('Administracion y facturacion')

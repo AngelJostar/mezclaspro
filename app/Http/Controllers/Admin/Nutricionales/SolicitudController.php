@@ -709,6 +709,8 @@ class SolicitudController extends Controller
             }
         ])
             ->where('nutri_medicine_list_id', $hospital->nutri_medicine_list_id)
+            ->where('is_active', true)
+            ->whereHas('presentation', fn ($query) => $query->where('is_available', true))
             ->get();
 
         $presentationsByInput = $listItems
@@ -1221,6 +1223,8 @@ class SolicitudController extends Controller
             },
         ])
             ->where('nutri_medicine_list_id', $hospital->nutri_medicine_list_id)
+            ->where('is_active', true)
+            ->whereHas('presentation', fn ($query) => $query->where('is_available', true))
             ->get();
 
         $presentationsByInput = $listItems
@@ -1911,6 +1915,8 @@ class SolicitudController extends Controller
 
         $itemLista = NutriMedicineListItem::where('nutri_medicine_list_id', $hospital->nutri_medicine_list_id)
             ->where('nutrition_medicine_presentation_id', $presentation->id)
+            ->where('is_active', true)
+            ->whereHas('presentation', fn ($query) => $query->where('is_available', true))
             ->first();
 
         if (!$itemLista) {

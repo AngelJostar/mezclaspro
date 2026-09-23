@@ -177,12 +177,65 @@ class CatalogoListasController extends Controller
             'categories' => $this->priceListCategories(),
             'list' => $priceList,
             'items' => $this->priceListItems($category, $list),
+            'canUpdateListStatus' => $this->canUpdateListStatus($category),
             'additionalCharges' => PriceListAdditionalCharge::query()
                 ->where('price_list_type', $category)
                 ->where('price_list_id', $priceList->id)
                 ->orderBy('name')
                 ->get(),
         ]);
+    }
+
+    private function canUpdateListStatus(string $category): bool
+    {
+        $user = auth()->user();
+
+        return $user && !$user->hasAnyRole(['Cliente', 'Institucion'])
+            && ($user->hasRole('Super Admin')
+                || $user->can($category === 'nutricionales' ? 'medicamentos_nutricionales' : 'medicamentos_oncologicos'));
+    }
+
+    public function updateListProductStatus(Request $request, string $category, int $list, int $presentation)
+    {
+        abort_unless(array_key_exists($category, $this->priceListCategories()), 404);
+        abort_unless($this->canUpdateListStatus($category), 403);
+        $request->validate(['is_active' => ['required', 'boolean']]);
+        $active = $request->boolean('is_active');
+
+        DB::transaction(function () use ($category, $list, $presentation, $active) {
+            if ($category === 'nutricionales') {
+                NutriMedicineList::findOrFail($list);
+                $product = NutritionMedicinePresentation::lockForUpdate()->findOrFail($presentation);
+                $item = NutriMedicineListItem::where('nutri_medicine_list_id', $list)
+                    ->where('nutrition_medicine_presentation_id', $presentation)->lockForUpdate()->firstOrFail();
+            } else {
+                MedicineList::forCategory($category)->findOrFail($list);
+                $product = MedicinePresentation::whereHas('catalog', fn ($query) => $query->forCategory($category))
+                    ->lockForUpdate()->findOrFail($presentation);
+                $item = DB::table('medicine_list_presentation')->where('medicine_list_id', $list)
+                    ->where('medicine_presentation_id', $presentation);
+                abort_unless((clone $item)->lockForUpdate()->first(), 404);
+            }
+
+            if ($active && !$product->is_available) {
+                throw ValidationException::withMessages([
+                    'is_active' => 'El producto esta inactivo en el catalogo. Activalo desde el catalogo de productos.',
+                ]);
+            }
+
+            // Only this list preference changes; catalog availability and prices remain untouched.
+            if ($category === 'nutricionales') {
+                $item->forceFill(['is_active' => $active])->save();
+            } else {
+                $item->update(['is_active' => $active, 'updated_at' => now()]);
+            }
+        });
+
+        $message = $active ? 'Producto activo en esta lista de precios.' : 'Producto inactivo en esta lista de precios.';
+
+        return $request->expectsJson()
+            ? response()->json(['is_active' => $active, 'message' => $message])
+            : back()->with('catalog_status_message', $message);
     }
 
     public function storeAdditionalCharge(Request $request, string $category, int $list)
@@ -442,6 +495,7 @@ class CatalogoListasController extends Controller
             'formMethod' => 'PUT',
             'list' => $priceList,
             'pricesByPresentation' => $this->editorPricesByPresentation($category, $priceList),
+            'inactiveItems' => $this->priceListItems($category, $list)->where('is_available', false),
             'additionalCharges' => PriceListAdditionalCharge::query()->where('price_list_type', $category)
                 ->where('price_list_id', $priceList->id)->orderBy('name')->get(),
         ], $locationData));
@@ -542,7 +596,6 @@ class CatalogoListasController extends Controller
         if (in_array($category, ['oncologicos', 'antibioticos'], true)) {
             return MedicinePresentation::query()
                 ->with(['catalog', 'batches'])
-                ->where('is_available', true)
                 ->whereHas('catalog', fn ($query) => $query->forCategory($category))
                 ->get()
                 ->sortBy(fn ($presentation) => mb_strtolower(
@@ -550,7 +603,7 @@ class CatalogoListasController extends Controller
                     'UTF-8'
                 ))
                 ->values()
-                ->map(function (MedicinePresentation $presentation) {
+                ->map(function (MedicinePresentation $presentation) use ($category) {
                     $pricedBatches = $presentation->batches
                         ->filter(fn ($batch) => $batch->costo_unitario !== null);
 
@@ -563,6 +616,8 @@ class CatalogoListasController extends Controller
                         ->first();
 
                     return (object) [
+                        'is_available' => (bool) $presentation->is_available,
+                        'status_url' => route('admin.catalogo-listas.products.status', ['category' => $category, 'presentation' => $presentation->id]),
                         'product' => $presentation->catalog?->denominacion ?? '-',
                         'dose' => $this->doseLabel($this->oncologyDoseMg($presentation), 'mg'),
                         'presentation' => $presentation->presentacion ?? '-',
@@ -582,7 +637,6 @@ class CatalogoListasController extends Controller
         if ($category === 'nutricionales') {
             return NutritionMedicinePresentation::query()
                 ->with(['catalog.input', 'stocks'])
-                ->where('is_available', true)
                 ->get()
                 ->sortBy(fn ($presentation) => mb_strtolower(
                     trim((string) $presentation->catalog?->denominacion_generica.' '.(string) $presentation->denominacion_comercial),
@@ -595,6 +649,8 @@ class CatalogoListasController extends Controller
                         ->first();
 
                     return (object) [
+                        'is_available' => (bool) $presentation->is_available,
+                        'status_url' => route('admin.catalogo-listas.products.status', ['category' => 'nutricionales', 'presentation' => $presentation->id]),
                         'product' => $presentation->catalog?->denominacion_generica ?? '-',
                         'dose' => $this->doseLabel(
                             $presentation->presentacion_ml !== null
@@ -797,6 +853,9 @@ class CatalogoListasController extends Controller
                         'product' => $presentation->catalog?->denominacion ?? '-',
                         'presentation' => $presentation->presentacion ?? '-',
                         'price_bottle' => $priceByBottle,
+                        'presentation_id' => $presentation->id,
+                        'list_is_active' => (bool) $presentation->pivot->is_active,
+                        'is_available' => (bool) $presentation->is_available,
                         'unit_price' => $priceByBottle !== null && $milligrams > 0
                             ? ((float) $priceByBottle / $milligrams)
                             : null,
@@ -820,8 +879,11 @@ class CatalogoListasController extends Controller
 
                     return (object) [
                         'product' => $item->presentation?->catalog?->denominacion_generica ?? '-',
+                        'presentation_id' => $item->nutrition_medicine_presentation_id,
+                        'list_is_active' => (bool) $item->is_active,
                         'presentation' => trim(($item->presentation?->denominacion_comercial ?? '').' '.($item->presentation?->presentacion ?? '')),
                         'price_bottle' => $milliliters > 0 ? $priceMl * $milliliters : null,
+                        'is_available' => (bool) $item->presentation?->is_available,
                         'unit_price' => $priceMl,
                         'charge_by' => $this->normalizeNutritionChargeBy($item->charge_by ?? null),
                     ];

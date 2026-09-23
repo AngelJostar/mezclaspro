@@ -7,9 +7,16 @@ use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\Oncologicos\DiluentCatalogPresentation;
 use App\Models\ConsumableLot;
 use App\Models\Oncologicos\Laboratory;
+use App\Models\Oncologicos\LaboratoryPurchaseOrder;
 use App\Models\Warehouse;
+use App\Models\MinimumStockSetting;
+use App\Models\Supplier;
+use App\Services\MinimumStockCatalogService;
+use App\Services\AutomaticPurchaseOrderService;
+use App\Support\AdminMenuAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class WarehouseController extends Controller
 {
@@ -132,14 +139,14 @@ class WarehouseController extends Controller
     public function purchaseOrders(Request $request)
     {
         $section = (string) $request->query('section', 'mine');
-        $validSections = ['paid', 'pending', 'mine', 'rejected'];
+        $validSections = ['all', 'paid', 'pending', 'mine', 'rejected'];
 
         if (! in_array($section, $validSections, true)) {
             $section = 'mine';
         }
 
         $laboratories = Laboratory::query()
-            ->withCount('warehouses')
+            ->withCount(['warehouses as active_warehouses_count' => fn ($query) => $query->where('is_active', true)])
             ->orderByDesc('activo')
             ->orderBy('nombre')
             ->get();
@@ -158,6 +165,7 @@ class WarehouseController extends Controller
                 ]);
 
             match ($section) {
+                'all' => $purchaseOrdersQuery,
                 'paid' => $purchaseOrdersQuery->whereIn('status', ['pagada', 'pagado']),
                 'pending' => $purchaseOrdersQuery->whereIn('status', ['pendiente_pago', 'pendiente de pago']),
                 'mine' => $purchaseOrdersQuery->where('created_by', auth()->id()),
@@ -171,6 +179,11 @@ class WarehouseController extends Controller
         }
 
         $sectionMeta = [
+            'all' => [
+                'title' => 'Todas las ordenes de compra',
+                'description' => $selectedLaboratory?->nombre ?? '',
+                'empty' => 'No hay ordenes de compra para esta central de mezclas.',
+            ],
             'paid' => [
                 'title' => 'Pagadas',
                 'description' => 'Ordenes de compra cuyo pago ya fue registrado.',
@@ -182,7 +195,7 @@ class WarehouseController extends Controller
                 'empty' => 'No hay ordenes de compra pendientes de pago para esta central de mezclas.',
             ],
             'mine' => [
-                'title' => 'Mis ordenes',
+                'title' => 'Órdenes de compra',
                 'description' => 'Ordenes de compra creadas por tu usuario.',
                 'empty' => 'Todavia no has creado ordenes de compra para esta central de mezclas.',
             ],
@@ -200,6 +213,68 @@ class WarehouseController extends Controller
             'section',
             'sectionMeta'
         ));
+    }
+
+    public function minimumStock(Request $request, MinimumStockCatalogService $catalog)
+    {
+        $laboratories = Laboratory::query()
+            ->withCount(['warehouses as active_warehouses_count' => fn ($query) => $query->where('is_active', true)])
+            ->orderByDesc('activo')
+            ->orderBy('nombre')
+            ->get();
+        $selectedLaboratory = $laboratories->firstWhere('id', $request->integer('laboratory_id'))
+            ?? $laboratories->first();
+
+        $stockView = in_array($request->query('view'), ['automated', 'history'], true)
+            ? $request->query('view') : 'stock';
+        $stockType = in_array($request->query('tipo'), ['nutricionales', 'oncologicos', 'antibioticos'], true)
+            ? $request->query('tipo') : 'todas';
+        $stockRows = $selectedLaboratory && $stockView === 'stock' ? $catalog->rows($selectedLaboratory->id, $stockType) : collect();
+        $automaticOrders = $selectedLaboratory && $stockView !== 'stock' && app(AutomaticPurchaseOrderService::class)->available()
+            ? LaboratoryPurchaseOrder::query()->with(['laboratory', 'deliveryLaboratory', 'warehouse'])
+                ->where('laboratory_id', $selectedLaboratory->id)->where('is_automatic', true)
+                ->when($stockView === 'history', fn ($query) => $query->whereNull('automatic_open_key'),
+                    fn ($query) => $query->whereNotNull('automatic_open_key'))
+                ->when($stockType !== 'todas', fn ($query) => $query->where('inventory_destination', $stockType))
+                ->latest('id')->get() : collect();
+        $currentStockRows = $automaticOrders->isNotEmpty() ? $catalog->rows($selectedLaboratory->id)->keyBy('key') : collect();
+        $suppliers = Supplier::query()->orderBy('name')->get(['id', 'name', 'email', 'status']);
+
+        return view('admin.warehouses.minimum-stock', compact('laboratories', 'selectedLaboratory', 'stockView', 'stockType', 'stockRows', 'suppliers', 'automaticOrders', 'currentStockRows'));
+    }
+
+    public function automaticPurchaseOrder(Laboratory $laboratory, LaboratoryPurchaseOrder $purchaseOrder)
+    {
+        abort_unless($purchaseOrder->is_automatic && (int) $purchaseOrder->laboratory_id === (int) $laboratory->id, 404);
+        $purchaseOrder->loadMissing(['laboratory', 'deliveryLaboratory', 'warehouse', 'creator']);
+        return view('admin.warehouses.automatic-order', ['order' => $purchaseOrder]);
+    }
+
+    public function updateMinimumStock(Request $request, Laboratory $laboratory, string $type, int $presentation, MinimumStockCatalogService $catalog)
+    {
+        abort_unless(AdminMenuAccess::allows($request->user(), 'menu.compras')
+            && !$request->user()->hasAnyRole(['Cliente', 'Institucion']), 403);
+        abort_unless($laboratory->activo, 422, 'No se puede modificar el stock de una central inactiva.');
+        $catalog->query($type)->findOrFail($presentation);
+        $limits = $request->hasAny(['minimum_stock', 'maximum_stock']);
+        $validated = $request->validate([
+            'minimum_stock' => [$limits ? 'required' : 'sometimes', 'integer', 'min:0', 'max:1000000'],
+            'maximum_stock' => [$limits ? 'required' : 'sometimes', 'integer', 'min:0', 'max:1000000', 'gte:minimum_stock'],
+            'supplier_id' => [$limits ? 'sometimes' : 'present', 'nullable', 'integer',
+                Rule::exists('suppliers', 'id')->where('status', Supplier::STATUS_ACTIVE)],
+        ], [
+            'maximum_stock.gte' => 'El punto de reorden debe ser mayor o igual al stock minimo.',
+            'supplier_id.exists' => 'Selecciona un proveedor activo del catalogo.',
+        ]);
+        $setting = MinimumStockSetting::updateOrCreate([
+            'laboratory_id' => $laboratory->id, 'product_type' => $type, 'presentation_id' => $presentation,
+        ], $validated + ['updated_by' => $request->user()->id]);
+        $setting->load('supplier');
+
+        return response()->json([
+            'minimum_stock' => $setting->minimum_stock, 'maximum_stock' => $setting->maximum_stock,
+            'supplier' => $setting->supplier ? $setting->supplier->only(['id', 'name', 'email', 'status']) : null,
+        ]);
     }
 
     public function newPurchaseOrder(Request $request)
@@ -220,7 +295,10 @@ class WarehouseController extends Controller
                 ->with('error', 'Registra una central de mezclas antes de crear una orden de compra.');
         }
 
-        return redirect()->route('admin.oncologicos.laboratory.purchase-orders.create', $laboratory);
+        return redirect()->route('admin.oncologicos.laboratory.purchase-orders.create', [
+            'laboratory' => $laboratory,
+            ...($request->boolean('purchase_popup') ? ['purchase_popup' => 1] : []),
+        ]);
     }
 
     public function suppliesInventory(Request $request, Warehouse $warehouse)

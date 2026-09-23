@@ -22,7 +22,7 @@ const script = buildSync({
 
 async function assertLeftAlignedLabels(page) {
     const labels = await page.locator('#logo-sidebar a, #logo-sidebar button').evaluateAll(elements => elements
-        .filter(element => element.getClientRects().length)
+        .filter(element => element.getClientRects().length && element.textContent.trim())
         .map(element => {
             const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
                 acceptNode: node => node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
@@ -41,7 +41,7 @@ async function assertLeftAlignedLabels(page) {
     }
 }
 
-test('hospital starts in Listado without internal personnel menus', async () => {
+test('hospital starts in Preparacion without internal personnel menus', async () => {
     const html = execFileSync('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3',
         'tests/Browser/fixtures/hospital-entry.php'], { cwd: root, encoding: 'utf8' });
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
@@ -54,15 +54,20 @@ test('hospital starts in Listado without internal personnel menus', async () => 
             await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><div x-data="{ open: true }">${html}</div>`);
             await page.addScriptTag({ content: script });
             const sidebar = page.locator('#logo-sidebar');
-            const list = sidebar.getByRole('link', { name: 'Listado', exact: true });
+            const list = sidebar.getByRole('link', { name: 'Preparacion', exact: true });
             await list.waitFor({ state: 'visible' });
             assert.equal(await list.getAttribute('aria-current'), 'page');
             assert.equal(await list.getAttribute('href'), 'http://localhost/admin/solicitudes');
+            const quotation = sidebar.getByRole('link', { name: 'Cotizacion', exact: true });
+            assert.equal(await quotation.isVisible(), true);
+            assert.equal(await quotation.getAttribute('href'), 'http://localhost/admin/solicitudes/cotizacion');
+            assert.equal(await quotation.getAttribute('aria-current'), null);
             assert.equal(await sidebar.getByRole('button').count(), 1);
             const tools = sidebar.getByRole('link', { name: 'Herramientas', exact: true });
-            assert.equal(await tools.count(), 1);
+            assert.equal(await tools.isVisible(), true);
             assert.equal(await tools.getAttribute('href'), 'http://localhost/admin/herramientas');
-            assert.equal(await tools.locator('[data-request-navigation-icon]').count(), 0);
+            assert.equal(await tools.getAttribute('aria-current'), null);
+            assert.ok((await tools.boundingBox()).y > (await list.boundingBox()).y);
             assert.equal(await sidebar.getByText('Personal y Capacitaciones', { exact: true }).count(), 0);
             assert.equal(await sidebar.locator('a[href*="/capacitaciones"]').count(), 0);
             assert.equal(await page.getByRole('heading', { name: 'Lista de Solicitudes', exact: true }).count(), 1);
@@ -70,6 +75,10 @@ test('hospital starts in Listado without internal personnel menus', async () => 
             assert.equal(await page.getByRole('navigation', { name: 'Tipo de solicitudes' }).getByRole('link').count(), 4);
             await assertLeftAlignedLabels(page);
             if (process.env.SIDEBAR_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.SIDEBAR_SCREENSHOTS, `hospital-entry-${width}.png`) });
+            await page.route('**/admin/herramientas', route => route.fulfill({ contentType: 'text/html', body: '<h1>Herramientas</h1>' }));
+            await tools.click();
+            await page.getByRole('heading', { name: 'Herramientas', exact: true }).waitFor();
+            assert.equal(page.url(), 'http://localhost/admin/herramientas');
             await page.close();
         }
     } finally { await browser.close(); }
@@ -124,11 +133,17 @@ test('only sidebar dropdowns have visible arrows that follow their expanded stat
             await page.addScriptTag({ content: script });
             const sidebar = page.locator('#logo-sidebar');
             const toggles = sidebar.locator('button[aria-controls]');
+            const catalog = sidebar.getByRole('link', { name: 'Catalogo y Listas de Precios', exact: true });
+            assert.equal(await catalog.isVisible(), true);
+            assert.ok((await catalog.getAttribute('href')).endsWith('/admin/catalogo-listas'));
+            assert.equal(await catalog.locator('span').evaluate(label => label.scrollWidth <= label.clientWidth + 1), true);
             await sidebar.locator('svg[data-request-navigation-icon]').first().waitFor();
             assert.equal(await toggles.count(), 6);
             assert.equal(await sidebar.locator('a [data-request-navigation-icon]').count(), 0);
-            assert.deepEqual((await sidebar.locator('#solicitudes-submenu a').allTextContents()).map(text => text.trim()), ['Listado']);
+            assert.deepEqual((await sidebar.locator('#solicitudes-submenu a').allTextContents()).map(text => text.trim()), ['Preparacion', 'Cotizacion']);
             assert.equal(await sidebar.locator('a[href*="/solicitudes/validaciones"]').count(), 0);
+            assert.deepEqual((await sidebar.locator('#compras-submenu a').allTextContents()).map(text => text.trim().replace(/\s+/g, ' ')), ['Órdenes de compra 0', 'Stock mínimo', 'Proveedores']);
+            assert.ok((await sidebar.getByRole('link', { name: 'Compras', exact: true }).getAttribute('href')).includes('section=mine'));
             await assertLeftAlignedLabels(page);
             for (const button of await toggles.all()) {
                 const label = (await button.innerText()).trim();
@@ -143,8 +158,8 @@ test('only sidebar dropdowns have visible arrows that follow their expanded stat
                     const arrow = element.querySelector('svg').getBoundingClientRect();
                     const label = element.querySelector('span');
                     return arrow.width > 0 && arrow.height > 0 && arrow.right <= bounds.right
-                        && arrow.left >= label.getBoundingClientRect().right
-                        && label.scrollWidth <= label.clientWidth + 1;
+                        && (!label || (arrow.left >= label.getBoundingClientRect().right
+                        && label.scrollWidth <= label.clientWidth + 1));
                 });
                 assert.equal(fits, true, `${label}: arrow and label must not overlap`);
                 await button.click();

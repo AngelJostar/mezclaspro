@@ -154,10 +154,12 @@ test('rejects unselected text and clears all pages when the warehouse changes', 
 test('handles failed queries, retries and stale responses without mixing catalogs', async () => {
     let calls = 0;
     let held;
+    let markHeld;
+    const requestHeld = new Promise(resolve => { markHeld = resolve; });
     const { page, errors } = await fixture({ onCatalog: async (route, url) => {
         calls++;
         if (calls === 1) return route.fulfill({ status: 503, json: {} });
-        if (calls === 3) { held = route; return; }
+        if (calls === 3) { held = route; markHeld(); return; }
         return route.fulfill({ json: { products: url.searchParams.get('inventory_destination') === 'oncologicos' ? products : [] } });
     } });
     try {
@@ -170,6 +172,7 @@ test('handles failed queries, retries and stale responses without mixing catalog
         await page.locator('#po-catalog-status[data-state="ready"]').waitFor();
         await page.getByLabel('Subalmacén receptor').selectOption('antibioticos');
         await page.waitForFunction(() => document.querySelector('#po-catalog-status').dataset.state === 'loading');
+        await requestHeld;
         await page.getByLabel('Subalmacén receptor').selectOption('oncologicos');
         await page.locator('#po-catalog-status[data-state="ready"]').waitFor();
         await held.fulfill({ json: { products: [{ product_key: 'antibioticos:9', description: 'Producto de respuesta vieja' }] } });

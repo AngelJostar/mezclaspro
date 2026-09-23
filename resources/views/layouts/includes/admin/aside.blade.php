@@ -4,6 +4,8 @@
         \App\Support\AdminMenuAccess::allows($sidebarUser, $permission, $legacyAccess);
     $isRequestsSection = request()->routeIs('admin.solicitudes.*', 'admin.nutricionales.solicitudes.*', 'admin.oncologicos.solicitudes.*', 'admin.antibioticos.solicitudes.*', 'admin.oncologicos.mezclas.*');
     $isValidationsSection = request()->routeIs('admin.solicitudes.validaciones.*');
+    $isQuotationSection = request()->routeIs('admin.solicitudes.cotizacion.*');
+    $isPreparationSection = $isRequestsSection && !$isValidationsSection && !$isQuotationSection;
     $isAdministrationSection = request()->routeIs('admin.instituciones.reportes', 'admin.instituciones.billing.*');
     $canViewAdministrationReports = \App\Support\AdministrationNavigation::canViewReports($sidebarUser);
     $administrationBillingSections = \App\Support\AdministrationNavigation::billingSections($sidebarUser);
@@ -30,7 +32,7 @@
     <div class="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
         <ul class="space-y-2 font-medium">
 
-            @unless (auth()->user()?->hasRole('Capacitacion'))
+            @unless (auth()->user()?->hasRole('Capacitacion') && !$sidebarUser->isSalesperson())
             @unless (auth()->user()?->hasRole('Administracion y facturacion'))
 
             @if ($menuAllows('menu.solicitudes', $sidebarUser?->can('nutricionales_solicitudes_index') || $sidebarUser?->can('oncologicos_solicitudes_index')))
@@ -42,6 +44,7 @@
                             <span class="min-w-0 flex-1 text-left font-bold">Solicitudes</span>
                             <i data-request-navigation-icon="chevron-down" class="h-3 w-3 shrink-0 transition-transform"
                                 :class="openMenu === 'solicitudes' ? 'rotate-180' : ''" aria-hidden="true"></i>
+                            @unless ($sidebarUser->hasSalesOnlyAccess())
                             <span
                                 class="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border border-red-300 bg-red-100 px-0.5 font-bold leading-none text-red-700"
                                 style="font-size: 10px"
@@ -49,13 +52,23 @@
                                 aria-label="{{ $pendingSolicitudesCount }} solicitudes pendientes">
                                 {{ $pendingSolicitudesCount > 99 ? '99+' : $pendingSolicitudesCount }}
                             </span>
+                            @endunless
                     </button>
                     <ul id="solicitudes-submenu" x-cloak x-show="openMenu === 'solicitudes'" class="space-y-1 pt-1">
+                        @unless ($sidebarUser->hasSalesOnlyAccess())
                         <li>
                             <a href="{{ route('admin.solicitudes.index') }}" @click="open = false"
-                                @if ($isRequestsSection && !$isValidationsSection) aria-current="page" @endif
-                                class="block rounded-md px-2 py-2 text-sm {{ $isRequestsSection && !$isValidationsSection ? 'bg-blue-100 font-semibold text-blue-800' : 'text-gray-900 hover:bg-blue-100' }}">
-                                Listado
+                                @if ($isPreparationSection) aria-current="page" @endif
+                                class="block rounded-md px-2 py-2 text-sm {{ $isPreparationSection ? 'bg-blue-100 font-semibold text-blue-800' : 'text-gray-900 hover:bg-blue-100' }}">
+                                Preparacion
+                            </a>
+                        </li>
+                        @endunless
+                        <li>
+                            <a href="{{ route('admin.solicitudes.cotizacion.index') }}" @click="open = false"
+                                @if ($isQuotationSection) aria-current="page" @endif
+                                class="block rounded-md px-2 py-2 text-sm {{ $isQuotationSection ? 'bg-blue-100 font-semibold text-blue-800' : 'text-gray-900 hover:bg-blue-100' }}">
+                                Cotizacion
                             </a>
                         </li>
                     </ul>
@@ -64,21 +77,21 @@
 
             @if ($sidebarUser?->hasAnyRole(['Cliente', 'Institucion']))
                 <li class="rounded-lg border border-cyan-200 bg-cyan-50 p-1 dark:border-cyan-700 dark:bg-cyan-900/20">
-                    <a href="{{ route('admin.hospital.herramientas') }}" x-on:click="open = false"
-                        @if (request()->routeIs('admin.hospital.herramientas')) aria-current="page" @endif
-                        class="flex w-full items-center rounded-lg p-2 text-gray-900 hover:bg-cyan-100 dark:text-white dark:hover:bg-cyan-800/50 {{ request()->routeIs('admin.hospital.herramientas') ? 'bg-cyan-100' : '' }}">
+                    <a href="{{ route('admin.herramientas.index') }}" x-on:click="open = false"
+                        @if (request()->routeIs('admin.herramientas.*')) aria-current="page" @endif
+                        class="flex w-full items-center rounded-md px-2 py-2 text-gray-900 hover:bg-cyan-100 dark:text-white dark:hover:bg-cyan-800/50 {{ request()->routeIs('admin.herramientas.*') ? 'bg-cyan-100 dark:bg-cyan-800/50' : '' }}">
                         <span class="min-w-0 flex-1 text-left font-bold">Herramientas</span>
                     </a>
                 </li>
             @endif
 
-            <!-- Catalogo y listas de precios -->
+            <!-- Catalogo y Listas de Precios -->
             @if ($menuAllows('menu.catalogo', $sidebarUser?->can('medicamentos_nutricionales') || $sidebarUser?->can('nutricionales_listas') || $sidebarUser?->can('medicamentos_oncologicos')))
                 <li
                     class="rounded-lg border border-yellow-200 bg-yellow-50 p-1 dark:border-yellow-700 dark:bg-yellow-900/20">
                     <a href="{{ route('admin.catalogo-listas.index') }}" x-on:click="open = false"
                         class="flex w-full items-center rounded-lg p-2 text-gray-900 hover:bg-yellow-100 dark:text-white dark:hover:bg-yellow-800/50 {{ request()->routeIs('admin.catalogo-listas.*') ? 'bg-yellow-100' : '' }}">
-                        <span class="min-w-0 flex-1 text-left font-bold">Catalogo y listas de precios</span>
+                        <span class="min-w-0 flex-1 whitespace-normal text-left font-bold">Catalogo y Listas de Precios</span>
                     </a>
                 </li>
             @endif
@@ -92,25 +105,35 @@
                 @php
                     $purchaseSection = (string) request()->query('section', 'mine');
                     $purchaseListRoute = request()->routeIs('admin.warehouses.purchase-orders.*');
+                    $purchaseLaboratory = request()->route('laboratory');
+                    $purchaseLaboratoryId = $purchaseLaboratory instanceof \App\Models\Oncologicos\Laboratory
+                        ? $purchaseLaboratory->id : (request()->integer('laboratory_id') ?: null);
+                    $purchaseLinks = $canAccessPurchases ? \App\Support\PurchaseNavigation::sections($sidebarUser, $purchaseLaboratoryId) : [];
+                    $purchaseEntry = $purchaseLinks ? reset($purchaseLinks)['url'] : route('admin.suppliers.index');
                 @endphp
                 <li class="rounded-lg border border-indigo-200 bg-indigo-50 p-1 dark:border-indigo-700 dark:bg-indigo-900/20">
-                    <button type="button"
-                        @click="openMenu === 'compras' ? openMenu = null : openMenu = 'compras'"
-                        :aria-expanded="(openMenu === 'compras').toString()" aria-controls="compras-submenu"
-                        class="flex w-full items-center rounded-lg p-2 text-gray-900 hover:bg-indigo-100 dark:text-white dark:hover:bg-indigo-800/50 {{ request()->routeIs('admin.purchases.*', 'admin.warehouses.purchase-orders.*', 'admin.oncologicos.laboratory.purchase-orders.*', 'admin.suppliers.*') ? 'bg-indigo-100' : '' }}">
-                        <span class="min-w-0 flex-1 text-left font-bold">Compras</span>
-                        <i data-request-navigation-icon="chevron-down" class="ms-1 h-3 w-3 shrink-0 transition-transform"
-                            :class="openMenu === 'compras' ? 'rotate-180' : ''" aria-hidden="true"></i>
-                    </button>
+                    <div class="flex items-center rounded-lg text-gray-900 dark:text-white {{ request()->routeIs('admin.purchases.*', 'admin.warehouses.purchase-orders.*', 'admin.oncologicos.laboratory.purchase-orders.*', 'admin.suppliers.*') ? 'bg-indigo-100' : '' }}">
+                        <a href="{{ $purchaseEntry }}" x-on:click="open = false"
+                            class="min-w-0 flex-1 rounded-lg p-2 text-left font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800/50">Compras</a>
+                        <button type="button"
+                            @click="openMenu === 'compras' ? openMenu = null : openMenu = 'compras'"
+                            :aria-expanded="(openMenu === 'compras').toString()" aria-controls="compras-submenu"
+                            aria-label="Desplegar menu de compras" title="Desplegar menu de compras"
+                            class="grid h-8 w-7 shrink-0 place-items-center rounded hover:bg-indigo-100 dark:hover:bg-indigo-800/50">
+                            <i data-request-navigation-icon="chevron-down" class="h-3 w-3 transition-transform"
+                                :class="openMenu === 'compras' ? 'rotate-180' : ''" aria-hidden="true"></i>
+                        </button>
+                    </div>
 
                     <ul id="compras-submenu" x-cloak x-show="openMenu === 'compras'" class="space-y-1 pt-1">
                         @if ($menuAllows('menu.compras.mine'))
                         <li>
-                            <a href="{{ route('admin.warehouses.purchase-orders.index', ['section' => 'mine']) }}"
+                            <a href="{{ route('admin.warehouses.purchase-orders.index', array_filter(['section' => 'mine', 'laboratory_id' => $purchaseLaboratoryId])) }}"
                                 x-on:click="open = false"
+                                @if ($purchaseListRoute && $purchaseSection === 'mine') aria-current="page" @endif
                                 class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-white dark:text-white dark:hover:bg-gray-700 {{ $purchaseListRoute && $purchaseSection === 'mine' ? 'bg-white shadow-sm' : '' }}">
                                 <span class="flex min-w-0 flex-1 items-center justify-between gap-2">
-                                    <span class="truncate">Mis Ordenes</span>
+                                    <span class="min-w-0 whitespace-normal leading-4">&Oacute;rdenes de compra</span>
                                     <span class="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border border-red-300 bg-red-100 px-1 text-[10px] font-bold leading-none text-red-700"
                                         title="{{ $myPurchaseOrdersCount }} ordenes creadas por ti"
                                         aria-label="{{ $myPurchaseOrdersCount }} ordenes creadas por ti">
@@ -120,39 +143,13 @@
                             </a>
                         </li>
                         @endif
-                        @if ($menuAllows('menu.compras.new'))
+                        @if ($canAccessPurchases)
                         <li>
-                            <a href="{{ route('admin.purchases.create', array_filter(['laboratory_id' => request()->integer('laboratory_id') ?: null])) }}"
+                            <a href="{{ route('admin.purchases.minimum-stock', array_filter(['laboratory_id' => $purchaseLaboratoryId])) }}"
                                 x-on:click="open = false"
-                                class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-white dark:text-white dark:hover:bg-gray-700 {{ request()->routeIs('admin.purchases.create', 'admin.oncologicos.laboratory.purchase-orders.create') ? 'bg-white shadow-sm' : '' }}">
-                                <span>Nueva OC</span>
-                            </a>
-                        </li>
-                        @endif
-                        @if ($menuAllows('menu.compras.paid'))
-                        <li>
-                            <a href="{{ route('admin.warehouses.purchase-orders.index', ['section' => 'paid']) }}"
-                                x-on:click="open = false"
-                                class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-white dark:text-white dark:hover:bg-gray-700 {{ $purchaseListRoute && $purchaseSection === 'paid' ? 'bg-white shadow-sm' : '' }}">
-                                <span>Pagadas</span>
-                            </a>
-                        </li>
-                        @endif
-                        @if ($menuAllows('menu.compras.pending'))
-                        <li>
-                            <a href="{{ route('admin.warehouses.purchase-orders.index', ['section' => 'pending']) }}"
-                                x-on:click="open = false"
-                                class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-white dark:text-white dark:hover:bg-gray-700 {{ $purchaseListRoute && $purchaseSection === 'pending' ? 'bg-white shadow-sm' : '' }}">
-                                <span>Pendientes de Pago</span>
-                            </a>
-                        </li>
-                        @endif
-                        @if ($menuAllows('menu.compras.rejected'))
-                        <li>
-                            <a href="{{ route('admin.warehouses.purchase-orders.index', ['section' => 'rejected']) }}"
-                                x-on:click="open = false"
-                                class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-white dark:text-white dark:hover:bg-gray-700 {{ $purchaseListRoute && $purchaseSection === 'rejected' ? 'bg-white shadow-sm' : '' }}">
-                                <span>Rechazadas</span>
+                                @if (request()->routeIs('admin.purchases.minimum-stock')) aria-current="page" @endif
+                                class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-white dark:text-white dark:hover:bg-gray-700 {{ request()->routeIs('admin.purchases.minimum-stock') ? 'bg-white shadow-sm' : '' }}">
+                                <span>Stock m&iacute;nimo</span>
                             </a>
                         </li>
                         @endif

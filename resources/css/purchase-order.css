@@ -32,3 +32,29 @@
 .po-item-pagination button { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #cbd5e1; background: #fff; color: #123e7b; }
 .po-item-pagination button:disabled { opacity: .35; cursor: not-allowed; }
 .po-item-pagination span { min-width: 64px; text-align: center; }
+
+.admin-page.purchase-popup-page { height: 100dvh; min-height: 0; padding: 0; overflow: hidden; }
+.purchase-popup-page .admin-content { height: 100%; }
+.po-editor.po-popup-editor { display: flex; flex-direction: column; height: 100%; padding: 0; box-shadow: none; }
+.po-popup-editor .po-editor-heading { flex-shrink: 0; padding: 10px 20px; }
+.po-popup-form { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; }
+.po-popup-form .po-form-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px 20px; }
+.po-popup-form .po-sheet-scroll { margin: 0; padding: 10px 2px 18px; }
+.po-popup-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; flex-shrink: 0; padding: 12px 20px; border-top: 1px solid #dbe2ea; background: #f7fafc; }
+.po-popup-actions a, .po-popup-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 14px; border: 1px solid; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.po-popup-actions svg { width: 16px; height: 16px; flex-shrink: 0; }
+.po-popup-close { background: #fff; color: #145577; border-color: #bed1df !important; }
+.po-popup-generate { background: #0c9b52; color: #fff; border-color: #0c9b52 !important; }
+.po-popup-generate:hover { background: #087c42; }
+.po-popup-actions :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.po-popup-actions :disabled, .po-popup-actions [aria-disabled="true"] { opacity: .55; cursor: wait; }
+.po-popup-editor [hidden] { display: none; }
+.po-popup-errors { padding: 12px 20px; max-height: 25vh; overflow: auto; flex-shrink: 0; background: #fef2f2; color: #991b1b; font-size: 13px; }
+.po-popup-errors ul { margin: 0; padding-left: 20px; list-style: disc; }
+.po-popup-result { padding: 24px 20px; }
+.po-popup-result h3 { margin-bottom: 20px; font-size: 18px; color: #166534; }
+.po-popup-result .po-popup-actions { border: 0; padding: 0; background: none; justify-content: flex-start; }
+@media (max-width: 640px) {
+    .po-popup-form .po-form-body { padding: 8px; }
+    .po-popup-actions { padding: 10px 8px; }
+}

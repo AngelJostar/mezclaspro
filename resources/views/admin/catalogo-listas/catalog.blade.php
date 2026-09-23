@@ -1,6 +1,6 @@
 @php
     $showCategoryColumn = $category === 'todos';
-    $columnOffset = $showCategoryColumn ? 1 : 0;
+    $columnOffset = $showCategoryColumn ? 2 : 1;
     $isSuppliesCatalog = $category === 'insumos';
     $supplySection = $supplySection ?? 'diluyentes';
     $isConsumablesCatalog = $isSuppliesCatalog && $supplySection === 'consumibles';
@@ -65,6 +65,9 @@
             @include('admin.catalogo-listas.partials.consumable-modal')
         @endif
 
+        @unless ($isSuppliesCatalog)
+            <p id="catalogStatusMessage" class="mt-3 text-sm" role="status" hidden></p>
+        @endunless
         <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
             @if ($isConsumablesCatalog)
                 @include('admin.catalogo-listas.partials.consumables-table')
@@ -142,6 +145,7 @@
                         @if ($showCategoryColumn)
                             <x-filterable-table-header column="0" trigger-class="js-catalog-column-filter">Categoría</x-filterable-table-header>
                         @endif
+                        <x-filterable-table-header :column="$columnOffset - 1" trigger-class="js-catalog-column-filter">Estado</x-filterable-table-header>
                         <x-filterable-table-header :column="$columnOffset" trigger-class="js-catalog-column-filter">Producto</x-filterable-table-header>
                         <x-filterable-table-header :column="$columnOffset + 1" trigger-class="js-catalog-column-filter" align="center">Dosis</x-filterable-table-header>
                         <x-filterable-table-header :column="$columnOffset + 2" trigger-class="js-catalog-column-filter">Presentacion</x-filterable-table-header>
@@ -174,6 +178,25 @@
                                     </span>
                                 </td>
                             @endif
+                            <td class="px-3 py-2">
+                                @if (isset($row->status_url))
+                                    <form method="POST" action="{{ $row->status_url }}" data-catalog-status-form>
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="is_available" value="{{ $row->is_available ? 0 : 1 }}">
+                                        <button type="submit" role="switch" class="catalog-status-switch"
+                                            aria-checked="{{ $row->is_available ? 'true' : 'false' }}"
+                                            aria-label="Estado de {{ $row->product }} {{ $row->presentation }} {{ $row->commercial_name }}"
+                                            title="{{ $row->is_available ? 'Inactivar' : 'Activar' }} en el catalogo de productos"
+                                            @disabled(!$canEditGenericMedication)>
+                                            <span class="catalog-status-track" aria-hidden="true"><span></span></span>
+                                            <span data-status-label>{{ $row->is_available ? 'Activo' : 'Inactivo' }}</span>
+                                        </button>
+                                    </form>
+                                @else
+                                    {{ ($row->is_active ?? true) ? 'Activo' : 'Inactivo' }}
+                                @endif
+                            </td>
                             <td class="max-w-xs px-3 py-2 font-semibold text-gray-900">
                                 {{ $row->product }}
                             </td>
@@ -221,7 +244,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ ($showCategoryColumn ? 10 : 9) + ($canEditGenericMedication ? 1 : 0) }}" class="px-3 py-8 text-center text-sm text-gray-500">
+                            <td colspan="{{ ($showCategoryColumn ? 11 : 10) + ($canEditGenericMedication ? 1 : 0) }}" class="px-3 py-8 text-center text-sm text-gray-500">
                                 No hay productos registrados para esta categoria.
                             </td>
                         </tr>
@@ -260,7 +283,7 @@
                         rows.length === 0 || rows.some((row) => !row.classList.contains('hidden')));
                 };
 
-                window.createExcelColumnFilters({
+                const columnFilters = window.createExcelColumnFilters({
                     tableId: 'catalogTable',
                     rowSelector: '.catalog-row',
                     triggerSelector: '.js-catalog-column-filter',
@@ -269,6 +292,7 @@
                 });
 
                 input?.addEventListener('input', applyFilters);
+                document.addEventListener('catalog-status-updated', () => columnFilters?.apply());
                 applyFilters();
             });
         </script>

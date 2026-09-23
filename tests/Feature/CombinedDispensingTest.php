@@ -21,6 +21,7 @@ class CombinedDispensingTest extends TestCase
         DB::table('medicine_remainders')->delete(); // This connection is SQLite :memory: only.
         Schema::create('users', fn (Blueprint $table) => $table->id());
         Schema::create('medicine_list_presentation', function (Blueprint $table) {
+            $table->boolean('is_active')->default(true);
             $table->integer('medicine_presentation_id');
             $table->integer('medicine_list_id');
             $table->decimal('precio')->default(10);
@@ -167,6 +168,19 @@ class CombinedDispensingTest extends TestCase
         DB::table('medicine_list_presentation')->where('medicine_presentation_id', 12)->delete();
         $this->expectException(\RuntimeException::class);
         app(OncologicMedicationInventoryService::class)->consumeSelection($this->selection(), 1, 1, 10, 38, 1000);
+    }
+
+    public function test_inactive_list_presentation_cannot_be_selected_or_consume_stock(): void
+    {
+        DB::table('medicine_list_presentation')->where('medicine_presentation_id', 12)->update(['is_active' => false]);
+        $before = DB::table('medicine_batches')->get()->toJson();
+        try {
+            app(OncologicMedicationInventoryService::class)->consumeSelection($this->selection(), 1, 1, 10, 38, 1000);
+            $this->fail('Inactive list product was accepted.');
+        } catch (\RuntimeException $exception) {
+            $this->assertDatabaseCount('medicine_batch_movements', 0);
+            $this->assertSame($before, DB::table('medicine_batches')->get()->toJson());
+        }
     }
 
     public function test_failure_in_a_later_presentation_rolls_back_the_already_consumed_lot(): void

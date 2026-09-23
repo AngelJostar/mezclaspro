@@ -20,6 +20,7 @@ class MedicalUnitCatalogController extends Controller
 
         $items = $list
             ? $list->items()
+                ->where('is_active', true)
                 ->with(['presentation.catalog.category', 'presentation.catalog.input'])
                 ->get()
                 ->filter(fn ($item) => $item->presentation?->is_available && $item->presentation?->catalog?->is_active)
@@ -59,6 +60,7 @@ class MedicalUnitCatalogController extends Controller
 
         $items = $list
             ? $list->presentations()
+                ->wherePivot('is_active', true)
                 ->with('catalog')
                 ->where('medicine_presentations.is_available', true)
                 ->whereHas('catalog', fn ($query) => $query->where('state', true))

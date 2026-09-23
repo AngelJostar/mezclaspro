@@ -1,8 +1,8 @@
-import { createIcons, Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide';
+import { createIcons, ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide';
 
 function initRequestNavigation() {
     createIcons({
-        icons: { Check, ChevronDown, ChevronLeft, ChevronRight },
+        icons: { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, X },
         nameAttr: 'data-request-navigation-icon',
     });
 

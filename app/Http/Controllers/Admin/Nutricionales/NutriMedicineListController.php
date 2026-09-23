@@ -13,6 +13,7 @@ use App\Services\PriceListWarehouseConfigurationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class NutriMedicineListController extends Controller
 {
@@ -54,7 +55,8 @@ class NutriMedicineListController extends Controller
             ]);
         }
 
-        $totalPresentations = DB::table('nutrition_medicine_presentations')
+        $totalPresentations = NutritionMedicinePresentation::query()
+            ->whereHas('catalog', fn ($query) => $query->where('is_active', true))
             ->where('is_available', 1)
             ->count();
 
@@ -77,7 +79,7 @@ class NutriMedicineListController extends Controller
             'contract_number' => 'nullable|string|max:255|required_if:has_contract,1',
             'contract_information' => 'nullable|string|max:10000',
             'items' => 'required|array|size:'.$totalPresentations,
-            'items.*.nutrition_medicine_presentation_id' => 'required|exists:nutrition_medicine_presentations,id',
+            'items.*.nutrition_medicine_presentation_id' => ['required', 'distinct', $this->availablePresentationRule()],
             'items.*.precio_ml' => 'required|numeric|min:0',
             'items.*.charge_by' => 'nullable|in:frasco,ml',
             'items.*.selected' => 'nullable|boolean',
@@ -235,7 +237,11 @@ class NutriMedicineListController extends Controller
             ]);
         }
 
-        $totalPresentations = DB::table('nutrition_medicine_presentations')
+        $inactiveItemIds = $nutriMedicineList->items()
+            ->whereHas('presentation', fn ($query) => $query->where('is_available', false))
+            ->pluck('id')->all();
+        $totalPresentations = NutritionMedicinePresentation::query()
+            ->whereHas('catalog', fn ($query) => $query->where('is_active', true))
             ->where('is_available', 1)
             ->count();
 
@@ -258,8 +264,8 @@ class NutriMedicineListController extends Controller
             'has_contract' => 'nullable|boolean',
             'contract_number' => 'nullable|string|max:255|required_if:has_contract,1',
             'contract_information' => 'nullable|string|max:10000',
-            'items' => 'required|array|size:'.$totalPresentations,
-            'items.*.nutrition_medicine_presentation_id' => 'required|exists:nutrition_medicine_presentations,id',
+            'items' => ($inactiveItemIds ? 'nullable|array|size:' : 'required|array|size:').$totalPresentations,
+            'items.*.nutrition_medicine_presentation_id' => ['required', 'distinct', $this->availablePresentationRule()],
             'items.*.precio_ml' => 'required|numeric|min:0',
             'items.*.charge_by' => 'nullable|in:frasco,ml',
             'items.*.selected' => 'nullable|boolean',
@@ -282,7 +288,7 @@ class NutriMedicineListController extends Controller
             )
             ->values();
 
-        if ($items->isEmpty()) {
+        if ($items->isEmpty() && !$inactiveItemIds) {
             return back()->withInput()->withErrors([
                 'items' => 'Selecciona al menos un producto para conformar la lista de precios.',
             ]);
@@ -354,7 +360,10 @@ class NutriMedicineListController extends Controller
             $existingDescriptions = $nutriMedicineList->items()
                 ->pluck('descripcion_remision', 'nutrition_medicine_presentation_id');
 
-            $nutriMedicineList->items()->delete();
+            // Preserve catalog-blocked products and per-list status when editing prices.
+            $nutriMedicineList->items()->whereNotIn('id', $inactiveItemIds)
+                ->whereNotIn('nutrition_medicine_presentation_id', $items->pluck('nutrition_medicine_presentation_id'))
+                ->delete();
 
             foreach ($items as $item) {
                 $presentationId = (int) $item['nutrition_medicine_presentation_id'];
@@ -362,9 +371,10 @@ class NutriMedicineListController extends Controller
                     ?: trim((string) $existingDescriptions->get($presentationId, ''))
                     ?: $defaultDescriptions->get($presentationId);
 
-                NutriMedicineListItem::create([
+                NutriMedicineListItem::updateOrCreate([
                     'nutri_medicine_list_id' => $nutriMedicineList->id,
                     'nutrition_medicine_presentation_id' => $presentationId,
+                ], [
                     'precio_ml' => $item['precio_ml'],
                     'charge_by' => $this->normalizeChargeBy($item['charge_by'] ?? null),
                     'descripcion_remision' => $remissionDescription,
@@ -431,6 +441,15 @@ class NutriMedicineListController extends Controller
         $chargeBy = strtolower(trim((string) $value));
 
         return in_array($chargeBy, ['frasco', 'ml'], true) ? $chargeBy : 'ml';
+    }
+
+    private function availablePresentationRule()
+    {
+        return Rule::exists('nutrition_medicine_presentations', 'id')
+            ->where(fn ($query) => $query->where('is_available', true)
+                ->whereIn('nutrition_medicine_catalog_id', function ($catalogs) {
+                    $catalogs->select('id')->from('nutrition_medicines_catalog')->where('is_active', true);
+                }));
     }
 
     private function defaultRemissionDescriptions($presentationIds)
