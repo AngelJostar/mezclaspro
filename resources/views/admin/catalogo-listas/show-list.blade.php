@@ -75,10 +75,14 @@
             </form>
         </dialog>
 
+        <p id="catalogStatusMessage" role="status" aria-live="polite" @if (!session('catalog_status_message') && !$errors->any()) hidden @endif data-error="{{ $errors->any() ? 'true' : 'false' }}">{{ $errors->first() ?: session('catalog_status_message') }}</p>
+
         <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200">
             <table class="min-w-full divide-y divide-gray-200 text-xs">
                 <thead class="bg-gray-50 text-gray-700">
                     <tr>
+                        <th class="whitespace-nowrap px-3 py-2 text-left font-bold uppercase">Estado de Catalogo</th>
+                        <th class="whitespace-nowrap px-3 py-2 text-left font-bold uppercase">Estado en Lista de Precios</th>
                         <th class="whitespace-nowrap px-3 py-2 text-left font-bold uppercase">Producto</th>
                         <th class="whitespace-nowrap px-3 py-2 text-left font-bold uppercase">Presentacion</th>
                         <th class="whitespace-nowrap px-3 py-2 text-right font-bold uppercase">Precio por frasco</th>
@@ -96,6 +100,29 @@
                 <tbody class="divide-y divide-gray-200 bg-white">
                     @forelse ($items as $item)
                         <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2">
+                                <span class="catalog-product-state" title="Estado de solo lectura, definido en el catalogo de productos" data-active="{{ $item->is_available ? 'true' : 'false' }}">{{ $item->is_available ? 'Activo' : 'Inactivo' }}</span>
+                            </td>
+                            <td class="px-3 py-2">
+                                @php($activeInList = $item->is_available && $item->list_is_active)
+                                @if ($canUpdateListStatus)
+                                    <form method="POST" action="{{ route('admin.catalogo-listas.lists.products.status', ['category' => $category, 'list' => $list->id, 'presentation' => $item->presentation_id]) }}" data-price-list-status-form>
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="is_active" value="{{ $activeInList ? '0' : '1' }}">
+                                        <button type="submit" role="switch" class="catalog-status-switch"
+                                            aria-checked="{{ $activeInList ? 'true' : 'false' }}"
+                                            aria-label="Estado en lista de precios: {{ $item->product }} {{ $item->presentation }}"
+                                            title="{{ !$item->is_available ? 'Inactivo en el catalogo de productos' : ($activeInList ? 'Inactivar en esta lista de precios' : 'Activar en esta lista de precios') }}"
+                                            @disabled(!$item->is_available)>
+                                            <span class="catalog-status-track" aria-hidden="true"><span></span></span>
+                                            <span data-status-label>{{ $activeInList ? 'Activo' : 'Inactivo' }}</span>
+                                        </button>
+                                    </form>
+                                @else
+                                    <span class="catalog-product-state" data-active="{{ $activeInList ? 'true' : 'false' }}">{{ $activeInList ? 'Activo' : 'Inactivo' }}</span>
+                                @endif
+                            </td>
                             <td class="max-w-xs px-3 py-2 font-semibold text-gray-900">
                                 {{ $item->product }}
                             </td>
@@ -126,7 +153,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $usesMilligrams ? 6 : ($usesChargeMethod ? 5 : 4) }}" class="px-3 py-8 text-center text-sm text-gray-500">
+                            <td colspan="{{ $usesMilligrams ? 8 : ($usesChargeMethod ? 7 : 6) }}" class="px-3 py-8 text-center text-sm text-gray-500">
                                 Esta lista no tiene productos capturados.
                             </td>
                         </tr>

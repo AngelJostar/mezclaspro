@@ -12,6 +12,7 @@ use App\Models\Oncologicos\Diluent;
 use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\MedicinesCatalog;
+use App\Models\Oncologicos\MedicinePresentation;
 use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,26 @@ use Illuminate\View\View;
 
 class CatalogProductController extends Controller
 {
+    public function updateStatus(Request $request, string $category, int $presentation): JsonResponse|RedirectResponse
+    {
+        abort_unless(in_array($category, ['oncologicos', 'antibioticos', 'nutricionales'], true), 404);
+        $data = $request->validate(['is_available' => ['required', 'boolean']]);
+        $product = $category === 'nutricionales'
+            ? NutritionMedicinePresentation::findOrFail($presentation)
+            : MedicinePresentation::whereHas('catalog', fn ($query) => $query->forCategory($category))
+                ->findOrFail($presentation);
+
+        // The catalog gates every list without replacing their individual preferences or prices.
+        $product->update(['is_available' => (bool) $data['is_available']]);
+        $message = $product->is_available
+            ? 'Producto activado en el catalogo. Se conservan los estados de cada lista de precios.'
+            : 'Producto inactivado en el catalogo y las listas de precios.';
+
+        return $request->expectsJson()
+            ? response()->json(['is_available' => $product->is_available, 'message' => $message])
+            : back()->with('success', $message);
+    }
+
     public function create(Request $request, string $category): View|RedirectResponse
     {
         $category = $this->normalizeCategory($category);

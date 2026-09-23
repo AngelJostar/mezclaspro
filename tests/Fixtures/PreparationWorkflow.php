@@ -29,6 +29,7 @@ class PreparationWorkflow
                 foreach ($columns as $column) $table->integer($column);
             });
         }
+        Schema::table('medicine_list_presentation', fn (Blueprint $table) => $table->boolean('is_active')->default(true));
         DB::table('hospitals')->where('id', 1)->update(['onco_medicine_list_id' => 1, 'antibiotic_medicine_list_id' => 1]);
         DB::table('medicine_oncos')->insert(['id' => 1, 'catalog_id' => 1]);
         DB::table('medicine_medicine_lists')->insert(['medicine_list_id' => 1, 'medicine_id' => 1]);

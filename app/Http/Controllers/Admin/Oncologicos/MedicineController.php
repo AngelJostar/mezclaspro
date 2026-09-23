@@ -267,6 +267,7 @@ class MedicineController extends Controller
 
         $presentationsInList = $lista->presentations
             ->loadMissing('catalog')
+            ->where('is_available', true)
             ->groupBy('catalog_id');
 
         $catalogos = $catalogos->map(function ($catalogo) use ($presentationsInList) {
@@ -319,7 +320,7 @@ class MedicineController extends Controller
                 ->values();
         }
 
-        $listaItems = $lista->presentations->map(function ($pres) {
+        $listaItems = $lista->presentations->where('is_available', true)->map(function ($pres) {
             return [
                 'catalog_id' => $pres->catalog_id,
                 'presentation_id' => $pres->id,
@@ -348,6 +349,9 @@ class MedicineController extends Controller
         PriceListWarehouseConfigurationService $warehouseConfiguration
     ) {
         $catalogCategory = $this->catalogCategoryFromRequest($request);
+        $listForUpdate = MedicineList::query()->forCategory($catalogCategory)->findOrFail($id);
+        $inactiveIds = $listForUpdate->presentations()->where('is_available', false)
+            ->pluck('medicine_presentations.id')->all();
         $allowedChargeMethods = $catalogCategory === 'oncologicos'
             ? ['mg', 'frasco']
             : ['mg', 'ml', 'frasco'];
@@ -385,7 +389,7 @@ class MedicineController extends Controller
             'contract_number' => 'nullable|string|max:255|required_if:has_contract,1',
             'contract_information' => 'nullable|string|max:10000',
 
-            'medicamentos' => 'required|array|min:1',
+            'medicamentos' => $inactiveIds ? 'nullable|array' : 'required|array|min:1',
             'medicamentos.*.catalog_id' => 'required|exists:medicines_catalog,id',
             'medicamentos.*.presentation_id' => 'required|exists:medicine_presentations,id',
             'medicamentos.*.precio' => 'required|numeric|min:0',
@@ -415,7 +419,7 @@ class MedicineController extends Controller
             )
             ->values();
 
-        if ($rows->isEmpty()) {
+        if ($rows->isEmpty() && !$inactiveIds) {
             return back()->withInput()->withErrors([
                 'medicamentos' => 'Debes ingresar al menos una presentación con precio.',
             ]);
@@ -449,7 +453,7 @@ class MedicineController extends Controller
                 ? $this->normalizeChargeBy($rows->first()['charge_by'] ?? null, 'frasco', $catalogCategory)
                 : $this->normalizeChargeBy($request->input('charge_by', 'mg'), 'mg', $catalogCategory);
 
-            if (! $this->allPresentationsAreSelectable($rows->pluck('presentation_id'), $catalogCategory)) {
+            if ($rows->isNotEmpty() && ! $this->allPresentationsAreSelectable($rows->pluck('presentation_id'), $catalogCategory)) {
                 DB::rollBack();
 
                 return back()->withInput()->withErrors([
@@ -550,7 +554,7 @@ class MedicineController extends Controller
                 ];
             }
 
-            if (empty($pivotData)) {
+            if (empty($pivotData) && !$inactiveIds) {
                 DB::rollBack();
 
                 return back()->withInput()->withErrors([
@@ -558,7 +562,8 @@ class MedicineController extends Controller
                 ]);
             }
 
-            $lista->presentations()->sync($pivotData);
+            // Inactive products are absent from the editor, not removed from the list.
+            $lista->presentations()->sync($pivotData + array_fill_keys($inactiveIds, []));
 
             DB::commit();
 

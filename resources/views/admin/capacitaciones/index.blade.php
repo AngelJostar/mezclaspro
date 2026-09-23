@@ -470,7 +470,7 @@
         ];
     @endphp
 
-    <div class="training-screen" data-training-screen>
+    <div class="training-screen {{ $isPersonnelPage ? 'training-personnel-screen' : '' }}" data-training-screen>
         <header class="training-page-header">
             <div class="training-page-heading">
                 <h1>Personal y Capacitaciones / {{ $trainingSectionTitle }}</h1>
@@ -1104,44 +1104,48 @@
 
                 <label>
                     <span>Departamento</span>
-                    <select>
-                        <option>Todos los departamentos</option>
+                    <select @if ($isPersonnelPage) data-personnel-department @endif>
+                        <option value="">Todos los departamentos</option>
                         <option>Administracion</option>
                         <option>Almacen</option>
                         <option>Calidad</option>
                         <option>Operaciones</option>
+                        <option>Produccion</option>
+                        <option>Ventas</option>
                     </select>
                 </label>
 
-                <button type="button" class="training-filter-button">
-                    <i class="fa-solid fa-filter"></i>
+                <button type="button" class="training-filter-button" @if ($isPersonnelPage) data-personnel-apply-department @endif>
+                    <i class="fa-solid fa-filter h-4 w-4" @if ($isPersonnelPage) data-personnel-table-icon="filter" @endif aria-hidden="true"></i>
                     <span>Filtros</span>
                 </button>
+                @if ($isPersonnelPage)
+                    <button type="button" class="training-filter-button" data-personnel-clear-filters>
+                        <i data-personnel-table-icon="filter-x" class="h-4 w-4" aria-hidden="true"></i>
+                        <span>Limpiar filtros</span>
+                    </button>
+                @endif
             </div>
 
             <div class="training-table {{ $isPersonnelPage ? 'training-personnel-table' : '' }}"
-                @if ($isPersonnelPage) data-sticky-x-mode="fixed" @endif role="region"
+                @if ($isPersonnelPage) data-sticky-x-position="viewport" @endif role="region"
                 aria-label="{{ $isPersonnelPage ? 'Informacion del personal' : ($studentProgressView === 'completed' ? 'Alumnos con programas concluidos' : 'Alumnos con capacitaciones en curso') }}" tabindex="0">
-                <table>
+                <table @if ($isPersonnelPage) id="training-personnel-table" data-disable-column-filters @endif>
                     <thead>
                         @if ($isPersonnelPage)
                             <tr>
-                                <th rowspan="2">Personal</th>
+                                <x-filterable-table-header rowspan="2" scope="col" column="0" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Personal</x-filterable-table-header>
                                 <th rowspan="2">Editar</th>
-                                <th rowspan="2">Puesto(s)</th>
-                                <th rowspan="2">Fecha de ingreso</th>
-                                <th rowspan="2">Programas concluidos</th>
-                                <th rowspan="2">Programas en curso</th>
-                                <th rowspan="2" class="training-score-heading">
-                                    <span>Promedio de calificaci&oacute;n</span>
-                                    <span>en programas de</span>
-                                    <span>capacitaci&oacute;n</span>
-                                </th>
-                                <th rowspan="2">Departamento</th>
-                                <th rowspan="2">Estatus laboral</th>
-                                <th rowspan="2">Ultima actividad</th>
+                                <x-filterable-table-header rowspan="2" scope="col" column="2" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Puesto(s)</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="3" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" sort-type="date">Fecha de ingreso</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="4" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" sort-type="count">Programas concluidos</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="5" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" sort-type="count">Programas en curso</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="6" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" sort-type="number" class="training-score-heading">Promedio de calificación en programas de capacitación</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="7" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Departamento</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="8" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Estatus laboral</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="9" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" sort-type="date">Ultima actividad</x-filterable-table-header>
                                 <th rowspan="2">Nueva capacitaci&oacute;n</th>
-                                <th rowspan="2">ID usuario</th>
+                                <x-filterable-table-header rowspan="2" scope="col" column="11" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" sort-type="number">ID usuario</x-filterable-table-header>
                                 <th colspan="2" class="training-user-group is-software">
                                     <i class="fa-solid fa-desktop" aria-hidden="true"></i>
                                     Acceso al software
@@ -1150,15 +1154,15 @@
                                     <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
                                     Acceso a capacitaci&oacute;n
                                 </th>
-                                <th rowspan="2">Central</th>
-                                <th rowspan="2">Roles</th>
+                                <x-filterable-table-header rowspan="2" scope="col" column="16" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Central</x-filterable-table-header>
+                                <x-filterable-table-header rowspan="2" scope="col" column="17" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Roles</x-filterable-table-header>
                                 <th rowspan="2">Editar accesos</th>
-                                <th rowspan="2">Bloqueo</th>
+                                <x-filterable-table-header rowspan="2" scope="col" column="19" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Bloqueo</x-filterable-table-header>
                             </tr>
                             <tr class="training-user-subheading">
-                                <th class="is-software">Usuario software</th>
+                                <x-filterable-table-header scope="col" column="12" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" class="is-software">Usuario software</x-filterable-table-header>
                                 <th class="is-software">Contrase&ntilde;a software</th>
-                                <th class="is-training">Usuario capacitaci&oacute;n</th>
+                                <x-filterable-table-header scope="col" column="14" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" class="is-training">Usuario capacitación</x-filterable-table-header>
                                 <th class="is-training">Contrase&ntilde;a capacitaci&oacute;n</th>
                             </tr>
                         @else
@@ -1175,7 +1179,8 @@
                         @endif
                     </thead>
                     <tbody>
-                        @foreach ($visiblePersonnel as $person)
+                        {{-- Personal is paginated after filtering so every record remains searchable. --}}
+                        @foreach ($isPersonnelPage ? $personnel : $visiblePersonnel as $person)
                             @php
                                 $personUser = $person['user'] ?? null;
                                 $credentials = $personUser && auth()->user()->can('usuarios')
@@ -1183,7 +1188,8 @@
                                     : null;
                             @endphp
                             <tr data-student-row data-student-name="{{ $person['name'] }}"
-                                data-student-index="{{ $loop->index }}">
+                                data-student-index="{{ $loop->index }}"
+                                @if ($isPersonnelPage && ($loop->index < $personnelOffset || $loop->index >= $personnelOffset + $personnelPageSize)) hidden @endif>
                                 <td>
                                     <div class="training-person">
                                         <span class="training-avatar is-{{ $person['avatar'] }}">{{ $person['initials'] }}</span>
@@ -1396,11 +1402,11 @@
                                 @endif
                             </tr>
                         @endforeach
-                        @if ($visiblePersonnel === [])
-                            <tr>
+                        @if ($isPersonnelPage || $visiblePersonnel === [])
+                            <tr @if ($isPersonnelPage) data-personnel-empty @if ($personnelTotal > 0) hidden @endif @endif>
                                 <td colspan="{{ $isPersonnelPage ? 20 : ($isAlumnosPage ? 8 : 7) }}" class="training-table-empty">
                                     @if ($isPersonnelPage)
-                                        No hay personal registrado.
+                                        No se encontro personal con los filtros seleccionados.
                                     @else
                                         {{ $studentProgressView === 'completed' ? 'No hay alumnos con programas concluidos.' : 'No hay alumnos con capacitaciones en curso.' }}
                                     @endif
@@ -1411,9 +1417,18 @@
                 </table>
             </div>
 
-                <footer class="training-pagination" aria-label="Paginacion de personal en bloques de 200">
-                <span>{{ $personnelRangeStart }}-{{ $personnelRangeEnd }} de {{ $personnelTotal }}</span>
+                <footer class="training-pagination" aria-label="Paginacion de personal en bloques de 200"
+                    @if ($isPersonnelPage) data-personnel-pagination data-page="{{ $personnelCurrentPage }}" data-page-size="{{ $personnelPageSize }}" @endif>
+                <span @if ($isPersonnelPage) data-personnel-count aria-live="polite" @endif>{{ $personnelRangeStart }}-{{ $personnelRangeEnd }} de {{ $personnelTotal }}</span>
 
+                @if ($isPersonnelPage)
+                    <button type="button" data-personnel-previous aria-label="Pagina anterior" @disabled($personnelCurrentPage <= 1)>
+                        <i data-personnel-table-icon="chevron-left" class="h-4 w-4" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" data-personnel-next aria-label="Pagina siguiente" @disabled($personnelCurrentPage >= $personnelPageCount)>
+                        <i data-personnel-table-icon="chevron-right" class="h-4 w-4" aria-hidden="true"></i>
+                    </button>
+                @else
                 @if ($personnelCurrentPage > 1)
                     <a href="{{ request()->fullUrlWithQuery(['page' => $personnelCurrentPage - 1]) }}" aria-label="Pagina anterior">
                         <i class="fa-solid fa-chevron-left"></i>
@@ -1433,12 +1448,14 @@
                         <i class="fa-solid fa-chevron-right"></i>
                     </button>
                 @endif
+                @endif
             </footer>
 
             @if ($isPersonnelPage)
                 @include('admin.capacitaciones.partials.personnel-create-modal')
                 @include('admin.capacitaciones.partials.personnel-edit-modal')
                 @include('admin.capacitaciones.partials.personnel-user-management')
+                @include('admin.capacitaciones.partials.personnel-table-script')
             @endif
 
             <dialog class="training-program-modal training-assignment-modal" data-training-assignment-modal
@@ -2065,6 +2082,16 @@
             .training-route-heading {
                 display: flex;
                 align-items: center;
+            }
+
+            .training-personnel-screen {
+                grid-template-columns: minmax(0, 1fr);
+                min-width: 0;
+                max-width: 100%;
+            }
+
+            .training-personnel-screen > section {
+                min-width: 0;
             }
 
             .training-page-header {
@@ -4025,7 +4052,7 @@
             }
 
             .training-filters.is-personnel {
-                grid-template-columns: minmax(12rem, 20rem) auto;
+                grid-template-columns: minmax(12rem, 20rem) auto auto;
                 justify-content: start;
                 margin-top: 0.75rem;
             }
@@ -6134,6 +6161,26 @@
 
             .training-personnel-table th {
                 letter-spacing: 0;
+                text-transform: none;
+                white-space: normal;
+            }
+
+            .training-personnel-table th > .flex > span:first-child {
+                overflow-wrap: anywhere;
+            }
+
+            .training-personnel-table tr[hidden] {
+                display: none;
+            }
+
+            @media (max-width: 640px) {
+                .training-filters.is-personnel {
+                    grid-template-columns: minmax(0, 1fr) auto;
+                }
+
+                .training-filters.is-personnel > label {
+                    grid-column: 1 / -1;
+                }
             }
 
             .training-personnel-table th:first-child,
@@ -6186,9 +6233,9 @@
             }
 
             .training-personnel-table .training-score-heading {
-                width: 10rem;
-                min-width: 10rem;
-                max-width: 10rem;
+                width: 14rem;
+                min-width: 14rem;
+                max-width: 14rem;
                 line-height: 1.2;
                 text-align: left;
             }

@@ -177,6 +177,16 @@ class PurchaseOrderCatalogTest extends TestCase
         $this->assertEquals(1, $order->delivery_laboratory_id);
     }
 
+    public function test_popup_store_returns_the_created_order_and_download_url_without_leaving_the_form(): void
+    {
+        $this->withoutPurchaseAuthorization();
+        $this->postJson($this->url('store').'?purchase_popup=1', $this->payload())
+            ->assertCreated()->assertJsonPath('folio', 'OC001')
+            ->assertJsonPath('download_url', route('admin.oncologicos.laboratory.purchase-orders.download', [1, 1]));
+        $this->assertSame(1, LaboratoryPurchaseOrder::count());
+        $this->assertSame('220.40', LaboratoryPurchaseOrder::sole()->total);
+    }
+
     public function test_one_order_cannot_mix_subwarehouses_or_warehouses_across_its_lines(): void
     {
         $this->withoutPurchaseAuthorization();

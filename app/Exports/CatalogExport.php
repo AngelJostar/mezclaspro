@@ -64,6 +64,7 @@ class CatalogExport extends DefaultValueBinder implements FromCollection, WithHe
             'commercial_name' => 'Denominacion comercial', 'stability_hours' => 'Estabilidad reconstituido',
             'lowest_price' => 'Precio compra mas bajo', 'lowest_date' => 'Fecha compra mas baja',
             'last_price' => 'Ultimo precio de compra', 'last_date' => 'Fecha ultima compra',
+            'is_available' => 'Estado',
         ];
     }
 
@@ -83,6 +84,7 @@ class CatalogExport extends DefaultValueBinder implements FromCollection, WithHe
                     ? Date::dateTimeToExcel(Carbon::parse($value)->startOfDay()) : '-',
                 'stability_hours' => (int) $value > 0 ? (int) $value : 'Sin capturar',
                 'is_active' => $value ? 'Activo' : 'Inactivo',
+                'is_available' => ($value ?? $row->is_active ?? true) ? 'Activo' : 'Inactivo',
                 default => $value ?? '-',
             };
         }, array_keys($this->columns()));

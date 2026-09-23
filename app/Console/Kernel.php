@@ -12,6 +12,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        $schedule->command('inventory:reorder')->everyMinute()->withoutOverlapping();
         $schedule->command('integration:materialize-mixtures --limit=50')
             ->everyMinute()
             ->withoutOverlapping();

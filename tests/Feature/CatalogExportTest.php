@@ -25,10 +25,10 @@ class CatalogExportTest extends TestCase
     public function test_each_catalog_downloads_its_own_real_excel_file(): void
     {
         foreach ([
-            ['todos', null, 5, 'J', ['Oncologicos', 'Nutricionales', 'Antibioticos', 'Insumos', 'Insumos']],
-            ['oncologicos', null, 1, 'I', ['Producto oncologicos']],
-            ['nutricionales', null, 1, 'I', ['Producto nutricional']],
-            ['antibioticos', null, 1, 'I', ['Producto antibioticos']],
+            ['todos', null, 6, 'K', ['Oncologicos', 'Oncologicos', 'Nutricionales', 'Antibioticos', 'Insumos', 'Insumos']],
+            ['oncologicos', null, 2, 'J', ['Producto oncologicos', 'Producto oncologicos']],
+            ['nutricionales', null, 1, 'J', ['Producto nutricional']],
+            ['antibioticos', null, 1, 'J', ['Producto antibioticos']],
             ['insumos', null, 2, 'K', ['CLORURO DE SODIO 0.9%', 'GLUCOSA 5%']],
             ['insumos', 'consumibles', 3, 'E', ['Guante', 'Jeringa', 'Jeringa']],
         ] as [$category, $section, $count, $column, $names]) {
@@ -58,6 +58,9 @@ class CatalogExportTest extends TestCase
         $this->assertSame('01/02/2026', $sheet->getCell('I2')->getFormattedValue());
         $this->assertSame('250 mg', $sheet->getCell('B2')->getValue());
         $this->assertSame('48 h', $sheet->getCell('E2')->getFormattedValue());
+        $this->assertSame('Estado', $sheet->getCell('J1')->getValue());
+        $this->assertSame('Activo', $sheet->getCell('J2')->getValue());
+        $this->assertSame('Inactivo', $sheet->getCell('J3')->getValue());
         $book->disconnectWorksheets();
 
         $book = $this->download('insumos');

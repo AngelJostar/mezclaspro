@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\Nutricionales\SolicitudController;
 use App\Http\Controllers\Admin\UnifiedSolicitudController;
+use App\Http\Controllers\Admin\RequestQuotationController;
 use App\Http\Controllers\Admin\SolicitudValidationController;
 use App\Http\Controllers\Admin\MixtureAdjustmentController;
 use App\Http\Controllers\Admin\MixtureMessageController;
@@ -62,6 +63,23 @@ Route::get('/dashboard', function () {
 
 Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
     ->name('solicitudes.index');
+
+Route::get('solicitudes/cotizacion', [RequestQuotationController::class, 'index'])
+    ->name('solicitudes.cotizacion.index');
+Route::get('solicitudes/cotizacion/opciones', [RequestQuotationController::class, 'options'])->name('solicitudes.cotizacion.options');
+Route::get('solicitudes/cotizacion/exportar', [RequestQuotationController::class, 'export'])->name('solicitudes.cotizacion.export');
+Route::post('solicitudes/cotizacion', [RequestQuotationController::class, 'store'])->name('solicitudes.cotizacion.store');
+Route::get('solicitudes/cotizacion/{quotation}', [RequestQuotationController::class, 'show'])->whereNumber('quotation')->name('solicitudes.cotizacion.show');
+Route::put('solicitudes/cotizacion/{quotation}', [RequestQuotationController::class, 'update'])->whereNumber('quotation')->name('solicitudes.cotizacion.update');
+Route::get('solicitudes/cotizacion/{quotation}/adjunto', [RequestQuotationController::class, 'attachment'])->whereNumber('quotation')->name('solicitudes.cotizacion.attachment');
+Route::post('solicitudes/cotizacion/{quotation}/correo', [RequestQuotationController::class, 'email'])
+    ->middleware('throttle:10,1')->whereNumber('quotation')->name('solicitudes.cotizacion.email');
+Route::post('solicitudes/cotizacion/{quotation}/autorizar', [RequestQuotationController::class, 'authorizeQuotation'])
+    ->whereNumber('quotation')->name('solicitudes.cotizacion.authorize');
+
+Route::view('herramientas', 'admin.herramientas.index')
+    ->middleware('role:Cliente|Institucion')
+    ->name('herramientas.index');
 
 Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
@@ -226,6 +244,8 @@ Route::prefix('catalogo-listas')
         Route::get('/', [CatalogoListasController::class, 'index'])->name('index');
         Route::get('{category}/productos/nuevo', [CatalogProductController::class, 'create'])->name('products.create');
         Route::post('{category}/productos', [CatalogProductController::class, 'store'])->name('products.store');
+        Route::patch('{category}/productos/{presentation}/estado', [CatalogProductController::class, 'updateStatus'])
+            ->whereNumber('presentation')->middleware('role:Super Admin')->name('products.status');
         Route::get('{category}/catalogo', [CatalogoListasController::class, 'catalog'])->name('catalog');
         Route::get('{category}/catalogo/descargar', [CatalogoListasController::class, 'exportCatalog'])->name('catalog.export');
         Route::get('{category}/listas', [CatalogoListasController::class, 'lists'])->name('lists');
@@ -233,6 +253,8 @@ Route::prefix('catalogo-listas')
         Route::post('listas/unificadas', [CatalogoListasController::class, 'storeUnifiedList'])->name('lists.store-unified');
         Route::get('{category}/listas/respaldo/nueva', [CatalogoListasController::class, 'createBackupList'])->name('backup-lists.create');
         Route::get('{category}/listas/{list}/editar', [CatalogoListasController::class, 'editList'])->name('lists.edit');
+        Route::patch('{category}/listas/{list}/productos/{presentation}/estado', [CatalogoListasController::class, 'updateListProductStatus'])
+            ->whereNumber(['list', 'presentation'])->name('lists.products.status');
         Route::post('{category}/listas/{list}/cargos', [CatalogoListasController::class, 'storeAdditionalCharge'])
             ->name('lists.additional-charges.store');
         Route::put('{category}/listas/{list}/cargos/{charge}', [CatalogoListasController::class, 'updateAdditionalCharge'])->name('lists.additional-charges.update');
@@ -828,6 +850,18 @@ Route::get('/almacenes/ordenes-de-compra', [WarehouseController::class, 'purchas
 
 Route::get('/compras/nueva', [WarehouseController::class, 'newPurchaseOrder'])
     ->name('purchases.create')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::get('/compras/stock-minimo', [WarehouseController::class, 'minimumStock'])
+    ->name('purchases.minimum-stock')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::get('/compras/stock-minimo/ordenes/{laboratory}/{purchaseOrder}', [WarehouseController::class, 'automaticPurchaseOrder'])
+    ->name('purchases.minimum-stock.orders.show')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
+Route::patch('/compras/stock-minimo/{laboratory}/{type}/{presentation}', [WarehouseController::class, 'updateMinimumStock'])
+    ->whereNumber('presentation')->name('purchases.minimum-stock.update')
     ->middleware(['can:oncologicos_laboratory_index']);
 
 Route::get('/almacenes/{warehouse}/insumos', [WarehouseController::class, 'suppliesInventory'])

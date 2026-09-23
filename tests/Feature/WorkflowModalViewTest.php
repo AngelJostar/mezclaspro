@@ -15,6 +15,7 @@ class WorkflowModalViewTest extends TestCase
             ['admin.oncologicos.mezclas.edit', 'approval_popup'],
             ['admin.oncologicos.mezclas.edit', 'dispensing_popup'],
             ['admin.nutricionales.solicitudes.edit', 'approval_popup'],
+            ['admin.oncologicos.laboratory.purchase-orders.create', 'purchase_popup'],
         ] as [$route, $flag]) {
             $html = $this->renderLayout($route, [$flag => 1]);
             $this->assertStringContainsString('workflow-page', $html);

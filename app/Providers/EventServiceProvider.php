@@ -25,7 +25,12 @@ class EventServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        $this->app->singleton(\App\Services\StockReorderMonitor::class);
+        Event::listen(\Illuminate\Database\Events\QueryExecuted::class,
+            fn ($query) => app(\App\Services\StockReorderMonitor::class)->record($query));
+        $this->app->terminating(fn () => app(\App\Services\StockReorderMonitor::class)->flush());
+        Event::listen(\Illuminate\Queue\Events\JobProcessed::class,
+            fn () => app(\App\Services\StockReorderMonitor::class)->flush());
     }
 
     /**

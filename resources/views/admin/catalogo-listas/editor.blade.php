@@ -267,6 +267,27 @@
                         placeholder="Buscar producto o presentacion...">
                 </div>
 
+                @if (($inactiveItems ?? collect())->isNotEmpty())
+                    <details class="mt-4 border-y border-gray-200 py-3" data-retained-inactive-products>
+                        <summary class="cursor-pointer text-sm font-semibold text-red-700">Productos inactivos ({{ $inactiveItems->count() }})</summary>
+                        <div class="mt-2 overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead><tr><th class="p-2">Estado</th><th class="p-2">Producto</th><th class="p-2">Presentacion</th><th class="p-2 text-right">Precio por frasco</th></tr></thead>
+                                <tbody>
+                                    @foreach ($inactiveItems as $inactiveItem)
+                                        <tr class="border-t border-gray-100">
+                                            <td class="p-2"><span class="catalog-product-state" data-active="false">Inactivo</span></td>
+                                            <td class="p-2">{{ $inactiveItem->product }}</td>
+                                            <td class="p-2">{{ $inactiveItem->presentation }}</td>
+                                            <td class="p-2 text-right">{{ $inactiveItem->price_bottle !== null ? '$' . number_format((float) $inactiveItem->price_bottle, 2) : '-' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                @endif
+
                 @php
                     $selectionError = $errors->first($usesMedicineCatalog ? 'medicamentos' : 'items');
                 @endphp
@@ -834,7 +855,7 @@
                 form?.addEventListener('submit', function(event) {
                     const hasSelection = rows.some((row) => row.querySelector('.price-editor-selection')?.checked);
 
-                    if (!hasSelection) {
+                    if (!hasSelection && !form.querySelector('[data-retained-inactive-products]')) {
                         event.preventDefault();
                         window.Swal?.fire({
                             icon: 'warning',

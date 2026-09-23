@@ -1,0 +1,14 @@
+.catalog-status-switch { display: inline-flex; align-items: center; gap: 8px; width: 104px; min-height: 32px; white-space: nowrap; color: #b91c1c; font-weight: 600; }
+.catalog-status-switch[aria-checked="true"] { color: #15803d; }
+.catalog-status-track { position: relative; display: inline-block; flex: 0 0 36px; width: 36px; height: 22px; border-radius: 11px; background: #dc2626; }
+.catalog-status-track > span { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .15s; }
+.catalog-status-switch[aria-checked="true"] .catalog-status-track { background: #16a34a; }
+.catalog-status-switch[aria-checked="true"] .catalog-status-track > span { transform: translateX(14px); }
+.catalog-status-switch:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; border-radius: 4px; }
+.catalog-status-switch:disabled { cursor: not-allowed; }
+.catalog-status-switch[aria-busy="true"] { opacity: .6; cursor: wait; }
+.catalog-product-state { display: inline-block; padding: 3px 8px; border-radius: 4px; color: #b91c1c; background: #fef2f2; font-weight: 600; }
+.catalog-product-state[data-active="true"] { color: #15803d; background: #dcfce7; }
+#catalogStatusMessage[data-error="true"] { color: #b91c1c; }
+#catalogStatusMessage[data-error="false"] { color: #15803d; }
+@media (prefers-reduced-motion: reduce) { .catalog-status-track > span { transition: none; } }

@@ -34,7 +34,7 @@ final class AdminMenuAccess
             ],
             [
                 'permission' => 'menu.catalogo',
-                'label' => 'Catalogo y listas de precios',
+                'label' => 'Catalogo y Listas de Precios',
                 'icon' => 'fa-book-medical',
                 'children' => [
                     ['permission' => 'menu.catalogo.nutricionales', 'label' => 'Medicamentos nutricionales'],
@@ -50,8 +50,9 @@ final class AdminMenuAccess
                 'label' => 'Compras',
                 'icon' => 'fa-cart-shopping',
                 'children' => [
-                    ['permission' => 'menu.compras.mine', 'label' => 'Mis ordenes'],
+                    ['permission' => 'menu.compras.mine', 'label' => 'Órdenes de compra'],
                     ['permission' => 'menu.compras.new', 'label' => 'Nueva OC'],
+                    ['permission' => 'menu.compras.all', 'label' => 'Todas las ordenes de compra'],
                     ['permission' => 'menu.compras.paid', 'label' => 'Pagadas'],
                     ['permission' => 'menu.compras.pending', 'label' => 'Pendientes de pago'],
                     ['permission' => 'menu.compras.rejected', 'label' => 'Rechazadas'],
@@ -262,6 +263,13 @@ final class AdminMenuAccess
             return false;
         }
 
+        if ($user->hasSalesOnlyAccess()) {
+            return in_array($permission, ['menu.solicitudes', 'menu.capacitaciones', 'menu.capacitaciones.programas'], true);
+        }
+        if ($user->isSalesperson() && $permission === 'menu.solicitudes') {
+            return true;
+        }
+
         if ($user->hasAnyRole(['Cliente', 'Institucion'])
             && ($permission === 'menu.capacitaciones' || str_starts_with($permission, 'menu.capacitaciones.'))) {
             return false;
@@ -298,11 +306,16 @@ final class AdminMenuAccess
 
         if ($routeName === 'admin.warehouses.purchase-orders.index') {
             return match ((string) $request->query('section', 'mine')) {
+                'all' => 'menu.compras.all',
                 'paid' => 'menu.compras.paid',
                 'pending' => 'menu.compras.pending',
                 'rejected' => 'menu.compras.rejected',
                 default => 'menu.compras.mine',
             };
+        }
+
+        if ($routeName === 'admin.purchases.minimum-stock' || str_starts_with($routeName, 'admin.purchases.minimum-stock.')) {
+            return 'menu.compras';
         }
 
         if ($routeName === 'admin.purchases.create'

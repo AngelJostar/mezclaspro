@@ -1,7 +1,8 @@
 @php
-    $isWorkflowPage = request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit', 'admin.solicitudes.ajustes.show')
-        && (request()->boolean('approval_popup') || request()->boolean('dispensing_popup'));
-    $workflowCompleted = $isWorkflowPage && (session('approval_popup_done') || session('dispensing_popup_done'));
+    $isPurchasePopup = request()->routeIs('admin.oncologicos.laboratory.purchase-orders.create') && request()->boolean('purchase_popup');
+    $isWorkflowPage = $isPurchasePopup || (request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit', 'admin.solicitudes.ajustes.show')
+        && (request()->boolean('approval_popup') || request()->boolean('dispensing_popup')));
+    $workflowCompleted = $isWorkflowPage && !$isPurchasePopup && (session('approval_popup_done') || session('dispensing_popup_done'));
     $workflowPageConfig = [
         'embedded' => $isWorkflowPage,
         'completed' => (bool) $workflowCompleted,
@@ -55,7 +56,7 @@
         @include('layouts.includes.admin.aside')
     @endunless
 
-    <main @class(['admin-page', 'sm:ml-44' => ! $isWorkflowPage, 'workflow-page' => $isWorkflowPage])>
+    <main @class(['admin-page', 'sm:ml-44' => ! $isWorkflowPage, 'workflow-page' => $isWorkflowPage, 'purchase-popup-page' => $isPurchasePopup])>
         <div class="admin-content">
             {{ $slot }}
         </div>

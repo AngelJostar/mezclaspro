@@ -18,6 +18,7 @@ if (typeof window.createExcelColumnFilters !== 'function') {
         const listenerOptions = { signal: controller.signal };
 
         const cellValue = (row, columnIndex) => {
+            if (config.cellValue) return String(config.cellValue(row, columnIndex) ?? '').trim();
             const cell = row.cells[columnIndex];
             if (!cell) return '';
 
@@ -246,6 +247,13 @@ if (typeof window.createExcelColumnFilters !== 'function') {
             }
         }, listenerOptions);
         window.addEventListener('resize', closePanel, listenerOptions);
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && activeTrigger) {
+                const trigger = activeTrigger;
+                closePanel();
+                trigger.focus({ preventScroll: true });
+            }
+        }, listenerOptions);
 
         applyFilters();
 
@@ -254,6 +262,13 @@ if (typeof window.createExcelColumnFilters !== 'function') {
                 return row?.dataset.columnFilterMatch !== '0';
             },
             apply: applyFilters,
+            clear() {
+                appliedFilters.clear();
+                updateTriggerStates();
+                closePanel();
+                applyFilters();
+            },
+            close: closePanel,
             destroy() {
                 closePanel();
                 controller.abort();

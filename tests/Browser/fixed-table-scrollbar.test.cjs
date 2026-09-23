@@ -14,6 +14,50 @@ const script = buildSync({ entryPoints: [path.join(root, 'resources/js/fixed-tab
     bundle: true, write: false, format: 'iife', loader: { '.css': 'empty' },
 }).outputFiles[0].text;
 const table = execFileSync('php', ['tests/Browser/fixtures/request-scrollbar.php'], { cwd: root, encoding: 'utf8' });
+const personnel = execFileSync('php', ['tests/Browser/fixtures/personnel-scrollbar.php'], { cwd: root, encoding: 'utf8' });
+
+test('personnel scrolls only its columns with the scrollbar fixed at the viewport bottom', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    try {
+        for (const width of [1881, 1366, 390]) {
+            const page = await browser.newPage({ viewport: { width, height: 900 } });
+            const errors = [];
+            page.on('pageerror', error => errors.push(error.message));
+            try {
+                await page.route('**/*', route => route.abort());
+                await page.setContent(`<style>${styles}</style><main class="admin-page sm:ml-44"><div class="admin-content">${personnel}</div></main><script>${script}</script>`);
+                const source = page.getByRole('region', { name: 'Informacion del personal', exact: true });
+                const bar = page.getByRole('group', { name: 'Desplazamiento horizontal de la tabla', exact: true });
+                const range = bar.getByRole('slider');
+                await source.scrollIntoViewIfNeeded();
+                await bar.waitFor();
+                const headingX = (await page.locator('.training-page-header').boundingBox()).x;
+                const checkPosition = async () => {
+                    const box = await bar.boundingBox();
+                    const bounds = await source.boundingBox();
+                    assert.ok(Math.abs(box.y + box.height - 900) <= 1);
+                    assert.ok(Math.abs(box.x - bounds.x) <= 1);
+                    assert.ok(Math.abs(box.width - bounds.width) <= 1);
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+                    assert.equal(await page.locator('.admin-content').evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
+                };
+                await checkPosition();
+                await bar.getByRole('button', { name: 'Desplazar columnas a la derecha', exact: true }).click();
+                assert.ok(await source.evaluate(el => el.scrollLeft > 0));
+                assert.equal((await page.locator('.training-page-header').boundingBox()).x, headingX);
+                await range.focus();
+                await page.keyboard.press('End');
+                assert.ok(await source.evaluate(el => Math.abs(el.scrollWidth - el.clientWidth - el.scrollLeft) <= 1));
+                await page.keyboard.press('Home');
+                assert.equal(await source.evaluate(el => el.scrollLeft), 0);
+                await page.evaluate(() => scrollBy(0, 250));
+                await checkPosition();
+                if (process.env.SCROLLBAR_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.SCROLLBAR_SCREENSHOTS, `fixed-personnel-scrollbar-${width}.png`) });
+                assert.deepEqual(errors, []);
+            } finally { await page.close(); }
+        }
+    } finally { await browser.close(); }
+});
 
 test('fixed table scrollbar stays visible for empty requests and supports arrows, dragging, keyboard, resize and refreshed tables', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });

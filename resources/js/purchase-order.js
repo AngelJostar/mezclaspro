@@ -1,4 +1,4 @@
-import { createElement, ChevronLeft, ChevronRight } from 'lucide';
+import { createElement, createIcons, ChevronLeft, ChevronRight, Download, FilePlus2, X } from 'lucide';
 import { createProductPicker } from './purchase-product-picker';
 import '../css/purchase-order.css';
 
@@ -8,6 +8,10 @@ function initializePurchaseOrder() {
     form.dataset.initialized = 'true';
     form.noValidate = true;
     const config = JSON.parse(document.getElementById('purchase-order-config').textContent);
+    createIcons({ icons: { Download, FilePlus2, X }, nameAttr: 'data-po-icon', root: form.closest('.po-editor') });
+    let submitting = false;
+    let generated = false;
+    let uncertain = false;
     const hiddenInputs = document.getElementById('item-hidden-inputs');
     const discountInput = document.getElementById('discount');
     const taxRateInput = document.getElementById('tax_rate');
@@ -412,7 +416,77 @@ function initializePurchaseOrder() {
         renderPage();
     }));
 
-    form.addEventListener('submit', function (event) {
+    const popupState = (action, extra = {}) => document.dispatchEvent(new CustomEvent('workflow-popup-state', { detail: { action, ...extra } }));
+    async function submitPopup() {
+        submitting = true;
+        const errors = document.querySelector('[data-po-errors]');
+        const submit = form.querySelector('[type="submit"]');
+        const label = form.querySelector('[data-po-submit-label]');
+        const close = form.querySelector('[data-purchase-popup-close]');
+        errors.hidden = true;
+        submit.disabled = true;
+        label.textContent = 'Generando...';
+        close.setAttribute('aria-disabled', 'true');
+        popupState('busy', { busy: true });
+        function showErrors(messages) {
+            const list = document.createElement('ul');
+            messages.forEach(message => {
+                const item = document.createElement('li');
+                item.textContent = message;
+                list.append(item);
+            });
+            errors.replaceChildren(list);
+            errors.hidden = false;
+            errors.focus();
+        }
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST', body: new FormData(form), credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await response.json();
+            if (response.status === 422) {
+                showErrors(Object.values(data.errors ?? {}).flat().length
+                    ? Object.values(data.errors).flat() : ['Revisa los datos de la orden.']);
+                return;
+            }
+            if (response.status === 403 || response.status === 401 || response.status === 419) {
+                showErrors(['La sesion o los permisos cambiaron. Cierra esta ventana y vuelve a ingresar.']);
+                uncertain = true;
+                return;
+            }
+            if (!response.ok || !data.folio || !data.download_url) throw new Error('Unconfirmed purchase order');
+            const downloadUrl = new URL(data.download_url, window.location.href);
+            if (downloadUrl.origin !== window.location.origin) throw new Error('Invalid download URL');
+            generated = true;
+            picker.close();
+            form.hidden = true;
+            const result = document.querySelector('[data-po-success]');
+            result.querySelector('[data-po-success-title]').textContent = `Orden ${data.folio} generada`;
+            const download = result.querySelector('[data-po-download]');
+            download.href = downloadUrl.href;
+            result.hidden = false;
+            result.focus();
+            popupState('saved');
+            download.click();
+        } catch {
+            // A lost response may follow a committed order; do not allow a duplicate submission.
+            uncertain = true;
+            showErrors(['No se pudo confirmar la generacion. Cierra esta ventana y revisa las ordenes antes de intentar de nuevo.']);
+        } finally {
+            submitting = false;
+            submit.disabled = generated || uncertain;
+            label.textContent = 'Generar orden';
+            close.removeAttribute('aria-disabled');
+            popupState('busy', { busy: false });
+        }
+    }
+
+    form.addEventListener('submit', async function (event) {
+        if (submitting || generated || uncertain) {
+            event.preventDefault();
+            return;
+        }
         syncDeliveryFields();
         saveVisibleItems();
         if (!validateItems()) {
@@ -424,6 +498,10 @@ function initializePurchaseOrder() {
             return;
         }
         buildHiddenInputs();
+        if (config.popup) {
+            event.preventDefault();
+            await submitPopup();
+        }
     });
 
     renderPage();

@@ -11,17 +11,24 @@ function initializeWorkflowModal() {
 
     if (config.embedded) {
         const isEmbedded = window.parent !== window;
+        let busy = false;
         const notifyParent = (action, extra = {}) => {
             if (isEmbedded) window.parent.postMessage({ type: messageType, action, ...extra }, window.location.origin);
         };
         notifyParent('ready', { title: document.querySelector('[data-workflow-heading]')?.textContent.replace(/\s+/g, ' ').trim() });
         document.addEventListener('click', (event) => {
-            if (!isEmbedded || !event.target.closest('[data-workflow-popup-close]')) return;
+            if (!isEmbedded || !event.target.closest('[data-workflow-popup-close], [data-purchase-popup-close]')) return;
             event.preventDefault();
-            notifyParent('close');
+            if (!busy) notifyParent('close');
         });
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && !window.Swal?.isVisible()) notifyParent('close');
+            if (event.key === 'Escape' && !event.defaultPrevented && !busy && !window.Swal?.isVisible()) notifyParent('close');
+        });
+        document.addEventListener('workflow-popup-state', (event) => {
+            if (event.detail?.action === 'busy') {
+                busy = Boolean(event.detail.busy);
+                notifyParent('busy', { busy });
+            } else if (event.detail?.action === 'saved') notifyParent('saved');
         });
 
         if (config.completed) {
@@ -57,6 +64,9 @@ function initializeWorkflowModal() {
     let activeUrl;
     let timeout;
     let completed = false;
+    let saved = false;
+    let busy = false;
+    let purchaseOrder = false;
     createIcons({ icons: { X }, nameAttr: 'data-workflow-icon', root: modal });
 
     const stopLoading = () => {
@@ -82,6 +92,7 @@ function initializeWorkflowModal() {
     modal.querySelector('[data-workflow-retry]').addEventListener('click', loadFrame);
     closeButton.addEventListener('click', () => modal.close());
     modal.addEventListener('cancel', (event) => {
+        if (busy) event.preventDefault();
         try {
             if (frame.contentWindow?.Swal?.isVisible()) event.preventDefault();
         } catch {
@@ -93,20 +104,27 @@ function initializeWorkflowModal() {
         frame.src = 'about:blank';
         document.documentElement.classList.remove('workflow-modal-open');
         trigger?.focus({ preventScroll: true });
+        if (saved) window.location.reload();
     });
 
     // Delegation also covers rows replaced by Livewire sorting and pagination.
     const openFromLink = (event) => {
-        const link = event.target.closest('[data-approval-popup], [data-dispensing-popup]');
+        const link = event.target.closest('[data-approval-popup], [data-dispensing-popup], [data-purchase-order-popup]');
         if (!link) return;
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         const url = new URL(link.href, window.location.href);
         if (url.origin !== window.location.origin) return;
         event.preventDefault();
         if (modal.open) return;
         trigger = link;
+        purchaseOrder = link.hasAttribute('data-purchase-order-popup');
+        if (purchaseOrder) url.searchParams.set('purchase_popup', '1');
         activeUrl = url.href;
         completed = false;
-        title.textContent = link.hasAttribute('data-dispensing-popup') ? 'Dispensar mezcla' : 'Aprobaci\u00f3n de mezcla';
+        saved = false;
+        busy = false;
+        closeButton.disabled = false;
+        title.textContent = purchaseOrder ? 'Nueva orden de compra' : link.hasAttribute('data-dispensing-popup') ? 'Dispensar mezcla' : 'Aprobaci\u00f3n de mezcla';
         frame.title = title.textContent;
         modal.showModal();
         document.documentElement.classList.add('workflow-modal-open');
@@ -124,7 +142,12 @@ function initializeWorkflowModal() {
                 frame.title = event.data.title;
             }
         } else if (event.data.action === 'close') {
-            modal.close();
+            if (!busy) modal.close();
+        } else if (purchaseOrder && event.data.action === 'busy') {
+            busy = Boolean(event.data.busy);
+            closeButton.disabled = busy;
+        } else if (purchaseOrder && event.data.action === 'saved') {
+            saved = true;
         } else if (event.data.action === 'complete' && !completed) {
             completed = true;
             modal.close();

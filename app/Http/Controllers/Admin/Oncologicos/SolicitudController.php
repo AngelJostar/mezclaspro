@@ -211,6 +211,7 @@ class SolicitudController extends Controller
             ->where('mb.medicine_presentation_id', $currentBatch->medicine_presentation_id)
             ->where('mp.catalog_id', $catalogId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->where('mb.stock_actual', '>=', $unidades)
             ->where(function ($query) {
                 $query->whereNull('mb.caducidad')->orWhereDate('mb.caducidad', '>=', now()->toDateString());
@@ -253,6 +254,7 @@ class SolicitudController extends Controller
             ->where('mb.laboratory_id', $laboratoryId)
             ->where('mp.catalog_id', $catalogId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->where(function ($q) {
                 $q->whereNull('mb.caducidad')
                     ->orWhereDate('mb.caducidad', '>=', now()->toDateString());
@@ -463,6 +465,7 @@ class SolicitudController extends Controller
             ->join('medicine_presentations as mp', 'mp.id', '=', 'mlp.medicine_presentation_id')
             ->where('mlp.medicine_list_id', $listaId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->pluck('mp.catalog_id')
             ->map(fn($x) => (int) $x)
             ->unique()
@@ -493,6 +496,7 @@ class SolicitudController extends Controller
             ->join('medicine_list_presentation as mlp', 'mlp.medicine_presentation_id', '=', 'mp.id')
             ->where('mlp.medicine_list_id', $listaId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->select(
                 'mp.id',
                 'mp.catalog_id',
@@ -630,6 +634,7 @@ class SolicitudController extends Controller
             ->join('medicine_presentations as mp', 'mp.id', '=', 'mlp.medicine_presentation_id')
             ->where('mlp.medicine_list_id', $listaId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->pluck('mp.catalog_id')
             ->map(fn($x) => (int) $x)
             ->unique()
@@ -644,6 +649,7 @@ class SolicitudController extends Controller
             ->join('medicine_presentations as mp', 'mp.id', '=', 'mlp.medicine_presentation_id')
             ->where('mlp.medicine_list_id', $listaId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->get([
                 'mp.catalog_id',
                 'mlp.charge_by',
@@ -918,6 +924,7 @@ class SolicitudController extends Controller
             ->join('medicine_presentations as mp', 'mp.id', '=', 'mlp.medicine_presentation_id')
             ->where('mlp.medicine_list_id', $listaId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->pluck('mp.catalog_id')
             ->unique()
             ->values();
@@ -937,6 +944,7 @@ class SolicitudController extends Controller
             ->join('medicine_list_presentation as mlp', 'mlp.medicine_presentation_id', '=', 'mp.id')
             ->where('mlp.medicine_list_id', $listaId)
             ->where('mp.is_available', 1)
+            ->where('mlp.is_active', true)
             ->select(
                 'mp.id',
                 'mp.catalog_id',
@@ -1227,6 +1235,7 @@ class SolicitudController extends Controller
                 ->join('medicine_presentations as mp', 'mp.id', '=', 'mlp.medicine_presentation_id')
                 ->where('mlp.medicine_list_id', $listaId)
                 ->where('mp.is_available', 1)
+                ->where('mlp.is_active', true)
                 ->pluck('mp.catalog_id')
                 ->map(fn($x) => (int) $x)
                 ->unique()
@@ -1241,6 +1250,7 @@ class SolicitudController extends Controller
                 ->join('medicine_presentations as mp', 'mp.id', '=', 'mlp.medicine_presentation_id')
                 ->where('mlp.medicine_list_id', $listaId)
                 ->where('mp.is_available', 1)
+                ->where('mlp.is_active', true)
                 ->get([
                     'mp.catalog_id',
                     'mlp.charge_by',

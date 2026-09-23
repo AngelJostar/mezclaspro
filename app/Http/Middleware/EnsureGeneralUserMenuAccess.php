@@ -13,6 +13,10 @@ class EnsureGeneralUserMenuAccess
     {
         $user = $request->user();
 
+        if ($user?->isSalesperson() && $request->routeIs('admin.solicitudes.cotizacion.*')) {
+            return $next($request);
+        }
+
         if (! $user?->hasRole(AdminMenuAccess::GENERAL_ROLE)) {
             return $next($request);
         }

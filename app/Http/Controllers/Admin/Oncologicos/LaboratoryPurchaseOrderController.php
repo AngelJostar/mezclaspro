@@ -22,6 +22,14 @@ class LaboratoryPurchaseOrderController extends Controller
 {
     public function create(Laboratory $laboratory): View
     {
+        $laboratories = Laboratory::query()
+            ->withCount(['warehouses as active_warehouses_count' => fn ($query) => $query->where('is_active', true)])
+            ->orderByDesc('activo')->orderBy('nombre')->get();
+
+        if (! request()->boolean('purchase_popup')) {
+            return view('admin.oncologicos.laboratory.purchase-orders.new', compact('laboratory', 'laboratories'));
+        }
+
         $deliveryLaboratories = Laboratory::query()
             ->with(['warehouses' => fn ($query) => $query
                 ->where('is_active', true)
@@ -50,6 +58,7 @@ class LaboratoryPurchaseOrderController extends Controller
 
         return view('admin.oncologicos.laboratory.purchase-orders.create', compact(
             'laboratory',
+            'laboratories',
             'deliveryLaboratories',
             'supplierOptions',
         ))->with('inventoryDestinations', LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS);
@@ -83,7 +92,7 @@ class LaboratoryPurchaseOrderController extends Controller
         ];
     }
 
-    public function store(Request $request, Laboratory $laboratory, PurchaseOrderCatalogService $catalog): RedirectResponse
+    public function store(Request $request, Laboratory $laboratory, PurchaseOrderCatalogService $catalog): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'department' => ['required', 'string', 'max:255'],
@@ -191,6 +200,13 @@ class LaboratoryPurchaseOrderController extends Controller
             return $order;
         });
 
+        if ($request->boolean('purchase_popup') && $request->expectsJson()) {
+            return response()->json([
+                'folio' => $order->folio,
+                'download_url' => route('admin.oncologicos.laboratory.purchase-orders.download', [$laboratory, $order]),
+            ], 201);
+        }
+
         return redirect()
             ->route('admin.oncologicos.laboratory.purchase-orders.download', [$laboratory, $order]);
     }
@@ -198,6 +214,8 @@ class LaboratoryPurchaseOrderController extends Controller
     public function download(Laboratory $laboratory, LaboratoryPurchaseOrder $purchaseOrder)
     {
         abort_unless($purchaseOrder->laboratory_id === $laboratory->id, 404);
+        abort_if($purchaseOrder->is_automatic && ($purchaseOrder->reorder_snapshot['pricing_pending'] ?? false),
+            422, 'La orden automatica esta pendiente de revision y cotizacion.');
 
         $purchaseOrder->loadMissing(['laboratory', 'deliveryLaboratory', 'warehouse', 'creator']);
 

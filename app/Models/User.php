@@ -80,6 +80,26 @@ class User extends Authenticatable
         return $this->hasOne(PersonnelProfile::class);
     }
 
+    public function isSalesperson(): bool
+    {
+        return $this->hasRole(PersonnelProfile::POSITION_SELLER)
+            && ! $this->hasAnyRole(['Cliente', 'Institucion']);
+    }
+
+    public function hasSalesOnlyAccess(): bool
+    {
+        return $this->isSalesperson() && $this->roles->every(
+            fn ($role) => in_array($role->name, [PersonnelProfile::POSITION_SELLER, 'Capacitacion'], true)
+        );
+    }
+
+    public function scopeActiveSalespeople($query)
+    {
+        return $query->where('is_active', true)
+            ->whereHas('roles', fn ($roles) => $roles->where('name', PersonnelProfile::POSITION_SELLER))
+            ->whereDoesntHave('roles', fn ($roles) => $roles->whereIn('name', ['Cliente', 'Institucion']));
+    }
+
     public function isBlockedByInstitution(): bool
     {
         if (! $this->hospital_id || ! $this->hasAnyRole(['Cliente', 'Institucion'])) {
