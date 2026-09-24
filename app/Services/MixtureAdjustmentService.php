@@ -51,7 +51,7 @@ class MixtureAdjustmentService
 
     public function hospitalId(Model $target): int
     {
-        return (int) ($target instanceof Solicitud ? $target->user?->hospital_id : $target->solicitud?->hospital_id);
+        return (int) ($target instanceof Solicitud ? $target->hospital_id : $target->solicitud?->hospital_id);
     }
 
     public function requestAdjustment(Model $target, Request $request): MixtureAdjustment
@@ -222,6 +222,7 @@ class MixtureAdjustmentService
 
     public function assertWritable(Model $target, Request $request): void
     {
+        app(QuotationPreparationService::class)->guardChanges($target, $request);
         $adjustment = $target->currentAdjustment();
         if ($adjustment?->status === 'approved') {
             if ($request->input('accion', 'actualizar') === 'actualizar') {

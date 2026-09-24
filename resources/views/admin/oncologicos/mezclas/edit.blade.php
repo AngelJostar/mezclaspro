@@ -1,4 +1,5 @@
 <x-admin-layout>
+    @include('admin.solicitudes.quotations.request-reference')
     @php
         $requestType = $solicitud->tipo_solicitud ?? 'oncologicos';
         $closeRoute = $requestType === 'antibioticos'

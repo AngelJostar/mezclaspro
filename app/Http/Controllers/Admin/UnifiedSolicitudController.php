@@ -43,10 +43,10 @@ class UnifiedSolicitudController extends Controller
 
         if ($canViewNutrition) {
             $nutritionQuery = NutritionSolicitud::query()
-                ->with(['user.hospital.instituciones', 'solicitud_detail', 'solicitud_patient', 'adjustment']);
+                ->with(['hospital.instituciones', 'solicitud_detail', 'solicitud_patient', 'adjustment']);
 
             if ($isHospitalUser) {
-                $nutritionQuery->where('user_id', $user->id);
+                $nutritionQuery->forRequestUser($user);
             }
 
             $requests = $requests->concat(
@@ -63,8 +63,8 @@ class UnifiedSolicitudController extends Controller
                         'mixture' => null,
                         'id' => $solicitud->id,
                         'request_id' => $solicitud->id,
-                        'hospital_id' => $solicitud->user?->hospital_id,
-                        'hospital' => $solicitud->user?->hospital?->name ?? 'Sin hospital',
+                        'hospital_id' => $solicitud->hospital_id,
+                        'hospital' => $solicitud->hospital?->name ?? 'Sin hospital',
                         'patient' => $patient ?: 'Sin paciente',
                         'requested_at' => $solicitud->created_at,
                         'delivery_at' => $this->parseDate($solicitud->solicitud_detail?->fecha_hora_entrega),

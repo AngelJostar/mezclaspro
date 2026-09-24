@@ -53,13 +53,13 @@ class SolicitudesTable extends Component
         $query = NutricionalesSolicitud::query()
             ->with([
                 'adjustment',
-                'user.hospital.instituciones',
+                'hospital.instituciones',
                 'solicitud_detail',
                 'solicitud_patient',
             ]);
 
         if (in_array($role, ['Cliente', 'Institucion'], true)) {
-            $query->where('solicituds.user_id', $user->id);
+            $query->forRequestUser($user);
         }
 
         $this->applyStatusFilter($query);
@@ -168,7 +168,7 @@ class SolicitudesTable extends Component
                 'solicituds.solicitud_detail_id'
             )
             ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function (JoinClause $join) {
-                $join->on('request_delivery_schedules.hospital_id', '=', 'request_delivery_users.hospital_id')
+                $join->on('request_delivery_schedules.hospital_id', '=', DB::raw('COALESCE(solicituds.hospital_id, request_delivery_users.hospital_id)'))
                     ->where('request_delivery_schedules.status', 'sent')
                     ->whereRaw(
                         'DATE(request_delivery_schedules.scheduled_date) = DATE(request_delivery_details.fecha_hora_entrega)'

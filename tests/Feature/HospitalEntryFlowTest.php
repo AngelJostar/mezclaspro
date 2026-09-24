@@ -54,7 +54,7 @@ class HospitalEntryFlowTest extends TestCase
         $this->assertAuthenticatedAs($this->hospital);
 
         $this->get(route('admin.solicitudes.index'))->assertOk()
-            ->assertSee('Lista de Solicitudes')->assertSee('Listado')
+            ->assertSee('Lista de Solicitudes')->assertSee('Preparacion')->assertSee('Cotizacion')
             ->assertSee('Hospital de prueba')->assertDontSee('Hospital ajeno')
             ->assertDontSeeText('Personal y Capacitaciones')
             ->assertViewHas('requests', fn ($rows) => $rows->count() === 5

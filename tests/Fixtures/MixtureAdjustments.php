@@ -16,7 +16,7 @@ class MixtureAdjustments
         PreparationWorkflow::seed();
         Schema::table('users', fn (Blueprint $t) => $t->integer('notification')->default(0));
         foreach ([
-            'solicituds' => ['user_id', 'solicitud_patient_id', 'solicitud_detail_id', 'estado', 'lote'],
+            'solicituds' => ['user_id', 'hospital_id', 'request_quotation_id', 'solicitud_patient_id', 'solicitud_detail_id', 'estado', 'lote'],
             'solicitud_patients' => ['nombre_paciente', 'apellidos_paciente', 'peso', 'servicio', 'fecha_nacimiento'],
             'solicitud_details' => ['volumen_total', 'npt'],
             'solicitud_inputs' => ['solicitud_id', 'input_id', 'valor', 'nutrition_medicine_presentation_id', 'lote', 'caducidad'],

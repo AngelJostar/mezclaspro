@@ -36,7 +36,7 @@ class InstitutionBillingPendingSummaryService
                 'solicitud_detail:id,fecha_hora_entrega',
                 'billing:id,origen_tipo,origen_id,estatus_facturacion,folio_interno,fecha_facturacion,numero_carta_factura,fecha_carta_factura',
             ])
-            ->whereHas('user.hospital.instituciones')
+            ->whereHas('hospital.instituciones')
             ->get()
             ->map(fn ($solicitud) => [
                 'delivery_date' => $solicitud->solicitud_detail?->fecha_hora_entrega,

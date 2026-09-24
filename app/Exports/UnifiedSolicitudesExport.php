@@ -57,7 +57,7 @@ class UnifiedSolicitudesExport extends DefaultValueBinder implements FromCollect
         };
 
         return [
-            $row['type_label'], $row['id'], $row['request_id'], $row['hospital'], $row['patient'],
+            $row['type_label'], $row['id'], $row['model']->request_quotation_id ? $row['model']->request_folio : $row['request_id'], $row['hospital'], $row['patient'],
             $row['requested_at'] ? Date::dateTimeToExcel($row['requested_at']) : null,
             $row['delivery_at'] ? Date::dateTimeToExcel($row['delivery_at']) : null,
             $statusLabel, $row['lot'], $approval,

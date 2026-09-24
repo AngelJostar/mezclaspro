@@ -11,8 +11,10 @@ class Solicitud extends Model
 {
     use \App\Models\Concerns\HasMixtureAdjustment;
     use HasFactory;
+    use \App\Models\Concerns\HasSourceQuotation;
 
     protected $fillable = [
+        'hospital_id',
         'user_id',
         'solicitud_detail_id',
         'solicitud_patient_id',
@@ -26,6 +28,7 @@ class Solicitud extends Model
 
 
     protected $casts = [
+        'quotation_pricing_snapshot' => 'array',
 
         'fecha_hora_preparacion' => 'datetime',
     ];
@@ -33,6 +36,31 @@ class Solicitud extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function hospital()
+    {
+        return $this->belongsTo(\App\Models\Hospital::class);
+    }
+
+    public function getHospitalIdAttribute($value)
+    {
+        return $value ?? $this->user?->hospital_id;
+    }
+
+    public function preparationHospital()
+    {
+        if (!$this->hospital || !$this->request_quotation_id) return $this->hospital;
+        $hospital = clone $this->hospital;
+        $hospital->nutri_medicine_list_id = $this->quotation->price_list_id;
+        return $hospital;
+    }
+
+    public function scopeForRequestUser($query, User $user)
+    {
+        return $query->where(fn ($visible) => $visible->where('solicituds.user_id', $user->id)
+            ->orWhere(fn ($quoted) => $quoted->whereNotNull('solicituds.request_quotation_id')
+                ->where('solicituds.hospital_id', $user->hospital_id ?: 0)));
     }
 
     //Relacion uno a uno inversa

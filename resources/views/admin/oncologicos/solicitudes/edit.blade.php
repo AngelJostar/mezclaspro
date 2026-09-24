@@ -1,4 +1,5 @@
 <x-admin-layout>
+    @include('admin.solicitudes.quotations.request-reference')
     <div class="flex flex-col ">
         <div class="mt-2 mb-4">
             <h1 class="text-2xl font-medium text-gray-800">

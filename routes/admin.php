@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\Nutricionales\SolicitudController;
 use App\Http\Controllers\Admin\UnifiedSolicitudController;
+use App\Http\Controllers\Admin\RequestQuotationController;
 use App\Http\Controllers\Admin\SolicitudValidationController;
 use App\Http\Controllers\Admin\MixtureAdjustmentController;
 use App\Http\Controllers\Admin\MixtureMessageController;
@@ -62,6 +63,25 @@ Route::get('/dashboard', function () {
 
 Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
     ->name('solicitudes.index');
+
+Route::get('solicitudes/cotizacion', [RequestQuotationController::class, 'index'])
+    ->name('solicitudes.cotizacion.index');
+Route::get('solicitudes/cotizacion/opciones', [RequestQuotationController::class, 'options'])->name('solicitudes.cotizacion.options');
+Route::get('solicitudes/cotizacion/exportar', [RequestQuotationController::class, 'export'])->name('solicitudes.cotizacion.export');
+Route::post('solicitudes/cotizacion', [RequestQuotationController::class, 'store'])->name('solicitudes.cotizacion.store');
+Route::post('solicitudes/cotizacion/revisar', [RequestQuotationController::class, 'preview'])->name('solicitudes.cotizacion.preview');
+Route::get('solicitudes/cotizacion/{quotation}', [RequestQuotationController::class, 'show'])->whereNumber('quotation')->name('solicitudes.cotizacion.show');
+Route::put('solicitudes/cotizacion/{quotation}', [RequestQuotationController::class, 'update'])->whereNumber('quotation')->name('solicitudes.cotizacion.update');
+Route::get('solicitudes/cotizacion/{quotation}/adjunto', [RequestQuotationController::class, 'attachment'])->whereNumber('quotation')->name('solicitudes.cotizacion.attachment');
+Route::get('solicitudes/cotizacion/{quotation}/pdf', [RequestQuotationController::class, 'pdf'])->whereNumber('quotation')->name('solicitudes.cotizacion.pdf');
+Route::post('solicitudes/cotizacion/{quotation}/correo', [RequestQuotationController::class, 'email'])
+    ->middleware('throttle:10,1')->whereNumber('quotation')->name('solicitudes.cotizacion.email');
+Route::post('solicitudes/cotizacion/{quotation}/autorizar', [RequestQuotationController::class, 'authorizeQuotation'])
+    ->whereNumber('quotation')->name('solicitudes.cotizacion.authorize');
+Route::get('solicitudes/cotizacion/{quotation}/preparacion', [\App\Http\Controllers\Admin\QuotationPreparationController::class, 'create'])
+    ->whereNumber('quotation')->name('solicitudes.cotizacion.preparation');
+Route::post('solicitudes/cotizacion/{quotation}/preparacion', [\App\Http\Controllers\Admin\QuotationPreparationController::class, 'store'])
+    ->whereNumber('quotation')->name('solicitudes.cotizacion.prepare');
 
 Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');

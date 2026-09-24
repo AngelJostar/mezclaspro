@@ -55,7 +55,7 @@
                         </td>
 
                         <td class="px-2 py-2 text-center">{{ $mezcla->id }}</td>
-                        <td class="px-2 py-2 text-center">{{ $solicitud->id }}</td>
+                        <td class="px-2 py-2 text-center">{{ $solicitud->request_folio }}</td>
                         @include('admin.solicitudes._institution-cell', ['institutionHospital' => $solicitud->hospital])
                         <td class="px-2 py-2 text-center">{{ $solicitud->hospital->name ?? 'N/A' }}</td>
                         <td class="px-2 py-2 text-center">{{ $solicitud->nombre_paciente }}</td>

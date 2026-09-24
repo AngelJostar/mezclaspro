@@ -10,6 +10,7 @@ import './table-column-filters';
 import './fixed-table-scrollbar';
 import './request-process-confirmations';
 import './request-navigation';
+import './request-quotations';
 import './workflow-modal';
 import './mixture-workflow';
 import './mixture-adjustments';

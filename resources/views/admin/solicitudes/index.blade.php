@@ -88,13 +88,18 @@
                             $estado = 'en_ajuste';
                         }
                     @endphp
-                    <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($isNutrition ? $solicitud->id : $mezcla?->id, $isNutrition ? $solicitud->user?->hospital : $solicitud->hospital) }}">
+                    <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($isNutrition ? $solicitud->id : $mezcla?->id, $solicitud->hospital) }}">
                         <td class="px-2 py-2 text-center whitespace-nowrap">
                             @include('admin.solicitudes._type-badge', ['type' => $requestRow['type']])
                         </td>
                         <td class="px-2 py-2 text-center">{{ $requestRow['id'] ?? '—' }}</td>
-                        <td class="px-2 py-2 text-center">{{ $requestRow['request_id'] }}</td>
-                        @include('admin.solicitudes._institution-cell', ['institutionHospital' => $isNutrition ? $solicitud->user?->hospital : $solicitud->hospital])
+                        <td class="px-2 py-2 text-center">
+                            {{ $requestRow['model']->request_folio }}
+                            @if ($requestRow['model']->request_quotation_id)
+                                <a class="block text-xs text-teal-700 underline" href="{{ route('admin.solicitudes.cotizacion.index', ['buscar' => $requestRow['model']->quotation->folio]) }}">Cotizacion {{ $requestRow['model']->quotation->folio }}</a>
+                            @endif
+                        </td>
+                        @include('admin.solicitudes._institution-cell', ['institutionHospital' => $solicitud->hospital])
                         <td class="px-2 py-2 text-center">{{ $requestRow['hospital'] }}</td>
                         <td class="px-2 py-2 text-center">{{ $requestRow['patient'] }}</td>
                         <td class="w-[11rem] min-w-[11rem] max-w-[11rem] px-2 py-2 text-center whitespace-nowrap">

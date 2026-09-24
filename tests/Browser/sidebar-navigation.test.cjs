@@ -41,7 +41,7 @@ async function assertLeftAlignedLabels(page) {
     }
 }
 
-test('hospital starts in Listado without internal personnel menus', async () => {
+test('hospital starts in Preparacion without internal personnel menus', async () => {
     const html = execFileSync('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3',
         'tests/Browser/fixtures/hospital-entry.php'], { cwd: root, encoding: 'utf8' });
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
@@ -54,10 +54,14 @@ test('hospital starts in Listado without internal personnel menus', async () => 
             await page.setContent(`<meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><div x-data="{ open: true }">${html}</div>`);
             await page.addScriptTag({ content: script });
             const sidebar = page.locator('#logo-sidebar');
-            const list = sidebar.getByRole('link', { name: 'Listado', exact: true });
+            const list = sidebar.getByRole('link', { name: 'Preparacion', exact: true });
             await list.waitFor({ state: 'visible' });
             assert.equal(await list.getAttribute('aria-current'), 'page');
             assert.equal(await list.getAttribute('href'), 'http://localhost/admin/solicitudes');
+            const quotation = sidebar.getByRole('link', { name: 'Cotizacion', exact: true });
+            assert.equal(await quotation.isVisible(), true);
+            assert.equal(await quotation.getAttribute('href'), 'http://localhost/admin/solicitudes/cotizacion');
+            assert.equal(await quotation.getAttribute('aria-current'), null);
             assert.equal(await sidebar.getByRole('button').count(), 1);
             assert.equal(await sidebar.getByText('Personal y Capacitaciones', { exact: true }).count(), 0);
             assert.equal(await sidebar.locator('a[href*="/capacitaciones"]').count(), 0);
@@ -88,7 +92,7 @@ test('only sidebar dropdowns have visible arrows that follow their expanded stat
             await sidebar.locator('svg[data-request-navigation-icon]').first().waitFor();
             assert.equal(await toggles.count(), 6);
             assert.equal(await sidebar.locator('a [data-request-navigation-icon]').count(), 0);
-            assert.deepEqual((await sidebar.locator('#solicitudes-submenu a').allTextContents()).map(text => text.trim()), ['Listado']);
+            assert.deepEqual((await sidebar.locator('#solicitudes-submenu a').allTextContents()).map(text => text.trim()), ['Preparacion', 'Cotizacion']);
             assert.equal(await sidebar.locator('a[href*="/solicitudes/validaciones"]').count(), 0);
             await assertLeftAlignedLabels(page);
             for (const button of await toggles.all()) {

@@ -76,7 +76,7 @@ class SolicitudValidationsTest extends TestCase
         }
     }
 
-    public function test_sidebar_keeps_only_listado_under_an_expanded_requests_parent(): void
+    public function test_sidebar_keeps_preparation_and_quotation_under_an_expanded_requests_parent(): void
     {
         $request = Request::create(route('admin.solicitudes.index'));
         $request->setRouteResolver(fn () => app('router')->getRoutes()->match($request));
@@ -90,9 +90,12 @@ class SolicitudValidationsTest extends TestCase
         @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
         $xpath = new \DOMXPath($dom);
         $links = $xpath->query('//ul[@id="solicitudes-submenu"]//a');
-        $this->assertCount(1, $links);
-        $this->assertSame('Listado', trim($links[0]->textContent));
+        $this->assertCount(2, $links);
+        $this->assertSame('Preparacion', trim($links[0]->textContent));
         $this->assertSame(route('admin.solicitudes.index'), $links[0]->getAttribute('href'));
+        $this->assertSame('Cotizacion', trim($links[1]->textContent));
+        $this->assertSame(route('admin.solicitudes.cotizacion.index'), $links[1]->getAttribute('href'));
+        $this->assertSame('', $links[1]->getAttribute('aria-current'));
         $this->assertStringNotContainsString('Validaciones', $html);
         $this->assertStringNotContainsString(route('admin.solicitudes.validaciones.index'), $html);
         $this->assertSame('page', $links[0]->getAttribute('aria-current'));

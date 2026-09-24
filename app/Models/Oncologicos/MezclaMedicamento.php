@@ -35,7 +35,7 @@ class MezclaMedicamento extends Model
     ];
 
     protected $casts = [
-        'dosis'              => 'decimal:2',
+        'dosis'              => 'decimal:4',
         'dosis_ml'           => 'decimal:2',
         'precio_unitario'    => 'decimal:2',
         'precio_mg_snapshot' => 'decimal:4',

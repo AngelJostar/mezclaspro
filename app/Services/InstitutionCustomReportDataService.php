@@ -108,13 +108,13 @@ class InstitutionCustomReportDataService
         $nutrition = NutricionalSolicitud::query()
             ->with([
                 'billing',
-                'user.hospital',
+                'hospital',
                 'solicitud_detail',
                 'solicitud_patient',
                 'input.input.nutritionMedicineCatalog',
                 'input.presentation.catalog',
             ])
-            ->whereHas('user', fn ($query) => $query->whereIn('hospital_id', $hospitalIds))
+            ->whereIn('hospital_id', $hospitalIds)
             ->whereBetween('created_at', [$periodFrom, $periodTo])
             ->get()
             ->map(fn (NutricionalSolicitud $request) => $this->nutritionRecord($request, $base));
@@ -184,7 +184,7 @@ class InstitutionCustomReportDataService
 
     private function nutritionRecord(NutricionalSolicitud $request, array $base): array
     {
-        $hospital = $request->user?->hospital;
+        $hospital = $request->hospital;
         $patient = $request->solicitud_patient;
         $detail = $request->solicitud_detail;
         $lines = $this->nutritionLines($request);

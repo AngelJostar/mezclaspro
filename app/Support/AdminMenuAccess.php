@@ -262,6 +262,13 @@ final class AdminMenuAccess
             return false;
         }
 
+        if ($user->hasSalesOnlyAccess()) {
+            return in_array($permission, ['menu.solicitudes', 'menu.capacitaciones', 'menu.capacitaciones.programas'], true);
+        }
+        if ($user->isSalesperson() && $permission === 'menu.solicitudes') {
+            return true;
+        }
+
         if ($user->hasAnyRole(['Cliente', 'Institucion'])
             && ($permission === 'menu.capacitaciones' || str_starts_with($permission, 'menu.capacitaciones.'))) {
             return false;

@@ -108,7 +108,7 @@ class InstitucionHospitalExport implements FromArray, WithHeadings, ShouldAutoSi
             'billing',
             'solicitud.hospital',
             'solicitud.user.medicineList',
-            'solicitud.user.hospital',
+            'solicitud.hospital',
             'medicamentos.medicamentoOnco.catalog',
             'medicamentos.presentacionesUsadas.batch.presentation',
             'medicamentos.diluyente',
@@ -194,21 +194,19 @@ class InstitucionHospitalExport implements FromArray, WithHeadings, ShouldAutoSi
     {
         $solicitudes = NutricionalSolicitud::with([
             'billing',
-            'user.hospital',
+            'hospital',
             'solicitud_detail',
             'solicitud_patient',
             'input.input.nutritionMedicineCatalog',
             'input.presentation',
         ])
-            ->whereHas('user', function ($query) use ($hospitalIds) {
-                $query->whereIn('hospital_id', $hospitalIds);
-            })
+            ->whereIn('hospital_id', $hospitalIds)
             ->get();
 
         $rows = collect();
 
         foreach ($solicitudes as $solicitud) {
-            $hospital = $solicitud?->user?->hospital;
+            $hospital = $solicitud?->hospital;
             $billing = $solicitud->billing;
             $inputs = $solicitud->input ?? collect();
             $rowOrder = 1;

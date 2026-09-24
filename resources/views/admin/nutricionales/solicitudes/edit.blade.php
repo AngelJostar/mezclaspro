@@ -112,10 +112,11 @@
 @endphp
 
 <x-admin-layout>
+    @include('admin.solicitudes.quotations.request-reference')
     <div class="flex flex-col items-center">
         <div class="mt-2 mb-4 flex w-full flex-wrap items-center gap-4">
             <h1 data-workflow-heading class="mixture-workflow-heading">
-                {{ $isApprovalMode ? 'Aprobación' : 'Nutrición parenteral' }} | {{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->user?->hospital) }}
+                {{ $isApprovalMode ? 'Aprobación' : 'Nutrición parenteral' }} | {{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->hospital) }}
             </h1>
             <div data-workflow-approval-actions class="ml-auto flex flex-wrap items-center justify-end gap-3">
                 @if ($isApprovalMode && $isPendingApproval)
@@ -486,7 +487,7 @@
     @if ($isApprovalMode && $isPendingApproval)
         @include('admin.solicitudes._adjustment-proposal', [
             'proposalId' => $solicitud->id,
-            'proposalHospital' => $solicitud->user?->hospital?->name,
+            'proposalHospital' => $solicitud->hospital?->name,
             'proposalPatient' => trim($solicitud->solicitud_patient->nombre_paciente.' '.$solicitud->solicitud_patient->apellidos_paciente),
             'proposalService' => $solicitud->solicitud_patient->servicio,
             'proposalDoctor' => $solicitud->solicitud_detail->nombre_medico,

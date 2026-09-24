@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class NutriMedicineListItem extends Model
 {
+    protected $casts = ['is_active' => 'boolean'];
+
     protected $fillable = [
         'nutri_medicine_list_id',
         'nutrition_medicine_presentation_id',

@@ -26,10 +26,10 @@ class InstitutionDailyNutritionPatientReportService
                 'solicitud_patient',
                 'input.input.nutritionMedicineCatalog',
                 'input.presentation',
-                'user.hospital',
+                'hospital',
             ])
             ->whereIn('estado', ['entregada', 'finalizada'])
-            ->whereHas('user', fn ($query) => $query->where('hospital_id', $hospitalId))
+            ->where('hospital_id', $hospitalId)
             ->whereHas('solicitud_detail', function ($query) use ($rangeStart, $rangeEnd) {
                 $query->whereBetween('fecha_hora_entrega', [$rangeStart, $rangeEnd]);
             })

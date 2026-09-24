@@ -179,7 +179,7 @@ class TrainingPersonnelController extends Controller
                 Rule::unique('personnel_profiles', 'personal_email')->ignore($profile?->id)],
             'laboratory_id' => ['required', 'integer', Rule::exists('laboratories', 'id')
                 ->where(fn ($query) => $query->where('activo', true)->orWhere('id', $currentLaboratoryId))],
-            'department' => ['required', Rule::in(['Administracion', 'Almacen', 'Calidad', 'Operaciones', 'Produccion'])],
+            'department' => ['required', Rule::in(['Administracion', 'Almacen', 'Calidad', 'Operaciones', 'Produccion', 'Ventas'])],
             'hire_date' => ['required', 'date', 'before_or_equal:today'],
             'positions' => ['required', 'array', 'min:1'],
             'positions.*' => ['required', 'string', Rule::in(array_merge($this->jobNames(), $profile?->positions ?? []))],
@@ -240,6 +240,7 @@ class TrainingPersonnelController extends Controller
                 }
 
                 $personnel->personnelProfile()->save($profile);
+                $this->syncSalesRole($personnel, $positions);
             });
         } catch (\Throwable $exception) {
             if ($cvPath) {
@@ -294,6 +295,7 @@ class TrainingPersonnelController extends Controller
                 'Calidad',
                 'Operaciones',
                 'Produccion',
+                'Ventas',
             ])],
             'hire_date' => ['required', 'date', 'before_or_equal:today'],
             'employment_status' => ['required', Rule::in(['hired', 'inactive'])],
@@ -321,6 +323,11 @@ class TrainingPersonnelController extends Controller
             'laboratory_id.exists' => 'Selecciona una central activa.',
         ]);
 
+        if (in_array(PersonnelProfile::POSITION_SELLER, $validated['positions'], true)) {
+            abort_unless($request->user()->hasAnyRole(['Super Admin', 'Admin'])
+                || $request->user()->can('menu.capacitaciones.personal'), 403);
+        }
+
         $cvPath = $request->file('cv')?->store('personnel/cv', 'local');
 
         try {
@@ -346,6 +353,7 @@ class TrainingPersonnelController extends Controller
                     'guard_name' => 'web',
                 ]);
                 $user->syncRoles([$role]);
+                $this->syncSalesRole($user, $validated['positions']);
 
                 $user->personnelProfile()->create([
                     'laboratory_id' => $validated['laboratory_id'],
@@ -429,6 +437,18 @@ class TrainingPersonnelController extends Controller
             ->toString();
     }
 
+    private function syncSalesRole(User $user, array $positions): void
+    {
+        if (in_array(PersonnelProfile::POSITION_SELLER, $positions, true)) {
+            $user->assignRole(Role::findOrCreate(PersonnelProfile::POSITION_SELLER, 'web'));
+        } elseif ($user->hasRole(PersonnelProfile::POSITION_SELLER)) {
+            $user->removeRole(PersonnelProfile::POSITION_SELLER);
+            if ($user->roles()->doesntExist()) {
+                $user->assignRole(Role::findOrCreate('Capacitacion', 'web'));
+            }
+        }
+    }
+
     /**
      * @return array<string, array<int, string>>
      */
@@ -454,6 +474,7 @@ class TrainingPersonnelController extends Controller
                 PersonnelProfile::POSITION_COURIER,
                 'Capturista administrativo',
             ],
+            'Ventas' => [PersonnelProfile::POSITION_SELLER, PersonnelProfile::POSITION_SALES_SUPPORT],
         ];
     }
 

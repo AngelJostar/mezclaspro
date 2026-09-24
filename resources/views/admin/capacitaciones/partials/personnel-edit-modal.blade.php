@@ -61,7 +61,7 @@
                             <span>Departamento *</span>
                             <select name="department" required>
                                 <option value="">Selecciona un departamento</option>
-                                @foreach (['Administracion', 'Almacen', 'Calidad', 'Operaciones', 'Produccion'] as $department)
+                                @foreach (['Administracion', 'Almacen', 'Calidad', 'Operaciones', 'Produccion', 'Ventas'] as $department)
                                     <option value="{{ $department }}">{{ $department }}</option>
                                 @endforeach
                             </select>

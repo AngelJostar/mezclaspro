@@ -4,6 +4,8 @@
         \App\Support\AdminMenuAccess::allows($sidebarUser, $permission, $legacyAccess);
     $isRequestsSection = request()->routeIs('admin.solicitudes.*', 'admin.nutricionales.solicitudes.*', 'admin.oncologicos.solicitudes.*', 'admin.antibioticos.solicitudes.*', 'admin.oncologicos.mezclas.*');
     $isValidationsSection = request()->routeIs('admin.solicitudes.validaciones.*');
+    $isQuotationSection = request()->routeIs('admin.solicitudes.cotizacion.*');
+    $isPreparationSection = $isRequestsSection && !$isValidationsSection && !$isQuotationSection;
     $isAdministrationSection = request()->routeIs('admin.instituciones.reportes', 'admin.instituciones.billing.*');
     $canViewAdministrationReports = \App\Support\AdministrationNavigation::canViewReports($sidebarUser);
     $administrationBillingSections = \App\Support\AdministrationNavigation::billingSections($sidebarUser);
@@ -30,7 +32,7 @@
     <div class="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
         <ul class="space-y-2 font-medium">
 
-            @unless (auth()->user()?->hasRole('Capacitacion'))
+            @unless (auth()->user()?->hasRole('Capacitacion') && !$sidebarUser->isSalesperson())
             @unless (auth()->user()?->hasRole('Administracion y facturacion'))
 
             @if ($menuAllows('menu.solicitudes', $sidebarUser?->can('nutricionales_solicitudes_index') || $sidebarUser?->can('oncologicos_solicitudes_index')))
@@ -42,6 +44,7 @@
                             <span class="min-w-0 flex-1 text-left font-bold">Solicitudes</span>
                             <i data-request-navigation-icon="chevron-down" class="h-3 w-3 shrink-0 transition-transform"
                                 :class="openMenu === 'solicitudes' ? 'rotate-180' : ''" aria-hidden="true"></i>
+                            @unless ($sidebarUser->hasSalesOnlyAccess())
                             <span
                                 class="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border border-red-300 bg-red-100 px-0.5 font-bold leading-none text-red-700"
                                 style="font-size: 10px"
@@ -49,13 +52,23 @@
                                 aria-label="{{ $pendingSolicitudesCount }} solicitudes pendientes">
                                 {{ $pendingSolicitudesCount > 99 ? '99+' : $pendingSolicitudesCount }}
                             </span>
+                            @endunless
                     </button>
                     <ul id="solicitudes-submenu" x-cloak x-show="openMenu === 'solicitudes'" class="space-y-1 pt-1">
+                        @unless ($sidebarUser->hasSalesOnlyAccess())
                         <li>
                             <a href="{{ route('admin.solicitudes.index') }}" @click="open = false"
-                                @if ($isRequestsSection && !$isValidationsSection) aria-current="page" @endif
-                                class="block rounded-md px-2 py-2 text-sm {{ $isRequestsSection && !$isValidationsSection ? 'bg-blue-100 font-semibold text-blue-800' : 'text-gray-900 hover:bg-blue-100' }}">
-                                Listado
+                                @if ($isPreparationSection) aria-current="page" @endif
+                                class="block rounded-md px-2 py-2 text-sm {{ $isPreparationSection ? 'bg-blue-100 font-semibold text-blue-800' : 'text-gray-900 hover:bg-blue-100' }}">
+                                Preparacion
+                            </a>
+                        </li>
+                        @endunless
+                        <li>
+                            <a href="{{ route('admin.solicitudes.cotizacion.index') }}" @click="open = false"
+                                @if ($isQuotationSection) aria-current="page" @endif
+                                class="block rounded-md px-2 py-2 text-sm {{ $isQuotationSection ? 'bg-blue-100 font-semibold text-blue-800' : 'text-gray-900 hover:bg-blue-100' }}">
+                                Cotizacion
                             </a>
                         </li>
                     </ul>

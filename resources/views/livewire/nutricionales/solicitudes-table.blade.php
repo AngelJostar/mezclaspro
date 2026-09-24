@@ -43,18 +43,18 @@
                         }
                     @endphp
 
-                    <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->user?->hospital) }}">
+                    <tr class="border-b" data-mixture-context="{{ \App\Support\MixtureWorkflowContext::label($solicitud->id, $solicitud->hospital) }}">
                         <td class="px-2 py-2 text-center whitespace-nowrap">
                             @include('admin.solicitudes._type-badge', ['type' => 'nutricionales'])
                         </td>
 
                         <td class="px-2 py-2 text-center">{{ $solicitud->id }}</td>
 
-                        <td class="px-2 py-2 text-center">{{ $solicitud->id }}</td>
+                        <td class="px-2 py-2 text-center">{{ $solicitud->request_folio }}</td>
 
-                        @include('admin.solicitudes._institution-cell', ['institutionHospital' => $solicitud->user?->hospital])
+                        @include('admin.solicitudes._institution-cell', ['institutionHospital' => $solicitud->hospital])
                         <td class="px-2 py-2 text-center">
-                            {{ $solicitud->user->hospital->name ?? 'N/A' }}
+                            {{ $solicitud->hospital->name ?? 'N/A' }}
                         </td>
 
                         <td class="px-2 py-2 text-center">

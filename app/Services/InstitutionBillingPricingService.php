@@ -24,6 +24,9 @@ class InstitutionBillingPricingService
 
     public function priceOncoMix(Mezcla $mezcla): array
     {
+        if ($mezcla->quotation_pricing_snapshot) {
+            return app(QuotationPreparationPricing::class)->summary($mezcla->quotation_pricing_snapshot, $mezcla);
+        }
         $mezcla->loadMissing([
             'billing',
             'solicitud.hospital',
@@ -96,15 +99,18 @@ class InstitutionBillingPricingService
 
     public function priceNutritionRequest(NutricionalSolicitud $solicitud): array
     {
+        if ($solicitud->quotation_pricing_snapshot) {
+            return app(QuotationPreparationPricing::class)->summary($solicitud->quotation_pricing_snapshot);
+        }
         $solicitud->loadMissing([
             'billing',
-            'user.hospital',
+            'hospital',
             'solicitud_detail',
             'input.input.nutritionMedicineCatalog',
             'input.presentation',
         ]);
 
-        $medicineListId = (int) ($solicitud->user?->hospital?->nutri_medicine_list_id ?? 0);
+        $medicineListId = (int) ($solicitud->hospital?->nutri_medicine_list_id ?? 0);
         $medicationLines = collect();
         $supplyLines = collect();
         $serviceFromInputs = 0.0;

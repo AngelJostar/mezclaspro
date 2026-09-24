@@ -49,7 +49,7 @@ class SolicitudValidationController extends Controller
         $validations = collect();
         if ($canViewNutrition && in_array($selectedType, ['todas', 'nutricionales'], true)) {
             $query = NutritionSolicitud::query()
-                ->with(['user.hospital', 'solicitud_detail', 'solicitud_patient'])
+                ->with(['hospital', 'solicitud_detail', 'solicitud_patient'])
                 ->withExists('inspeccionNutricional')
                 ->whereIn('estado', self::REJECTED_STATES);
             if ($isHospitalView) {
@@ -61,7 +61,7 @@ class SolicitudValidationController extends Controller
                 return [
                     'type' => 'nutricionales', 'type_label' => 'Nutricional',
                     'id' => $solicitud->id, 'request_id' => $solicitud->id,
-                    'hospital' => $solicitud->user?->hospital?->name ?? 'Sin hospital',
+                    'hospital' => $solicitud->hospital?->name ?? 'Sin hospital',
                     'patient' => trim(($solicitud->solicitud_patient?->nombre_paciente ?? '').' '.($solicitud->solicitud_patient?->apellidos_paciente ?? '')) ?: 'Sin paciente',
                     'requested_at' => $solicitud->created_at,
                     'delivery_at' => filled($delivery) ? Carbon::parse($delivery) : null,

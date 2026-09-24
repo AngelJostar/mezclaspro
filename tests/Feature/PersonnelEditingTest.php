@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Oncologicos\Laboratory;
+use App\Models\PersonnelProfile;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -174,6 +175,92 @@ class PersonnelEditingTest extends TestCase
         $user->assignRole(Role::create(['name' => 'Cliente', 'guard_name' => 'web']));
         $this->getJson(route('admin.capacitaciones.personal.edit', $user))->assertNotFound();
         $this->patchJson(route('admin.capacitaciones.personal.update', $user), [])->assertNotFound();
+    }
+
+    public function test_sales_position_can_be_added_and_removed_without_changing_existing_roles_or_credentials(): void
+    {
+        $user = $this->createUser();
+        $user->assignRole(Role::findOrCreate('Capacitacion', 'web'));
+        $profile = $this->createProfile($user);
+        $credentials = $user->getRawOriginal('password');
+        $payload = $this->payload($profile->laboratory_id);
+        $payload['department'] = 'Ventas';
+        $payload['positions'] = ['Verificador', 'Vendedor'];
+        $this->patchJson(route('admin.capacitaciones.personal.update', $user), $payload)->assertOk();
+        $this->assertTrue($user->fresh()->hasSalesOnlyAccess());
+        $this->assertTrue($user->fresh()->hasRole('Capacitacion'));
+        $this->assertSame('Ventas', $profile->fresh()->department);
+        $this->assertContains('Vendedor', $profile->fresh()->positions);
+        $this->assertSame($credentials, $user->fresh()->getRawOriginal('password'));
+        $payload['positions'] = ['Verificador'];
+        $this->patchJson(route('admin.capacitaciones.personal.update', $user), $payload)->assertOk();
+        $this->assertFalse($user->fresh()->isSalesperson());
+        $this->assertTrue($user->fresh()->hasRole('Capacitacion'));
+    }
+
+    public function test_new_sales_personnel_receive_seller_access_and_admin_roles_are_preserved_on_edit(): void
+    {
+        $lab = Laboratory::create(['nombre' => 'Central ventas', 'activo' => true]);
+        $payload = $this->payload($lab->id);
+        $payload['department'] = 'Ventas';
+        $payload['positions'] = ['Vendedor'];
+        $payload += ['username' => 'vendedor.prueba', 'password' => 'test-password', 'employment_status' => 'hired'];
+        $this->post(route('admin.capacitaciones.personal.store'), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $user = User::where('username', 'vendedor.prueba')->firstOrFail();
+        $this->assertTrue($user->hasSalesOnlyAccess());
+        $this->assertTrue($user->is_active);
+        $this->assertSame(['Vendedor'], $user->personnelProfile->positions);
+        $user->assignRole(Role::findOrCreate('Admin', 'web'));
+        $this->patchJson(route('admin.capacitaciones.personal.update', $user), $payload)->assertOk();
+        $this->assertTrue($user->fresh()->hasRole('Admin'));
+        $this->assertFalse($user->fresh()->hasSalesOnlyAccess());
+    }
+
+    public function test_training_only_user_cannot_create_a_sales_account(): void
+    {
+        $user = $this->createUser();
+        $user->assignRole(Role::findOrCreate('Capacitacion', 'web'));
+        $lab = Laboratory::create(['nombre' => 'Central ventas', 'activo' => true]);
+        $payload = $this->payload($lab->id);
+        $payload['positions'] = ['Vendedor'];
+        $payload += ['username' => 'forged.seller', 'password' => 'test-password', 'employment_status' => 'hired'];
+        $this->actingAs($user)->postJson(route('admin.capacitaciones.personal.store'), $payload)->assertForbidden();
+        $this->assertNull(User::where('username', 'forged.seller')->first());
+    }
+
+    public function test_sales_support_is_available_in_the_shared_sales_catalog(): void
+    {
+        $view = app(\App\Http\Controllers\Admin\TrainingPersonnelController::class)
+            ->index(\Illuminate\Http\Request::create('/admin/capacitaciones/personal'));
+        $this->assertSame(['Vendedor', 'Soporte a ventas (Cotizaciones)'], $view->getData()['jobCatalog']['Ventas']);
+        foreach (['personnel-create-modal', 'personnel-edit-modal'] as $modal) {
+            $html = view('admin.capacitaciones.partials.'.$modal, $view->getData() + [
+                'errors' => new \Illuminate\Support\ViewErrorBag,
+            ])->render();
+            $this->assertStringContainsString('value="Soporte a ventas (Cotizaciones)"', $html);
+        }
+    }
+
+    public function test_sales_support_can_be_created_and_edited_without_granting_seller_access(): void
+    {
+        $lab = Laboratory::create(['nombre' => 'Central ventas', 'activo' => true]);
+        $payload = $this->payload($lab->id);
+        $payload['department'] = 'Ventas';
+        $payload['positions'] = [PersonnelProfile::POSITION_SALES_SUPPORT];
+        $payload += ['username' => 'soporte.ventas', 'password' => 'test-password', 'employment_status' => 'hired'];
+        $this->post(route('admin.capacitaciones.personal.store'), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $user = User::where('username', 'soporte.ventas')->firstOrFail();
+        $this->assertSame([PersonnelProfile::POSITION_SALES_SUPPORT], $user->personnelProfile->positions);
+        $this->assertFalse($user->isSalesperson());
+        $this->assertSame(['Capacitacion'], $user->getRoleNames()->all());
+
+        $payload['positions'][] = 'Verificador';
+        $this->patchJson(route('admin.capacitaciones.personal.update', $user), $payload)->assertOk();
+        $this->getJson(route('admin.capacitaciones.personal.edit', $user))->assertOk()
+            ->assertJsonPath('fields.positions.0', PersonnelProfile::POSITION_SALES_SUPPORT)
+            ->assertJsonPath('fields.positions.1', 'Verificador');
+        $this->assertFalse($user->fresh()->isSalesperson());
+        $this->assertSame(['Capacitacion'], $user->fresh()->getRoleNames()->all());
     }
 
     private function createUser(): User

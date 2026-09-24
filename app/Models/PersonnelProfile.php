@@ -8,6 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PersonnelProfile extends Model
 {
+    public const POSITION_SELLER = 'Vendedor';
+
+    public const POSITION_SALES_SUPPORT = 'Soporte a ventas (Cotizaciones)';
+
     public const POSITION_COURIER = 'Mensajero de red fria';
 
     protected $fillable = [

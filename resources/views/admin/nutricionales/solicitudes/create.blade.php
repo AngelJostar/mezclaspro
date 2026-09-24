@@ -4,7 +4,7 @@
         <div class="mt-2 mb-4 flex w-full items-start justify-between gap-4">
             <span class="h-10 w-10 shrink-0" aria-hidden="true"></span>
             <h1 class="flex-1 text-center text-2xl font-medium text-gray-800">SOLICITUD DE NUTRICIÓN PARENTERAL</h1>
-            <a href="{{ route('admin.nutricionales.solicitudes.index') }}"
+            <a href="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.index') : route('admin.nutricionales.solicitudes.index') }}"
                 class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                 title="Cerrar formato de solicitud"
                 aria-label="Cerrar formato de solicitud">
@@ -22,9 +22,13 @@
             </div>
         @endif
 
-        <form action="{{ route('admin.nutricionales.solicitudes.store') }}" method="POST"
+        <form action="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.prepare', $preparationQuotation) : route('admin.nutricionales.solicitudes.store') }}" method="POST"
+            @if (isset($preparationQuotation)) data-quotation-preparation @endif
             class="bg-white rounded-lg p-6 shadow-lg">
             @csrf
+            @isset($preparationQuotation)
+                @include('admin.solicitudes.quotations.preparation-summary')
+            @endisset
 
             <div class="flex gap-4">
                 <div class="mb-4 flex items-baseline gap-2 w-full">
@@ -234,6 +238,9 @@
                 </div>
             </div>
 
+            @if (isset($preparationQuotation))
+                @include('admin.solicitudes.quotations.preparation-fields')
+            @else
             <h2 class="mb-4">MACRONUTRIENTES:</h2>
             <hr>
 
@@ -320,6 +327,7 @@
                 </div>
             </div>
 
+            @endif
             <div class="mb-4">
                 <x-label class="mb-2 font-bold">
                     OBSERVACIONES
@@ -493,4 +501,7 @@
             });
         </script>
     @endpush
+    @isset($preparationQuotation)
+        @include('admin.solicitudes.quotations.preparation-script')
+    @endisset
 </x-admin-layout>

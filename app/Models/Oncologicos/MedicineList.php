@@ -90,6 +90,7 @@ class MedicineList extends Model
             'medicine_list_id',
             'medicine_presentation_id'
         )->withPivot([
+            'is_active',
             'charge_by',
             'precio',
             'precio_mg_override',

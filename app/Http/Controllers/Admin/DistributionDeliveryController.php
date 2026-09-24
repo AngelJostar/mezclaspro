@@ -438,7 +438,7 @@ class DistributionDeliveryController extends Controller
             )
             ->with([
                 'user:id,hospital_id',
-                'user.hospital:id,name,laboratory_id',
+                'hospital:id,name,laboratory_id',
                 'solicitud_detail:id,fecha_hora_entrega',
                 'solicitud_patient:id,nombre_paciente,apellidos_paciente,servicio',
             ])
@@ -458,9 +458,9 @@ class DistributionDeliveryController extends Controller
                     'delivery_date' => $deliveryAt->toDateString(),
                     'time' => $deliveryAt->format('H:i'),
                     'status' => Str::headline($request->estado),
-                    'hospital_id' => $request->user?->hospital_id,
-                    'laboratory_id' => $request->user?->hospital?->laboratory_id,
-                    'hospital' => $request->user?->hospital?->name ?? 'Sin hospital',
+                    'hospital_id' => $request->hospital_id,
+                    'laboratory_id' => $request->hospital?->laboratory_id,
+                    'hospital' => $request->hospital?->name ?? 'Sin hospital',
                     'url' => route('admin.nutricionales.solicitudes.edit', $request),
                 ];
             });

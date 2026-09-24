@@ -3,10 +3,14 @@
     $canViewNutrition = $canViewNutrition ?? auth()->user()?->can('nutricionales_solicitudes_index');
     $canViewOncology = $canViewOncology ?? auth()->user()?->can('oncologicos_solicitudes_index');
     $selectorId = 'request-type-selector-' . $selectedType;
-    $activeStatus = App\Support\SolicitudStatusFilter::normalize(request()->query('estado'));
-    $typeQuery = $activeStatus === App\Support\SolicitudStatusFilter::ALL
-        ? []
-        : ['estado' => $activeStatus];
+    if (isset($typeSelectorQuery)) {
+        $typeQuery = $typeSelectorQuery;
+    } else {
+        $activeStatus = App\Support\SolicitudStatusFilter::normalize(request()->query('estado'));
+        $typeQuery = $activeStatus === App\Support\SolicitudStatusFilter::ALL
+            ? []
+            : ['estado' => $activeStatus];
+    }
     $requestTypes = collect([
         [
             'key' => 'todas',
@@ -22,7 +26,7 @@
         ],
         [
             'key' => 'oncologicos',
-            'label' => 'Oncologicas',
+            'label' => $typeSelectorLabels['oncologicos'] ?? 'Oncologicas',
             'route' => route('admin.oncologicos.solicitudes.index', $typeQuery),
             'visible' => $canViewOncology,
         ],
@@ -41,7 +45,7 @@
     }
 @endphp
 
-<nav class="mt-4 flex max-w-4xl items-center gap-2" aria-label="Tipo de solicitudes" data-request-type-selector>
+<nav class="mt-4 flex max-w-4xl items-center gap-2" aria-label="{{ $typeSelectorLabel ?? 'Tipo de solicitudes' }}" data-request-type-selector>
     <button type="button"
         onclick="document.getElementById('{{ $selectorId }}').scrollBy({ left: -240, behavior: 'smooth' })"
         class="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-blue-900 shadow-sm transition hover:bg-gray-50"
