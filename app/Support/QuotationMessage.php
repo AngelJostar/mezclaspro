@@ -22,6 +22,9 @@ class QuotationMessage
         foreach ($quotation->pricing_snapshot['lines'] ?? [] as $index => $item) {
             $lines[] = '';
             $lines[] = ($index + 1).'. '.trim(($item['description'] ?? '').' '.($item['presentation'] ?? ''));
+            if (isset($item['concentration'], $item['concentration_unit'])) {
+                $lines[] = 'Concentracion solicitada: '.$item['concentration'].' '.($item['concentration_unit'] === 'ml' ? 'mL' : 'mg');
+            }
             $lines[] = 'Cantidad: '.($item['quantity'] ?? '').' '.($item['unit'] ?? '').' | Mezclas: '.($item['mixtures'] ?? 1);
             $lines[] = 'Precio unitario: '.(isset($item['unit_price']) ? '$'.number_format((float) $item['unit_price'], 4).' MXN' : 'Sin registrar');
             $lines[] = 'IVA: '.$money($item['vat'] ?? null).' | Importe: '.$money($item['total'] ?? null);

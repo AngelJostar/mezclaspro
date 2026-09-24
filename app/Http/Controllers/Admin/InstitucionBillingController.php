@@ -522,20 +522,20 @@ class InstitucionBillingController extends Controller
     {
         return NutricionalSolicitud::query()
             ->with([
-                'user.hospital.instituciones',
+                'hospital.instituciones',
                 'solicitud_patient',
                 'solicitud_detail',
                 'input.input.nutritionMedicineCatalog',
                 'input.presentation',
                 'billing',
             ])
-            ->whereHas('user.hospital.instituciones', function ($query) use ($institucionId) {
+            ->whereHas('hospital.instituciones', function ($query) use ($institucionId) {
                 if ($institucionId) {
                     $query->where('clientes.id', $institucionId);
                 }
             })
             ->when($hospitalId, function ($query) use ($hospitalId) {
-                $query->whereHas('user.hospital', function ($subquery) use ($hospitalId) {
+                $query->whereHas('hospital', function ($subquery) use ($hospitalId) {
                     $subquery->where('hospitals.id', $hospitalId);
                 });
             })
@@ -648,7 +648,7 @@ class InstitucionBillingController extends Controller
             $viewLabel = 'Ver mezcla';
             $pricing = $this->pricing->priceOncoMix($record);
         } else {
-            $hospital = $record->user?->hospital;
+            $hospital = $record->hospital;
             $institucionActual = $institucionId
                 ? $hospital?->instituciones?->firstWhere('id', (int) $institucionId)
                 : $hospital?->instituciones?->first();

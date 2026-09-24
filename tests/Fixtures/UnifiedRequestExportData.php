@@ -23,7 +23,7 @@ class UnifiedRequestExportData
         DB::table('hospitals')->insert(['id' => 2, 'name' => 'Hospital ajeno']);
 
         foreach ([
-            'solicituds' => ['user_id', 'solicitud_patient_id', 'solicitud_detail_id', 'estado', 'lote', 'remision'],
+            'solicituds' => ['user_id', 'hospital_id', 'request_quotation_id', 'solicitud_patient_id', 'solicitud_detail_id', 'estado', 'lote', 'remision'],
             'solicitud_patients' => ['nombre_paciente', 'apellidos_paciente'],
             'solicitud_details' => ['fecha_hora_entrega'],
             'distribution_delivery_schedules' => ['hospital_id', 'scheduled_date', 'status'],
@@ -44,7 +44,7 @@ class UnifiedRequestExportData
         foreach ([1, 2] as $id) {
             DB::table('solicitud_patients')->insert(['id' => $id, 'nombre_paciente' => 'Paciente '.$id, 'apellidos_paciente' => 'Nutricion']);
             DB::table('solicitud_details')->insert(['id' => $id, 'fecha_hora_entrega' => '2026-09-09 15:00:00']);
-            DB::table('solicituds')->insert(['id' => 10 + $id, 'user_id' => $id, 'solicitud_patient_id' => $id,
+            DB::table('solicituds')->insert(['id' => 10 + $id, 'user_id' => $id, 'hospital_id' => $id, 'solicitud_patient_id' => $id,
                 'solicitud_detail_id' => $id, 'estado' => 'aprobada', 'lote' => '00042', 'created_at' => '2026-09-08 09:30:00']);
         }
         foreach ([

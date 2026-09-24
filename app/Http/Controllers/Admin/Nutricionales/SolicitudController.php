@@ -113,13 +113,13 @@ class SolicitudController extends Controller
         $role = $user->roles[0]->name;
         if ($role === 'Admin' or $role === 'Super Admin') {
             // Si el usuario es un administrador, cargar todas las solicitudes
-            $solicitudes = Solicitud::with('user', 'solicitud_detail', 'solicitud_patient', 'input', 'user.hospital')
+            $solicitudes = Solicitud::with('user', 'solicitud_detail', 'solicitud_patient', 'input', 'hospital')
                 ->latest()
                 ->paginate(30);
         } elseif (in_array($role, ['Cliente', 'Institucion'], true)) {
             // Si el usuario es un cliente, cargar solo sus propias solicitudes
-            $solicitudes = Solicitud::where('user_id', $user->id)
-                ->with('user', 'solicitud_detail', 'solicitud_patient', 'input', 'user.hospital')
+            $solicitudes = Solicitud::forRequestUser($user)
+                ->with('user', 'solicitud_detail', 'solicitud_patient', 'input', 'hospital')
                 ->latest()
                 ->paginate(10);
             //return $solicitudes;
@@ -128,11 +128,11 @@ class SolicitudController extends Controller
         $pendingApprovalCountQuery = Solicitud::query();
 
         if (in_array($role, ['Cliente', 'Institucion'], true)) {
-            $pendingApprovalCountQuery->where('user_id', $user->id);
+            $pendingApprovalCountQuery->forRequestUser($user);
         }
 
         $adjustmentPendingCount = Solicitud::query()
-            ->when($user->hasAnyRole(['Cliente', 'Institucion']), fn ($query) => $query->where('user_id', $user->id))
+            ->when($user->hasAnyRole(['Cliente', 'Institucion']), fn ($query) => $query->forRequestUser($user))
             ->where(fn ($query) => $query->whereNull('estado')->orWhereIn('estado', ['pendiente', '']))
             ->whereHas('adjustment', fn ($adjustment) => $adjustment
                 ->whereIn('status', MixtureAdjustment::AWAITING_APPROVAL_STATUSES))
@@ -154,7 +154,7 @@ class SolicitudController extends Controller
                 'solicituds.solicitud_detail_id'
             )
             ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
-                $join->on('request_delivery_schedules.hospital_id', '=', 'request_delivery_users.hospital_id')
+                $join->on('request_delivery_schedules.hospital_id', '=', DB::raw('COALESCE(solicituds.hospital_id, request_delivery_users.hospital_id)'))
                     ->where('request_delivery_schedules.status', 'sent')
                     ->whereRaw(
                         'DATE(request_delivery_schedules.scheduled_date) = DATE(request_delivery_details.fecha_hora_entrega)'
@@ -164,7 +164,7 @@ class SolicitudController extends Controller
             ->whereNull('request_delivery_schedules.id');
 
         if (in_array($role, ['Cliente', 'Institucion'], true)) {
-            $routePendingCountQuery->where('solicituds.user_id', $user->id);
+            $routePendingCountQuery->forRequestUser($user);
         }
 
         $routePendingCount = $routePendingCountQuery->count();
@@ -177,7 +177,7 @@ class SolicitudController extends Controller
                 'solicituds.solicitud_detail_id'
             )
             ->leftJoin('distribution_delivery_schedules as request_delivery_schedules', function ($join) {
-                $join->on('request_delivery_schedules.hospital_id', '=', 'request_delivery_users.hospital_id')
+                $join->on('request_delivery_schedules.hospital_id', '=', DB::raw('COALESCE(solicituds.hospital_id, request_delivery_users.hospital_id)'))
                     ->where('request_delivery_schedules.status', 'sent')
                     ->whereRaw(
                         'DATE(request_delivery_schedules.scheduled_date) = DATE(request_delivery_details.fecha_hora_entrega)'
@@ -187,7 +187,7 @@ class SolicitudController extends Controller
             ->whereNotNull('request_delivery_schedules.id');
 
         if (in_array($role, ['Cliente', 'Institucion'], true)) {
-            $deliveryPendingCountQuery->where('solicituds.user_id', $user->id);
+            $deliveryPendingCountQuery->forRequestUser($user);
         }
 
         $deliveryPendingCount = $deliveryPendingCountQuery->distinct('solicituds.id')->count('solicituds.id');
@@ -331,7 +331,7 @@ class SolicitudController extends Controller
             ->unique()
             ->values();
 
-        $hospital = $solicitud->user?->hospital;
+        $hospital = $solicitud->hospital;
         $laboratoryId = $hospital?->laboratory_id;
         $defaultWarehouseName = $laboratoryId
             ? Warehouse::where('laboratory_id', $laboratoryId)
@@ -502,7 +502,7 @@ class SolicitudController extends Controller
 
         try {
 
-            $solicitud->loadMissing('user.hospital');
+            $solicitud->loadMissing('hospital');
 
             if (
                 $solicitud->estado === 'aprobada' ||
@@ -654,8 +654,13 @@ class SolicitudController extends Controller
             ]);
         }
     }
-    public function create()
+    public function create(Request $request)
     {
+        if ($request->attributes->get('preparationQuotation')) {
+            return view('admin.nutricionales.solicitudes.create', [
+                'inputs' => collect(), 'presentationsByInput' => collect(), 'activeSelections' => collect(),
+            ]);
+        }
         $user = Auth::user();
         $user->loadMissing('hospital');
 
@@ -771,6 +776,7 @@ class SolicitudController extends Controller
 
     public function store(Request $request)
     {
+        $quotation = $request->attributes->get('preparationQuotation');
         $dynamicRules = [];
         $inputQuantities = [];
 
@@ -832,7 +838,7 @@ class SolicitudController extends Controller
 
         $user = Auth::user();
         $user?->loadMissing('hospital');
-        $hospital = $user?->hospital;
+        $hospital = $quotation?->hospital ?? $user?->hospital;
 
         if (!$hospital) {
             return redirect()->back()->withErrors([
@@ -840,7 +846,7 @@ class SolicitudController extends Controller
             ])->withInput();
         }
 
-        if (!$hospital->nutri_medicine_list_id) {
+        if (!$quotation && !$hospital->nutri_medicine_list_id) {
             return redirect()->back()->withErrors([
                 'store' => 'Tu hospital no tiene lista nutricional asignada.',
             ])->withInput();
@@ -852,15 +858,17 @@ class SolicitudController extends Controller
             ])->withInput();
         }
 
-        $submissionFingerprint = hash('sha256', json_encode([
+        if (! $quotation) {
+            $submissionFingerprint = hash('sha256', json_encode([
             'user_id' => $user->id,
             'payload' => $request->except(['_token']),
-        ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION));
+            ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION));
 
-        if (!Cache::add('nutrition-request-submission:'.$submissionFingerprint, true, now()->addSeconds(15))) {
-            return redirect()->back()->withErrors([
+            if (!Cache::add('nutrition-request-submission:'.$submissionFingerprint, true, now()->addSeconds(15))) {
+                return redirect()->back()->withErrors([
                 'store' => 'Esta solicitud ya está siendo procesada. Evita enviarla nuevamente.',
-            ])->withInput();
+                ])->withInput();
+            }
         }
 
         DB::beginTransaction();
@@ -903,11 +911,18 @@ class SolicitudController extends Controller
 
             $solicitud = [];
             $solicitud['user_id'] = $user->id;
+            $solicitud['hospital_id'] = $hospital->id;
+            if ($quotation) $solicitud['estado'] = 'pendiente';
             $solicitud['solicitud_detail_id'] = $solicitud_detalles_resp->id;
             $solicitud['solicitud_patient_id'] = $solicitud_paciente_resp->id;
 
             $solicitud_nueva = Solicitud::create($solicitud);
 
+            if ($quotation) {
+                app(\App\Services\QuotationPreparationService::class)->attachNutrition($quotation, $solicitud_nueva, $request);
+                DB::commit();
+                return redirect()->route('admin.solicitudes.index');
+            }
             $registro = SolicitudDetail::find($solicitud_detalles_resp->id);
             $suma_volumen_ml = 0.0;
 
@@ -1110,11 +1125,11 @@ class SolicitudController extends Controller
             $registro->save();
 
             $solicitudes = Solicitud::where('user_id', $user->id)
-                ->with('user', 'user.hospital')
+                ->with('user', 'hospital')
                 ->latest()
                 ->first();
 
-            $nombreHospital = $solicitudes?->user?->hospital?->name ?? 'Sin hospital asignado';
+            $nombreHospital = $solicitudes?->hospital?->name ?? 'Sin hospital asignado';
 
             $message = Message::create([
                 'sender_id' => auth()->id(),
@@ -1158,6 +1173,7 @@ class SolicitudController extends Controller
     public function edit(Solicitud $solicitud)
     {
         $user = Auth::user();
+        abort_if($user->hasAnyRole(['Cliente', 'Institucion']) && (int) $user->hospital_id !== (int) $solicitud->hospital_id, 403);
         $role = $user->roles[0]->name ?? null;
 
         if ($solicitud->estado !== 'pendiente' && !in_array($role, ['Admin', 'Super Admin'])) {
@@ -1165,7 +1181,7 @@ class SolicitudController extends Controller
         }
 
         $solicitud = Solicitud::with([
-            'user.hospital.instituciones',
+            'hospital.instituciones',
             'solicitud_detail',
             'solicitud_patient',
             'input',
@@ -1173,7 +1189,7 @@ class SolicitudController extends Controller
 
         $inputs_solicitud = SolicitudInput::where('solicitud_id', $solicitud->id)->get();
 
-        $hospital = $solicitud->user?->hospital;
+        $hospital = $solicitud->preparationHospital();
 
         if (!$hospital) {
             return redirect()->route('admin.nutricionales.solicitudes.index')
@@ -1376,6 +1392,8 @@ class SolicitudController extends Controller
 
     public function update(Request $request, Solicitud $solicitud)
     {
+        abort_if($request->user()->hasAnyRole(['Cliente', 'Institucion'])
+            && (int) $request->user()->hospital_id !== (int) $solicitud->hospital_id, 403);
         $adjustments = app(\App\Services\MixtureAdjustmentService::class);
         if (in_array($request->input('accion'), ['aprobar', 'rechazar', 'ajustar'], true)) {
             $adjustments->assertCentral($request->user(), $solicitud);
@@ -1461,8 +1479,8 @@ class SolicitudController extends Controller
                 'hospital_destino' => 'nullable|string|max:255',
             ]);
 
-            $solicitud->loadMissing('user.hospital');
-            $hospital = $solicitud->user?->hospital;
+            $solicitud->loadMissing('hospital');
+            $hospital = $solicitud->preparationHospital();
 
             if (!$hospital) {
                 throw new \Exception('La solicitud no tiene hospital asociado.');
@@ -2256,7 +2274,7 @@ class SolicitudController extends Controller
             'solicitud_detail',
             'solicitud_patient',
             'input',
-            'user.hospital'
+            'hospital'
         )->findOrFail($solicitud->id);
 
         $inputs = Input::join('categories', 'inputs.category_id', '=', 'categories.id')
@@ -2339,7 +2357,7 @@ class SolicitudController extends Controller
         // return $arreglo_resultado;
         //print_r($inputs_solicitud);
         //return $inputs_solicitud;
-        $solicitud_detalles = Solicitud::with('user', 'solicitud_detail', 'solicitud_patient', 'input', 'user.hospital')
+        $solicitud_detalles = Solicitud::with('user', 'solicitud_detail', 'solicitud_patient', 'input', 'hospital')
             ->find($solicitud->id);
         $set_infusion = SolicitudInput::where('solicitud_id', $solicitud['id'])
             ->where('input_id', 40) // Filtrar por input_id igual a 40
@@ -2356,8 +2374,8 @@ class SolicitudController extends Controller
     public function ordenPreparacion(Solicitud $solicitud, bool $soloInspeccion = false)
     {
 
-        $solicitud->load('user.hospital.nutriMedicineList', 'inspeccionNutricional');
-        $hospital = $solicitud->user?->hospital;
+        $solicitud->load('hospital.nutriMedicineList', 'inspeccionNutricional');
+        $hospital = $solicitud->hospital;
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
         $inspectionWorkflow = $solicitud->inspeccionNutricional;
         $inspeccion = $inspectionWorkflow;
@@ -2382,13 +2400,13 @@ class SolicitudController extends Controller
             ->whereNotIn('input_id', [40])
             ->with([
                 'input.nutritionMedicineCatalog.presentations.stocks' => function ($query) use ($solicitud) {
-                    $query->where('laboratory_id', $solicitud->user->hospital->laboratory_id)
+                    $query->where('laboratory_id', $solicitud->hospital->laboratory_id)
                         ->where('is_active', 1)
                         ->orderBy('caducidad')
                         ->orderBy('id');
                 },
                 'presentation.stocks' => function ($query) use ($solicitud) {
-                    $query->where('laboratory_id', $solicitud->user->hospital->laboratory_id)
+                    $query->where('laboratory_id', $solicitud->hospital->laboratory_id)
                         ->where('is_active', 1)
                         ->orderBy('caducidad')
                         ->orderBy('id');
@@ -2400,7 +2418,7 @@ class SolicitudController extends Controller
         $inputs_solicitud = \App\Support\NutritionAdditionOrder::sort($inputs_solicitud);
 
         $solicitud_detalles = Solicitud::with([
-            'user.hospital',
+            'hospital',
             'solicitud_detail',
             'solicitud_patient',
             'input.input.nutritionMedicineCatalog.presentations',
@@ -2499,9 +2517,9 @@ class SolicitudController extends Controller
 
     public function remision(Solicitud $solicitud, InstitutionBillingPricingService $pricing)
     {
-        $solicitud->load('user.hospital.nutriMedicineList.distributor');
+        $solicitud->load('hospital.nutriMedicineList.distributor');
 
-        $hospital = $solicitud->user?->hospital;
+        $hospital = $solicitud->hospital;
         $nutriMedicineListId = $hospital?->nutri_medicine_list_id;
         $priceList = $hospital?->nutriMedicineList;
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
@@ -2534,7 +2552,7 @@ class SolicitudController extends Controller
             ->get();
 
         $solicitud_detalles = Solicitud::with([
-            'user.hospital',
+            'hospital',
             'solicitud_detail',
             'solicitud_patient',
 
@@ -2628,9 +2646,9 @@ class SolicitudController extends Controller
 
     public function envio(Solicitud $solicitud)
     {
-        $solicitud->load('user.hospital.nutriMedicineList');
+        $solicitud->load('hospital.nutriMedicineList');
 
-        $hospital = $solicitud->user?->hospital;
+        $hospital = $solicitud->hospital;
         $nutriMedicineListId = $hospital?->nutri_medicine_list_id;
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
 
@@ -2661,7 +2679,7 @@ class SolicitudController extends Controller
             ->get();
 
         $solicitud_detalles = Solicitud::with([
-            'user.hospital',
+            'hospital',
             'solicitud_detail',
             'solicitud_patient',
 
@@ -2759,7 +2777,7 @@ class SolicitudController extends Controller
             ->get();
 
         $solicitud_detalles = Solicitud::with([
-            'user.hospital',
+            'hospital',
             'solicitud_detail',
             'solicitud_patient'
         ])->findOrFail($solicitud->id);

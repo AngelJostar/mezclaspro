@@ -25,7 +25,7 @@ class SolicitudesExport implements FromQuery, WithMapping, WithHeadings, WithChu
     public function query()
     {
         $query = Solicitud::with([
-            'user.hospital',
+            'hospital',
             'solicitud_patient',
             'solicitud_detail',
             'input',
@@ -48,7 +48,7 @@ class SolicitudesExport implements FromQuery, WithMapping, WithHeadings, WithChu
             $s->id,
             $s->remision ?? '',
             $s->lote ?? '',
-            $s->user->hospital->name ?? '',
+            $s->hospital->name ?? '',
             trim(($s->solicitud_patient->nombre_paciente ?? '') . ' ' . ($s->solicitud_patient->apellidos_paciente ?? '')),
             $s->solicitud_patient->servicio ?? '',
             $s->solicitud_patient->registro ?? '',

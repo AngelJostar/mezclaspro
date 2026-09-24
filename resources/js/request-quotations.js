@@ -1,9 +1,10 @@
-import { createIcons, Plus, FileSpreadsheet, X, Trash2, FileText, UserRound, Table2, Droplets, Stethoscope, Upload, CalendarDays, Send, Mail, MessageCircle } from 'lucide';
+import { createIcons, Plus, FileSpreadsheet, X, Trash2, FileText, UserRound, Table2, Droplets, Stethoscope, Upload, CalendarDays, Send, Mail, MessageCircle, Download, RotateCw } from 'lucide';
 import '../css/request-quotations.css';
 import './quotation-send';
+import './quotation-commercial';
 
 function initQuotations() {
-    const icons = () => createIcons({ icons: { Plus, FileSpreadsheet, X, Trash2, FileText, UserRound, Table2, Droplets, Stethoscope, Upload, CalendarDays, Send, Mail, MessageCircle }, nameAttr: 'data-quotation-icon' });
+    const icons = () => createIcons({ icons: { Plus, FileSpreadsheet, X, Trash2, FileText, UserRound, Table2, Droplets, Stethoscope, Upload, CalendarDays, Send, Mail, MessageCircle, Download, RotateCw }, nameAttr: 'data-quotation-icon' });
     icons();
     const dialog = document.querySelector('[data-quotation-dialog]');
     if (!dialog || dialog.dataset.initialized) return;
@@ -347,8 +348,7 @@ function initQuotations() {
         if (!dialog.open) dialog.showModal();
         return openVersion;
     }
-    document.querySelector('[data-quotation-new]')?.addEventListener('click', () => { reset(); loadCatalog(); });
-    document.querySelectorAll('[data-quotation-edit]').forEach(button => button.addEventListener('click', async () => {
+    document.querySelectorAll('[data-quotation-edit]:not([data-quotation-flow="commercial"])').forEach(button => button.addEventListener('click', async () => {
         const version = reset();
         loading = true; buttons(); find('[data-quotation-capture-fields]').disabled = true;
         try {

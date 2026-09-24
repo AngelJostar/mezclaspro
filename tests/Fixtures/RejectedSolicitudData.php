@@ -43,6 +43,8 @@ final class RejectedSolicitudData
         });
         Schema::create('solicituds', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('hospital_id')->nullable();
+            $table->unsignedBigInteger('request_quotation_id')->nullable();
             $table->unsignedBigInteger('user_id');
             $table->unsignedBigInteger('solicitud_patient_id')->nullable();
             $table->unsignedBigInteger('solicitud_detail_id')->nullable();

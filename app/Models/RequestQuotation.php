@@ -29,9 +29,10 @@ class RequestQuotation extends Model
 
     public static function canCreate(User $user, string $category): bool
     {
-        return in_array($category, ['oncologicos', 'nutricionales'], true)
-            && ($user->isSalesperson() || ($user->can($category.'_solicitudes_index')
-                && $user->can($category.'_solicitudes_create')));
+        $permissionType = $category === 'antibioticos' ? 'oncologicos' : $category;
+        return in_array($category, ['oncologicos', 'nutricionales', 'antibioticos'], true)
+            && ($user->isSalesperson() || ($user->can($permissionType.'_solicitudes_index')
+                && $user->can($permissionType.'_solicitudes_create')));
     }
 
     public function canBeViewedBy(User $user): bool
@@ -50,6 +51,13 @@ class RequestQuotation extends Model
         return $this->status === 'borrador' && $this->canBeViewedBy($user)
             && static::canCreate($user, $this->category)
             && ((int) $this->created_by === (int) $user->id || !$user->hasAnyRole(['Cliente', 'Institucion']));
+    }
+
+    public function canPrepareBy(User $user): bool
+    {
+        $type = $this->category === 'nutricionales' ? 'nutricionales' : 'oncologicos';
+        return $this->canBeViewedBy($user) && $user->can($type.'_solicitudes_create')
+            && $user->can($type.'_solicitudes_store');
     }
 
     public function hospital(): BelongsTo

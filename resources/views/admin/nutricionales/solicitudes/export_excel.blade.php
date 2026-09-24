@@ -67,7 +67,7 @@
                 <td class="px-6 py-4">
                     {{ $solicitud->lote ?? '' }}
                 </td>
-                <td>{{ $solicitud->user->hospital->name ?? '' }}</td>
+                <td>{{ $solicitud->hospital->name ?? '' }}</td>
                 <td>{{ $solicitud->solicitud_patient->nombre_paciente ?? '' }}
                     {{ $solicitud->solicitud_patient->apellidos_paciente ?? '' }}</td>
                 <td>{{ $solicitud->solicitud_patient->servicio ?? '' }}</td>

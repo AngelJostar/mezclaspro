@@ -22,9 +22,12 @@
             <label class="quotation-field">Mensaje (opcional)
                 <textarea name="note" rows="3" maxlength="2000"></textarea>
             </label>
-            <label class="quotation-field">Cotizacion
-                <textarea data-send-summary rows="9" readonly></textarea>
-            </label>
+            <div class="quotation-send-attachment">
+                <i data-quotation-icon="file-text" aria-hidden="true"></i>
+                <div><strong data-send-filename></strong><span data-send-file-status>Documento PDF</span></div>
+                <button type="button" class="quotation-icon-button" data-send-retry hidden title="Reintentar PDF" aria-label="Reintentar PDF"><i data-quotation-icon="rotate-cw" aria-hidden="true"></i></button>
+                <a class="quotation-icon-button" data-send-download title="Descargar PDF" aria-label="Descargar PDF"><i data-quotation-icon="download" aria-hidden="true"></i></a>
+            </div>
             <p role="alert" tabindex="-1" data-send-error hidden></p>
             <p role="status" data-send-status hidden></p>
         </div>

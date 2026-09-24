@@ -46,13 +46,16 @@ class RequestQuotationEmailTest extends TestCase
             $this->assertTrue($mail->hasTo('destino@example.test'));
             $this->assertStringContainsString('Buenos dias.', $mail->contentText);
             $this->assertStringContainsString('COT-000001', $mail->contentText);
-            $this->assertStringContainsString('Producto de prueba Frasco', $mail->contentText);
-            $this->assertStringContainsString('$25.1250 MXN', $mail->contentText);
-            $this->assertStringContainsString('Total: $100.50 MXN', $mail->contentText);
+            $this->assertStringContainsString('en formato PDF', $mail->contentText);
             foreach (['Paciente de prueba', 'Dato clinico privado', 'CEDULA-PRIVADA', 'signature.pdf', 'Importe falsificado'] as $private) {
                 $this->assertStringNotContainsString($private, $mail->contentText);
             }
-            $this->assertSame([], $mail->attachments);
+            $this->assertSame([], $mail->attachments, 'No private signatures or filesystem attachments');
+            $this->assertCount(1, $mail->rawAttachments);
+            $attachment = $mail->rawAttachments[0];
+            $this->assertSame('COT-000001.pdf', $attachment['name']);
+            $this->assertSame('application/pdf', $attachment['options']['mime']);
+            $this->assertStringStartsWith('%PDF-', $attachment['data']);
             return true;
         });
         Mail::assertSentCount(1);
@@ -121,7 +124,7 @@ class RequestQuotationEmailTest extends TestCase
         $this->assertSame($before, RequestQuotation::findOrFail(1)->getAttributes());
     }
 
-    public function test_send_dialog_and_summary_exist_even_without_capture_permission(): void
+    public function test_send_dialog_and_pdf_exist_even_without_capture_permission(): void
     {
         $response = $this->get(route('admin.solicitudes.cotizacion.index'))->assertOk()
             ->assertSee('data-quotation-send-dialog', false)->assertDontSee('data-quotation-dialog', false);
@@ -131,7 +134,9 @@ class RequestQuotationEmailTest extends TestCase
         $this->assertCount(1, $xpath->query('//dialog[@data-quotation-send-dialog]//input[@name="_token"]'));
         foreach ($xpath->query('//button[@data-quotation-send]') as $button) {
             $data = json_decode($button->getAttribute('data-quotation-send'), true, 512, JSON_THROW_ON_ERROR);
-            $this->assertStringNotContainsString('Paciente', $data['summary']);
+            $this->assertArrayNotHasKey('summary', $data);
+            $this->assertSame($data['folio'].'.pdf', $data['filename']);
+            $this->assertStringEndsWith('/pdf', $data['pdf_url']);
             $this->assertStringEndsWith('/correo', $data['url']);
         }
         $quote = RequestQuotation::findOrFail(1);
@@ -144,5 +149,13 @@ class RequestQuotationEmailTest extends TestCase
         for ($attempt = 0; $attempt < 10; $attempt++) $this->sendQuote()->assertOk();
         $this->sendQuote()->assertStatus(429);
         Mail::assertSentCount(10);
+    }
+
+    public function test_pdf_failure_prevents_email_delivery(): void
+    {
+        $this->mock(\App\Services\RequestQuotationPdf::class)
+            ->shouldReceive('render')->once()->andThrow(new \RuntimeException('private-render-details'));
+        $this->sendQuote()->assertStatus(502)->assertDontSee('private-render-details');
+        Mail::assertNothingSent();
     }
 }

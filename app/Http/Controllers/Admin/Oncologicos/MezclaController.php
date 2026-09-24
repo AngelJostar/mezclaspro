@@ -755,6 +755,7 @@ class MezclaController extends Controller
         $listaId = DB::table('hospitals')
             ->where('id', $hospitalSolicitudId)
             ->value($this->medicineListColumnFor($solicitud));
+        $listaId = $solicitud->quotation?->price_list_id ?? $listaId;
 
         if (!$listaId) {
             abort(422, 'El hospital de la solicitud no tiene una lista de medicamentos configurada.');
@@ -1254,6 +1255,7 @@ class MezclaController extends Controller
         $listaId = DB::table('hospitals')
             ->where('id', $hospitalSolicitudId)
             ->value($this->medicineListColumnFor($mezcla->solicitud));
+        $listaId = $mezcla->solicitud?->quotation?->price_list_id ?? $listaId;
 
         if (!$listaId) {
             return back()->withErrors(['error' => 'El hospital de la solicitud no tiene una lista de medicamentos configurada.']);

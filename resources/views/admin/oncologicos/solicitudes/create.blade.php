@@ -31,7 +31,7 @@
                 @endif
             </div>
 
-            <a href="{{ route($closeRoute) }}"
+            <a href="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.index') : route($closeRoute) }}"
                 class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                 title="Cerrar formato de solicitud"
                 aria-label="Cerrar formato de solicitud">
@@ -39,9 +39,13 @@
             </a>
         </div>
 
-        <form id="formularioSolicitud" action="{{ route('admin.oncologicos.solicitudes.store') }}" method="POST"
+        <form id="formularioSolicitud" action="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.prepare', $preparationQuotation) : route('admin.oncologicos.solicitudes.store') }}" method="POST"
+            @if (isset($preparationQuotation)) data-quotation-preparation @endif
             class="bg-white rounded-lg p-6 shadow-lg">
             @csrf
+            @isset($preparationQuotation)
+                @include('admin.solicitudes.quotations.preparation-summary')
+            @endisset
             <input type="hidden" name="tipo_solicitud" value="{{ $requestType ?? 'oncologicos' }}">
 
 
@@ -190,7 +194,7 @@
         // con campos: id, denominacion, requires_infusor, etc.
         const medicamentos = @json($medicamentos);
         const infoAdicional = @json($infoAdicional);
-        const mezclasOld = @json(old('mezclas') ? json_decode(old('mezclas'), true) : []);
+        const mezclasOld = {{ Illuminate\Support\Js::from(old('mezclas') ? json_decode(old('mezclas'), true) : ($quotationDefaults['mezclas'] ?? [])) }};
         const infusors = @json($infusors ?? []);
 
         const MAX_MEZCLAS = 99;
@@ -872,4 +876,7 @@
             });
         </script>
     @endif
+    @isset($preparationQuotation)
+        @include('admin.solicitudes.quotations.preparation-script')
+    @endisset
 </x-admin-layout>

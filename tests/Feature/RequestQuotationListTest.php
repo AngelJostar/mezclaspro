@@ -29,10 +29,16 @@ class RequestQuotationListTest extends TestCase
     {
         $response = $this->screen()->assertOk()->assertSee('Lista de Cotizaciones')
             ->assertViewHas('quotations', fn ($rows) => $rows->count() === 5)
-            ->assertSeeInOrder(['Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios',
-                'Total MXN', 'Estado', 'Enviar', 'Autorizaci&oacute;n', 'Detalle', 'Agregar a solicitudes'], false);
+            ->assertSeeInOrder(['Tipo', 'Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios',
+                'Total MXN', 'Estado', 'Enviar', 'Autorizaci&oacute;n', 'Detalle', 'Enviar a preparacion'], false);
         $xpath = $this->xpath($response->getContent());
-        $this->assertCount(13, $xpath->query('//table[@id="request-quotations-table"]//th'));
+        $this->assertCount(14, $xpath->query('//table[@id="request-quotations-table"]//th'));
+        $this->assertSame('Tipo', trim($xpath->query('//table[@id="request-quotations-table"]//th')->item(0)->textContent));
+        $this->assertSame(['Antibiotico', 'Nutricional', 'Oncologica', 'Oncologica', 'Oncologica'], array_map(
+            fn ($cell) => trim($cell->textContent), iterator_to_array($xpath->query('//tr[@data-quotation-row]/td[1]'))));
+        foreach ($xpath->query('//tr[@data-quotation-row]') as $row) {
+            $this->assertCount(14, $xpath->query('./td', $row));
+        }
         $this->assertCount(5, $xpath->query('//table[@id="request-quotations-table"]//button[@data-quotation-send]'));
         $this->assertSame(['Todas', 'Recibidas', 'Enviadas', 'Autorizadas', 'En preparacion'], array_map(
             fn ($link) => trim($link->textContent), iterator_to_array($xpath->query('//nav[@aria-label="Estado de las cotizaciones"]/a'))));

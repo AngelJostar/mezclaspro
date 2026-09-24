@@ -31,7 +31,7 @@ class MixtureMessagingService
                 ->map(fn ($key) => (int) substr($key, strlen($kind) + 1))->unique();
             if ($ids->isEmpty()) continue;
             if ($kind === 'nutricionales') {
-                $query = Solicitud::with(['user.hospital', 'solicitud_patient'])->whereIn('id', $ids);
+                $query = Solicitud::with(['hospital', 'solicitud_patient'])->whereIn('id', $ids);
                 if ($hospitalSide) $query->where('user_id', $user->id);
             } else {
                 $query = Mezcla::with('solicitud.hospital')->whereIn('id', $ids)
@@ -41,7 +41,7 @@ class MixtureMessagingService
                     });
             }
             foreach ($query->get() as $model) {
-                $hospital = $kind === 'nutricionales' ? $model->user?->hospital : $model->solicitud?->hospital;
+                $hospital = $kind === 'nutricionales' ? $model->hospital : $model->solicitud?->hospital;
                 if (!$hospital || ($hospitalSide && (int) $hospital->id !== (int) $user->hospital_id)) continue;
                 $result->put($kind.':'.$model->id, [
                     'kind' => $kind, 'id' => $model->id, 'hospital_id' => $hospital->id,

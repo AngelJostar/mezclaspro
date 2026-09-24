@@ -7,7 +7,12 @@
 .quotation-send-dialog [hidden] { display:none!important; }
 .quotation-send-dialog input:not([type=radio]):not([type=hidden]), .quotation-send-dialog textarea { width:100%; min-width:0; padding:10px; border:1px solid #ccd7e5; border-radius:4px; font-size:13px; font-weight:400; color:#203858; }
 .quotation-send-dialog textarea { resize:vertical; }
-.quotation-send-dialog textarea[readonly] { background:#f6f8fb; }
+.quotation-send-attachment { display:flex; align-items:center; gap:12px; border:1px solid #dce3ed; background:#f6f8fb; border-radius:4px; padding:12px; font-size:13px; }
+.quotation-send-attachment > svg { width:24px; height:24px; flex-shrink:0; color:#00877b; }
+.quotation-send-attachment > div { flex:1; min-width:0; overflow-wrap:anywhere; }
+.quotation-send-attachment span { display:block; font-size:12px; color:#61728a; margin-top:3px; }
+.quotation-send-dialog [data-send-submit] { white-space:normal; }
+.quotation-send-dialog .quotation-modal-footer > div { display:flex; gap:8px; min-width:0; }
 .quotation-send-channels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; padding:4px; border:1px solid #dce3ed; border-radius:6px; background:#f6f8fb; }
 .quotation-send-channels label { position:relative; min-width:0; cursor:pointer; }
 .quotation-send-channels input { position:absolute; width:1px; height:1px; opacity:0; }

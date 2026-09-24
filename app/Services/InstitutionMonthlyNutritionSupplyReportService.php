@@ -17,7 +17,7 @@ class InstitutionMonthlyNutritionSupplyReportService
                 'input.input',
             ])
             ->whereIn('estado', ['entregada', 'finalizada'])
-            ->whereHas('user', fn ($query) => $query->where('hospital_id', $hospitalId))
+            ->where('hospital_id', $hospitalId)
             ->whereHas('solicitud_detail', function ($query) use ($month) {
                 $query->whereBetween('fecha_hora_entrega', [
                     $month->copy()->startOfMonth()->startOfDay(),

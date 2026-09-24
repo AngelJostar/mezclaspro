@@ -47,6 +47,7 @@ class Mezcla extends Model
     ];
 
     protected $casts = [
+        'quotation_pricing_snapshot' => 'array',
         'production_attempt' => 'integer',
         'set_infusion' => 'boolean',
         'volumen_dilucion' => 'decimal:2',

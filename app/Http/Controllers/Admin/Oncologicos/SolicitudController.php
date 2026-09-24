@@ -443,8 +443,9 @@ class SolicitudController extends Controller
 
     public function create(Request $request)
     {
-        $requestType = $this->requestType($request->query('tipo_solicitud'));
-        $listaId = $this->currentMedicineListId($requestType);
+        $quotation = $request->attributes->get('preparationQuotation');
+        $requestType = $quotation?->category ?? $this->requestType($request->query('tipo_solicitud'));
+        $listaId = $quotation?->price_list_id ?? $this->currentMedicineListId($requestType);
 
         if (!$listaId) {
             return redirect()
@@ -453,7 +454,7 @@ class SolicitudController extends Controller
         }
 
         // ✅ Validar que el hospital ya tenga laboratorio asignado
-        $laboratoryId = $this->currentLaboratoryId();
+        $laboratoryId = $quotation?->hospital?->laboratory_id ?? $this->currentLaboratoryId();
         if (!$laboratoryId) {
             return redirect()
                 ->route($this->indexRoute($requestType))
@@ -471,6 +472,10 @@ class SolicitudController extends Controller
             ->unique()
             ->values();
 
+        if ($quotation) {
+            $catalogIdsPermitidos = collect(app(\App\Services\QuotationPreparationService::class)->items($quotation))
+                ->pluck('catalog_id')->unique()->values();
+        }
         if ($catalogIdsPermitidos->isEmpty()) {
             return redirect()
                 ->route($this->indexRoute($requestType))
@@ -558,6 +563,7 @@ class SolicitudController extends Controller
 
     public function store(Request $request, OncologyMixtureDeliveryScheduleService $deliverySchedule)
     {
+        $quotation = $request->attributes->get('preparationQuotation');
 
         $request->validate([
             'tipo_solicitud'  => 'required|in:oncologicos,antibioticos',
@@ -589,19 +595,19 @@ class SolicitudController extends Controller
         ]);
 
         $user = auth()->user();
-        $hospitalId = (int) ($user?->hospital_id ?? 0);
+        $hospitalId = (int) ($quotation?->hospital_id ?? $user?->hospital_id ?? 0);
 
         if ($hospitalId <= 0) {
             return back()->withErrors(['error' => 'Tu usuario no tiene hospital asignado.'])->withInput();
         }
 
-        $laboratoryId = $this->currentLaboratoryId();
+        $laboratoryId = $quotation?->hospital?->laboratory_id ?? $this->currentLaboratoryId();
         if (!$laboratoryId) {
             return back()->withErrors(['error' => 'Tu hospital no tiene laboratorio asignado. Configúralo desde Hospitales.'])->withInput();
         }
 
         $requestType = $this->requestType($request->input('tipo_solicitud'));
-        $listaId = $this->currentMedicineListId($requestType);
+        $listaId = $quotation?->price_list_id ?? $this->currentMedicineListId($requestType);
 
         if (!$listaId) {
             return back()->withErrors([
@@ -641,6 +647,10 @@ class SolicitudController extends Controller
             ->values()
             ->toArray();
 
+        if ($quotation) {
+            $catalogosPermitidos = array_values(array_unique(array_column(
+                app(\App\Services\QuotationPreparationService::class)->items($quotation), 'catalog_id')));
+        }
         if (count($catalogosPermitidos) === 0) {
             return back()->withErrors(['error' => 'La lista de medicamentos del hospital está vacía.'])->withInput();
         }
@@ -846,6 +856,7 @@ class SolicitudController extends Controller
                 }
             }
 
+            if ($quotation) app(\App\Services\QuotationPreparationService::class)->attachOncology($quotation, $solicitud);
             DB::commit();
 
             return redirect()

@@ -41,7 +41,8 @@ class RequestQuotationCaptureTest extends TestCase
     {
         $payload = Fixture::payload() + ['total' => 1, 'status' => 'autorizada', 'authorized_by' => 2, 'price_list_id' => 999, 'created_by' => 2];
         $counts = array_map(fn ($table) => DB::table($table)->count(), ['solicitud_oncos', 'solicituds', 'mezclas', 'medicine_batch_movements']);
-        $this->store($payload)->assertOk()->assertJsonPath('total', '524.00')->assertJsonPath('status', 'borrador');
+        $this->store($payload)->assertOk()->assertJsonPath('total', '524.00')->assertJsonPath('status', 'borrador')
+            ->assertJsonPath('redirect_url', route('admin.solicitudes.cotizacion.index'));
         $quote = RequestQuotation::latest('id')->first();
         $this->assertSame(1, $quote->price_list_id);
         $this->assertEquals($this->user->id, $quote->created_by);
@@ -121,7 +122,8 @@ class RequestQuotationCaptureTest extends TestCase
         $quote = RequestQuotation::latest('id')->first();
         $this->getJson(route('admin.solicitudes.cotizacion.show', $quote))->assertOk()->assertJsonPath('editable', true)->assertJsonMissingPath('attachment_path');
         $data = Fixture::payload(); $data['action'] = 'send'; $data['patient_name'] = 'Paciente actualizado';
-        $this->putJson(route('admin.solicitudes.cotizacion.update', $quote), $data)->assertOk()->assertJsonPath('status', 'enviada');
+        $this->putJson(route('admin.solicitudes.cotizacion.update', $quote), $data)->assertOk()->assertJsonPath('status', 'enviada')
+            ->assertJsonPath('redirect_url', route('admin.solicitudes.cotizacion.index'));
         $this->assertNotNull($quote->refresh()->sent_at);
         $this->assertSame('Paciente actualizado', $quote->patient_name);
         $this->putJson(route('admin.solicitudes.cotizacion.update', $quote), $data)->assertForbidden();

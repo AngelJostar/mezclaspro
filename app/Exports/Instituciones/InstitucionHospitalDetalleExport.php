@@ -135,15 +135,13 @@ class InstitucionHospitalDetalleExport implements WithMultipleSheets
         }
 
         $solicitudes = NutricionalSolicitud::with([
-            'user.hospital',
+            'hospital',
             'solicitud_detail',
             'solicitud_patient',
             'input.input',
             'input.presentation.catalog',
         ])
-            ->whereHas('user', function ($query) use ($hospitalIds) {
-                $query->whereIn('hospital_id', $hospitalIds);
-            })
+            ->whereIn('hospital_id', $hospitalIds)
             ->orderBy('id')
             ->get();
 
@@ -256,7 +254,7 @@ class InstitucionHospitalDetalleExport implements WithMultipleSheets
             $solicitud->id,
             $solicitud->remision ?: '',
             $solicitud->lote ?: '',
-            $solicitud->user?->hospital?->name ?: '',
+            $solicitud->hospital?->name ?: '',
             trim(($patient?->nombre_paciente ?? '') . ' ' . ($patient?->apellidos_paciente ?? '')),
             $patient?->servicio ?: '',
             $patient?->registro ?: '',

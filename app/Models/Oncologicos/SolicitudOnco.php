@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SolicitudOnco extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\HasSourceQuotation;
 
     protected $table = 'solicitud_oncos';
 

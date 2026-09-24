@@ -24,8 +24,8 @@
         </nav>
         <div class="ml-auto flex flex-wrap justify-end gap-2">
             @if (count($createTypes))
-                <button type="button" data-quotation-new @disabled($selectedType === 'antibioticos' || ($selectedType !== 'todas' && !in_array($selectedType, $createTypes)))
-                    title="{{ $selectedType === 'antibioticos' ? 'Formato de antibioticos pendiente' : 'Nueva cotizacion' }}"
+                <button type="button" data-quotation-new
+                    title="Nueva cotizacion"
                     class="inline-flex items-center gap-2 rounded-full bg-azul-prodifem px-5 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
                     <i data-quotation-icon="plus" class="h-4 w-4" aria-hidden="true"></i>Nueva Cotizacion
                 </button>
@@ -98,7 +98,7 @@
             <table id="request-quotations-table" class="w-full text-left text-sm text-gray-500">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-700">
                     <tr>
-                        @foreach (['Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios'] as $column)
+                        @foreach (['Tipo', 'Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios'] as $column)
                             <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>{!! $column !!}</th>
                         @endforeach
                         <th scope="col" class="px-2 py-3 text-center whitespace-nowrap" data-command-column
@@ -110,7 +110,7 @@
                         <th scope="col" class="px-2 py-3 text-center" data-command-column>Enviar</th>
                         <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>Autorizaci&oacute;n</th>
                         <th scope="col" class="px-2 py-3 text-center" data-command-column>Detalle</th>
-                        <th scope="col" class="px-2 py-3 text-center whitespace-nowrap" data-command-column>Agregar a solicitudes</th>
+                        <th scope="col" class="px-2 py-3 text-center whitespace-nowrap" data-command-column>Enviar a preparacion</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -134,11 +134,14 @@
                                 ? 'admin.nutricionales.solicitudes.edit' : 'admin.oncologicos.solicitudes.edit', $quotation->request_id) : null;
                         @endphp
                         <tr class="border-b hover:bg-gray-50" data-quotation-row>
+                            <td class="px-2 py-3 text-center whitespace-nowrap">
+                                @include('admin.solicitudes._type-badge', ['type' => $quotation->category])
+                            </td>
                             <td class="px-2 py-3 text-center whitespace-nowrap font-medium text-gray-700">{{ $quotation->folio }}</td>
                             <td class="px-2 py-3 text-center whitespace-nowrap">{{ $quotation->created_at?->format('d/m/Y') }}</td>
                             <td class="min-w-[10rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->institution?->nombre ?? 'Sin institucion' }}</td>
                             <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->hospital?->name ?? 'Sin hospital' }}</td>
-                            <td class="min-w-[10rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->patient_name }}</td>
+                            <td class="min-w-[10rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->patient_name ?: 'Sin paciente' }}</td>
                             <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->seller_name }}</td>
                             <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->price_list_name }}</td>
                             <td class="px-2 py-3 text-right whitespace-nowrap font-medium text-gray-700">{{ $quotation->total === null ? 'Sin registrar' : '$'.number_format((float) $quotation->total, 2) }}</td>
@@ -154,7 +157,8 @@
                             <td class="px-2 py-3 text-center">
                                 <button type="button" data-quotation-send="{{ json_encode([
                                     'folio' => $quotation->folio,
-                                    'summary' => App\Support\QuotationMessage::summary($quotation),
+                                    'filename' => App\Services\RequestQuotationPdf::filename($quotation),
+                                    'pdf_url' => route('admin.solicitudes.cotizacion.pdf', $quotation),
                                     'url' => route('admin.solicitudes.cotizacion.email', $quotation),
                                 ], JSON_THROW_ON_ERROR) }}" aria-label="Enviar {{ $quotation->folio }}"
                                     class="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">
@@ -181,13 +185,20 @@
                                     aria-label="Ver {{ $quotation->folio }}" class="inline-flex rounded-full bg-azul-prodifem px-4 py-2 text-xs font-semibold text-white hover:bg-blue-800">Ver</button>
                                 @if ($quotation->clinical_data && $quotation->canBeEditedBy(auth()->user()))
                                     <button type="button" data-quotation-edit="{{ route('admin.solicitudes.cotizacion.show', $quotation) }}"
+                                        data-quotation-flow="{{ $quotation->clinical_data['flow'] ?? 'clinical' }}"
                                         class="mt-1 rounded-md border px-3 py-1 text-xs font-semibold" aria-label="Editar {{ $quotation->folio }}">Editar</button>
                                 @endif
                             </td>
                             <td class="px-2 py-3 text-center">
                                 @if ($requestUrl)
-                                    <span class="block text-xs text-gray-500">Agregada</span>
-                                    <a href="{{ $requestUrl }}" class="mt-1 inline-block text-xs font-semibold text-blue-700 underline">SOL-{{ str_pad((string) $quotation->request_id, 5, '0', STR_PAD_LEFT) }}</a>
+                                    <span class="block text-xs text-gray-500">Enviada</span>
+                                    <a href="{{ $requestUrl }}" class="mt-1 inline-block text-xs font-semibold text-blue-700 underline">COT-{{ $quotation->request_id }}</a>
+                                @elseif ($quotation->status === 'autorizada' && $quotation->canPrepareBy(auth()->user()))
+                                    <a href="{{ route('admin.solicitudes.cotizacion.preparation', $quotation) }}"
+                                        aria-label="Enviar {{ $quotation->folio }} a preparacion"
+                                        class="inline-flex items-center gap-2 rounded border border-teal-600 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50">
+                                        <i class="fas fa-paper-plane" aria-hidden="true"></i> Enviar
+                                    </a>
                                 @else
                                     <span class="text-xs text-gray-500">{{ $quotation->status === 'autorizada' ? 'Por agregar' : 'Pendiente' }}</span>
                                 @endif
@@ -215,6 +226,9 @@
             </dl>
             <section class="border-t p-5" x-show="Boolean(quotation?.clinical)">
                 <h3 class="mb-3 font-semibold">Datos de la mezcla</h3>
+                <template x-for="(item, index) in (quotation?.clinical?.items || [])" :key="'commercial-' + index">
+                    <p class="mt-2 text-sm" x-text="(item.mixture_number ? 'Mezcla ' + item.mixture_number + ': ' : '') + item.product_name + ' · ' + item.presentation_name + ': ' + (item.bottle_count ?? item.concentration) + ' ' + (item.bottle_count != null ? 'frascos' : item.unit === 'ml' ? 'mL' : 'mg')"></p>
+                </template>
                 <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     @foreach (['scheduled_date' => 'Programacion', 'service' => 'Servicio', 'floor' => 'Piso', 'bed' => 'Cama', 'record_number' => 'Registro', 'sex' => 'Sexo', 'birth_date' => 'Nacimiento', 'weight_kg' => 'Peso (kg)', 'height_cm' => 'Talla (cm)', 'body_surface_m2' => 'Superficie corporal (m2)', 'diagnosis' => 'Diagnostico', 'administration_route' => 'Via', 'infusion_hours' => 'Infusion (h)', 'infusion_rate' => 'Velocidad (ml/h)', 'overfill_ml' => 'Sobrellenado (ml)', 'volume_total_ml' => 'Volumen total (ml)', 'npt' => 'NPT', 'delivery_at' => 'Entrega', 'delivery_method' => 'Manera de entrega', 'doctor_name' => 'Medico', 'doctor_license' => 'Cedula profesional', 'observations' => 'Observaciones'] as $key => $label)
                         <div x-show="quotation?.clinical?.{{ $key }} != null && quotation?.clinical?.{{ $key }} !== ''" class="min-w-0">
@@ -239,7 +253,7 @@
                 <h3 class="mb-3 font-semibold">Importes cotizados (MXN)</h3>
                 <template x-for="(line, index) in (quotation?.pricing?.lines || [])" :key="index">
                     <div class="flex items-start justify-between gap-4 border-b py-2 text-sm">
-                        <div class="min-w-0 break-words"><p x-text="line.description + ' ' + line.presentation"></p>
+                        <div class="min-w-0 break-words"><p x-text="(line.mixture_number ? 'Mezcla ' + line.mixture_number + ': ' : '') + line.description + ' ' + line.presentation"></p>
                             <p class="text-xs text-gray-500" x-text="line.quantity + ' ' + line.unit + ' × ' + line.mixtures + ' · $' + Number(line.unit_price).toFixed(4) + ' · IVA $' + Number(line.vat).toFixed(2)"></p></div>
                         <span class="shrink-0 font-semibold" x-text="'$' + Number(line.total).toFixed(2)"></span>
                     </div>
@@ -250,6 +264,7 @@
         @include('admin.solicitudes.quotations._send-modal')
         @if (count($createTypes))
             @include('admin.solicitudes.quotations._capture-modal')
+            @include('admin.solicitudes.quotations._commercial-modal')
         @endif
     </div>
 </x-admin-layout>

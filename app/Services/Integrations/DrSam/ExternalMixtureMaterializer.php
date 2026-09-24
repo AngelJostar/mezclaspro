@@ -118,6 +118,7 @@ class ExternalMixtureMaterializer
         ]);
         $request = Solicitud::query()->create([
             'user_id' => $user->id,
+            'hospital_id' => $external->hospital_id,
             'solicitud_detail_id' => $detail->id,
             'solicitud_patient_id' => $patient->id,
             'estado' => 'pendiente',

@@ -6,6 +6,8 @@ use App\Models\Hospital;
 use App\Models\PriceListAdditionalCharge;
 use App\Models\RequestQuotation;
 use App\Models\User;
+use App\Models\Oncologicos\MedicineList;
+use App\Models\Nutricionales\NutriMedicineList;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -13,7 +15,7 @@ class RequestQuotationCaptureService
 {
     public function __construct(private InstitutionBillingPricingService $pricing) {}
 
-    public function catalog(User $user, string $category, int $hospitalId): array
+    public function catalog(User $user, string $category, int $hospitalId, bool $noCommercial = false, ?string $billingMode = null): array
     {
         abort_unless(RequestQuotation::canCreate($user, $category), 403);
         if ($user->hasAnyRole(['Cliente', 'Institucion'])) {
@@ -27,24 +29,38 @@ class RequestQuotationCaptureService
         if ($institutions->isEmpty()) {
             $this->fail('institution_id', 'El hospital no tiene una institucion activa asignada.');
         }
-        $list = $category === 'oncologicos' ? $hospital->oncoMedicineList : $hospital->nutriMedicineList;
+        $list = match ($category) {
+            'oncologicos' => $hospital->oncoMedicineList,
+            'antibioticos' => $hospital->antibioticMedicineList,
+            default => $hospital->nutriMedicineList,
+        };
+        if ($noCommercial) {
+            $listId = config('request-quotations.base_lists.'.$category);
+            $list = $listId ? ($category === 'nutricionales'
+                ? NutriMedicineList::find($listId) : MedicineList::find($listId)) : null;
+            if (!$list) $this->fail('no_commercial_relationship', 'No hay una lista base/generica configurada para esta categoria.');
+            if (!in_array($billingMode, ['unit', 'frasco'], true)) $this->fail('billing_mode', 'Selecciona la modalidad de cobro.');
+        } elseif ($billingMode !== null) {
+            $this->fail('billing_mode', 'El cobro se determina por la lista asignada al hospital.');
+        }
         if (!$list || ($category === 'nutricionales' && !$list->is_active)
-            || ($category === 'oncologicos' && $list->catalog_category !== 'oncologicos')) {
+            || ($category !== 'nutricionales' && $list->catalog_category !== $category)) {
             $this->fail('hospital_id', 'El hospital no tiene una lista de precios vigente para este tipo de mezcla.');
         }
 
         $products = [];
         $serviceTotal = 0.0;
         $supplies = [];
-        if ($category === 'oncologicos') {
+        if ($category !== 'nutricionales') {
             $presentations = $list->presentations()->where('medicine_presentations.is_available', true)
                 ->wherePivot('is_active', true)
-                ->whereHas('catalog', fn ($query) => $query->where('state', true)->where('catalog_category', 'oncologicos'))
+                ->whereHas('catalog', fn ($query) => $query->where('state', true)->where('catalog_category', $category))
                 ->with('catalog.diluents')->orderBy('medicine_presentations.id')->get();
             foreach ($presentations as $presentation) {
                 $config = $presentation->pivot;
                 $contentMg = $presentation->contentInMilligrams();
                 $unit = $config->charge_by ?: ($list->charge_by ?: 'mg');
+                if ($noCommercial) $unit = $billingMode === 'frasco' ? 'frasco' : 'mg';
                 $price = match ($unit) {
                     'mg' => $config->precio_mg_override > 0 ? (float) $config->precio_mg_override
                         : ($contentMg > 0 && $config->precio !== null ? round((float) $config->precio / $contentMg, 4) : null),
@@ -93,7 +109,8 @@ class RequestQuotationCaptureService
                 $products[] = [
                     'id' => $presentation->id, 'name' => $name, 'brand' => $presentation->denominacion_comercial,
                     'presentation' => $presentation->presentacion, 'group' => $catalog->category?->name ?: 'Otros componentes',
-                    'unit' => $item->charge_by ?: 'ml', 'unit_price' => $item->precio_ml !== null ? (float) $item->precio_ml : null,
+                    'unit' => $noCommercial ? ($billingMode === 'frasco' ? 'frasco' : 'ml') : ($item->charge_by ?: 'ml'),
+                    'unit_price' => $item->precio_ml !== null ? (float) $item->precio_ml : null,
                     'container_ml' => (float) $presentation->presentacion_ml, 'vat' => false,
                 ];
             }
@@ -116,12 +133,38 @@ class RequestQuotationCaptureService
 
         return [
             'hospital_id' => $hospital->id, 'institutions' => $institutions->map->only(['id', 'nombre'])->all(),
-            'price_list' => ['id' => $list->id, 'name' => $list->name], 'products' => $products, 'charges' => $charges,
+            'price_list' => ['id' => $list->id, 'name' => $list->name, 'source' => $noCommercial ? 'generic' : 'hospital'],
+            'products' => $products, 'charges' => $charges,
         ];
     }
 
-    public function capture(User $user, array $data): array
+    public function commercialCatalog(User $user, array $data): array
     {
+        $catalog = $this->catalog($user, $data['category'], (int) $data['hospital_id'],
+            (bool) ($data['no_commercial_relationship'] ?? false), $data['billing_mode'] ?? null);
+        $unit = $data['category'] === 'nutricionales' ? 'ml' : 'mg';
+        foreach ($catalog['products'] as &$product) {
+            // Legacy nutrition tariffs store price per mL even for whole-bottle billing.
+            if ($unit === 'ml' && $product['unit'] === 'frasco') {
+                $product['unit_price'] = $product['unit_price'] !== null && $product['container_ml'] > 0
+                    ? round($product['unit_price'] * $product['container_ml'], 4) : null;
+            } elseif ($unit === 'mg' && $product['unit'] === 'ml') {
+                $product['unit_price'] = $product['unit_price'] !== null && $product['container_ml'] > 0 && $product['content_mg'] > 0
+                    ? round($product['unit_price'] * $product['container_ml'] / $product['content_mg'], 4) : null;
+                $product['unit'] = 'mg';
+            }
+            $product['content'] = $unit === 'ml' ? $product['container_ml'] : $product['content_mg'];
+        }
+        unset($product);
+        $modes = array_unique(array_column($catalog['products'], 'unit'));
+        $catalog['billing_mode'] = count($modes) === 1 ? (reset($modes) === 'frasco' ? 'frasco' : 'unit') : 'mixed';
+        $catalog['concentration_unit'] = $unit;
+        return $catalog;
+    }
+
+    public function capture(User $user, array $data, bool $preview = false): array
+    {
+        if (($data['flow'] ?? null) === 'commercial') return $this->captureCommercial($user, $data, $preview);
         $catalog = $this->catalog($user, $data['category'], (int) $data['hospital_id']);
         if (!in_array((int) $data['institution_id'], array_column($catalog['institutions'], 'id'), true)) {
             $this->fail('institution_id', 'La institucion seleccionada no corresponde al hospital.');
@@ -217,6 +260,114 @@ class RequestQuotationCaptureService
         if ($product['unit_price'] === null || $product['unit_price'] < 0) {
             $this->fail($field, 'El producto no tiene un precio valido registrado.');
         }
+    }
+
+    private function captureCommercial(User $user, array $data, bool $preview): array
+    {
+        $grouped = isset($data['mixture_count']);
+        if ($grouped) {
+            $data['mixture_count'] = (int) $data['mixture_count'];
+            $numbers = []; $seen = [];
+            foreach ($data['items'] as $index => &$item) {
+                $number = (int) $item['mixture_number'];
+                if ($number > $data['mixture_count']) $this->fail("items.$index.mixture_number", 'La mezcla no corresponde a esta cotizacion.');
+                $key = $number.':'.$item['presentation_id'];
+                if (isset($seen[$key])) $this->fail("items.$index.presentation_id", 'El medicamento ya esta agregado a esta mezcla.');
+                $seen[$key] = true; $numbers[$number] = true; $item['mixture_number'] = $number;
+            }
+            unset($item);
+            if (count($numbers) !== $data['mixture_count']) $this->fail('items', 'Agrega al menos un medicamento a cada mezcla.');
+            usort($data['items'], fn ($left, $right) => $left['mixture_number'] <=> $right['mixture_number']);
+        }
+        $catalog = $this->commercialCatalog($user, $data);
+        if (!in_array((int) $data['institution_id'], array_column($catalog['institutions'], 'id'), true)) {
+            $this->fail('institution_id', 'La institucion seleccionada no corresponde al hospital.');
+        }
+        $products = collect($catalog['products'])->keyBy('id');
+        $lines = [];
+        foreach ($data['items'] as $index => &$item) {
+            $product = $products->get($item['presentation_id']);
+            $this->assertProduct($product, "items.$index.presentation_id");
+            if (!in_array($product['unit'], [$catalog['concentration_unit'], 'frasco'], true)) {
+                $this->fail("items.$index.presentation_id", 'La unidad de cobro no corresponde a la categoria.');
+            }
+            $bottle = $product['unit'] === 'frasco';
+            $quantityField = $bottle ? 'bottle_count' : 'concentration';
+            $otherField = $bottle ? 'concentration' : 'bottle_count';
+            if (!isset($item[$quantityField]) || array_key_exists($otherField, $item)) {
+                $this->fail("items.$index.$quantityField", $bottle
+                    ? 'Captura la cantidad de frascos, no la concentracion, para este medicamento.'
+                    : 'Captura la concentracion solicitada para este medicamento.');
+            }
+            $quantity = $bottle ? (int) $item['bottle_count'] : (float) $item['concentration'];
+            $item[$quantityField] = $quantity;
+            $item['product_name'] = $product['name'];
+            $item['presentation_name'] = trim($product['brand'].' '.$product['presentation']);
+            $item['unit'] = $product['unit'];
+            $listPrice = $product['unit_price'];
+            if (array_key_exists('unit_price_override', $item)) {
+                $item['unit_price_override'] = round((float) $item['unit_price_override'], 4);
+                $product['unit_price'] = $item['unit_price_override'];
+            }
+            // Only the quotation snapshot changes; the hospital tariff remains untouched.
+            $lines[] = $this->line($product, $quantity, 1) + [
+                'presentation_content' => $product['content'],
+                'concentration_unit' => $catalog['concentration_unit'],
+                'list_unit_price' => $listPrice,
+                'price_adjusted' => $product['unit_price'] != $listPrice,
+                'price_adjusted_by' => $product['unit_price'] != $listPrice ? $user->id : null,
+            ] + ($grouped ? ['mixture_number' => $item['mixture_number']] : []) + ($bottle ? []
+                : ['concentration' => $quantity, 'concentration_unit' => $catalog['concentration_unit']]);
+        }
+        unset($item);
+        // Older captures did not group medication rows explicitly.
+        $mixtures = $grouped ? $data['mixture_count'] : ($data['category'] === 'nutricionales' ? 1 : count($data['items']));
+        $requirements = [];
+        foreach ($data['requirements'] ?? [] as $index => $requirement) {
+            if ((int) $requirement['mixture_number'] > $mixtures) {
+                $this->fail("requirements.$index.mixture_number", 'El requerimiento no corresponde a una mezcla de esta cotizacion.');
+            }
+            $medicine = trim($requirement['medicine']);
+            if ($medicine === '') $this->fail("requirements.$index.medicine", 'Captura el medicamento del requerimiento.');
+            $requirements[] = ['mixture_number' => (int) $requirement['mixture_number'], 'medicine' => $medicine,
+                'concentration' => round((float) $requirement['concentration'], 4), 'unit' => $catalog['concentration_unit']];
+        }
+        usort($requirements, fn ($left, $right) => $left['mixture_number'] <=> $right['mixture_number']);
+        if (array_key_exists('requirements', $data)) $data['requirements'] = $requirements;
+        foreach ($grouped ? range(1, $mixtures) : [null] as $number) {
+            foreach ($catalog['charges'] as $charge) {
+                if ($charge['total'] < 0) $this->fail('hospital_id', 'Un cargo de la lista tiene un importe invalido.');
+                $count = $grouped ? 1 : $mixtures;
+                $amount = round($charge['total'] * $count, 2);
+                $tax = $charge['vat_included'] ? $this->pricing->splitIncludedVat($amount) : ['base' => $amount, 'vat' => 0];
+                $lines[] = ['description' => $charge['name'], 'presentation' => '', 'quantity' => $count,
+                    'unit' => 'servicio', 'unit_price' => round($tax['base'] / $count, 4), 'mixtures' => 1,
+                    'subtotal' => $tax['base'], 'vat' => $tax['vat'], 'total' => $amount] + ($grouped ? ['mixture_number' => $number] : []);
+            }
+        }
+        $total = round(array_sum(array_column($lines, 'total')), 2);
+        if (!is_finite($total) || $total > 999999999.99) $this->fail('items', 'El importe de la cotizacion excede el limite permitido.');
+        $snapshot = ['currency' => 'MXN', 'lines' => $lines, 'mixtures' => $mixtures, 'total' => $total,
+            'category' => $data['category'], 'concentration_unit' => $catalog['concentration_unit'],
+            'price_list' => $catalog['price_list'], 'billing_mode' => $catalog['billing_mode']];
+        if ($requirements !== []) $snapshot['requirements'] = $requirements;
+        $token = hash('sha256', json_encode($snapshot, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR));
+        if (!$preview && !hash_equals($token, $data['pricing_token'] ?? '')) {
+            $this->fail('pricing_token', 'Revisa nuevamente la cotizacion: los precios o medicamentos cambiaron.');
+        }
+        unset($data['action'], $data['submission_key'], $data['seller_id'], $data['pricing_token']);
+        $patientNames = [];
+        foreach (['patient_name', 'patient_paternal_surname', 'patient_maternal_surname'] as $field) {
+            $data[$field] = trim($data[$field] ?? '');
+            if ($data[$field] !== '') $patientNames[] = $data[$field];
+        }
+        $patientName = implode(' ', $patientNames);
+        if (mb_strlen($patientName) > 255) $this->fail('patient_name', 'El nombre completo del paciente no debe exceder 255 caracteres.');
+        $data['patient_platform_id'] = trim($data['patient_platform_id'] ?? '');
+        return ['hospital_id' => $data['hospital_id'], 'institution_id' => $data['institution_id'], 'category' => $data['category'],
+            'patient_name' => $patientName, 'price_list_id' => $catalog['price_list']['id'],
+            'price_list_name' => $catalog['price_list']['name'], 'total' => $total, 'clinical_data' => $data,
+            'pricing_snapshot' => $snapshot] + ($preview ? ['pricing_token' => $token] : []);
     }
 
     private function line(array $product, float $quantity, int $count): array

@@ -12,6 +12,8 @@ use App\Models\RequestQuotation;
 use App\Models\User;
 use App\Notifications\QuotationAssigned;
 use App\Services\RequestQuotationCaptureService;
+use App\Services\RequestQuotationPdf;
+use App\Support\QuotationDocument;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,18 @@ use Illuminate\Validation\ValidationException;
 
 class RequestQuotationController extends Controller
 {
+    public function pdf(Request $request, RequestQuotation $quotation, RequestQuotationPdf $pdf)
+    {
+        abort_unless($quotation->canBeViewedBy($request->user()), 403);
+
+        return response($pdf->render($quotation), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.RequestQuotationPdf::filename($quotation).'"',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function email(Request $request, RequestQuotation $quotation)
     {
         abort_unless($quotation->canBeViewedBy($request->user()), 403);
@@ -51,8 +65,21 @@ class RequestQuotationController extends Controller
 
     public function options(Request $request, RequestQuotationCaptureService $capture)
     {
-        $data = $request->validate(['category' => 'required|in:oncologicos,nutricionales', 'hospital_id' => 'required|integer|min:1']);
+        $data = $request->validate([
+            'category' => 'required|in:oncologicos,nutricionales,antibioticos', 'hospital_id' => 'required|integer|min:1',
+            'flow' => 'nullable|in:commercial', 'no_commercial_relationship' => 'sometimes|boolean',
+            'billing_mode' => [$request->boolean('no_commercial_relationship') ? 'required' : 'prohibited', 'in:unit,frasco'],
+        ]);
+        if (($data['flow'] ?? null) === 'commercial') return response()->json($capture->commercialCatalog($request->user(), $data));
         return response()->json($capture->catalog($request->user(), $data['category'], (int) $data['hospital_id']));
+    }
+
+    public function preview(StoreRequestQuotationRequest $request, RequestQuotationCaptureService $capture)
+    {
+        abort_unless($request->validated('flow') === 'commercial', 422);
+        $result = $capture->capture($request->user(), $request->validated(), true);
+        return response()->json(['pricing_snapshot' => $result['pricing_snapshot'], 'pricing_token' => $result['pricing_token'],
+            'document' => QuotationDocument::metadata($result['pricing_snapshot'])]);
     }
 
     public function show(Request $request, RequestQuotation $quotation)
@@ -61,6 +88,7 @@ class RequestQuotationController extends Controller
         return response()->json([
             'folio' => $quotation->folio, 'clinical_data' => $quotation->clinical_data,
             'pricing_snapshot' => $quotation->pricing_snapshot,
+            'document' => QuotationDocument::metadata($quotation->pricing_snapshot ?? [], $quotation->created_at),
             'seller_id' => $quotation->seller_id, 'seller_name' => $quotation->seller_name,
             'editable' => $quotation->canBeEditedBy($request->user()),
             'update_url' => route('admin.solicitudes.cotizacion.update', $quotation),
@@ -177,7 +205,7 @@ class RequestQuotationController extends Controller
     private function saved(RequestQuotation $quotation)
     {
         return response()->json(['folio' => $quotation->folio, 'status' => $quotation->status, 'total' => $quotation->total,
-            'redirect_url' => route('admin.solicitudes.cotizacion.index', ['tipo' => $quotation->category, 'buscar' => $quotation->folio])]);
+            'redirect_url' => route('admin.solicitudes.cotizacion.index')]);
     }
 
     public function export(Request $request)
@@ -282,7 +310,7 @@ class RequestQuotationController extends Controller
             'tipo' => $selectedType, 'estado' => $statusFilter, 'orden' => $sort, 'direccion' => $sortDirection,
         ]), fn ($value) => $value !== null && $value !== '');
 
-        $createTypes = array_values(array_filter(['nutricionales', 'oncologicos'], fn ($type) => RequestQuotation::canCreate($user, $type)));
+        $createTypes = array_values(array_filter(['nutricionales', 'oncologicos', 'antibioticos'], fn ($type) => RequestQuotation::canCreate($user, $type)));
         $sellers = $isSalesperson ? collect() : User::activeSalespeople()->orderBy('name')->orderBy('lastname')->get(['id', 'name', 'lastname']);
         return compact('quotations', 'hospitals', 'institutions', 'filters', 'createTypes',
             'sellers', 'isSalesperson',

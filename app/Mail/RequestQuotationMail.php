@@ -3,7 +3,7 @@
 namespace App\Mail;
 
 use App\Models\RequestQuotation;
-use App\Support\QuotationMessage;
+use App\Services\RequestQuotationPdf;
 use Illuminate\Mail\Mailable;
 
 class RequestQuotationMail extends Mailable
@@ -14,7 +14,8 @@ class RequestQuotationMail extends Mailable
     public function __construct(RequestQuotation $quotation, string $note = '')
     {
         $this->folio = $quotation->folio;
-        $this->contentText = ($note !== '' ? trim($note)."\n\n" : '').QuotationMessage::summary($quotation);
+        $this->contentText = ($note !== '' ? trim($note)."\n\n" : '').'Se adjunta la cotizacion '.$this->folio.' en formato PDF.';
+        $this->attachData(app(RequestQuotationPdf::class)->render($quotation), RequestQuotationPdf::filename($quotation), ['mime' => 'application/pdf']);
     }
 
     public function build(): static
