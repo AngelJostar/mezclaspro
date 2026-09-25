@@ -322,13 +322,16 @@ class RequestQuotationCaptureService
         unset($item);
         // Older captures did not group medication rows explicitly.
         $mixtures = $grouped ? $data['mixture_count'] : ($data['category'] === 'nutricionales' ? 1 : count($data['items']));
-        $requirements = [];
+        $requirements = []; $requestedMedicines = [];
         foreach ($data['requirements'] ?? [] as $index => $requirement) {
             if ((int) $requirement['mixture_number'] > $mixtures) {
                 $this->fail("requirements.$index.mixture_number", 'El requerimiento no corresponde a una mezcla de esta cotizacion.');
             }
             $medicine = trim($requirement['medicine']);
             if ($medicine === '') $this->fail("requirements.$index.medicine", 'Captura el medicamento del requerimiento.');
+            $key = (int) $requirement['mixture_number'].':'.mb_strtolower(Str::ascii($medicine));
+            if (isset($requestedMedicines[$key])) $this->fail("requirements.$index.medicine", 'El medicamento ya esta capturado en la receta de esta mezcla.');
+            $requestedMedicines[$key] = true;
             $requirements[] = ['mixture_number' => (int) $requirement['mixture_number'], 'medicine' => $medicine,
                 'concentration' => round((float) $requirement['concentration'], 4), 'unit' => $catalog['concentration_unit']];
         }

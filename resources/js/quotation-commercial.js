@@ -1,4 +1,4 @@
-import { createIcons, X, Droplets, FlaskConical, Pill, FileText, Search, Plus, Trash2, LockKeyhole, Pencil, Check, RotateCcw } from 'lucide';
+import { createIcons, X, Droplets, FlaskConical, Pill, Search, Plus, Trash2, LockKeyhole, Pencil, Check, RotateCcw } from 'lucide';
 import '../css/quotation-commercial.css';
 
 function initCommercialQuotation() {
@@ -8,14 +8,21 @@ function initCommercialQuotation() {
     const form = dialog.querySelector('form');
     const find = selector => dialog.querySelector(selector);
     const field = name => form.elements.namedItem(name);
-    const icons = () => createIcons({ icons: { X, Droplets, FlaskConical, Pill, FileText, Search, Plus, Trash2, LockKeyhole, Pencil, Check, RotateCcw }, nameAttr: 'data-qw-icon' });
+    const icons = () => createIcons({ icons: { X, Droplets, FlaskConical, Pill, Search, Plus, Trash2, LockKeyhole, Pencil, Check, RotateCcw }, nameAttr: 'data-qw-icon' });
     const labels = { nutricionales: 'Nutricionales', oncologicos: 'Oncologicos', antibioticos: 'Antibioticos' };
     const money = (value, decimals = 2) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
     const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
     let step = 0, category = '', catalog = null, items = [], loading = false, busy = false;
     let controller, version = 0, submissionKey, updateUrl, pricingToken, documentIdentity;
-    let mixtureCount = 1, mixtureSections = [], requirements = [];
+    let mixtureCount = 1, mixtureSections = [], recipeSections = [], requirements = [];
+    const normalize = text => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const mixtureItems = number => items.filter(item => item.mixture_number === number);
+    const recipeRows = number => requirements.filter(row => row.mixture_number === number);
+    const completeRecipe = () => Array.from({ length: mixtureCount }, (_, index) => {
+        const rows = recipeRows(index + 1);
+        return rows.length > 0 && rows.every(row => row.medicine.trim() && Number(row.concentration) > 0
+            && Number(row.concentration) <= 1000000) && new Set(rows.map(row => normalize(row.medicine))).size === rows.length;
+    }).every(Boolean);
     const completeMixtures = () => Array.from({ length: mixtureCount }, (_, index) => mixtureItems(index + 1).length > 0).every(Boolean);
     const unit = () => category === 'nutricionales' ? 'mL' : 'mg';
     const noCommercial = () => field('no_commercial_relationship').checked;
@@ -50,17 +57,17 @@ function initCommercialQuotation() {
             if (section.tagName === 'FIELDSET') section.disabled = section.hidden || busy;
         });
         if (field('seller_id')) {
-            find('[data-qw-seller]').hidden = step !== 1;
-            field('seller_id').disabled = step !== 1 || busy;
+            find('[data-qw-seller]').hidden = ![1, 2].includes(step);
+            field('seller_id').disabled = ![1, 2].includes(step) || busy;
         }
         const badge = find('[data-qw-badge]');
         badge.hidden = !category || step === 0;
         badge.textContent = `${labels[category] || ''} · ${unit()}`;
-        find('[data-qw-step-label]').textContent = ['Categoria de medicamentos', 'Institucion, hospital y mezclas', 'Revision de cotizacion'][step];
+        find('[data-qw-step-label]').textContent = ['Categoria de medicamentos', 'Receta o solicitud de mezcla', 'Desglose de medicamentos y datos del paciente', 'Revision de cotizacion'][step];
         find('[data-qw-back]').textContent = step === 0 ? 'Cancelar' : 'Atras';
-        find('[data-qw-next]').textContent = ['Continuar', 'Continuar', 'Generar cotizaci\u00f3n'][step];
-        find('[data-qw-next]').disabled = busy || loading || (step === 0 ? !category : !catalog || !completeMixtures());
-        find('[data-qw-save]').hidden = step !== 2;
+        find('[data-qw-next]').textContent = ['Continuar', 'Continuar', 'Continuar', 'Generar cotizaci\u00f3n'][step];
+        find('[data-qw-next]').disabled = busy || loading || (step === 0 ? !category : !catalog || (step === 1 ? !completeRecipe() : !completeMixtures()));
+        find('[data-qw-save]').hidden = step !== 3;
         find('[data-qw-save]').disabled = busy || !pricingToken;
         find('[data-qw-back]').disabled = busy;
         find('[data-qw-close]').disabled = busy;
@@ -68,10 +75,13 @@ function initCommercialQuotation() {
         find('[data-qw-lock]').hidden = noCommercial();
         find('[data-qw-commercial-label]').textContent = noCommercial() ? 'Si' : 'No';
         find('[data-qw-unit-label]').textContent = `Por ${unit()}`;
-        find('[data-qw-add-mixture]').disabled = loading || busy || !catalog || mixtureCount >= 50 || items.length >= 50;
+        const mixtureLimit = mixtureCount >= 50 || items.length >= 50 || requirements.length >= 50;
+        find('[data-qw-add-mixture]').disabled = loading || busy || !catalog || mixtureLimit;
+        find('[data-qw-recipe-add-mixture]').disabled = loading || busy || !catalog || mixtureLimit;
+        dialog.querySelectorAll('[data-qw-recipe-add]').forEach(button => { button.disabled = loading || busy || !catalog || requirements.length >= 50; });
+        recipeSections.forEach(section => { section.search.disabled = loading || busy || !catalog; });
         mixtureSections.forEach(section => {
             section.search.disabled = loading || busy || !catalog;
-            section.root.querySelector('[data-qw-add]').disabled = loading || busy || !catalog || items.length >= 50;
             section.root.querySelector('[data-qw-remove-mixture]').disabled = busy || loading;
         });
         dialog.querySelectorAll('[data-qw-items] tr').forEach(row => {
@@ -100,7 +110,7 @@ function initCommercialQuotation() {
         });
     }
     function closeResults(section) {
-        if (!section) { mixtureSections.forEach(closeResults); return; }
+        if (!section) { [...mixtureSections, ...recipeSections].forEach(closeResults); return; }
         const { search, results, resultList } = section;
         results.hidden = true;
         search.setAttribute('aria-expanded', 'false');
@@ -108,7 +118,7 @@ function initCommercialQuotation() {
         resultList.querySelectorAll('[role=option]').forEach(option => option.setAttribute('aria-selected', 'false'));
     }
     function renderResults(section) {
-        if (!section) { mixtureSections.forEach(renderResults); return; }
+        if (!section) { [...mixtureSections, ...recipeSections].forEach(renderResults); return; }
         const { search, results, resultList, root, number } = section;
         closeResults(section);
         resultList.replaceChildren();
@@ -116,29 +126,35 @@ function initCommercialQuotation() {
         status.hidden = true;
         status.textContent = '';
         if (!catalog || loading || busy || document.activeElement !== search) return;
-        const normalize = text => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         const term = normalize(search.value).trim();
         if (!term) return;
-        const matches = catalog.products.filter(product => normalize(`${product.name} ${product.brand} ${product.presentation}`).includes(term));
+        const products = section.recipe ? [...new Map(catalog.products.map(product => [normalize(product.name), product])).values()] : catalog.products;
+        const matches = products.filter(product => normalize(section.recipe ? product.name : `${product.name} ${product.brand} ${product.presentation}`).includes(term));
         for (const product of matches.slice(0, 5)) {
             const row = el('div', undefined, 'qw-result');
-            row.id = `qw-mixture-${number}-option-${product.id}`;
+            row.id = section.recipe ? `${resultList.id}-option-${product.id}` : `qw-mixture-${number}-option-${product.id}`;
             row.setAttribute('role', 'option');
             row.setAttribute('aria-selected', 'false');
             const title = el('div');
-            title.append(el('strong', product.name), el('small', [product.brand, product.presentation].filter(Boolean).join(' · ')));
+            title.append(el('strong', product.name));
+            if (!section.recipe) title.append(el('small', [product.brand, product.presentation].filter(Boolean).join(' · ')));
             const price = el('span', product.unit_price == null ? 'Sin precio' : `${money(product.unit_price, 4)} / ${product.unit === 'ml' ? 'mL' : product.unit}`, 'qw-result-price');
-            const disabled = product.unit_price == null || product.unit_price < 0 || mixtureItems(number).some(item => item.presentation_id === product.id) || items.length >= 50;
+            const disabled = section.recipe ? recipeRows(number).some(item => item !== section.recipe && normalize(item.medicine) === normalize(product.name))
+                : product.unit_price == null || product.unit_price < 0 || mixtureItems(number).some(item => item.presentation_id === product.id) || items.length >= 50;
             row.setAttribute('aria-disabled', String(disabled));
             row.addEventListener('mousedown', event => event.preventDefault());
             row.addEventListener('click', () => {
                 if (disabled) return;
+                if (section.recipe) {
+                    section.recipe.medicine = product.name; search.value = product.name; pricingToken = null;
+                    closeResults(section); sync(); root.querySelector('[data-qw-recipe-concentration]').focus(); return;
+                }
                 items.push({ presentation_id: product.id, quantity: '', unit: product.unit, mixture_number: number });
                 search.value = '';
                 pricingToken = null; renderItems(); renderResults(); sync();
                 mixtureSections[number - 1].root.querySelector('[data-qw-items]').lastElementChild.querySelector('input').focus();
             });
-            row.append(title, price); resultList.append(row);
+            row.append(title); if (!section.recipe) row.append(price); resultList.append(row);
         }
         if (!matches.length) {
             status.textContent = 'Sin coincidencias.';
@@ -178,6 +194,69 @@ function initCommercialQuotation() {
             || (product.unit === 'frasco' && !Number.isInteger(quantity))) return 0;
         const base = round(quantity * price);
         return round(base + (product.vat ? round(base * .16) : 0));
+    }
+    function removeMixtureByNumber(number) {
+        items = items.filter(item => item.mixture_number !== number);
+        requirements = requirements.filter(row => row.mixture_number !== number);
+        [...items, ...requirements].forEach(row => { if (row.mixture_number > number) row.mixture_number -= 1; });
+        mixtureCount -= 1; pricingToken = null;
+        renderRecipes(); renderItems(); sync();
+        find(step === 1 ? '[data-qw-recipe-add-mixture]' : '[data-qw-add-mixture]').focus();
+    }
+    function renderRecipes() {
+        closeResults(); recipeSections = [];
+        const container = find('[data-qw-recipe-mixtures]'); container.replaceChildren();
+        for (let number = 1; number <= mixtureCount; number++) {
+            if (!recipeRows(number).length) requirements.push({ mixture_number: number, medicine: '', concentration: '' });
+            const root = find('[data-qw-recipe-template]').content.firstElementChild.cloneNode(true);
+            root.dataset.qwRecipeMixture = String(number); root.setAttribute('aria-label', `Receta de la mezcla ${number}`);
+            root.querySelector('[data-qw-recipe-title]').textContent = `Mezcla ${number}`;
+            root.querySelector('[data-qw-recipe-concentration-heading]').textContent = `Concentraci\u00f3n (${unit()})`;
+            const remove = root.querySelector('[data-qw-recipe-remove-mixture]');
+            remove.hidden = mixtureCount === 1; remove.title = `Eliminar mezcla ${number}`; remove.setAttribute('aria-label', remove.title);
+            remove.addEventListener('click', () => removeMixtureByNumber(number));
+            root.querySelector('[data-qw-recipe-add]').addEventListener('click', () => {
+                if (requirements.length >= 50) return;
+                requirements.push({ mixture_number: number, medicine: '', concentration: '' }); pricingToken = null;
+                renderRecipes(); sync(); recipeSections.filter(section => section.number === number).at(-1).search.focus();
+            });
+            recipeRows(number).forEach((recipe, index) => {
+                const row = el('tr'); row.dataset.qwRecipeRow = '';
+                const medicine = el('td');
+                const autocomplete = el('div', undefined, 'qw-autocomplete');
+                const label = el('label', undefined, 'qw-search'); label.innerHTML = '<i data-qw-icon="search"></i>';
+                const search = el('input'); search.type = 'search'; search.placeholder = 'Buscar medicamento'; search.autocomplete = 'off';
+                search.required = true; search.maxLength = 255; search.value = recipe.medicine; search.dataset.qwRecipeMedicine = '';
+                search.setAttribute('role', 'combobox'); search.setAttribute('aria-label', `Medicamento ${index + 1} de la receta, mezcla ${number}`);
+                search.setAttribute('aria-autocomplete', 'list'); search.setAttribute('aria-haspopup', 'listbox'); search.setAttribute('aria-expanded', 'false');
+                const results = el('div', undefined, 'qw-results'); results.hidden = true;
+                const resultList = el('div'); resultList.id = `qw-recipe-${number}-${index}-results`;
+                resultList.setAttribute('role', 'listbox'); resultList.setAttribute('aria-label', 'Medicamentos de la receta');
+                search.setAttribute('aria-controls', resultList.id);
+                const status = el('p', undefined, 'qw-result-status'); status.dataset.qwResultStatus = ''; status.hidden = true; status.setAttribute('role', 'status');
+                results.append(resultList, status); label.append(search); autocomplete.append(label, results); medicine.append(autocomplete);
+                const concentration = el('td'), group = el('div', undefined, 'qw-quantity');
+                const input = el('input'); input.type = 'number'; input.inputMode = 'decimal'; input.min = '0.0001'; input.max = '1000000'; input.step = '0.0001'; input.required = true;
+                input.placeholder = 'Capturar'; input.value = recipe.concentration; input.dataset.qwRecipeConcentration = '';
+                input.setAttribute('aria-label', `Concentracion del medicamento ${index + 1}, mezcla ${number}, en ${unit()}`);
+                input.addEventListener('input', () => { recipe.concentration = input.value; pricingToken = null; sync(); });
+                group.append(input, el('span', unit())); concentration.append(group);
+                const action = el('td'), button = el('button', undefined, 'quotation-icon-button'); button.type = 'button';
+                button.title = `Eliminar medicamento ${index + 1} de la receta, mezcla ${number}`; button.setAttribute('aria-label', button.title);
+                button.innerHTML = '<i data-qw-icon="trash-2"></i>';
+                button.addEventListener('click', () => {
+                    requirements.splice(requirements.indexOf(recipe), 1); pricingToken = null;
+                    renderRecipes(); sync(); recipeSections.find(section => section.number === number).search.focus();
+                });
+                action.append(button); row.append(medicine, concentration, action); root.querySelector('[data-qw-recipe-rows]').append(row);
+                const section = { root: row, number, recipe, search, results, resultList }; recipeSections.push(section);
+                search.addEventListener('input', () => { recipe.medicine = search.value; pricingToken = null; sync(); renderResults(section); });
+                search.addEventListener('focus', () => renderResults(section)); search.addEventListener('blur', () => closeResults(section));
+                search.addEventListener('keydown', event => navigateResults(event, section));
+            });
+            container.append(root);
+        }
+        icons();
     }
     function renderPrice(cell, item, product) {
         cell.replaceChildren();
@@ -254,12 +333,12 @@ function initCommercialQuotation() {
             const removeMixture = root.querySelector('[data-qw-remove-mixture]');
             removeMixture.hidden = mixtureCount === 1; removeMixture.title = `Eliminar mezcla ${number}`;
             removeMixture.setAttribute('aria-label', removeMixture.title);
-            removeMixture.addEventListener('click', () => {
-                items = items.filter(item => item.mixture_number !== number);
-                items.forEach(item => { if (item.mixture_number > number) item.mixture_number -= 1; });
-                requirements.splice(number - 1, 1);
-                mixtureCount -= 1; pricingToken = null; renderItems(); sync(); find('[data-qw-add-mixture]').focus();
+            removeMixture.addEventListener('click', () => removeMixtureByNumber(number));
+            const summary = el('dl', undefined, 'qw-recipe-summary');
+            recipeRows(number).filter(recipe => recipe.medicine.trim()).forEach(recipe => {
+                const pair = el('div'); pair.append(el('dt', recipe.medicine), el('dd', `${recipe.concentration} ${unit()}`)); summary.append(pair);
             });
+            if (summary.childElementCount) root.querySelector('.qw-mixture-header').after(summary);
             const search = root.querySelector('[data-qw-search]'), resultList = root.querySelector('[data-qw-result-list]');
             resultList.id = `qw-medication-results-${number}`; search.setAttribute('aria-controls', resultList.id);
             const section = { root, number, search, resultList, results: root.querySelector('[data-qw-results]') };
@@ -268,25 +347,6 @@ function initCommercialQuotation() {
             search.addEventListener('focus', () => renderResults(section));
             search.addEventListener('blur', () => closeResults(section));
             search.addEventListener('keydown', event => navigateResults(event, section));
-            root.querySelector('[data-qw-add]').addEventListener('click', () => { search.value = ''; renderResults(section); search.focus(); });
-            const requirement = requirements[number - 1] ||= { medicine: '', concentration: '' };
-            const requiredMedicine = root.querySelector('[data-qw-requirement-medicine]');
-            const requiredConcentration = root.querySelector('[data-qw-requirement-concentration]');
-            requiredMedicine.value = requirement.medicine;
-            requiredConcentration.value = requirement.concentration;
-            requiredMedicine.setAttribute('aria-label', `Medicamento del requerimiento de la mezcla ${number}`);
-            requiredConcentration.setAttribute('aria-label', `Concentracion del requerimiento de la mezcla ${number} en ${unit()}`);
-            root.querySelector('[data-qw-requirement-unit]').textContent = unit();
-            root.querySelector('[data-qw-requirement-heading]').classList.toggle('qw-bottle-count', catalog?.billing_mode === 'frasco');
-            const validateRequirement = () => {
-                const filled = requiredMedicine.value.trim() !== '' || requiredConcentration.value !== '';
-                requiredMedicine.required = filled; requiredConcentration.required = filled;
-            };
-            [requiredMedicine, requiredConcentration].forEach(input => input.addEventListener('input', () => {
-                requirement.medicine = requiredMedicine.value; requirement.concentration = requiredConcentration.value;
-                pricingToken = null; validateRequirement();
-            }));
-            validateRequirement();
             const quantityHeading = root.querySelector('[data-qw-quantity-heading]');
             quantityHeading.classList.toggle('qw-bottle-count', catalog?.billing_mode === 'frasco');
             quantityHeading.textContent = catalog?.billing_mode === 'frasco' ? 'Cantidad de frascos'
@@ -310,7 +370,7 @@ function initCommercialQuotation() {
                 const action = el('td'); const remove = el('button', undefined, 'quotation-icon-button');
                 remove.type = 'button'; remove.title = 'Eliminar medicamento'; remove.setAttribute('aria-label', `Eliminar ${product?.name || 'medicamento'}`);
                 remove.innerHTML = '<i data-qw-icon="trash-2"></i>';
-                remove.addEventListener('click', () => { items.splice(index, 1); pricingToken = null; renderItems(); sync(); mixtureSections[number - 1].root.querySelector('[data-qw-add]').focus(); });
+                remove.addEventListener('click', () => { items.splice(index, 1); pricingToken = null; renderItems(); sync(); mixtureSections[number - 1].search.focus(); });
                 action.append(remove); row.append(name, concentration, price, amount, action); body.append(row);
             });
             root.querySelector('[data-qw-empty]').hidden = mixtureItems(number).length > 0;
@@ -321,10 +381,8 @@ function initCommercialQuotation() {
         controller?.abort();
         const current = new AbortController(); controller = current;
         catalog = null; pricingToken = null; loading = false; error();
-        if (!preserve) { items = []; mixtureCount = 1; requirements = []; }
-        find('[data-qw-list-name]').textContent = 'Sin lista seleccionada';
-        find('[data-qw-list-status]').textContent = '';
-        if (!category || !field('hospital_id').value) { renderItems(); renderResults(); sync(); return; }
+        if (!preserve) items = [];
+        if (!category || !field('hospital_id').value) { renderRecipes(); renderItems(); renderResults(); sync(); return; }
         loading = true; renderResults(); sync();
         const params = new URLSearchParams({ flow: 'commercial', category, hospital_id: field('hospital_id').value, no_commercial_relationship: noCommercial() ? '1' : '0' });
         if (noCommercial()) params.set('billing_mode', field('billing_mode').value || 'unit');
@@ -341,9 +399,6 @@ function initCommercialQuotation() {
                 }
                 item.unit = product.unit;
             });
-            find('[data-qw-list-name]').textContent = `${noCommercial() ? 'Lista base / generica: ' : 'Lista asignada: '}${catalog.price_list.name}`;
-            find('[data-qw-list-status]').textContent = catalog.billing_mode === 'mixed' ? 'Cobro segun la configuracion de cada medicamento.'
-                : `Cobro por ${catalog.billing_mode === 'frasco' ? 'frasco' : unit()}`;
             if (!noCommercial()) {
                 dialog.querySelectorAll('[name=billing_mode]').forEach(input => { input.checked = input.value === catalog.billing_mode; });
             }
@@ -351,10 +406,10 @@ function initCommercialQuotation() {
             if (missing) error('Hay medicamentos que no estan disponibles en esta lista. Retiralos o selecciona otra lista.');
         } catch (failure) {
             if (failure.name !== 'AbortError' && current === controller) {
-                error(failure.message); find('[data-qw-list-status]').textContent = 'Lista de precios no disponible.';
+                error(failure.message);
             }
         } finally {
-            if (current === controller) { loading = false; renderItems(); renderResults(); sync(); }
+            if (current === controller) { loading = false; renderRecipes(); renderItems(); renderResults(); sync(); }
         }
     }
     function payload(action = 'save') {
@@ -366,7 +421,7 @@ function initCommercialQuotation() {
             patient_maternal_surname: field('patient_maternal_surname').value,
             patient_platform_id: field('patient_platform_id').value,
             mixture_count: mixtureCount,
-            requirements: requirements.map((requirement, index) => ({ mixture_number: index + 1,
+            requirements: requirements.map(requirement => ({ mixture_number: requirement.mixture_number,
                 medicine: requirement.medicine.trim(), concentration: requirement.concentration === '' ? null : Number(requirement.concentration) }))
                 .filter(requirement => requirement.medicine !== '' || requirement.concentration !== null),
             items: [...items].sort((a, b) => a.mixture_number - b.mixture_number).map(item => ({ presentation_id: item.presentation_id, mixture_number: item.mixture_number,
@@ -430,9 +485,9 @@ function initCommercialQuotation() {
         try {
             const result = await request(dialog.dataset.previewUrl, { method: 'POST', body: JSON.stringify(data) });
             if (current !== version) return;
-            pricingToken = result.pricing_token; review(result.pricing_snapshot, result.document); step = 2;
+            pricingToken = result.pricing_token; review(result.pricing_snapshot, result.document); step = 3;
         } catch (failure) { error(failure.message); }
-        finally { busy = false; sync(); if (step === 2) { find('.qw-body').scrollTop = 0; find('[data-qw-back]').focus(); } }
+        finally { busy = false; sync(); if (step === 3) { find('.qw-body').scrollTop = 0; find('[data-qw-back]').focus(); } }
     }
     async function save(action) {
         if (busy || !pricingToken) return;
@@ -440,7 +495,7 @@ function initCommercialQuotation() {
         try {
             const result = await request(updateUrl || dialog.dataset.storeUrl, { method: updateUrl ? 'PUT' : 'POST', body: JSON.stringify(data) });
             location.assign(result.redirect_url);
-        } catch (failure) { busy = false; pricingToken = null; go(1); error(failure.message); }
+        } catch (failure) { busy = false; pricingToken = null; go(2); error(failure.message); }
     }
     function reset() {
         controller?.abort(); controller = null; version += 1;
@@ -449,14 +504,14 @@ function initCommercialQuotation() {
         mixtureCount = 1; requirements = [];
         submissionKey = crypto.randomUUID(); error();
         find('#quote-wizard-title').textContent = 'Nueva cotizacion';
-        filterHospitals(); renderItems(); renderResults(); sync();
+        filterHospitals(); renderRecipes(); renderItems(); renderResults(); sync();
         if (!dialog.open) dialog.showModal();
         go(0);
     }
     document.querySelector('[data-quotation-new]')?.addEventListener('click', reset);
     dialog.querySelectorAll('[name=category]').forEach(input => input.addEventListener('change', () => {
-        if (category !== input.value) { catalog = null; items = []; mixtureCount = 1; requirements = []; pricingToken = null; renderItems(); }
-        category = input.value; sync();
+        if (category !== input.value) { catalog = null; items = []; mixtureCount = 1; requirements = []; pricingToken = null; }
+        category = input.value; renderRecipes(); renderItems(); sync();
     }));
     field('institution_id').addEventListener('change', () => { field('hospital_id').value = ''; filterHospitals(); loadCatalog(); });
     field('hospital_id').addEventListener('change', () => loadCatalog());
@@ -466,10 +521,12 @@ function initCommercialQuotation() {
         loadCatalog(true);
     });
     dialog.querySelectorAll('[name=billing_mode]').forEach(input => input.addEventListener('change', () => { resetPrices(); loadCatalog(true); }));
-    find('[data-qw-add-mixture]').addEventListener('click', () => {
-        if (loading || busy || !catalog || mixtureCount >= 50 || items.length >= 50) return;
-        mixtureCount += 1; pricingToken = null; renderItems(); sync(); mixtureSections.at(-1).search.focus();
-    });
+    function addMixture() {
+        if (loading || busy || !catalog || mixtureCount >= 50 || items.length >= 50 || requirements.length >= 50) return;
+        mixtureCount += 1; pricingToken = null; renderRecipes(); renderItems(); go(1); recipeSections.at(-1).search.focus();
+    }
+    find('[data-qw-add-mixture]').addEventListener('click', addMixture);
+    find('[data-qw-recipe-add-mixture]').addEventListener('click', addMixture);
     find('[data-qw-back]').addEventListener('click', () => { if (busy) return; error(); if (step === 0) dialog.close(); else go(step - 1); });
     find('[data-qw-close]').addEventListener('click', () => { if (!busy) dialog.close(); });
     dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
@@ -478,8 +535,9 @@ function initCommercialQuotation() {
     form.addEventListener('submit', event => {
         event.preventDefault(); if (busy || loading) return;
         if (step === 0 && category) { go(1); loadCatalog(true); }
-        else if (step === 1) preview();
-        else if (step === 2) save('send');
+        else if (step === 1 && catalog && completeRecipe() && form.reportValidity()) { error(); renderItems(); go(2); }
+        else if (step === 2) preview();
+        else if (step === 3) save('send');
     });
     document.querySelectorAll('[data-quotation-edit][data-quotation-flow="commercial"]').forEach(button => button.addEventListener('click', async () => {
         reset(); const current = version; busy = true; sync();
@@ -512,11 +570,9 @@ function initCommercialQuotation() {
                     unit: bottle ? 'frasco' : category === 'nutricionales' ? 'ml' : 'mg' };
             });
             mixtureCount = capture.mixture_count ?? Math.max(1, ...items.map(item => item.mixture_number));
-            requirements = Array.from({ length: mixtureCount }, (_, index) => {
-                const requirement = capture.requirements?.find(requirement => requirement.mixture_number === index + 1);
-                return { medicine: requirement?.medicine || '', concentration: requirement?.concentration ?? '' };
-            });
-            busy = false; find('#quote-wizard-title').textContent = `Editar ${data.folio}`; go(1); await loadCatalog(true);
+            requirements = (capture.requirements || []).map(requirement => ({ mixture_number: requirement.mixture_number,
+                medicine: requirement.medicine || '', concentration: requirement.concentration ?? '' }));
+            busy = false; find('#quote-wizard-title').textContent = `Editar ${data.folio}`; go(2); await loadCatalog(true);
         } catch (failure) { if (current === version) { busy = false; sync(); error(failure.message); } }
     }));
     icons();

@@ -12,7 +12,7 @@
 
         <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
         <nav class="flex max-w-full flex-wrap gap-2 pb-1" aria-label="Estado de las cotizaciones">
-            @foreach (App\Models\RequestQuotation::STATUS_FILTERS as $key => $label)
+            @foreach ($statusFilters as $key => $label)
                 <a href="{{ route('admin.solicitudes.cotizacion.index', array_merge($filterQuery, ['estado' => $key])) }}"
                     @if ($statusFilter === $key) aria-current="page" @endif
                     @class([
@@ -98,7 +98,7 @@
             <table id="request-quotations-table" class="w-full text-left text-sm text-gray-500">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-700">
                     <tr>
-                        @foreach (['Tipo', 'Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios'] as $column)
+                        @foreach ($isHospitalView ? ['Tipo', 'Folio', 'Fecha', 'Paciente'] : ['Tipo', 'Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios'] as $column)
                             <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>{!! $column !!}</th>
                         @endforeach
                         <th scope="col" class="px-2 py-3 text-center whitespace-nowrap" data-command-column
@@ -106,10 +106,13 @@
                             <a class="inline-flex items-center gap-1" href="{{ route('admin.solicitudes.cotizacion.index', array_merge($filterQuery, ['orden' => 'total', 'direccion' => $sort === 'total' && $sortDirection === 'asc' ? 'desc' : 'asc'])) }}"
                                 title="Ordenar por total">Total MXN <i data-request-navigation-icon="arrow-up-down" class="h-3 w-3 shrink-0" aria-hidden="true"></i></a>
                         </th>
-                        <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>Estado</th>
+                        @unless ($isHospitalView)
+                            <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>Estado</th>
+                        @endunless
+                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Detalle</th>
                         <th scope="col" class="px-2 py-3 text-center" data-command-column>Enviar</th>
                         <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>Autorizaci&oacute;n</th>
-                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Detalle</th>
+                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Solicitud (Foto o Archivo)</th>
                         <th scope="col" class="px-2 py-3 text-center whitespace-nowrap" data-command-column>Enviar a preparacion</th>
                     </tr>
                 </thead>
@@ -139,20 +142,36 @@
                             </td>
                             <td class="px-2 py-3 text-center whitespace-nowrap font-medium text-gray-700">{{ $quotation->folio }}</td>
                             <td class="px-2 py-3 text-center whitespace-nowrap">{{ $quotation->created_at?->format('d/m/Y') }}</td>
-                            <td class="min-w-[10rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->institution?->nombre ?? 'Sin institucion' }}</td>
-                            <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->hospital?->name ?? 'Sin hospital' }}</td>
+                            @unless ($isHospitalView)
+                                <td class="min-w-[10rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->institution?->nombre ?? 'Sin institucion' }}</td>
+                                <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->hospital?->name ?? 'Sin hospital' }}</td>
+                            @endunless
                             <td class="min-w-[10rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->patient_name ?: 'Sin paciente' }}</td>
-                            <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->seller_name }}</td>
-                            <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->price_list_name }}</td>
+                            @unless ($isHospitalView)
+                                <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->seller_name }}</td>
+                                <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->price_list_name }}</td>
+                            @endunless
                             <td class="px-2 py-3 text-right whitespace-nowrap font-medium text-gray-700">{{ $quotation->total === null ? 'Sin registrar' : '$'.number_format((float) $quotation->total, 2) }}</td>
+                            @unless ($isHospitalView)
+                                <td class="px-2 py-3 text-center">
+                                    <span @class([
+                                        'quotation-row-pill',
+                                        'quotation-row-pill--pending' => $quotation->status === 'borrador',
+                                        'quotation-row-pill--success' => in_array($quotation->status, ['enviada', 'autorizada']),
+                                        'quotation-row-pill--primary' => $quotation->status === 'preparacion',
+                                    ])>{{ $quotation->status === 'borrador' ? 'Por enviar' : $quotation->status_label }}</span>
+                                </td>
+                            @endunless
                             <td class="px-2 py-3 text-center">
-                                <span @class([
-                                    'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold',
-                                    'bg-gray-100 text-gray-600' => $quotation->status === 'borrador',
-                                    'bg-amber-100 text-amber-800' => $quotation->status === 'enviada',
-                                    'bg-emerald-100 text-emerald-700' => $quotation->status === 'autorizada',
-                                    'bg-blue-100 text-blue-700' => $quotation->status === 'preparacion',
-                                ])><span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-current"></span>{{ $quotation->status_label }}</span>
+                                <div class="quotation-row-actions">
+                                <button type="button" @click="$dispatch('quotation-detail', {{ Illuminate\Support\Js::from($detail) }})"
+                                    aria-label="Ver {{ $quotation->folio }}" class="quotation-row-pill quotation-row-pill--primary">Ver</button>
+                                @if ($quotation->clinical_data && $quotation->canBeEditedBy(auth()->user()))
+                                    <button type="button" data-quotation-edit="{{ route('admin.solicitudes.cotizacion.show', $quotation) }}"
+                                        data-quotation-flow="{{ $quotation->clinical_data['flow'] ?? 'clinical' }}"
+                                        class="quotation-row-pill quotation-row-pill--primary" aria-label="Editar {{ $quotation->folio }}">Editar</button>
+                                @endif
+                                </div>
                             </td>
                             <td class="px-2 py-3 text-center">
                                 <button type="button" data-quotation-send="{{ json_encode([
@@ -161,46 +180,60 @@
                                     'pdf_url' => route('admin.solicitudes.cotizacion.pdf', $quotation),
                                     'url' => route('admin.solicitudes.cotizacion.email', $quotation),
                                 ], JSON_THROW_ON_ERROR) }}" aria-label="Enviar {{ $quotation->folio }}"
-                                    class="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">
+                                    class="quotation-row-pill quotation-row-pill--success">
                                     <i data-quotation-icon="send" class="h-3.5 w-3.5" aria-hidden="true"></i>Enviar
                                 </button>
                             </td>
                             <td class="min-w-[10rem] px-2 py-3 text-center">
                                 @if ($quotation->authorized_at)
-                                    <span class="block">{{ trim($quotation->authorizer?->name.' '.$quotation->authorizer?->lastname) }}</span>
-                                    <span class="mt-1 block text-xs">{{ $quotation->authorized_at->format('d/m/Y H:i') }}</span>
+                                    <span class="quotation-row-pill quotation-row-pill--success"
+                                        title="{{ $detail['authorization'] }}">Autorizado</span>
                                 @else
-                                    <span class="block">Pendiente</span>
                                     @if ($quotation->status === 'enviada' && $quotation->canBeAuthorizedBy(auth()->user()))
                                         <form method="POST" action="{{ route('admin.solicitudes.cotizacion.authorize', $quotation) }}"
-                                            class="mt-1" onsubmit="return confirm('¿Autorizar esta cotizacion con el importe mostrado?')">
+                                            data-quotation-authorization="{{ json_encode([
+                                                'folio' => $quotation->folio,
+                                                'date' => $quotation->created_at?->format('d/m/Y'),
+                                                'hospital' => $quotation->hospital?->name ?? 'Sin hospital',
+                                                'amount' => $quotation->total === null ? 'Sin registrar' : '$'.number_format((float) $quotation->total, 2),
+                                                'can_authorize' => $quotation->total !== null && $quotation->total >= 0,
+                                            ], JSON_THROW_ON_ERROR) }}">
                                             @csrf
-                                            <button type="submit" class="rounded-md border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Autorizar</button>
+                                            <button type="button" data-quotation-authorize class="quotation-row-pill quotation-row-pill--pending"
+                                                title="Autorizar {{ $quotation->folio }}" aria-label="Pendiente: autorizar {{ $quotation->folio }}">Pendiente</button>
                                         </form>
+                                    @else
+                                        <button type="button" disabled class="quotation-row-pill quotation-row-pill--pending"
+                                            title="{{ $quotation->status === 'borrador' ? 'Primero genera la cotizacion para enviarla a autorizacion' : 'Pendiente de un usuario con permiso para autorizar' }}">Pendiente</button>
                                     @endif
                                 @endif
                             </td>
                             <td class="px-2 py-3 text-center">
-                                <button type="button" @click="$dispatch('quotation-detail', {{ Illuminate\Support\Js::from($detail) }})"
-                                    aria-label="Ver {{ $quotation->folio }}" class="inline-flex rounded-full bg-azul-prodifem px-4 py-2 text-xs font-semibold text-white hover:bg-blue-800">Ver</button>
-                                @if ($quotation->clinical_data && $quotation->canBeEditedBy(auth()->user()))
-                                    <button type="button" data-quotation-edit="{{ route('admin.solicitudes.cotizacion.show', $quotation) }}"
-                                        data-quotation-flow="{{ $quotation->clinical_data['flow'] ?? 'clinical' }}"
-                                        class="mt-1 rounded-md border px-3 py-1 text-xs font-semibold" aria-label="Editar {{ $quotation->folio }}">Editar</button>
-                                @endif
+                                <button type="button" @class([
+                                        'quotation-row-pill',
+                                        'quotation-row-pill--pending' => !$quotation->documents_count,
+                                        'quotation-row-pill--success' => $quotation->documents_count > 0,
+                                    ]) data-quotation-documents
+                                    data-folio="{{ $quotation->folio }}" data-url="{{ route('admin.solicitudes.cotizacion.documents.index', $quotation) }}"
+                                    aria-label="Solicitud de {{ $quotation->folio }}" title="Solicitud de {{ $quotation->folio }} (Foto o Archivo): {{ $quotation->documents_count }} adjuntos">
+                                    <i data-quotation-document-icon="camera" aria-hidden="true"></i>
+                                    <span aria-hidden="true">/</span>
+                                    <i data-quotation-document-icon="paperclip" aria-hidden="true"></i>
+                                </button>
                             </td>
-                            <td class="px-2 py-3 text-center">
+                            <td class="px-2 py-3 text-center" @unless ($requestUrl) data-quotation-preparation @endunless>
                                 @if ($requestUrl)
-                                    <span class="block text-xs text-gray-500">Enviada</span>
-                                    <a href="{{ $requestUrl }}" class="mt-1 inline-block text-xs font-semibold text-blue-700 underline">COT-{{ $quotation->request_id }}</a>
-                                @elseif ($quotation->status === 'autorizada' && $quotation->canPrepareBy(auth()->user()))
+                                    <a href="{{ $requestUrl }}" class="quotation-row-pill quotation-row-pill--success"
+                                        title="Enviada a preparacion" aria-label="Ver solicitud COT-{{ $quotation->request_id }} enviada a preparacion">COT-{{ $quotation->request_id }}</a>
+                                @elseif ($quotation->canStartPreparationBy(auth()->user()))
                                     <a href="{{ route('admin.solicitudes.cotizacion.preparation', $quotation) }}"
                                         aria-label="Enviar {{ $quotation->folio }} a preparacion"
-                                        class="inline-flex items-center gap-2 rounded border border-teal-600 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50">
-                                        <i class="fas fa-paper-plane" aria-hidden="true"></i> Enviar
+                                        class="quotation-row-pill quotation-row-pill--success">
+                                        <i data-quotation-icon="send" aria-hidden="true"></i>Enviar
                                     </a>
                                 @else
-                                    <span class="text-xs text-gray-500">{{ $quotation->status === 'autorizada' ? 'Por agregar' : 'Pendiente' }}</span>
+                                    <button type="button" disabled class="quotation-row-pill quotation-row-pill--muted"
+                                        title="{{ $quotation->status !== 'autorizada' ? 'Pendiente de autorizacion' : (!$quotation->documents_count ? 'Adjunta una foto o archivo de la solicitud' : 'Sin permiso para enviar a preparacion') }}">Pendiente</button>
                                 @endif
                             </td>
                         </tr>
@@ -262,6 +295,8 @@
             <div class="flex justify-end border-t px-5 py-4"><button type="button" @click="$refs.detail.close()" class="rounded-md bg-azul-prodifem px-5 py-2 text-sm font-semibold text-white hover:bg-blue-800">Cerrar</button></div>
         </dialog>
         @include('admin.solicitudes.quotations._send-modal')
+        @include('admin.solicitudes.quotations._documents-modal')
+        @include('admin.solicitudes.quotations._authorize-modal')
         @if (count($createTypes))
             @include('admin.solicitudes.quotations._capture-modal')
             @include('admin.solicitudes.quotations._commercial-modal')

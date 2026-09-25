@@ -244,6 +244,7 @@ class RequestQuotationController extends Controller
     {
         $user = $request->user();
         $isSalesperson = $user->isSalesperson();
+        $isHospitalView = $user->hasAnyRole(['Cliente', 'Institucion']);
         $canViewNutrition = $isSalesperson || $user->can('nutricionales_solicitudes_index');
         $canViewOncology = $isSalesperson || $user->can('oncologicos_solicitudes_index');
         abort_unless($canViewNutrition || $canViewOncology, 403);
@@ -255,8 +256,12 @@ class RequestQuotationController extends Controller
             $selectedType = 'todas';
         }
         abort_if($selectedType !== 'todas' && !in_array($selectedType, $allowedTypes, true), 403);
+        $statusFilters = RequestQuotation::STATUS_FILTERS;
+        if ($isHospitalView) {
+            unset($statusFilters['recibidas'], $statusFilters['enviadas']);
+        }
         $statusFilter = $request->query('estado', 'todas');
-        if (!is_string($statusFilter) || !array_key_exists($statusFilter, RequestQuotation::STATUS_FILTERS)) {
+        if (!is_string($statusFilter) || !array_key_exists($statusFilter, $statusFilters)) {
             $statusFilter = 'todas';
         }
 
@@ -271,7 +276,6 @@ class RequestQuotationController extends Controller
         $filters['buscar'] = trim($filters['buscar'] ?? '');
         $sortDirection = $request->query('direccion') === 'asc' ? 'asc' : 'desc';
         $sort = $request->query('orden') === 'total' ? 'total' : 'fecha';
-        $isHospitalView = $user->hasAnyRole(['Cliente', 'Institucion']);
 
         $hospitals = Hospital::query()->select('id', 'name')->with('instituciones:id,nombre')
             ->when($isHospitalView, fn ($query) => $query->whereKey($user->hospital_id ?: 0))
@@ -281,6 +285,7 @@ class RequestQuotationController extends Controller
             ->orderBy('nombre')->get();
 
         $query = RequestQuotation::query()->with(['hospital:id,name', 'institution:id,nombre', 'authorizer:id,name,lastname', 'seller:id,name,lastname'])
+            ->withCount('documents')
             ->forSalesperson($user)
             ->whereIn('category', $selectedType === 'todas' ? $allowedTypes : [$selectedType])
             ->when($isHospitalView, fn ($query) => $query->where('hospital_id', $user->hospital_id ?: 0))
@@ -313,7 +318,7 @@ class RequestQuotationController extends Controller
         $createTypes = array_values(array_filter(['nutricionales', 'oncologicos', 'antibioticos'], fn ($type) => RequestQuotation::canCreate($user, $type)));
         $sellers = $isSalesperson ? collect() : User::activeSalespeople()->orderBy('name')->orderBy('lastname')->get(['id', 'name', 'lastname']);
         return compact('quotations', 'hospitals', 'institutions', 'filters', 'createTypes',
-            'sellers', 'isSalesperson',
-            'selectedType', 'statusFilter', 'sort', 'sortDirection', 'filterQuery', 'canViewNutrition', 'canViewOncology');
+            'sellers', 'isSalesperson', 'isHospitalView',
+            'selectedType', 'statusFilter', 'statusFilters', 'sort', 'sortDirection', 'filterQuery', 'canViewNutrition', 'canViewOncology');
     }
 }

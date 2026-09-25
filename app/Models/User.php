@@ -70,6 +70,12 @@ class User extends Authenticatable
             : Str::lower($normalizedValue);
     }
 
+    public function getEmailForPasswordReset(): string
+    {
+        // Laravel's token table keeps its legacy email column, but accounts use usernames.
+        return (string) $this->username;
+    }
+
     public function hospital()
     {
         return $this->belongsTo(Hospital::class);

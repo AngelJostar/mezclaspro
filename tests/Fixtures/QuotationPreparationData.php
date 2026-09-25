@@ -7,6 +7,8 @@ use App\Services\RequestQuotationCaptureService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 
 class QuotationPreparationData
@@ -14,6 +16,7 @@ class QuotationPreparationData
     public static function seed()
     {
         $user = RequestQuotationCaptureData::seed();
+        Storage::fake('local');
         foreach (['oncologicos_solicitudes_store', 'nutricionales_solicitudes_store'] as $permission) {
             $user->givePermissionTo(Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']));
         }
@@ -61,7 +64,7 @@ class QuotationPreparationData
         return $user;
     }
 
-    public static function quotation(string $category = 'oncologicos', string $unit = 'mg', int $count = 1, ?float $specialPrice = null, bool $grouped = false): RequestQuotation
+    public static function quotation(string $category = 'oncologicos', string $unit = 'mg', int $count = 1, ?float $specialPrice = null, bool $grouped = false, bool $withDocument = true): RequestQuotation
     {
         if ($category === 'nutricionales') DB::table('nutri_medicine_list_items')->where('nutrition_medicine_presentation_id', 1)->update(['charge_by' => $unit]);
         else DB::table('medicine_list_presentation')->update(['charge_by' => $unit]);
@@ -78,7 +81,14 @@ class QuotationPreparationData
         }
         $capture = app(RequestQuotationCaptureService::class)->capture(auth()->user(), $data, true);
         unset($capture['pricing_token']);
-        return RequestQuotation::forceCreate($capture + ['created_by' => auth()->id(), 'status' => 'autorizada', 'authorized_at' => now(), 'authorized_by' => auth()->id()]);
+        $quote = RequestQuotation::forceCreate($capture + ['created_by' => auth()->id(), 'status' => 'autorizada', 'authorized_at' => now(), 'authorized_by' => auth()->id()]);
+        if ($withDocument) {
+            $file = \Illuminate\Http\UploadedFile::fake()->image('solicitud.jpg');
+            $quote->documents()->create(['uploaded_by' => auth()->id(), 'upload_key' => (string) Str::uuid(),
+                'path' => $file->store('request-quotations/'.$quote->id.'/documents', 'local'),
+                'original_name' => 'solicitud.jpg', 'mime_type' => 'image/jpeg', 'size' => $file->getSize()]);
+        }
+        return $quote;
     }
 
     public static function presentationGroups(string $category = 'oncologicos', string $unit = 'frasco'): RequestQuotation

@@ -19,9 +19,9 @@ const script = buildSync({ stdin: {
         Alpine.start();`, resolveDir: root,
 }, bundle: true, write: false, format: 'iife', loader: { '.css': 'empty' } }).outputFiles[0].text;
 
-function screen(query = '', capture = false) {
+function screen(query = '', capture = false, role = '') {
     const html = execFileSync('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3',
-        'tests/Browser/fixtures/request-quotations.php', query, capture ? 'capture' : ''], { cwd: root, encoding: 'utf8' });
+        'tests/Browser/fixtures/request-quotations.php', query, capture ? (typeof capture === 'string' ? capture : 'capture') : '', role], { cwd: root, encoding: 'utf8' });
     return `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style>
         <div x-data="{ open: false }">${html}</div><script>${script}</script>`;
 }
@@ -41,15 +41,11 @@ async function assertMedicationColumns(mixture) {
     const headings = await table.locator('thead th').all();
     const rows = await table.locator('[data-qw-items] tr, [data-qw-entry]').all();
     assert.equal(headings.length, 5);
+    assert.equal(await headings[0].textContent(), 'Selecci\u00f3n de Presentaci\u00f3n');
     assert.equal(await table.locator('[data-qw-entry]').count(), 1);
-    const requirementHeadings = await mixture.locator('.qw-requirement-table thead th').all();
-    assert.equal(requirementHeadings.length, 5);
-    assert.equal(await mixture.locator('[data-qw-requirement-heading]').textContent(), 'Concentraci\u00f3n solicitada');
-    for (let i = 0; i < headings.length; i++) {
-        const heading = await headings[i].boundingBox(), requirement = await requirementHeadings[i].boundingBox();
-        assert.ok(Math.abs(heading.x - requirement.x) < 1 && Math.abs(heading.width - requirement.width) < 1,
-            'Requirements align with the medication breakdown columns');
-    }
+    assert.equal(await table.locator('[data-qw-add]').count(), 0);
+    assert.equal(await mixture.locator('.qw-requirement-table, [data-qw-requirement-medicine], [data-qw-requirement-concentration]').count(), 0,
+        'The removed requirement section does not render or add form validation');
     for (const row of rows) {
         const cells = await row.locator('td').all();
         assert.equal(cells.length, headings.length);
@@ -60,13 +56,31 @@ async function assertMedicationColumns(mixture) {
         }
     }
     const entry = table.locator('[data-qw-entry]');
-    const cell = await entry.locator('td').first().boundingBox();
-    for (const control of await entry.locator('[data-qw-add], [data-qw-search]').all()) {
-        const box = await control.boundingBox();
-        assert.ok(box.x >= cell.x && box.x + box.width <= cell.x + cell.width,
-            'Both medication entry controls stay inside the medication column');
-    }
+    const bounds = await entry.locator('td').first().evaluate(cell => {
+        const style = getComputedStyle(cell), box = cell.getBoundingClientRect();
+        const input = cell.querySelector('[data-qw-search]').getBoundingClientRect();
+        return { left: input.left - box.left, right: box.right - input.right,
+            paddingLeft: parseFloat(style.paddingLeft), paddingRight: parseFloat(style.paddingRight) };
+    });
+    assert.ok(Math.abs(bounds.left - bounds.paddingLeft) <= 1 && Math.abs(bounds.right - bounds.paddingRight) <= 1,
+        'The medication search fills the entire presentation column inside its cell padding');
     assert.deepEqual(await entry.locator('td').allTextContents().then(cells => cells.slice(1)), ['', '', '', '']);
+}
+
+async function waitForCatalog(dialog) {
+    await dialog.locator('[data-qw-recipe-medicine]:enabled, [data-qw-search]:enabled').first().waitFor({ state: 'visible' });
+    assert.equal(await dialog.locator('.qw-list, [data-qw-list-name], [data-qw-list-status]').count(), 0,
+        'Loading hospital or generic prices must not display an assigned-price-list banner');
+}
+
+async function enterBreakdown(dialog, medicine = 'Medicamento de prueba', concentration = '100', mixture = 1) {
+    const recipe = dialog.locator(`[data-qw-recipe-mixture="${mixture}"]`);
+    await recipe.locator('[data-qw-recipe-medicine]').first().fill(medicine);
+    await recipe.locator('[data-qw-recipe-concentration]').first().fill(concentration);
+    await dialog.locator('[data-qw-next]').click();
+    await dialog.locator('[data-qw-step="2"]').waitFor();
+    assert.equal(await dialog.locator('.qw-hospital-row').isVisible(), false);
+    assert.equal(await dialog.locator('.qw-list').count(), 0);
 }
 
 test('commercial wizard chooses category first, locks hospital tariffs and reviews server totals on desktop and mobile', async () => {
@@ -145,10 +159,11 @@ test('commercial wizard chooses category first, locks hospital tariffs and revie
                 if (category === 'nutricionales' && process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-layout-empty-${width}.png`) });
                 await dialog.locator('[name=institution_id]').selectOption('1');
                 await dialog.locator('[name=hospital_id]').selectOption('1');
-                await dialog.getByText('Lista asignada: Lista asignada de prueba', { exact: true }).waitFor();
-                await assertMedicationColumns(dialog.locator('[data-qw-mixture]'));
+                await waitForCatalog(dialog);
                 assert.equal(await dialog.getByRole('radio', { name: `Por ${unit}`, exact: true }).isDisabled(), true);
                 assert.equal(await dialog.getByRole('radio', { name: 'Por frasco', exact: true }).isDisabled(), true);
+                await enterBreakdown(dialog);
+                await assertMedicationColumns(dialog.locator('[data-qw-mixture]'));
                 await dialog.getByRole('combobox', { name: 'Buscar medicamento' }).fill('no existe');
                 await dialog.getByText('Sin coincidencias.', { exact: true }).waitFor();
                 await dialog.getByRole('combobox', { name: 'Buscar medicamento' }).fill('Medicamento');
@@ -175,29 +190,33 @@ test('commercial wizard chooses category first, locks hospital tariffs and revie
                     assert.equal(previews.length, previousPreviews);
                 }
                 await quantity.fill(bottle ? '2' : '101');
-                assert.equal(await dialog.locator('.qw-quantity span').textContent(), bottle ? 'frascos' : unit);
+                assert.equal(await dialog.locator('[data-qw-items] .qw-quantity span').textContent(), bottle ? 'frascos' : unit);
                 assert.equal(await dialog.getByRole('combobox', { name: 'Buscar medicamento' }).inputValue(), '');
                 assert.equal(await dialog.locator('[data-qw-results]').isVisible(), false);
                 assert.equal(await dialog.locator('[data-qw-items] tr').count(), 1);
                 await assertMedicationColumns(dialog.locator('[data-qw-mixture]'));
                 assert.equal(await dialog.locator('[data-qw-estimate]').textContent(), category === 'nutricionales' ? '$249.32 MXN' : '$479.00 MXN');
                 if (category === 'oncologicos') {
+                    await dialog.locator('[data-qw-back]').click();
                     await dialog.locator('[name=no_commercial_relationship]').check();
-                    await dialog.getByText('Lista base / generica: Lista base de prueba', { exact: true }).waitFor();
+                    await waitForCatalog(dialog);
                     assert.equal(await dialog.getByRole('radio', { name: 'Por mg', exact: true }).isEnabled(), true);
                     await dialog.getByRole('radio', { name: 'Por mg', exact: true }).check();
                     await page.waitForFunction(() => !document.querySelector('[data-qw-search]').disabled);
+                    await dialog.locator('[data-qw-next]').click();
                     const concentration = dialog.getByRole('spinbutton', { name: 'Concentracion de Medicamento de prueba en mg' });
                     assert.equal(await concentration.inputValue(), '');
                     await concentration.fill('101');
                     assert.equal(await dialog.locator('[data-qw-items] td').nth(2).textContent(), '$2.0000 / mg');
                     genericMissing = true;
+                    await dialog.locator('[data-qw-back]').click();
                     await dialog.getByRole('radio', { name: 'Por frasco', exact: true }).check();
                     await dialog.getByRole('alert').getByText('No hay una lista base/generica configurada para esta categoria.').waitFor();
                     assert.equal(await dialog.getByRole('button', { name: 'Continuar', exact: true }).isDisabled(), true);
                     genericMissing = false;
                     await dialog.locator('[name=no_commercial_relationship]').uncheck();
-                    await dialog.getByText('Lista asignada: Lista asignada de prueba', { exact: true }).waitFor();
+                    await waitForCatalog(dialog);
+                    await dialog.locator('[data-qw-next]').click();
                     assert.equal(await quantity.inputValue(), '');
                     await quantity.fill('2');
                     if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-wizard-medications-${width}.png`) });
@@ -239,7 +258,7 @@ test('commercial wizard chooses category first, locks hospital tariffs and revie
                     assert.match(await observations.inputValue(), /Primera observacion\nSegunda observacion/);
                     if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-extra-fields-${width}.png`) });
                     await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
-                    await dialog.locator('[data-qw-step="2"]').waitFor();
+                    await dialog.locator('[data-qw-step="3"]').waitFor();
                     assert.equal(await dialog.locator('.qw-document h3, .qw-document-subtitle').count(), 0);
                     assert.equal(await dialog.getByText('Medicamento y servicio de preparaci\u00f3n', { exact: true }).count(), 0);
                     assert.equal(await dialog.getByRole('button', { name: 'Generar cotizaci\u00f3n', exact: true }).isEnabled(), true);
@@ -306,18 +325,137 @@ test('commercial wizard chooses category first, locks hospital tariffs and revie
                 const footer = await dialog.locator('.qw-footer').boundingBox();
                 assert.ok(footer.y >= bounds.y && footer.y + footer.height <= bounds.y + bounds.height);
                 await dialog.getByRole('button', { name: 'Atras', exact: true }).click();
+                await dialog.getByRole('button', { name: 'Atras', exact: true }).click();
             }
             assert.equal(catalogs.at(-1).category, 'antibioticos');
             let release;
             delayCatalog = new Promise(resolve => { release = resolve; });
             await dialog.locator('[name=category][value=oncologicos]').check();
             await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
-            assert.equal(await dialog.getByRole('combobox', { name: 'Buscar medicamento' }).isDisabled(), true);
+            assert.equal(await dialog.locator('[data-qw-recipe-medicine]').isDisabled(), true);
             await dialog.getByRole('button', { name: 'Cerrar nueva cotizacion', exact: true }).click();
             release(); delayCatalog = null;
             await open.click();
             assert.equal(await dialog.locator('[name=category]:checked').count(), 0);
             assert.equal(await dialog.locator('[data-qw-items] tr').count(), 0);
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('recipe step captures multiple medicines per mixture and preserves concentrations independently from prices', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    const html = screen('', true).replace('data-quotation-flow="clinical"', 'data-quotation-flow="commercial"');
+    try {
+        for (const width of [1440, 390]) for (const category of ['oncologicos', 'nutricionales', 'antibioticos']) {
+            const page = await browser.newPage({ viewport: { width, height: 1000 } });
+            const errors = [];
+            let saved, preview;
+            const unit = category === 'nutricionales' ? 'ml' : 'mg';
+            const products = [
+                { id: 1, name: 'Medicamento A', presentation: '100', unit: 'frasco', unit_price: 10 },
+                { id: 2, name: 'Medicamento A', presentation: '50', unit: 'frasco', unit_price: 5 },
+                { id: 3, name: 'Medicamento B', presentation: '50', unit: 'frasco', unit_price: 5 },
+            ];
+            const catalog = { price_list: { id: 1, name: 'Lista de prueba' }, billing_mode: 'frasco', products, charges: [] };
+            const snapshot = data => ({ ...catalog, total: 10, lines: [{ description: 'Medicamento A', presentation: '100',
+                quantity: 1, unit: 'frasco', unit_price: 10, vat: 0, total: 10 }],
+                requirements: data.requirements.map(row => ({ ...row, unit })) });
+            page.on('pageerror', error => errors.push(error.message));
+            await page.route('**/*', route => {
+                const request = route.request(), url = new URL(request.url());
+                if (url.pathname.endsWith('/opciones')) return route.fulfill({ json: catalog });
+                if (url.pathname.endsWith('/revisar')) {
+                    preview = request.postDataJSON();
+                    return route.fulfill({ json: { pricing_snapshot: snapshot(preview), pricing_token: 'e'.repeat(64) } });
+                }
+                if (request.method() === 'POST') {
+                    saved = request.postDataJSON();
+                    return route.fulfill({ json: { redirect_url: '/admin/solicitudes/cotizacion' } });
+                }
+                if (url.pathname.endsWith('/cotizacion/1')) return route.fulfill({ json: { editable: true, folio: 'COT-000001',
+                    update_url: '/admin/solicitudes/cotizacion/1', clinical_data: saved, pricing_snapshot: snapshot(saved) } });
+                if (url.pathname === '/admin/solicitudes/cotizacion') return route.fulfill({ contentType: 'text/html', body: html });
+                return route.abort();
+            });
+            await page.goto('http://localhost/admin/solicitudes/cotizacion');
+            await page.locator('[data-quotation-new]').click();
+            const dialog = page.locator('[data-quote-wizard]');
+            await dialog.locator(`[name=category][value=${category}]`).check();
+            await dialog.locator('[data-qw-next]').click();
+            await dialog.locator('[name=institution_id]').selectOption('1');
+            await dialog.locator('[name=hospital_id]').selectOption('1');
+            await waitForCatalog(dialog);
+            const recipe = number => dialog.locator(`[data-qw-recipe-mixture="${number}"]`);
+            const first = recipe(1);
+            assert.equal(await dialog.locator('[data-qw-next]').isDisabled(), true);
+            assert.equal(await first.locator('[data-qw-recipe-concentration-heading]').textContent(), `Concentraci\u00f3n (${unit === 'ml' ? 'mL' : 'mg'})`);
+            await first.locator('[data-qw-recipe-medicine]').fill('Medicamento A');
+            assert.equal(await first.getByRole('option').count(), 1, 'Recipe search groups presentations by medication');
+            await first.locator('[data-qw-recipe-medicine]').press('ArrowDown');
+            await first.locator('[data-qw-recipe-medicine]').press('Enter');
+            assert.equal(await first.locator('[data-qw-recipe-concentration]').inputValue(), '', 'No clinical dose is inferred from a presentation');
+            await first.locator('[data-qw-recipe-concentration]').fill('130.1234');
+            await first.locator('[data-qw-recipe-add]').click();
+            assert.equal(await dialog.locator('[data-qw-next]').isDisabled(), true);
+            await first.locator('[data-qw-recipe-medicine]').nth(1).fill('Medicamento A');
+            await first.locator('[data-qw-recipe-concentration]').nth(1).fill('50');
+            assert.equal(await dialog.locator('[data-qw-next]').isDisabled(), true, 'Duplicate medicines must be combined by the user');
+            await first.locator('[data-qw-recipe-medicine]').nth(1).fill('Medicamento B');
+            await first.locator('[data-qw-recipe-concentration]').nth(1).fill('-1');
+            assert.equal(await dialog.locator('[data-qw-next]').isDisabled(), true);
+            await first.locator('[data-qw-recipe-concentration]').nth(1).fill('50');
+            await dialog.locator('[data-qw-recipe-add-mixture]').click();
+            assert.deepEqual(await dialog.locator('[data-qw-recipe-title]').allTextContents(), ['Mezcla 1', 'Mezcla 2']);
+            const addMixtureBox = await dialog.locator('[data-qw-recipe-add-mixture]').boundingBox();
+            for (const button of await dialog.locator('[data-qw-recipe-add]').all()) {
+                const addMedicineBox = await button.boundingBox();
+                assert.ok(Math.abs(addMixtureBox.x - addMedicineBox.x) < 1, 'Recipe add buttons share the same left edge');
+            }
+            await recipe(2).locator('[data-qw-recipe-medicine]').fill('Medicamento A');
+            await recipe(2).locator('[data-qw-recipe-concentration]').fill('25');
+            await recipe(2).locator('[data-qw-recipe-add]').click();
+            await recipe(2).locator('[data-qw-recipe-row]').last().getByRole('button').click();
+            assert.equal(await recipe(2).locator('[data-qw-recipe-row]').count(), 1);
+            await first.scrollIntoViewIfNeeded();
+            if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-recipe-${category}-${width}.png`) });
+            assert.equal(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true);
+            for (const row of await first.locator('[data-qw-recipe-row]').all()) {
+                const cells = await row.locator('td').all();
+                for (let index = 0; index < cells.length; index++) {
+                    const cell = await cells[index].boundingBox(), heading = await first.locator('th').nth(index).boundingBox();
+                    assert.ok(Math.abs(cell.x - heading.x) < 1 && Math.abs(cell.width - heading.width) < 1);
+                }
+            }
+            await recipe(2).locator('[data-qw-recipe-remove-mixture]').click();
+            await dialog.locator('[data-qw-next]').click();
+            assert.equal(await dialog.getAttribute('data-step'), '2');
+            assert.equal(await dialog.locator('[data-qw-step="2"] .qw-hospital-row, [data-qw-step="2"] .qw-list').count(), 0);
+            assert.equal(await dialog.locator('[data-qw-items] tr').count(), 0, 'Presentations remain a manual selection');
+            assert.match(await dialog.locator('.qw-recipe-summary').textContent(), /130.1234/);
+            await dialog.locator('[data-qw-search]').fill('Medicamento A');
+            await dialog.getByRole('listbox', { name: 'Medicamentos disponibles' }).getByRole('option').first().click();
+            await dialog.locator('[data-qw-items] .qw-quantity input').fill('1');
+            await dialog.locator('[data-qw-back]').click();
+            assert.equal(await first.locator('[data-qw-recipe-medicine]').first().inputValue(), 'Medicamento A');
+            assert.equal(await first.locator('[data-qw-recipe-medicine]').nth(1).inputValue(), 'Medicamento B');
+            assert.equal(await first.locator('[data-qw-recipe-concentration]').first().inputValue(), '130.1234');
+            await dialog.locator('[data-qw-next]').click();
+            assert.equal(await dialog.locator('[data-qw-items] .qw-quantity input').inputValue(), '1');
+            await dialog.locator('[data-qw-next]').click();
+            await dialog.locator('[data-qw-step="3"]').waitFor();
+            const expected = [{ mixture_number: 1, medicine: 'Medicamento A', concentration: 130.1234 },
+                { mixture_number: 1, medicine: 'Medicamento B', concentration: 50 }];
+            assert.deepEqual(preview.requirements, expected);
+            const navigation = page.waitForEvent('framenavigated', frame => frame === page.mainFrame());
+            await dialog.locator('[data-qw-save]').click(); await navigation;
+            assert.deepEqual(saved.requirements, expected);
+            await page.getByRole('button', { name: 'Editar COT-000001', exact: true }).click();
+            await waitForCatalog(dialog);
+            await dialog.locator('[data-qw-back]').click();
+            assert.equal(await first.locator('[data-qw-recipe-medicine]').nth(1).inputValue(), 'Medicamento B');
+            assert.equal(await first.locator('[data-qw-recipe-concentration]').nth(1).inputValue(), '50');
             assert.deepEqual(errors, []);
             await page.close();
         }
@@ -353,19 +491,14 @@ test('medication autocomplete stays empty until typing and offers at most five p
             await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
             await dialog.locator('[name=institution_id]').selectOption('1');
             await dialog.locator('[name=hospital_id]').selectOption('1');
-            await dialog.getByText('Lista asignada: Lista de prueba', { exact: true }).waitFor();
+            await waitForCatalog(dialog);
+            await enterBreakdown(dialog);
             const search = dialog.getByRole('combobox', { name: 'Buscar medicamento', exact: true });
-            const add = dialog.getByRole('button', { name: 'Agregar medicamento', exact: true });
-            assert.equal(await dialog.locator('[data-qw-add]').count(), 1);
-            assert.equal(await add.evaluate(button => Boolean(button.compareDocumentPosition(document.querySelector('[data-qw-search]')) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
-            const addBounds = await add.boundingBox(), searchBounds = await search.boundingBox();
+            assert.equal(await dialog.locator('[data-qw-step="2"]').getByRole('button', { name: 'Agregar medicamento', exact: true }).count(), 0);
+            const searchBounds = await search.boundingBox();
             const headerBounds = await dialog.locator('.qw-table thead').boundingBox();
             await assertMedicationColumns(dialog.locator('[data-qw-mixture]'));
-            assert.ok(addBounds.y >= headerBounds.y + headerBounds.height, 'The medication entry controls must follow the table header');
-            if (Math.abs(addBounds.y - searchBounds.y) <= 1) {
-                assert.ok(addBounds.x + addBounds.width < searchBounds.x);
-                assert.equal(addBounds.height, searchBounds.height);
-            } else assert.ok(addBounds.y + addBounds.height < searchBounds.y);
+            assert.ok(searchBounds.y >= headerBounds.y + headerBounds.height, 'The medication search must follow the table header');
             const results = dialog.locator('[data-qw-results]');
             const options = dialog.locator('#qw-medication-results-1 [role=option]');
             assert.equal(await results.isVisible(), false);
@@ -404,16 +537,15 @@ test('medication autocomplete stays empty until typing and offers at most five p
             assert.equal(await search.inputValue(), '');
             assert.equal(await results.isVisible(), false);
             assert.equal(await dialog.locator('[data-qw-items] tr').count(), 1);
-            assert.equal(await add.isEnabled(), true);
             assert.equal(await search.isEnabled(), true);
             assert.equal(await dialog.locator('[data-qw-search]').count(), 1);
             await assertMedicationColumns(dialog.locator('[data-qw-mixture]'));
-            const entryAfterAdd = await add.boundingBox();
+            const entryAfterAdd = await search.boundingBox();
             const medicationBounds = await dialog.locator('[data-qw-items] tr').last().boundingBox();
             assert.ok(entryAfterAdd.y >= medicationBounds.y + medicationBounds.height, 'A blank medication entry remains after the selected medications');
             assert.match(await dialog.locator('[data-qw-items] tr').textContent(), /fol\u00ednico 2/);
             assert.equal(posts.length, 0, 'Selecting with Enter must not review or save the quotation');
-            await add.click();
+            await search.click();
             assert.equal(await search.evaluate(input => document.activeElement === input), true);
             assert.equal(await results.isVisible(), false);
             await search.fill('acido');
@@ -441,7 +573,7 @@ test('medication autocomplete stays empty until typing and offers at most five p
             const amounts = dialog.locator('[data-qw-items] .qw-quantity input');
             assert.equal(await amounts.nth(0).getAttribute('step'), '1');
             assert.equal(await amounts.nth(1).getAttribute('step'), 'any');
-            assert.deepEqual(await dialog.locator('.qw-quantity span').allTextContents(), ['frascos', 'mg']);
+            assert.deepEqual(await dialog.locator('[data-qw-items] .qw-quantity span').allTextContents(), ['frascos', 'mg']);
             await amounts.nth(0).fill('2');
             await amounts.nth(1).fill('1.5');
             assert.equal(await dialog.locator('[data-qw-estimate]').textContent(), '$6,388.00 MXN');
@@ -449,6 +581,14 @@ test('medication autocomplete stays empty until typing and offers at most five p
             await search.fill('');
             assert.equal(await results.isVisible(), false);
             assert.equal(await options.count(), 0);
+            await dialog.locator('[data-qw-items] tr td:last-child button').first().click();
+            assert.equal(await search.evaluate(input => document.activeElement === input), true);
+            assert.equal(await dialog.locator('[data-qw-items] tr').count(), 1);
+            await assertMedicationColumns(dialog.locator('[data-qw-mixture]'));
+            await dialog.locator('[data-qw-items] tr td:last-child button').click();
+            assert.equal(await search.evaluate(input => document.activeElement === input), true);
+            assert.equal(await dialog.locator('[data-qw-items] tr').count(), 0);
+            await assertMedicationColumns(dialog.locator('[data-qw-mixture]'));
             assert.deepEqual(errors, []);
             await page.close();
         }
@@ -504,7 +644,8 @@ test('special unit prices edit only the quotation, restore in drafts and reset w
             await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
             await dialog.locator('[name=institution_id]').selectOption('1');
             await dialog.locator('[name=hospital_id]').selectOption('1');
-            await dialog.getByText('Lista asignada: Lista del hospital', { exact: true }).waitFor();
+            await waitForCatalog(dialog);
+            await enterBreakdown(dialog, 'Medicamento especial');
             const search = dialog.getByRole('combobox', { name: 'Buscar medicamento' });
             await search.fill('Medicamento especial');
             await dialog.getByRole('listbox', { name: 'Medicamentos disponibles' }).getByRole('option').click();
@@ -545,7 +686,7 @@ test('special unit prices edit only the quotation, restore in drafts and reset w
             assert.equal(geometry, true, 'Price controls stay inside their column');
             await input.press('Enter');
             await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
-            await dialog.locator('[data-qw-step="2"]').waitFor();
+            await dialog.locator('[data-qw-step="3"]').waitFor();
             assert.equal(previews.at(-1).items[0].unit_price_override, 123.4567);
             assert.equal(await dialog.locator('[data-qw-total]').textContent(), '$286.42 MXN');
             const savedNavigation = page.waitForEvent('framenavigated', frame => frame === page.mainFrame());
@@ -556,11 +697,13 @@ test('special unit prices edit only the quotation, restore in drafts and reset w
             assert.equal(await page.locator('[data-quotation-row]').count(), 5);
             assert.equal(saves[0].items[0].unit_price_override, 123.4567);
             await page.getByRole('button', { name: 'Editar COT-000001', exact: true }).click();
-            await dialog.getByText('Lista asignada: Lista del hospital', { exact: true }).waitFor();
+            await waitForCatalog(dialog);
             assert.match(await row.locator('.qw-price').textContent(), /123\.4567/);
             assert.equal(await dialog.locator('[data-qw-estimate]').textContent(), '$286.42 MXN');
+            await dialog.locator('[data-qw-back]').click();
             await dialog.getByRole('switch').check();
-            await dialog.getByText('Lista base / generica: Lista base', { exact: true }).waitFor();
+            await waitForCatalog(dialog);
+            await dialog.locator('[data-qw-next]').click();
             assert.match(await row.locator('.qw-price').textContent(), /200\.0000/);
             assert.equal(await row.getByRole('button', { name: /^Restablecer precio de lista/ }).isVisible(), false);
             assert.equal(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true);
@@ -608,10 +751,10 @@ test('commercial drafts restore bottle counts including older concentration draf
             await page.goto('http://localhost/admin/solicitudes/cotizacion');
             await page.getByRole('button', { name: 'Editar COT-000001', exact: true }).click();
             const dialog = page.locator('[data-quote-wizard]');
-            await dialog.getByText('Lista base / generica: Base nutricional', { exact: true }).waitFor();
+            await waitForCatalog(dialog);
             assert.equal(await page.locator('[data-quotation-dialog]').isVisible(), false);
-            assert.equal(await dialog.getByRole('switch').isChecked(), true);
-            assert.equal(await dialog.getByRole('radio', { name: 'Por frasco', exact: true }).isChecked(), true);
+            assert.equal(await dialog.locator('[name=no_commercial_relationship]').isChecked(), true);
+            assert.equal(await dialog.locator('[name=billing_mode][value=frasco]').isChecked(), true);
             assert.equal(await dialog.locator('[name=seller_id]').inputValue(), '900');
             assert.equal(await dialog.getByLabel('Nombre (opcional)', { exact: true }).inputValue(), legacy ? 'Paciente anterior completo' : 'Maria Elena');
             assert.equal(await dialog.getByLabel('Apellido paterno (opcional)', { exact: true }).inputValue(), legacy ? '' : 'Garcia');
@@ -619,7 +762,7 @@ test('commercial drafts restore bottle counts including older concentration draf
             assert.equal(await dialog.getByLabel('ID de la plataforma (opcional)', { exact: true }).inputValue(), legacy ? '' : '000123-A');
             assert.equal(await dialog.getByRole('spinbutton', { name: 'Cantidad de frascos de Componente' }).inputValue(), '1');
             await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
-            await dialog.locator('[data-qw-step="2"]').waitFor();
+            await dialog.locator('[data-qw-step="3"]').waitFor();
             assert.equal(await dialog.locator('[data-qw-folio]').textContent(), 'Folio: COT-000001');
             assert.equal(await dialog.locator('[data-qw-date]').textContent(), '22 de septiembre de 2026');
             assert.equal(await dialog.locator('[data-qw-tax-summary]').isVisible(), false);
@@ -769,6 +912,339 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
     } finally { await browser.close(); }
 });
 
+test('quotation authorization uses a branded confirmation with accurate details and explicit submission', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    const html = screen('', true);
+    try {
+        for (const width of [1920, 768, 390, 320]) {
+            const height = width <= 390 ? 740 : 960;
+            const page = await browser.newPage({ viewport: { width, height } });
+            const errors = [], posts = [], nativeDialogs = [];
+            page.on('pageerror', error => errors.push(error.message));
+            page.on('dialog', async dialog => { nativeDialogs.push(dialog.type()); await dialog.dismiss(); });
+            await page.route('**/*', async route => {
+                const request = route.request(), url = new URL(request.url());
+                if (request.method() === 'POST') {
+                    posts.push({ url: url.pathname, body: request.postData() });
+                    // Keep the document available to inspect duplicate-submit protection.
+                    return route.fulfill({ status: 204 });
+                }
+                if (url.pathname === '/admin/solicitudes/cotizacion') return route.fulfill({ contentType: 'text/html', body: html });
+                if (url.pathname === '/img/promesa-logo.png') return route.fulfill({ contentType: 'image/png', body: readFileSync(path.join(root, 'public/img/promesa-logo.png')) });
+                return route.abort();
+            });
+            await page.goto('http://localhost/admin/solicitudes/cotizacion');
+            const opener = page.getByRole('button', { name: 'Pendiente: autorizar COT-000002', exact: true });
+            const dialog = page.getByRole('dialog', { name: 'Autorizar cotizaci\u00f3n', exact: true });
+            await opener.click();
+            await dialog.waitFor({ state: 'visible' });
+            assert.equal(await dialog.locator('[data-authorize-folio]').innerText(), 'COT-000002');
+            assert.equal(await dialog.locator('[data-authorize-date]').innerText(), '21/09/2026');
+            assert.equal(await dialog.locator('[data-authorize-hospital]').innerText(), 'Hospital de prueba');
+            assert.equal(await dialog.locator('[data-authorize-amount]').innerText(), '$210.00');
+            assert.equal(await dialog.getByRole('button', { name: 'Cancelar', exact: true }).evaluate(button => button === document.activeElement), true);
+            const bounds = await dialog.boundingBox();
+            assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= height);
+            assert.equal(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
+            const confirm = dialog.getByRole('button', { name: 'Autorizar cotizaci\u00f3n', exact: true });
+            assert.equal(await confirm.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(22, 128, 66)');
+            assert.equal(await confirm.evaluate(button => getComputedStyle(button).color), 'rgb(255, 255, 255)');
+            assert.equal(await dialog.getByRole('heading').evaluate(heading => getComputedStyle(heading).color), 'rgb(18, 66, 142)');
+            for (const button of await dialog.getByRole('button').all()) {
+                assert.equal(await button.evaluate(node => node.scrollWidth <= node.clientWidth), true);
+            }
+            if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({
+                path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-authorization-${width}.png`),
+            });
+            await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+            await dialog.waitFor({ state: 'hidden' });
+            assert.equal(await opener.evaluate(button => button === document.activeElement), true);
+            assert.equal(posts.length, 0);
+            await page.getByRole('button', { name: 'Pendiente: autorizar COT-000005', exact: true }).click();
+            assert.equal(await dialog.locator('[data-authorize-folio]').innerText(), 'COT-000005');
+            assert.equal(await dialog.locator('[data-authorize-hospital]').innerText(), 'Hospital ajeno');
+            assert.equal(await dialog.locator('[data-authorize-amount]').innerText(), '$123.00');
+            await dialog.getByRole('button', { name: 'Cerrar autorizaci\u00f3n', exact: true }).click();
+            await dialog.waitFor({ state: 'hidden' });
+            await opener.click(); await page.keyboard.press('Escape');
+            await dialog.waitFor({ state: 'hidden' });
+            assert.equal(posts.length, 0);
+            await opener.click();
+            const token = await page.locator('[data-quotation-authorization]').filter({ has: opener }).locator('[name="_token"]').inputValue();
+            await confirm.click({ noWaitAfter: true });
+            await page.getByText('Autorizando...', { exact: true }).waitFor();
+            assert.equal(await dialog.locator('[data-authorize-confirm]').isDisabled(), true);
+            assert.equal(await dialog.getByRole('button', { name: 'Cancelar', exact: true }).isDisabled(), true);
+            await page.keyboard.press('Escape');
+            assert.equal(await dialog.isVisible(), true);
+            assert.equal(posts.length, 1);
+            assert.equal(posts[0].url, '/admin/solicitudes/cotizacion/2/autorizar');
+            assert.equal(new URLSearchParams(posts[0].body).get('_token'), token);
+            await dialog.locator('[data-authorize-confirm]').evaluate(button => button.click());
+            assert.equal(posts.length, 1);
+            assert.deepEqual(errors, []);
+            assert.deepEqual(nativeDialogs, []);
+            await page.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('quotation support popup uploads files, captures photos, retries safely and stops the camera on close', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    const html = screen('', true);
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=', 'base64');
+    try {
+        for (const width of [1440, 390]) {
+            const page = await browser.newPage({ viewport: { width, height: 960 }, hasTouch: width === 390 });
+            const errors = [], uploads = [], saved = [];
+            let failSave = true;
+            page.on('pageerror', error => errors.push(error.message));
+            await page.addInitScript(() => {
+                window.cameraTracks = [];
+                Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { value: async () => {
+                    if (window.denyCamera) throw new DOMException('denied', 'NotAllowedError');
+                    const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
+                    const context = canvas.getContext('2d'); context.fillStyle = '#e1f5eb'; context.fillRect(0, 0, 640, 480);
+                    context.fillStyle = '#142e52'; context.font = '32px Arial'; context.fillText('Solicitud de prueba', 32, 120);
+                    const stream = canvas.captureStream(10); window.cameraTracks.push(...stream.getTracks());
+                    if (window.delayCamera) await new Promise(resolve => { window.releaseCamera = resolve; });
+                    return stream;
+                } });
+            });
+            await page.route('**/*', route => {
+                const request = route.request(), url = new URL(request.url());
+                if (/\/cotizacion\/\d+\/solicitud$/.test(url.pathname)) {
+                    if (request.method() === 'POST') {
+                        uploads.push({ contentType: request.headers()['content-type'], body: request.postData() });
+                        if (failSave) { failSave = false; return route.fulfill({ status: 422, json: { errors: { file: ['Error temporal de guardado.'] } } }); }
+                        const document = { id: saved.length + 1, name: 'Solicitud guardada.png', size: png.length, mime_type: 'image/png', created_at: '24/09/2026 12:00', url: `${url.pathname}/${saved.length + 1}` };
+                        saved.push(document);
+                        return route.fulfill({ json: { document, count: saved.length, message: 'Solicitud guardada en COT-000001.' } });
+                    }
+                    return route.fulfill({ json: { can_upload: !url.pathname.includes('/2/'), documents: saved } });
+                }
+                if (url.pathname === '/admin/solicitudes/cotizacion') return route.fulfill({ contentType: 'text/html', body: html });
+                return route.abort();
+            });
+            await page.goto('http://localhost/admin/solicitudes/cotizacion');
+            const opener = page.getByRole('button', { name: 'Solicitud de COT-000001', exact: true });
+            assert.equal(await opener.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(234, 179, 8)');
+            await opener.click();
+            const dialog = page.locator('[data-quotation-documents-dialog]');
+            await dialog.locator('[data-doc-choose]').waitFor();
+            assert.equal(await dialog.locator('[data-doc-save]').isDisabled(), true);
+            assert.equal(await dialog.locator('[data-doc-empty]').isVisible(), true);
+            const chooser = page.waitForEvent('filechooser'); await dialog.locator('[data-doc-choose]').click();
+            await (await chooser).setFiles({ name: 'solicitud.png', mimeType: 'image/png', buffer: png });
+            await dialog.locator('[data-doc-image]').waitFor();
+            assert.equal(await dialog.locator('[data-doc-save]').isEnabled(), true);
+            assert.equal(uploads.length, 0, 'Selecting a file never saves automatically');
+            assert.equal(await opener.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(234, 179, 8)');
+            if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-support-file-${width}.png`) });
+            await dialog.locator('[data-doc-save]').click();
+            await dialog.getByText('Error temporal de guardado.', { exact: true }).waitFor();
+            assert.equal(await opener.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(234, 179, 8)');
+            assert.equal(await dialog.locator('[data-doc-preview]').isVisible(), true);
+            await dialog.locator('[data-doc-save]').click();
+            await dialog.getByText('Solicitud guardada en COT-000001.', { exact: true }).waitFor();
+            assert.match(uploads[0].contentType, /^multipart\/form-data; boundary=/);
+            assert.match(uploads[1].body, /filename="solicitud.png"/);
+            const key = upload => upload.body.match(/name="upload_key"\r\n\r\n([^\r]+)/)[1];
+            assert.equal(key(uploads[0]), key(uploads[1]), 'Retries use the same upload key');
+            assert.match(await opener.getAttribute('title'), /1 adjuntos$/);
+            assert.equal(await opener.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(21, 128, 61)');
+            assert.equal(await opener.evaluate(button => getComputedStyle(button).color), 'rgb(255, 255, 255)');
+            assert.equal(await opener.locator('[data-quotation-document-icon="camera"], [data-quotation-document-icon="paperclip"]').count(), 2);
+            assert.equal((await opener.innerText()).trim(), '/');
+            assert.equal(await dialog.locator('[data-doc-list] a').count(), 1);
+            assert.equal(await dialog.locator('[data-doc-save]').isDisabled(), true);
+            await dialog.locator('[data-doc-file]').setInputFiles({ name: 'bad.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') });
+            await dialog.getByText('Selecciona un archivo JPG, PNG, WEBP o PDF.', { exact: true }).waitFor();
+            assert.equal(await dialog.locator('[data-doc-save]').isDisabled(), true);
+            if (width === 1440) {
+                await dialog.locator('[data-doc-camera]').click();
+                await page.waitForFunction(() => !document.querySelector('[data-doc-capture]').disabled);
+                assert.equal(await page.evaluate(() => window.cameraTracks.at(-1).readyState), 'live');
+                if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-support-camera-${width}.png`) });
+                await dialog.locator('[data-doc-capture]').click();
+                await dialog.locator('[data-doc-image]').waitFor();
+                assert.equal(await page.evaluate(() => window.cameraTracks.at(-1).readyState), 'ended');
+                assert.match(await dialog.locator('[data-doc-filename]').textContent(), /Solicitud-COT-000001.jpg/);
+                await dialog.locator('[data-doc-save]').click();
+                await dialog.getByText('Solicitud guardada en COT-000001.', { exact: true }).waitFor();
+                assert.match(uploads.at(-1).body, /filename="Solicitud-COT-000001.jpg"/);
+                await dialog.locator('[data-doc-camera]').click();
+                await page.waitForFunction(() => !document.querySelector('[data-doc-capture]').disabled);
+                await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+                assert.equal(await page.evaluate(() => window.cameraTracks.every(track => track.readyState === 'ended')), true);
+                await opener.click(); await dialog.locator('[data-doc-choose]').waitFor();
+                await page.evaluate(() => { window.denyCamera = true; });
+                await dialog.locator('[data-doc-camera]').click();
+                await dialog.getByText('No se autorizo el acceso a la camara. Puedes adjuntar un archivo.', { exact: true }).waitFor();
+                assert.equal(await dialog.locator('[data-doc-choose]').isEnabled(), true);
+                await page.evaluate(() => { window.denyCamera = false; window.delayCamera = true; });
+                await dialog.locator('[data-doc-camera]').click();
+                await page.waitForFunction(() => !!window.releaseCamera);
+                await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+                await page.evaluate(() => window.releaseCamera());
+                await page.waitForFunction(() => window.cameraTracks.every(track => track.readyState === 'ended'));
+                await opener.click(); await dialog.locator('[data-doc-choose]').waitFor();
+            } else {
+                const cameraChooser = page.waitForEvent('filechooser'); await dialog.locator('[data-doc-camera]').click();
+                await (await cameraChooser).setFiles({ name: 'foto.png', mimeType: 'image/png', buffer: png });
+                assert.equal(await dialog.locator('[data-doc-camera-file]').getAttribute('capture'), 'environment');
+                await dialog.locator('[data-doc-save]').click();
+                await dialog.getByText('Solicitud guardada en COT-000001.', { exact: true }).waitFor();
+            }
+            const box = await dialog.boundingBox();
+            assert.ok(box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= 960);
+            assert.equal(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
+            await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+            await page.getByRole('button', { name: 'Solicitud de COT-000002', exact: true }).click();
+            await dialog.locator('[data-doc-list] a').first().waitFor();
+            assert.equal(await dialog.locator('[data-doc-upload]').isVisible(), false);
+            assert.equal(await dialog.locator('[data-doc-save]').isVisible(), false);
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('quotation preparation unlocks only after saving an attachment to an authorized quote', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    const html = screen('', 'preparation', 'Institucion');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=', 'base64');
+    try {
+        for (const width of [1920, 390]) {
+            const page = await browser.newPage({ viewport: { width, height: 960 } });
+            const documents = {}, errors = [];
+            let failSave = true, revoked = false;
+            page.on('pageerror', error => errors.push(error.message));
+            await page.route('**/*', route => {
+                const request = route.request(), url = new URL(request.url());
+                const match = url.pathname.match(/\/cotizacion\/(\d+)\/solicitud$/);
+                if (match) {
+                    const id = Number(match[1]);
+                    const saved = documents[id] ??= [];
+                    if (request.method() === 'POST') {
+                        if (id === 3 && failSave) {
+                            failSave = false;
+                            return route.fulfill({ status: 422, json: { errors: { file: ['No se guardo el archivo.'] } } });
+                        }
+                        saved.push({ id, name: 'Solicitud.png', mime_type: 'image/png', size: png.length,
+                            created_at: '24/09/2026 12:00', url: `${url.pathname}/${id}` });
+                    }
+                    const preparation_url = id === 3 && saved.length && !revoked ? '/admin/solicitudes/cotizacion/3/preparacion' : null;
+                    return route.fulfill({ json: request.method() === 'POST'
+                        ? { document: saved.at(-1), count: saved.length, message: 'Solicitud guardada.', preparation_url }
+                        : { documents: saved, can_upload: true, preparation_url } });
+                }
+                if (url.pathname === '/admin/solicitudes/cotizacion') return route.fulfill({ contentType: 'text/html', body: html });
+                if (url.pathname === '/img/promesa-logo.png') return route.fulfill({ contentType: 'image/png', body: readFileSync(path.join(root, 'public/img/promesa-logo.png')) });
+                return route.abort();
+            });
+            await page.goto('http://localhost/admin/solicitudes/cotizacion');
+            const dialog = page.locator('[data-quotation-documents-dialog]');
+            for (const id of [1, 2, 3]) {
+                const opener = page.getByRole('button', { name: `Solicitud de COT-00000${id}`, exact: true });
+                const cell = page.locator('[data-quotation-row]').filter({ has: opener }).locator('[data-quotation-preparation]');
+                assert.equal(await cell.getByRole('button', { name: 'Pendiente', exact: true }).isDisabled(), true);
+                await opener.click();
+                await dialog.locator('[data-doc-choose]:enabled').waitFor();
+                const chooser = page.waitForEvent('filechooser'); await dialog.locator('[data-doc-choose]').click();
+                await (await chooser).setFiles({ name: 'Solicitud.png', mimeType: 'image/png', buffer: png });
+                await dialog.locator('[data-doc-image]').waitFor();
+                assert.equal(await cell.locator('a').count(), 0, 'Selecting an unsaved file never unlocks preparation');
+                await dialog.locator('[data-doc-save]').click();
+                if (id === 3) {
+                    await dialog.getByText('No se guardo el archivo.', { exact: true }).waitFor();
+                    assert.equal(await cell.locator('a').count(), 0, 'A failed upload never unlocks preparation');
+                    await dialog.locator('[data-doc-save]').click();
+                }
+                await dialog.getByText('Solicitud guardada.', { exact: true }).waitFor();
+                await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+                if (id === 3) assert.equal(await cell.locator('a').getAttribute('href'), '/admin/solicitudes/cotizacion/3/preparacion');
+                else assert.equal(await cell.getByRole('button', { name: 'Pendiente', exact: true }).isDisabled(), true);
+                assert.equal((await opener.innerText()).trim(), '/');
+                assert.equal(await opener.locator('svg').count(), 2);
+            }
+            if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({
+                path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-preparation-attachment-${width}.png`), fullPage: true,
+            });
+            revoked = true;
+            await page.getByRole('button', { name: 'Solicitud de COT-000003', exact: true }).click();
+            await dialog.locator('[data-doc-choose]:enabled').waitFor();
+            assert.equal(await page.getByRole('link', { name: 'Enviar COT-000003 a preparacion', exact: true }).count(), 0);
+            await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+            assert.equal(await page.getByRole('link', { name: 'Ver solicitud COT-2 enviada a preparacion', exact: true }).count(), 1);
+            assert.deepEqual(errors, []);
+            await page.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('client and institution quotation lists omit internal columns and keep filters and details aligned', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    try {
+        for (const role of ['Cliente', 'Institucion']) {
+            const html = screen('estado=recibidas', false, role);
+            for (const width of [1920, 390]) {
+                const page = await browser.newPage({ viewport: { width, height: 960 } });
+                const errors = [];
+                page.on('pageerror', error => errors.push(error.message));
+                await page.route('**/*', route => {
+                    const url = new URL(route.request().url());
+                    if (url.pathname === '/admin/solicitudes/cotizacion') return route.fulfill({ contentType: 'text/html', body: html });
+                    if (url.pathname === '/img/promesa-logo.png') return route.fulfill({ contentType: 'image/png', body: readFileSync(path.join(root, 'public/img/promesa-logo.png')) });
+                    return route.abort();
+                });
+                await page.goto('http://localhost/admin/solicitudes/cotizacion?estado=recibidas');
+                const statuses = page.getByRole('navigation', { name: 'Estado de las cotizaciones' });
+                assert.deepEqual(await statuses.getByRole('link').allTextContents(), ['Todas', 'Autorizadas', 'En preparacion']);
+                assert.equal(await statuses.getByRole('link', { name: 'Todas', exact: true }).getAttribute('aria-current'), 'page');
+                assert.equal(await page.locator('input[name="estado"]').inputValue(), 'todas');
+                const table = page.locator('#request-quotations-table');
+                assert.deepEqual(await table.locator('th').evaluateAll(headers => headers.map(header => {
+                    const clone = header.cloneNode(true);
+                    clone.querySelectorAll('button').forEach(button => button.remove());
+                    return clone.textContent.replace(/\s+/g, ' ').trim();
+                })), ['Tipo', 'Folio', 'Fecha', 'Paciente', 'Total MXN', 'Detalle', 'Enviar', 'Autorizaci\u00f3n', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion']);
+                assert.equal(await table.locator('[data-quotation-row]').count(), 4);
+                assert.equal(await table.locator('tbody button[data-quotation-documents]').count(), 4);
+                for (const row of await table.locator('[data-quotation-row]').all()) {
+                    assert.equal(await row.locator('td').count(), 10);
+                    for (let index = 0; index < 10; index++) {
+                        const heading = await table.locator('th').nth(index).boundingBox();
+                        const cell = await row.locator('td').nth(index).boundingBox();
+                        assert.ok(Math.abs(heading.x - cell.x) <= 1 && Math.abs(heading.width - cell.width) <= 1);
+                    }
+                }
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+                if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({
+                    path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-client-columns-${role}-${width}.png`), fullPage: true,
+                });
+                await page.getByRole('button', { name: 'Filtrar Paciente', exact: true }).click();
+                const panel = page.locator('[data-filter-options]:visible');
+                assert.equal(await panel.getByRole('checkbox').count(), 4);
+                await page.locator('[data-filter-all]:visible').uncheck();
+                await panel.getByRole('checkbox', { name: 'Paciente de prueba 2', exact: true }).check();
+                await page.locator('[data-filter-accept]:visible').click();
+                const visibleRows = table.locator('[data-quotation-row]:visible');
+                assert.equal(await visibleRows.count(), 1);
+                assert.match(await visibleRows.innerText(), /COT-000002/);
+                await page.getByRole('button', { name: 'Ver COT-000002', exact: true }).click();
+                const detail = page.getByRole('dialog');
+                await detail.waitFor({ state: 'visible' });
+                assert.match(await detail.innerText(), /Paciente de prueba 2/);
+                assert.match(await detail.innerText(), /\$210\.00 MXN/);
+                await page.keyboard.press('Escape');
+                assert.deepEqual(errors, []);
+                await page.close();
+            }
+        }
+    } finally { await browser.close(); }
+});
+
 test('quotation list matches request navigation and filters without layout overflow', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
     try {
@@ -793,10 +1269,31 @@ test('quotation list matches request navigation and filters without layout overf
             assert.equal(await categories.getByRole('link').count(), 4);
             assert.deepEqual(await statuses.getByRole('link').allTextContents(), ['Todas', 'Recibidas', 'Enviadas', 'Autorizadas', 'En preparacion']);
             assert.equal(await page.locator('[data-quotation-row]').count(), 5);
-            assert.equal(await page.locator('#request-quotations-table th').count(), 14);
+            assert.equal(await page.locator('#request-quotations-table th').count(), 15);
             assert.deepEqual((await page.locator('[data-quotation-row] td:first-child').allTextContents()).map(text => text.trim()),
                 ['Antibiotico', 'Nutricional', 'Oncologica', 'Oncologica', 'Oncologica']);
             assert.equal(await page.getByRole('button', { name: 'Filtrar Tipo', exact: true }).count(), 1);
+            assert.deepEqual((await page.locator('[data-quotation-row] td:nth-child(10)').allTextContents()).map(text => text.trim()),
+                ['En preparacion', 'Autorizada', 'Enviada', 'Enviada', 'Por enviar']);
+            assert.deepEqual((await page.locator('[data-quotation-row] td:nth-child(13)').allTextContents()).map(text => text.trim()),
+                ['Autorizado', 'Autorizado', 'Pendiente', 'Pendiente', 'Pendiente']);
+            const pills = await page.locator('#request-quotations-table .quotation-row-pill').evaluateAll(elements => elements.map(element => {
+                const style = getComputedStyle(element), box = element.getBoundingClientRect();
+                return { width: box.width, height: box.height, radius: style.borderRadius, color: style.color,
+                    background: style.backgroundColor, text: element.textContent.trim(), fits: element.scrollWidth <= element.clientWidth,
+                    success: element.classList.contains('quotation-row-pill--success'), pending: element.classList.contains('quotation-row-pill--pending') };
+            }));
+            assert.equal(pills.length, 30);
+            for (const pill of pills) {
+                assert.equal(pill.width, 112);
+                assert.equal(pill.height, 32);
+                assert.equal(pill.radius, '999px');
+                assert.equal(pill.color, 'rgb(255, 255, 255)');
+                assert.ok(pill.fits, `${pill.text} fits its pill`);
+                if (pill.success) assert.equal(pill.background, 'rgb(21, 128, 61)');
+                if (pill.pending) assert.equal(pill.background, 'rgb(234, 179, 8)');
+            }
+            assert.equal(await page.locator('[data-quotation-row] button:not(.quotation-row-pill), [data-quotation-row] a:not(.quotation-row-pill)').count(), 0);
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
             for (const input of await page.locator('form[aria-label="Filtros de cotizaciones"]').locator('input:not([type="hidden"]), select, button').all()) {
                 const box = await input.boundingBox();
@@ -805,6 +1302,10 @@ test('quotation list matches request navigation and filters without layout overf
             if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({
                 path: path.join(process.env.QUOTATION_SCREENSHOTS, `request-quotations-${width}.png`), fullPage: true,
             });
+            if (process.env.QUOTATION_SCREENSHOTS) {
+                await page.locator('[data-quotation-row] td:last-child').first().scrollIntoViewIfNeeded();
+                await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-row-controls-${width}.png`), fullPage: true });
+            }
 
             await page.getByRole('button', { name: 'Ver COT-000003', exact: true }).click();
             const dialog = page.getByRole('dialog');
@@ -902,31 +1403,22 @@ test('numbered mixtures have independent medication tables, per-mixture charges,
                 await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
                 await dialog.locator('[name=institution_id]').selectOption('1');
                 await dialog.locator('[name=hospital_id]').selectOption('1');
-                await dialog.getByText('Lista asignada: Lista del hospital', { exact: true }).waitFor();
+                await waitForCatalog(dialog);
+                await enterBreakdown(dialog, 'Medicamento A');
                 const mixture = number => dialog.locator(`[data-qw-mixture="${number}"]`);
-                const requirementName = number => mixture(number).locator('[data-qw-requirement-medicine]');
-                const requirementQuantity = number => mixture(number).locator('[data-qw-requirement-concentration]');
                 const add = async (number, name, quantity) => {
                     await mixture(number).getByRole('combobox', { name: 'Buscar medicamento' }).fill(name);
                     await mixture(number).getByRole('option').filter({ hasText: name }).click();
                     await mixture(number).locator('.qw-quantity input').last().fill(String(quantity));
                 };
                 await assertMedicationColumns(mixture(1));
-                assert.equal(await mixture(1).locator('.qw-requirement-table caption').textContent(), 'Requerimiento');
-                assert.equal(await mixture(1).locator('[data-qw-requirement-unit]').textContent(), category === 'nutricionales' ? 'mL' : 'mg');
-                await requirementName(1).fill('Medicamento A');
-                await requirementQuantity(1).fill('150');
                 await add(1, 'Medicamento A', 2);
                 await add(1, 'Medicamento B', 1);
-                assert.equal(await requirementName(1).inputValue(), 'Medicamento A');
-                assert.equal(await requirementQuantity(1).inputValue(), '150');
                 assert.equal(await mixture(1).locator('[data-qw-mixture-total]').textContent(), '$32.00 MXN');
                 await dialog.getByRole('button', { name: 'Agregar mezcla', exact: true }).click();
                 assert.equal(await dialog.getByRole('button', { name: 'Continuar', exact: true }).isDisabled(), true);
+                await enterBreakdown(dialog, 'Medicamento A', '250.1234', 2);
                 await add(2, 'Medicamento A', 3);
-                assert.equal(await requirementName(2).inputValue(), '');
-                await requirementName(2).fill('Medicamento A');
-                await requirementQuantity(2).fill('250.1234');
                 await assertMedicationColumns(mixture(2));
                 assert.equal(await dialog.locator('[data-qw-estimate]').textContent(), '$69.00 MXN');
                 await mixture(2).getByRole('button', { name: /^Editar precio unitario/ }).click();
@@ -969,52 +1461,47 @@ test('numbered mixtures have independent medication tables, per-mixture charges,
                 await dialog.getByRole('button', { name: 'Eliminar mezcla 1', exact: true }).click();
                 assert.deepEqual(await dialog.locator('[data-qw-mixture-title]').allTextContents(), ['Mezcla 1']);
                 assert.equal(await mixture(1).locator('.qw-quantity input').inputValue(), '3');
-                assert.equal(await requirementQuantity(1).inputValue(), '250.1234');
                 assert.equal(await dialog.locator('[data-qw-estimate]').textContent(), '$31.00 MXN');
                 await dialog.getByRole('button', { name: 'Agregar mezcla', exact: true }).click();
+                await enterBreakdown(dialog, 'Medicamento B', '10.5', 2);
                 await add(2, 'Medicamento B', 4);
-                assert.equal(await requirementName(2).inputValue(), '');
-                await requirementName(2).fill('Medicamento B');
-                const previewsBefore = previews.length;
-                await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
-                assert.equal(previews.length, previewsBefore);
-                assert.equal(await requirementQuantity(2).evaluate(input => input.validity.valueMissing), true);
-                await requirementQuantity(2).fill('10.5');
                 if (process.env.QUOTATION_SCREENSHOTS) {
-                    await mixture(1).locator('.qw-requirement-table').scrollIntoViewIfNeeded();
-                    await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-requirements-${category}-${width}.png`) });
+                    await mixture(1).locator('.qw-table').scrollIntoViewIfNeeded();
+                    await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-without-requirements-${category}-${width}.png`) });
                 }
                 await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
-                await dialog.locator('[data-qw-step="2"]').waitFor();
+                await dialog.locator('[data-qw-step="3"]').waitFor();
                 assert.equal(previews.at(-1).mixture_count, 2);
                 assert.deepEqual(previews.at(-1).items.map(item => item.mixture_number), [1, 2]);
-                assert.deepEqual(previews.at(-1).requirements, [
+                const expectedRecipe = [
                     { mixture_number: 1, medicine: 'Medicamento A', concentration: 250.1234 },
                     { mixture_number: 2, medicine: 'Medicamento B', concentration: 10.5 },
-                ]);
-                assert.match(await dialog.locator('[data-qw-review-meta]').textContent(), /250\.1234/);
+                ];
+                assert.deepEqual(previews.at(-1).requirements, expectedRecipe);
                 assert.equal(await dialog.locator('[data-qw-total]').textContent(), '$58.00 MXN');
                 assert.match(await dialog.locator('[data-qw-review-lines]').textContent(), /Mezcla 1/);
                 assert.match(await dialog.locator('[data-qw-review-lines]').textContent(), /Mezcla 2/);
                 const navigation = page.waitForEvent('framenavigated', frame => frame === page.mainFrame());
                 await dialog.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
                 await navigation;
+                assert.deepEqual(saved.requirements, expectedRecipe);
                 await page.getByRole('button', { name: 'Editar COT-000001', exact: true }).click();
-                await dialog.getByText('Lista asignada: Lista del hospital', { exact: true }).waitFor();
+                await waitForCatalog(dialog);
                 assert.equal(saved.mixture_count, 2);
                 assert.equal(await dialog.locator('[data-qw-mixture]').count(), 2);
                 assert.equal(await mixture(1).locator('.qw-quantity input').inputValue(), '3');
                 assert.equal(await mixture(2).locator('.qw-quantity input').inputValue(), '4');
-                assert.equal(await requirementName(1).inputValue(), 'Medicamento A');
-                assert.equal(await requirementQuantity(1).inputValue(), '250.1234');
-                assert.equal(await requirementName(2).inputValue(), 'Medicamento B');
-                assert.equal(await requirementQuantity(2).inputValue(), '10.5');
+                await assertMedicationColumns(mixture(1));
+                await assertMedicationColumns(mixture(2));
+                await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
+                await dialog.locator('[data-qw-step="3"]').waitFor();
+                assert.deepEqual(previews.at(-1).requirements, saved.requirements);
                 await dialog.locator('[data-qw-close]').click();
                 await page.getByRole('button', { name: 'Nueva Cotizacion', exact: true }).click();
                 await dialog.locator(`[name=category][value=${category}]`).check();
                 await dialog.getByRole('button', { name: 'Continuar', exact: true }).click();
-                assert.equal(await requirementName(1).inputValue(), '');
-                assert.equal(await requirementQuantity(1).inputValue(), '');
+                assert.equal(await dialog.locator('[data-qw-recipe-mixture]').count(), 1);
+                assert.equal(await dialog.locator('[data-qw-recipe-medicine]').inputValue(), '');
                 assert.equal(await dialog.locator('[data-qw-estimate]').textContent(), '$0.00 MXN');
                 assert.deepEqual(errors, []);
                 await page.close();
@@ -1055,7 +1542,7 @@ test('legacy quotation editing preserves clinical data, diluents and delivery ca
             const row = dialog.locator('[data-quotation-medications] tr');
             const table = dialog.locator('.quotation-medication-table');
             const picker = dialog.locator('[data-quotation-row-picker]');
-            await page.waitForFunction(() => !document.querySelector('[data-drug]').disabled);
+            await row.locator('[data-drug]:enabled').waitFor({ state: 'visible' });
             assert.equal(await dialog.locator('[name=patient_name]').inputValue(), 'Paciente de prueba de captura');
             assert.equal(await dialog.locator('[name=seller_id] option:checked').textContent(), 'Vendedora Prueba');
             assert.equal(await row.locator('[data-key=dose_mg]').inputValue(), '50');

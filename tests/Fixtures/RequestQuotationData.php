@@ -18,6 +18,7 @@ class RequestQuotationData
         (require database_path('migrations/2026_09_22_000001_create_request_quotations_table.php'))->up();
         (require database_path('migrations/2026_09_22_000002_add_capture_to_request_quotations.php'))->up();
         (require database_path('migrations/2026_09_22_000004_add_seller_to_request_quotations.php'))->up();
+        (require database_path('migrations/2026_09_24_000001_create_request_quotation_documents_table.php'))->up();
         (require database_path('migrations/2024_05_21_124030_create_notifications_table.php'))->up();
         foreach (['users' => 'is_active', 'hospitals' => 'access_is_active', 'clientes' => 'is_active'] as $table => $column) {
             Schema::table($table, fn (Blueprint $schema) => $schema->boolean($column)->default(true));

@@ -73,6 +73,12 @@ Route::post('solicitudes/cotizacion/revisar', [RequestQuotationController::class
 Route::get('solicitudes/cotizacion/{quotation}', [RequestQuotationController::class, 'show'])->whereNumber('quotation')->name('solicitudes.cotizacion.show');
 Route::put('solicitudes/cotizacion/{quotation}', [RequestQuotationController::class, 'update'])->whereNumber('quotation')->name('solicitudes.cotizacion.update');
 Route::get('solicitudes/cotizacion/{quotation}/adjunto', [RequestQuotationController::class, 'attachment'])->whereNumber('quotation')->name('solicitudes.cotizacion.attachment');
+Route::get('solicitudes/cotizacion/{quotation}/solicitud', [\App\Http\Controllers\Admin\RequestQuotationDocumentController::class, 'index'])
+    ->whereNumber('quotation')->name('solicitudes.cotizacion.documents.index');
+Route::post('solicitudes/cotizacion/{quotation}/solicitud', [\App\Http\Controllers\Admin\RequestQuotationDocumentController::class, 'store'])
+    ->middleware('throttle:30,1')->whereNumber('quotation')->name('solicitudes.cotizacion.documents.store');
+Route::get('solicitudes/cotizacion/{quotation}/solicitud/{document}', [\App\Http\Controllers\Admin\RequestQuotationDocumentController::class, 'download'])
+    ->whereNumber('quotation')->whereNumber('document')->name('solicitudes.cotizacion.documents.download');
 Route::get('solicitudes/cotizacion/{quotation}/pdf', [RequestQuotationController::class, 'pdf'])->whereNumber('quotation')->name('solicitudes.cotizacion.pdf');
 Route::post('solicitudes/cotizacion/{quotation}/correo', [RequestQuotationController::class, 'email'])
     ->middleware('throttle:10,1')->whereNumber('quotation')->name('solicitudes.cotizacion.email');

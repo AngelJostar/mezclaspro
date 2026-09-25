@@ -1,7 +1,7 @@
 .quote-wizard { width: min(960px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: hidden; padding: 0; margin: auto; border: 1px solid #d5e0eb; border-radius: 8px; color: #142e52; background: #fff; box-shadow: 0 20px 60px #102b4b40; }
-.quote-wizard[data-step="1"] { width: min(1200px, calc(100% - 32px)); }
-.quote-wizard[data-step="2"] { width: min(1000px, calc(100% - 32px)); }
-.quote-wizard[data-step="1"] form { min-height: min(820px, calc(100dvh - 34px)); }
+.quote-wizard[data-step="1"], .quote-wizard[data-step="2"] { width: min(1200px, calc(100% - 32px)); }
+.quote-wizard[data-step="3"] { width: min(1000px, calc(100% - 32px)); }
+.quote-wizard[data-step="1"] form, .quote-wizard[data-step="2"] form { min-height: min(820px, calc(100dvh - 34px)); }
 .quote-wizard::backdrop { background: #152c4c80; }
 .quote-wizard *, .quote-wizard *::before, .quote-wizard *::after { box-sizing: border-box; letter-spacing: 0; }
 .quote-wizard [hidden] { display: none !important; }
@@ -49,10 +49,18 @@
 .qw-billing input:disabled:checked + span { background: #e0e6eb; color: #455771; }
 .qw-billing input:disabled { cursor: not-allowed; }
 .qw-billing input:focus-visible + span { outline: 2px solid #1474a4; outline-offset: -3px; }
-.qw-list { display: flex; align-items: center; gap: 12px; background: #f2f7fc; border: 1px solid #dce7f2; border-radius: 4px; padding: 12px 14px; margin: 20px 0; font-size: 13px; overflow-wrap: anywhere; }
-.qw-list p { color: #687c93; margin-top: 3px; font-size: 12px; }
-.qw-list p:empty { display: none; }
-.qw-medications { border-top: 1px solid #dbe4ee; padding-top: 20px; }
+.qw-recipe { border-top: 1px solid #dbe4ee; margin-top: 20px; padding-top: 20px; }
+.qw-recipe-table { width: 100%; min-width: 520px; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
+.qw-recipe-table th, .qw-recipe-table td { padding: 10px 8px; border-bottom: 1px solid #dde6ef; vertical-align: top; overflow-wrap: anywhere; }
+.qw-recipe-table th { text-align: left; background: #f2f6fa; font-weight: 600; }
+.qw-recipe-table th:nth-child(2) { width: 30%; }
+.qw-recipe-table th:last-child { width: 76px; text-align: center; }
+.qw-recipe-table td:last-child { text-align: center; }
+.qw-recipe-table .qw-quantity { height: 42px; }
+.qw-recipe-add { margin-top: 12px; }
+.qw-recipe-summary { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 14px; font-size: 13px; }
+.qw-recipe-summary dt { color: #647991; font-size: 12px; }
+.qw-recipe-summary dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .qw-mixture { min-width: 0; padding: 16px; border: 1px solid #c8d8e8; border-radius: 6px; }
 .qw-mixture + .qw-mixture { margin-top: 16px; }
 .qw-mixture-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
@@ -60,9 +68,9 @@
 .qw-mixture-total { display: flex; justify-content: flex-end; align-items: baseline; gap: 12px; padding-top: 12px; font-size: 12px; flex-wrap: wrap; }
 .qw-mixture-total strong { font-size: 14px; }
 .qw-mixture-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding-top: 22px; }
-.qw-medication-search { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
-.qw-medication-search > button { min-height: 42px; }
+.qw-recipe > .qw-mixture-actions { padding-inline: 17px; }
 .qw-autocomplete { position: relative; min-width: 0; flex: 1 1 200px; container-type: inline-size; }
+.qw-entry-row .qw-autocomplete { width: 100%; }
 .qw-search { display: flex; position: relative; align-items: center; }
 .qw-search svg { position: absolute; left: 12px; color: #67829c; }
 .qw-search input { padding-left: 40px; }
@@ -76,23 +84,20 @@
 .qw-result strong, .qw-result small, .qw-table strong, .qw-table small { display: block; overflow-wrap: anywhere; }
 .qw-result small, .qw-table small { color: #647991; font-size: 11px; margin-top: 3px; }
 .qw-table-scroll { max-width: 100%; overflow-x: auto; }
-:is(.qw-table, .qw-requirement-table) { width: 100%; min-width: 740px; table-layout: fixed; font-size: 12px; border-collapse: collapse; }
-:is(.qw-table, .qw-requirement-table) th { position: relative; background: #f2f6fa; font-weight: 600; text-align: left; }
-:is(.qw-table, .qw-requirement-table) th, :is(.qw-table, .qw-requirement-table) td { padding: 10px 8px; border-bottom: 1px solid #dde6ef; overflow-wrap: anywhere; }
-:is(.qw-table, .qw-requirement-table) th:nth-child(2) { width: 170px; }
-:is(.qw-table, .qw-requirement-table) th:nth-child(3) { width: 180px; }
-:is(.qw-table, .qw-requirement-table) th:nth-child(4) { width: 120px; }
-:is(.qw-table, .qw-requirement-table) th:last-child { width: 44px; }
-:is(.qw-table, .qw-requirement-table) th.qw-bottle-count { width: 150px; }
-.qw-requirement-table { margin-bottom: 16px; }
-.qw-requirement-table caption { padding: 0 0 10px; text-align: left; font-size: 14px; font-weight: 600; }
-.qw-requirement-medicine { width: 100%; min-width: 0; height: 38px; padding: 7px; border: 1px solid #c8d8e8; border-radius: 4px; font-size: 13px; }
+.qw-table { width: 100%; min-width: 740px; table-layout: fixed; font-size: 12px; border-collapse: collapse; }
+.qw-table th { position: relative; background: #f2f6fa; font-weight: 600; text-align: left; }
+.qw-table th, .qw-table td { padding: 10px 8px; border-bottom: 1px solid #dde6ef; overflow-wrap: anywhere; }
+.qw-table th:nth-child(2) { width: 170px; }
+.qw-table th:nth-child(3) { width: 180px; }
+.qw-table th:nth-child(4) { width: 120px; }
+.qw-table th:last-child { width: 44px; }
+.qw-table th.qw-bottle-count { width: 150px; }
 .qw-table .qw-entry-row td { vertical-align: top; }
 .qw-table:has(th.qw-bottle-count) .qw-quantity input { padding-inline: 4px; }
 .qw-table:has(th.qw-bottle-count) .qw-quantity span { padding-inline: 6px; font-size: 11px; }
-:is(.qw-quantity, .qw-requirement-quantity) { display: flex; height: 38px; border: 1px solid #c8d8e8; border-radius: 4px; overflow: hidden; }
-:is(.qw-quantity, .qw-requirement-quantity) input { min-width: 0; width: 100%; border: 0; padding: 7px; font-size: 13px; }
-:is(.qw-quantity, .qw-requirement-quantity) span { display: grid; place-items: center; min-width: 36px; padding: 0 8px; flex-shrink: 0; background: #f2f6fa; }
+.qw-quantity { display: flex; height: 38px; border: 1px solid #c8d8e8; border-radius: 4px; overflow: hidden; }
+.qw-quantity input { min-width: 0; width: 100%; border: 0; padding: 7px; font-size: 13px; }
+.qw-quantity span { display: grid; place-items: center; min-width: 36px; padding: 0 8px; flex-shrink: 0; background: #f2f6fa; }
 .qw-price { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 38px; }
 .qw-price > span { min-width: 0; font-variant-numeric: tabular-nums; }
 .qw-price input { width: 100%; min-width: 0; height: 38px; padding: 7px; border: 1px solid #c8d8e8; border-radius: 4px; font-size: 13px; }
@@ -161,6 +166,7 @@
 @media (max-width: 700px) {
     .qw-mixture { padding: 12px; }
     .qw-mixture-actions { gap: 12px; }
+    .qw-recipe > .qw-mixture-actions { padding-inline: 13px; }
     .qw-mixture-actions .qw-total { flex-direction: column; align-items: flex-end; gap: 2px; }
     .qw-header, .qw-body { padding: 16px; }
     .qw-header h2 { font-size: 19px; }

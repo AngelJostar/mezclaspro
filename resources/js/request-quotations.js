@@ -2,6 +2,8 @@ import { createIcons, Plus, FileSpreadsheet, X, Trash2, FileText, UserRound, Tab
 import '../css/request-quotations.css';
 import './quotation-send';
 import './quotation-commercial';
+import './quotation-documents';
+import './quotation-authorize';
 
 function initQuotations() {
     const icons = () => createIcons({ icons: { Plus, FileSpreadsheet, X, Trash2, FileText, UserRound, Table2, Droplets, Stethoscope, Upload, CalendarDays, Send, Mail, MessageCircle, Download, RotateCw }, nameAttr: 'data-quotation-icon' });

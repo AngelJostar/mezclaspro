@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RequestQuotation extends Model
 {
@@ -58,6 +59,23 @@ class RequestQuotation extends Model
         $type = $this->category === 'nutricionales' ? 'nutricionales' : 'oncologicos';
         return $this->canBeViewedBy($user) && $user->can($type.'_solicitudes_create')
             && $user->can($type.'_solicitudes_store');
+    }
+
+    public function canAttachRequestBy(User $user): bool
+    {
+        return $this->canBeViewedBy($user)
+            && (static::canCreate($user, $this->category) || $this->canBeAuthorizedBy($user));
+    }
+
+    public function canStartPreparationBy(User $user): bool
+    {
+        return !$this->request_id && $this->status === 'autorizada' && $this->canPrepareBy($user)
+            && ($this->documents_count ?? $this->documents()->count()) > 0;
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(RequestQuotationDocument::class);
     }
 
     public function hospital(): BelongsTo

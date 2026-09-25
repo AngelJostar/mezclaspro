@@ -43,7 +43,25 @@
                         </div>
                     </div>
                 </div>
-                <div class="qw-list" role="status"><i data-qw-icon="file-text"></i><div><strong data-qw-list-name>Sin lista seleccionada</strong><p data-qw-list-status></p></div></div>
+                <section class="qw-recipe" aria-labelledby="qw-recipe-heading">
+                    <h3 id="qw-recipe-heading">Captura la receta del m&eacute;dico o la solicitud de mezcla</h3>
+                    <div data-qw-recipe-mixtures></div>
+                    <div class="qw-mixture-actions"><button type="button" class="quotation-button quotation-outline" data-qw-recipe-add-mixture><i data-qw-icon="plus"></i>Agregar mezcla</button></div>
+                </section>
+                <template data-qw-recipe-template>
+                    <section class="qw-mixture" data-qw-recipe-mixture>
+                        <header class="qw-mixture-header"><h3 data-qw-recipe-title></h3><button type="button" class="quotation-icon-button" data-qw-recipe-remove-mixture title="Eliminar mezcla" aria-label="Eliminar mezcla"><i data-qw-icon="trash-2"></i></button></header>
+                        <div class="qw-table-scroll" tabindex="0" role="region" aria-label="Medicamentos de la receta">
+                            <table class="qw-recipe-table" data-disable-column-filters>
+                                <thead><tr><th scope="col">Medicamento</th><th scope="col" data-qw-recipe-concentration-heading>Concentraci&oacute;n (mg)</th><th scope="col">Eliminar</th></tr></thead>
+                                <tbody data-qw-recipe-rows></tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="quotation-button quotation-outline qw-recipe-add" data-qw-recipe-add><i data-qw-icon="plus"></i>Agregar medicamento</button>
+                    </section>
+                </template>
+            </fieldset>
+            <fieldset data-qw-step="2" hidden disabled>
                 <section class="qw-medications">
                     <div data-qw-mixtures></div>
                     <div class="qw-mixture-actions">
@@ -55,29 +73,17 @@
                     <section class="qw-mixture" data-qw-mixture>
                     <header class="qw-mixture-header"><h3 data-qw-mixture-title>Mezcla 1</h3><button type="button" class="quotation-icon-button" data-qw-remove-mixture title="Eliminar mezcla" aria-label="Eliminar mezcla"><i data-qw-icon="trash-2"></i></button></header>
                     <div class="qw-table-scroll" tabindex="0" role="region" aria-label="Medicamentos seleccionados">
-                        <table class="qw-requirement-table" data-disable-column-filters>
-                            <caption>Requerimiento</caption>
-                            <thead><tr><th scope="col">Medicamento</th><th scope="col" data-qw-requirement-heading>Concentraci&oacute;n solicitada</th><th aria-hidden="true"></th><th aria-hidden="true"></th><th aria-hidden="true"></th></tr></thead>
-                            <tbody><tr>
-                                <td><input type="text" class="qw-requirement-medicine" data-qw-requirement-medicine maxlength="255" placeholder="Medicamento" autocomplete="off"></td>
-                                <td><div class="qw-requirement-quantity"><input type="number" data-qw-requirement-concentration min="0.0001" max="1000000" step="0.0001" inputmode="decimal"><span data-qw-requirement-unit>mg</span></div></td>
-                                <td></td><td></td><td></td>
-                            </tr></tbody>
-                        </table>
                         <table class="qw-table" data-disable-column-filters>
-                            <thead><tr><th scope="col">Desglose de medicamentos</th><th scope="col" data-qw-quantity-heading>Concentraci&oacute;n disponible</th><th scope="col">Precio unitario</th><th scope="col">Importe</th><th scope="col"><span class="sr-only">Accion</span></th></tr></thead>
+                            <thead><tr><th scope="col">Selecci&oacute;n de Presentaci&oacute;n</th><th scope="col" data-qw-quantity-heading>Concentraci&oacute;n disponible</th><th scope="col">Precio unitario</th><th scope="col">Importe</th><th scope="col"><span class="sr-only">Accion</span></th></tr></thead>
                             <tbody data-qw-items></tbody>
                             <tbody>
                                 <tr class="qw-entry-row" data-qw-entry>
                                     <td>
-                                        <div class="qw-medication-search">
-                                            <button type="button" class="quotation-button quotation-outline" data-qw-add disabled><i data-qw-icon="plus"></i>Agregar medicamento</button>
-                                            <div class="qw-autocomplete" data-qw-autocomplete>
-                                                <label class="qw-search"><i data-qw-icon="search"></i><input type="search" data-qw-search role="combobox" aria-label="Buscar medicamento" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="qw-medication-results" aria-expanded="false" placeholder="Buscar medicamento" autocomplete="off" disabled></label>
-                                                <div class="qw-results" data-qw-results hidden>
-                                                    <div data-qw-result-list role="listbox" aria-label="Medicamentos disponibles"></div>
-                                                    <p class="qw-result-status" data-qw-result-status role="status" hidden></p>
-                                                </div>
+                                        <div class="qw-autocomplete" data-qw-autocomplete>
+                                            <label class="qw-search"><i data-qw-icon="search"></i><input type="search" data-qw-search role="combobox" aria-label="Buscar medicamento" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="qw-medication-results" aria-expanded="false" placeholder="Buscar medicamento" autocomplete="off" disabled></label>
+                                            <div class="qw-results" data-qw-results hidden>
+                                                <div data-qw-result-list role="listbox" aria-label="Medicamentos disponibles"></div>
+                                                <p class="qw-result-status" data-qw-result-status role="status" hidden></p>
                                             </div>
                                         </div>
                                     </td>
@@ -101,7 +107,7 @@
                     </div>
                 </section>
             </fieldset>
-            <section data-qw-step="2" hidden>
+            <section data-qw-step="3" hidden>
                 @php $issuer = App\Support\QuotationDocument::issuer(); @endphp
                 <article class="qw-document" aria-label="Cotizaci&oacute;n">
                     <div class="qw-document-brand">@include('admin.solicitudes.quotations._brand', ['issuer' => $issuer])</div>

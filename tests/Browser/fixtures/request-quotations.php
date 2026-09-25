@@ -7,6 +7,14 @@ config(['database.default' => 'sqlite', 'database.connections.sqlite.database' =
     'session.driver' => 'array', 'cache.default' => 'array']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 $user = !empty($argv[2]) ? Tests\Fixtures\RequestQuotationCaptureData::seed() : Tests\Fixtures\RequestQuotationData::seed();
+if (in_array($argv[3] ?? '', ['Cliente', 'Institucion'], true)) {
+    $user->syncRoles(Spatie\Permission\Models\Role::findOrCreate($argv[3], 'web'));
+}
+if (($argv[2] ?? '') === 'preparation') {
+    foreach (['oncologicos', 'nutricionales'] as $type) {
+        $user->givePermissionTo(Spatie\Permission\Models\Permission::findOrCreate($type.'_solicitudes_store', 'web'));
+    }
+}
 $seller = App\Models\User::create(['name' => 'Vendedora', 'lastname' => 'Prueba', 'username' => 'ventas.prueba', 'password' => 'fixture', 'is_active' => true]);
 $seller->assignRole(Spatie\Permission\Models\Role::findOrCreate('Vendedor', 'web'));
 App\Models\RequestQuotation::whereKey(1)->update(['seller_id' => $seller->id]);

@@ -158,6 +158,7 @@ class RequestQuotationCommercialTest extends TestCase
             $data['requirements'] = [
                 ['mixture_number' => 2, 'medicine' => ' Segundo medicamento ', 'concentration' => '12.3456'],
                 ['mixture_number' => 1, 'medicine' => ' Medicamento solicitado ', 'concentration' => 150],
+                ['mixture_number' => 1, 'medicine' => ' Otro medicamento ', 'concentration' => 75.5],
             ];
             $review = $this->preview($data)->assertOk();
             $this->assertSame($original['lines'], $review->json('pricing_snapshot.lines'));
@@ -170,7 +171,10 @@ class RequestQuotationCommercialTest extends TestCase
                 ->assertJsonPath('clinical_data.requirements.0.medicine', 'Medicamento solicitado')
                 ->assertJsonPath('clinical_data.requirements.0.concentration', 150)
                 ->assertJsonPath('clinical_data.requirements.0.unit', $category === 'nutricionales' ? 'ml' : 'mg')
-                ->assertJsonPath('clinical_data.requirements.1.concentration', 12.3456);
+                ->assertJsonPath('clinical_data.requirements.1.mixture_number', 1)
+                ->assertJsonPath('clinical_data.requirements.1.medicine', 'Otro medicamento')
+                ->assertJsonPath('clinical_data.requirements.1.concentration', 75.5)
+                ->assertJsonPath('clinical_data.requirements.2.concentration', 12.3456);
             $this->assertSame($quote->clinical_data['requirements'], $quote->pricing_snapshot['requirements']);
             $data['requirements'] = [];
             $data['pricing_token'] = $this->preview($data)->assertOk()->json('pricing_token');
@@ -199,7 +203,7 @@ class RequestQuotationCommercialTest extends TestCase
             $this->preview($data)->assertUnprocessable()->assertJsonValidationErrors('requirements.0.mixture_number');
         }
         $data = $base; $data['requirements'][] = $data['requirements'][0];
-        $this->preview($data)->assertUnprocessable()->assertJsonValidationErrors('requirements.0.mixture_number');
+        $this->preview($data)->assertUnprocessable()->assertJsonValidationErrors('requirements.1.medicine');
         $data = $base; $data['requirements'][0]['unit'] = 'frasco';
         $this->preview($data)->assertUnprocessable()->assertJsonValidationErrors('requirements.0');
         $base['pricing_token'] = $this->preview($base)->assertOk()->json('pricing_token');

@@ -62,6 +62,9 @@ class QuotationPreparationController extends Controller
     private function context(Request $request, RequestQuotation $quotation): void
     {
         if ($quotation->status !== 'autorizada') throw ValidationException::withMessages(['quotation' => 'Solo se pueden enviar cotizaciones autorizadas.']);
+        if (!$quotation->documents()->exists()) {
+            throw ValidationException::withMessages(['quotation' => 'Adjunta una foto o archivo de la solicitud antes de enviar a preparacion.']);
+        }
         if (!$quotation->hospital?->is_active || !$quotation->hospital?->laboratory_id) {
             throw ValidationException::withMessages(['quotation' => 'El hospital debe estar activo y tener una central de mezclas asignada.']);
         }

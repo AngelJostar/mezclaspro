@@ -35,7 +35,7 @@ class StoreRequestQuotationRequest extends FormRequest
                 'mixture_count' => ['sometimes', 'required', 'integer', 'min:1', 'max:50'],
                 'requirements' => ['sometimes', 'array', 'max:50'],
                 'requirements.*' => ['array:mixture_number,medicine,concentration'],
-                'requirements.*.mixture_number' => ['required', 'integer', 'distinct', 'min:1', 'max:50'],
+                'requirements.*.mixture_number' => ['required', 'integer', 'min:1', 'max:50'],
                 'requirements.*.medicine' => ['required', 'string', 'max:255'],
                 'requirements.*.concentration' => ['required', 'numeric', 'decimal:0,4', 'min:0.0001', 'max:1000000'],
                 'items' => ['required', 'array', 'min:1', 'max:50'],

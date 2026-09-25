@@ -25,6 +25,7 @@ class FortifyServiceProvider extends ServiceProvider
     {
         $this->app->singleton(\Laravel\Fortify\Contracts\LoginResponse::class, \App\Http\Responses\LoginResponse::class);
         $this->app->singleton(\Laravel\Fortify\Contracts\TwoFactorLoginResponse::class, \App\Http\Responses\TwoFactorLoginResponse::class);
+        $this->app->bind(\Laravel\Fortify\Http\Controllers\NewPasswordController::class, \App\Http\Controllers\Auth\UsernamePasswordResetController::class);
     }
 
     /**

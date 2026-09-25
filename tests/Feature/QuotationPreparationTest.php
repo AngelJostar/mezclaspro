@@ -275,12 +275,44 @@ class QuotationPreparationTest extends TestCase
     public function test_drafts_and_users_without_request_permission_cannot_prepare(): void
     {
         $quote = Data::quotation();
-        $quote->forceFill(['status' => 'borrador'])->save();
-        $this->postJson(route('admin.solicitudes.cotizacion.prepare', $quote), Data::payload())->assertUnprocessable();
+        foreach (['borrador', 'enviada'] as $status) {
+            $quote->forceFill(['status' => $status])->save();
+            $this->getJson(route('admin.solicitudes.cotizacion.preparation', $quote))->assertUnprocessable()->assertJsonValidationErrors('quotation');
+            $this->postJson(route('admin.solicitudes.cotizacion.prepare', $quote), Data::payload())->assertUnprocessable()->assertJsonValidationErrors('quotation');
+            $this->assertFalse($quote->canStartPreparationBy(auth()->user()));
+            $this->assertNull($quote->refresh()->request_id);
+        }
         $quote->forceFill(['status' => 'autorizada'])->save();
         auth()->user()->revokePermissionTo('oncologicos_solicitudes_store');
         $this->get(route('admin.solicitudes.cotizacion.preparation', $quote))->assertForbidden();
         $this->post(route('admin.solicitudes.cotizacion.prepare', $quote), Data::payload())->assertForbidden();
+    }
+
+    public function test_preparation_requires_its_own_saved_request_document_in_every_category(): void
+    {
+        Data::quotation();
+        foreach (['oncologicos' => 'mg', 'antibioticos' => 'mg', 'nutricionales' => 'ml'] as $category => $unit) {
+            $quote = Data::quotation($category, $unit, withDocument: false);
+            $quote->forceFill(['attachment_path' => 'signature.pdf'])->save();
+            $url = route('admin.solicitudes.cotizacion.preparation', $quote);
+            $this->get(route('admin.solicitudes.cotizacion.index', ['buscar' => $quote->folio]))->assertOk()
+                ->assertDontSee('href="'.$url.'"', false)->assertSee('Adjunta una foto o archivo de la solicitud');
+            $this->getJson($url)->assertUnprocessable()->assertJsonValidationErrors('quotation');
+            $this->postJson(route('admin.solicitudes.cotizacion.prepare', $quote), Data::payload($category))
+                ->assertUnprocessable()->assertJsonValidationErrors('quotation');
+            $this->assertNull($quote->refresh()->request_id);
+            $this->assertSame(0, DB::transactionLevel());
+            $this->postJson(route('admin.solicitudes.cotizacion.documents.store', $quote), [
+                'file' => \Illuminate\Http\UploadedFile::fake()->image('solicitud.jpg'),
+                'upload_key' => (string) \Illuminate\Support\Str::uuid(),
+            ])->assertOk()->assertJsonPath('preparation_url', $url);
+            $this->get(route('admin.solicitudes.cotizacion.index', ['buscar' => $quote->folio]))->assertOk()
+                ->assertSee('href="'.$url.'"', false);
+            $this->get($url)->assertOk();
+            $this->post(route('admin.solicitudes.cotizacion.prepare', $quote), Data::payload($category))
+                ->assertSessionHasNoErrors()->assertRedirect();
+            $this->assertNotNull($quote->refresh()->request_id);
+        }
     }
 
     public function test_multiple_mixtures_split_service_cents_without_changing_total(): void

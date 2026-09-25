@@ -30,14 +30,14 @@ class RequestQuotationListTest extends TestCase
         $response = $this->screen()->assertOk()->assertSee('Lista de Cotizaciones')
             ->assertViewHas('quotations', fn ($rows) => $rows->count() === 5)
             ->assertSeeInOrder(['Tipo', 'Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios',
-                'Total MXN', 'Estado', 'Enviar', 'Autorizaci&oacute;n', 'Detalle', 'Enviar a preparacion'], false);
+                'Total MXN', 'Estado', 'Detalle', 'Enviar', 'Autorizaci&oacute;n', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion'], false);
         $xpath = $this->xpath($response->getContent());
-        $this->assertCount(14, $xpath->query('//table[@id="request-quotations-table"]//th'));
+        $this->assertCount(15, $xpath->query('//table[@id="request-quotations-table"]//th'));
         $this->assertSame('Tipo', trim($xpath->query('//table[@id="request-quotations-table"]//th')->item(0)->textContent));
         $this->assertSame(['Antibiotico', 'Nutricional', 'Oncologica', 'Oncologica', 'Oncologica'], array_map(
             fn ($cell) => trim($cell->textContent), iterator_to_array($xpath->query('//tr[@data-quotation-row]/td[1]'))));
         foreach ($xpath->query('//tr[@data-quotation-row]') as $row) {
-            $this->assertCount(14, $xpath->query('./td', $row));
+            $this->assertCount(15, $xpath->query('./td', $row));
         }
         $this->assertCount(5, $xpath->query('//table[@id="request-quotations-table"]//button[@data-quotation-send]'));
         $this->assertSame(['Todas', 'Recibidas', 'Enviadas', 'Autorizadas', 'En preparacion'], array_map(
@@ -45,6 +45,74 @@ class RequestQuotationListTest extends TestCase
         $this->assertCount(4, $xpath->query('//nav[@aria-label="Tipo de solicitudes"]//a'));
         $this->assertCount(1, $xpath->query('//nav[@aria-label="Tipo de solicitudes"]//a[@aria-current="page"]'));
         $this->assertCount(1, $xpath->query('//nav[@aria-label="Estado de las cotizaciones"]//a[@aria-current="page"]'));
+    }
+
+    public function test_row_states_and_actions_use_consistent_pills_without_changing_authorization_permissions(): void
+    {
+        $xpath = $this->xpath($this->screen()->assertOk()->getContent());
+        $row = fn (int $id) => '//tr[@data-quotation-row][td[2]="COT-'.str_pad((string) $id, 6, '0', STR_PAD_LEFT).'"]';
+        foreach ([1 => ['Por enviar', 'pending'], 2 => ['Enviada', 'success'],
+            3 => ['Autorizada', 'success'], 4 => ['En preparacion', 'primary']] as $id => [$label, $tone]) {
+            $state = $xpath->query($row($id).'/td[10]/span')->item(0);
+            $this->assertSame($label, trim($state->textContent));
+            $this->assertStringContainsString('quotation-row-pill--'.$tone, $state->getAttribute('class'));
+        }
+        foreach ([1, 2, 5] as $id) {
+            $pending = $xpath->query($row($id).'/td[13]/button[@disabled]')->item(0);
+            $this->assertNotNull($pending);
+            $this->assertSame('Pendiente', trim($pending->textContent));
+            $this->assertStringContainsString('quotation-row-pill--pending', $pending->getAttribute('class'));
+        }
+        foreach ([3, 4] as $id) {
+            $authorized = $xpath->query($row($id).'/td[13]/span')->item(0);
+            $this->assertSame('Autorizado', trim($authorized->textContent));
+            $this->assertStringContainsString('quotation-row-pill--success', $authorized->getAttribute('class'));
+            $this->assertStringContainsString(RequestQuotation::findOrFail($id)->authorized_at->format('d/m/Y H:i'), $authorized->getAttribute('title'));
+        }
+        foreach ($xpath->query('//tr[@data-quotation-row]//button | //tr[@data-quotation-row]//a') as $control) {
+            $this->assertStringContainsString('quotation-row-pill', $control->getAttribute('class'));
+        }
+
+        $this->user->givePermissionTo(Permission::create(['name' => 'oncologicos_solicitudes_update', 'guard_name' => 'web']));
+        $xpath = $this->xpath($this->screen()->assertOk()->getContent());
+        $form = $xpath->query($row(2).'/td[13]/form')->item(0);
+        $this->assertSame(route('admin.solicitudes.cotizacion.authorize', 2), $form->getAttribute('action'));
+        $this->assertFalse($form->hasAttribute('onsubmit'));
+        $this->assertSame('POST', $form->getAttribute('method'));
+        $this->assertCount(1, $xpath->query('./input[@name="_token"]', $form));
+        $this->assertSame(['folio' => 'COT-000002', 'date' => '21/09/2026', 'hospital' => 'Hospital de prueba',
+            'amount' => '$210.00', 'can_authorize' => true], json_decode($form->getAttribute('data-quotation-authorization'), true));
+        $this->assertCount(1, $xpath->query('//dialog[@data-quotation-authorize-dialog]'));
+        $button = $xpath->query('./button', $form)->item(0);
+        $this->assertSame('Pendiente', trim($button->textContent));
+        $this->assertSame('button', $button->getAttribute('type'));
+        $this->assertTrue($button->hasAttribute('data-quotation-authorize'));
+        $this->assertFalse($button->hasAttribute('disabled'));
+        $this->assertCount(1, $xpath->query($row(1).'/td[13]/button[@disabled]'));
+    }
+
+    public function test_client_and_institution_tables_omit_internal_columns_and_preserve_row_alignment(): void
+    {
+        foreach (['Cliente', 'Institucion'] as $role) {
+            $this->user->syncRoles(Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']));
+            foreach ([[], ['estado' => 'enviadas'], ['buscar' => 'NO-EXISTE']] as $filters) {
+                $response = $this->screen($filters)->assertOk()->assertViewHas('isHospitalView', true);
+                $xpath = $this->xpath($response->getContent());
+                $this->assertSame(['Tipo', 'Folio', 'Fecha', 'Paciente', 'Total MXN', 'Detalle', 'Enviar',
+                    'Autorización', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion'], array_map(
+                        fn ($header) => trim($header->textContent), iterator_to_array($xpath->query('//table[@id="request-quotations-table"]//th'))));
+                foreach ($xpath->query('//tr[@data-quotation-row]') as $row) {
+                    $this->assertCount(10, $xpath->query('./td', $row));
+                    $this->assertStringStartsWith('Paciente de prueba ', trim($xpath->query('./td[4]', $row)->item(0)->textContent));
+                    $this->assertStringStartsWith('$', trim($xpath->query('./td[5]', $row)->item(0)->textContent));
+                    $this->assertCount(1, $xpath->query('./td[7]/button[@data-quotation-send]', $row));
+                    $this->assertCount(1, $xpath->query('./td[9]/button[@data-quotation-documents]', $row));
+                    $this->assertCount(1, $xpath->query('./td[6]//button[starts-with(@aria-label,"Ver COT-")]', $row));
+                    $this->assertStringNotContainsString('Lista del hospital', $row->textContent);
+                    $this->assertStringNotContainsString('Sin asignar', $row->textContent);
+                }
+            }
+        }
     }
 
     public function test_category_and_status_filters_combine_without_hiding_drafts_from_all(): void
@@ -64,6 +132,32 @@ class RequestQuotationListTest extends TestCase
         }
     }
 
+    public function test_hospital_status_tabs_omit_received_and_sent_and_normalize_old_links(): void
+    {
+        foreach (['Cliente', 'Institucion'] as $role) {
+            $this->user->syncRoles(Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']));
+            foreach (['todas', 'recibidas', 'enviadas'] as $status) {
+                $response = $this->screen(['estado' => $status])->assertOk()
+                    ->assertViewHas('statusFilter', 'todas')
+                    ->assertViewHas('quotations', fn ($rows) => $rows->modelKeys() === [4, 3, 2, 1]);
+                $xpath = $this->xpath($response->getContent());
+                $this->assertSame(['Todas', 'Autorizadas', 'En preparacion'], array_map(
+                    fn ($link) => trim($link->textContent), iterator_to_array($xpath->query('//nav[@aria-label="Estado de las cotizaciones"]/a'))));
+                $this->assertSame('Todas', trim($xpath->query('//nav[@aria-label="Estado de las cotizaciones"]/a[@aria-current="page"]')->item(0)->textContent));
+                $this->assertSame('todas', $xpath->query('//input[@name="estado"]')->item(0)->getAttribute('value'));
+                $this->assertStringNotContainsString('estado=recibidas', $response->getContent());
+                $this->assertStringNotContainsString('estado=enviadas', $response->getContent());
+            }
+            foreach (['autorizadas' => [3], 'preparacion' => [4]] as $status => $ids) {
+                $this->screen(['estado' => $status])->assertOk()->assertViewHas('statusFilter', $status)
+                    ->assertViewHas('quotations', fn ($rows) => $rows->modelKeys() === $ids);
+            }
+            $this->screen(['estado' => 'enviadas', 'tipo' => 'oncologicos', 'buscar' => 'COT-000002'])
+                ->assertOk()->assertViewHas('statusFilter', 'todas')
+                ->assertViewHas('quotations', fn ($rows) => $rows->modelKeys() === [2]);
+        }
+    }
+
     public function test_received_quotes_exclude_own_drafts_and_authorized_quotes_and_preserve_hospital_scope(): void
     {
         RequestQuotation::whereIn('id', [1, 2, 3, 4])->update(['created_by' => 2]);
@@ -76,7 +170,8 @@ class RequestQuotationListTest extends TestCase
         foreach (['Cliente', 'Institucion'] as $role) {
             $this->user->syncRoles(Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']));
             $this->screen(['estado' => 'recibidas'])->assertOk()
-                ->assertViewHas('quotations', fn ($rows) => $rows->modelKeys() === [2]);
+                ->assertViewHas('statusFilter', 'todas')
+                ->assertViewHas('quotations', fn ($rows) => $rows->modelKeys() === [4, 3, 2, 1]);
             $this->screen(['estado' => 'recibidas', 'hospital_id' => 2])->assertOk()
                 ->assertViewHas('quotations', fn ($rows) => $rows->isEmpty());
         }
@@ -181,6 +276,24 @@ class RequestQuotationListTest extends TestCase
             $this->post($url)->assertForbidden();
         }
         $this->assertSame('enviada', RequestQuotation::findOrFail(2)->status);
+    }
+
+    public function test_authorization_dialog_escapes_hospital_names_and_disallows_missing_amounts(): void
+    {
+        $this->user->givePermissionTo(Permission::findOrCreate('oncologicos_solicitudes_update', 'web'));
+        $quote = RequestQuotation::findOrFail(2);
+        $name = 'Hospital <img src=x onerror=alert(1)> & sucursal';
+        $quote->hospital->update(['name' => $name]);
+        foreach ([null, -1] as $total) {
+            $quote->update(['total' => $total]);
+            $response = $this->screen()->assertOk()->assertDontSee('<img src=x onerror=alert(1)>', false);
+            $xpath = $this->xpath($response->getContent());
+            $form = $xpath->query('//form[@data-quotation-authorization][@action="'.route('admin.solicitudes.cotizacion.authorize', $quote).'"]')->item(0);
+            $data = json_decode($form->getAttribute('data-quotation-authorization'), true);
+            $this->assertSame($name, $data['hospital']);
+            $this->assertFalse($data['can_authorize']);
+            $this->assertSame('enviada', $quote->refresh()->status);
+        }
     }
 
     public function test_read_only_staff_cannot_authorize_and_authorization_requires_a_sent_quote(): void
