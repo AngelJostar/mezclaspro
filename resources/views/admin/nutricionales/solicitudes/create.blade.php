@@ -136,7 +136,7 @@
                     </x-label>
                     <div class="flex flex-col w-full">
                         <div class="flex">
-                            <x-input-solicitud type="number" value="{{ old('peso') }}" step="0.001" min="0.001" max="1000" name="peso" class="w-full" placeholder="" />
+                            <x-input-solicitud type="number" value="{{ old('peso') }}" step="0.001" min="0.001" max="1000" name="peso" required data-clinical-required aria-label="Peso (kg)" class="w-full" placeholder="" />
                             <div>Kg</div>
                         </div>
                         @error('peso')
@@ -165,7 +165,7 @@
                     </x-label>
                     <div class="flex flex-col">
                         <x-input-solicitud type="date" value="{{ old('fecha_nacimiento') }}"
-                            max="{{ date('Y-m-d') }}" name="fecha_nacimiento" class="" placeholder=""
+                            max="{{ date('Y-m-d') }}" name="fecha_nacimiento" required data-clinical-required aria-label="Fecha de nacimiento" class="" placeholder=""
                             onchange="calcularEdad(this.value)" />
                         @error('fecha_nacimiento')
                             <div class="text-red-500 text-sm">{{ $message }}</div>
@@ -193,7 +193,7 @@
                         Tiempo de infusión (h):
                     </x-label>
                     <x-input-solicitud type="number" value="{{ old('tiempo_infusion_min') }}"
-                        min="0.001" max="1000" name="tiempo_infusion_min" class="w-full" placeholder="" />
+                        min="0.001" step="0.001" max="1000" name="tiempo_infusion_min" class="w-full" placeholder="" />
                     @error('tiempo_infusion_min')
                         <div class="text-red-500 text-sm">{{ $message }}</div>
                     @enderror
@@ -407,9 +407,10 @@
                 </div>
             </div>
 
+            @include('admin.solicitudes._clinical-review', ['clinicalKind' => 'nutricionales'])
             <div class="flex justify-end gap-5">
-                <x-button id="nutrition-request-submit">
-                    GUARDAR SOLICITUD
+                <x-button id="nutrition-request-submit" data-clinical-submit>
+                    Validar y Continuar
                 </x-button>
             </div>
         </form>
@@ -494,11 +495,9 @@
                         return;
                     }
 
+                    event.preventDefault();
                     if (!form.checkValidity() || submitButton.disabled) return;
-
-                    submitButton.disabled = true;
-                    submitButton.classList.add('cursor-not-allowed', 'opacity-60');
-                    submitButton.textContent = 'GUARDANDO...';
+                    window.validateClinicalRequest?.(form);
                 });
             });
 

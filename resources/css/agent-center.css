@@ -56,6 +56,13 @@
 .agent-form-fields input, .agent-form-fields textarea { width: 100%; min-width: 0; max-width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; line-height: 1.5; }
 .agent-form-fields textarea { resize: vertical; }
 .agent-form-fields input:focus, .agent-form-fields textarea:focus { outline: 2px solid #93c5fd; outline-offset: 1px; }
+.agent-secret-field { position: relative; min-width: 0; }
+.agent-secret-field input { padding-right: 46px; }
+.agent-secret-field input::-ms-reveal, .agent-secret-field input::-ms-clear { display: none; }
+.agent-secret-toggle { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 4px; color: #64748b; background: transparent; }
+.agent-secret-toggle:hover { color: #123567; background: #eff6ff; }
+.agent-secret-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.agent-secret-toggle svg { width: 20px; height: 20px; }
 .agent-error { margin-top: 4px; color: #b91c1c; font-size: 12px; }
 .agent-error:empty { display: none; }
 .agent-modal-actions { display: flex; flex: none; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #e5e7eb; }
@@ -96,6 +103,28 @@
 .agent-priority { padding: 2px 6px; border-radius: 4px; color: #854d0e; background: #fef9c3; font-size: 12px; }
 .agent-priority[data-priority="high"] { color: #991b1b; background: #fee2e2; }
 .agent-priority[data-priority="low"] { color: #065f46; background: #d1fae5; }
+.clinical-agent-chat { margin-top: 20px; padding-top: 16px; border-top: 1px solid #d4dfed; min-width: 0; }
+.clinical-chat-heading, .clinical-chat-tools, .clinical-chat-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.clinical-chat-heading h4 { margin: 0; font-size: 15px; }
+.clinical-chat-tools { justify-content: flex-end; }
+.clinical-chat-tools select { max-width: 100%; min-width: 0; padding: 7px 30px 7px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; }
+.clinical-chat-history { max-height: 420px; overflow-y: auto; overscroll-behavior: contain; padding: 8px 0; margin: 12px 0; border-block: 1px solid #e2e8f0; }
+.clinical-chat-turn { display: grid; gap: 10px; padding: 10px 0; }
+.clinical-chat-message { width: fit-content; max-width: 90%; min-width: 0; padding: 12px 14px; border-radius: 6px; }
+.clinical-chat-question { justify-self: end; background: #eaf7ef; border: 1px solid #c7e8d4; }
+.clinical-chat-answer { background: #f0f6fc; border: 1px solid #d4e4f5; }
+.clinical-chat-message header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: #28527b; font-size: 12px; }
+.clinical-chat-message > p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.clinical-chat-sources { border-top: 1px solid #d4e4f5; padding-top: 6px; font-size: 12px; }
+.clinical-chat-empty { padding: 12px 0; }
+.clinical-chat-composer label { display: block; font-weight: 600; margin: 8px 0; }
+.clinical-chat-composer textarea { display: block; width: 100%; min-width: 0; min-height: 90px; padding: 10px 12px; border: 1px solid #b8cce4; border-radius: 4px; resize: vertical; font-size: 14px; line-height: 1.5; }
+.clinical-chat-composer textarea:focus, .clinical-chat-history:focus-visible { outline: 2px solid #93c5fd; outline-offset: 1px; }
+.clinical-chat-footer { margin-top: 10px; align-items: flex-start; }
+.clinical-chat-footer p { flex: 1 1 260px; }
+.clinical-chat-send { display: inline-flex; align-items: center; justify-content: center; flex: none; gap: 8px; min-width: 160px; height: 38px; padding: 8px 14px; border-radius: 4px; background: #128441; color: #fff; font-weight: 600; font-size: 13px; }
+.clinical-chat-send:hover { background: #116c36; }
+.clinical-chat-send:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 639px) {
     .agent-config-columns, .agent-rule-list, .agent-criteria { grid-template-columns: minmax(0, 1fr); }
     .agent-information-heading { flex-wrap: wrap; }
@@ -103,4 +132,8 @@
     .agent-information-grid { grid-template-columns: minmax(0, 1fr); }
     .agent-modal-header, .agent-form-fields, .agent-modal-actions { padding: 14px; }
     .agent-form-fields input, .agent-form-fields textarea { font-size: 16px; }
+    .clinical-chat-tools { justify-content: flex-start; width: 100%; }
+    .clinical-chat-message { max-width: 100%; }
+    .clinical-chat-composer textarea { font-size: 16px; }
+    .clinical-chat-send { width: 100%; }
 }

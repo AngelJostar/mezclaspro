@@ -776,6 +776,7 @@ class SolicitudController extends Controller
 
     public function store(Request $request)
     {
+        app(\App\Services\Clinical\ClinicalReviewService::class)->requireSubmission($request, 'nutricionales');
         $quotation = $request->attributes->get('preparationQuotation');
         $dynamicRules = [];
         $inputQuantities = [];
@@ -917,6 +918,7 @@ class SolicitudController extends Controller
             $solicitud['solicitud_patient_id'] = $solicitud_paciente_resp->id;
 
             $solicitud_nueva = Solicitud::create($solicitud);
+            app(\App\Services\Clinical\ClinicalReviewService::class)->consume($request, 'solicituds', $solicitud_nueva->id);
 
             if ($quotation) {
                 app(\App\Services\QuotationPreparationService::class)->attachNutrition($quotation, $solicitud_nueva, $request);

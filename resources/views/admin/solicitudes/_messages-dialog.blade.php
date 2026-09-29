@@ -15,6 +15,11 @@
             <button type="button" class="mixture-chat-older" data-chat-older hidden>Mensajes anteriores</button>
             <p class="mixture-chat-empty" data-chat-empty role="status">Cargando mensajes...</p>
             <ol class="mixture-chat-messages" data-chat-messages aria-label="Historial de mensajes"></ol>
+            <details class="clinical-review clinical-chat" data-chat-clinical hidden open>
+                <summary>Soporte quimico y clinico · IA</summary>
+                <div data-chat-clinical-result aria-live="polite"></div>
+                <button type="button" data-chat-clinical-retry>Revisar parametros</button>
+            </details>
         </div>
         <form class="mixture-chat-form" data-chat-form>
             <label class="sr-only" for="mixture-chat-body">Mensaje</label>

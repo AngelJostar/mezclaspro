@@ -19,6 +19,9 @@ class AgentRunner
     public function run(AiAgent $agent, User $actor, string $trigger = 'manual', array $context = []): ?AiAgentRun
     {
         $agent->refresh();
+        if ($agent->integration_key === \App\Services\Clinical\ClinicalEvidence::KEY) {
+            throw ValidationException::withMessages(['execution' => 'Este agente se ejecuta desde Validar y Continuar o desde Mensajes de una mezcla.']);
+        }
         $sectionAccess = $agent->integration_key === 'admin_conciliation'
             && !$actor->hasAnyRole(['Cliente', 'Institucion']) && \App\Support\AdministrationNavigation::canViewReports($actor)
             && ($agent->configuration['rules'] ?? []) === ['conciliation'] && ($agent->configuration['sources'] ?? []) === ['conciliations'];

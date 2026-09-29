@@ -1,0 +1,105 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: testing
+      APP_KEY: '01234567890123456789012345678901'
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+      CACHE_DRIVER: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, zip, gd, mbstring, bcmath
+          coverage: none
+      - run: composer install --prefer-dist --no-interaction
+      - name: Tests aislados, sin llamadas reales a OpenAI
+        run: |
+          php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php tests/Feature/ClinicalSupportTest.php
+          php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php tests/Feature/ClinicalAgentChatTest.php
+          php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php tests/Feature/OpenAiDeploymentTest.php
+          bash -n scripts/deploy-vps.sh
+          node --test tests/Deployment/deploy-vps.test.cjs
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Deploy to VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PATH: ${{ secrets.VPS_PATH }}
+          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_AGENT_MODEL: ${{ vars.OPENAI_AGENT_MODEL }}
+        run: |
+          set +x
+          set -Eeuo pipefail
+          umask 077
+          for variable in VPS_HOST VPS_USER VPS_PATH VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS; do
+            if [[ -z ${!variable} ]]; then
+              printf 'Falta configurar el secreto %s en GitHub Actions.\n' "$variable" >&2
+              exit 1
+            fi
+          done
+          [[ $VPS_HOST =~ ^[A-Za-z0-9][A-Za-z0-9.:-]*$ ]]
+          [[ $VPS_USER =~ ^[a-z_][a-z0-9_-]*$ && $VPS_USER != root ]]
+          [[ $VPS_PORT =~ ^[0-9]{1,5}$ && $VPS_PORT -gt 0 && $VPS_PORT -le 65535 ]]
+          [[ $VPS_PATH =~ ^/[A-Za-z0-9_./-]+$ && $VPS_PATH != / ]]
+          [[ -z $OPENAI_AGENT_MODEL || $OPENAI_AGENT_MODEL =~ ^[A-Za-z0-9._:-]{1,100}$ ]]
+          key_file="$RUNNER_TEMP/vps-key"
+          hosts_file="$RUNNER_TEMP/vps-known-hosts"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$key_file"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$hosts_file"
+          unset VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS
+          ssh_options=(-i "$key_file" -p "$VPS_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$hosts_file" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+          destination="$VPS_USER@$VPS_HOST"
+          remote_script=''
+          cleanup() {
+            if [[ $remote_script =~ ^/tmp/mezclaspro-deploy\.[A-Za-z0-9]+$ ]]; then
+              ssh "${ssh_options[@]}" "$destination" "rm -f -- '$remote_script'" </dev/null || true
+            fi
+            rm -f -- "$key_file" "$hosts_file"
+          }
+          trap cleanup EXIT
+          remote_script=$(ssh "${ssh_options[@]}" "$destination" 'umask 077; mktemp /tmp/mezclaspro-deploy.XXXXXXXX')
+          [[ $remote_script =~ ^/tmp/mezclaspro-deploy\.[A-Za-z0-9]+$ ]]
+          ssh "${ssh_options[@]}" "$destination" "cat > '$remote_script'" < scripts/deploy-vps.sh
+          printf -v command 'bash %q %q %q %q %q' "$remote_script" "$VPS_PATH" "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$OPENAI_AGENT_MODEL"
+          printf '%s\n' "$OPENAI_API_KEY" | ssh "${ssh_options[@]}" "$destination" "$command"

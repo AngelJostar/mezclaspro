@@ -7,6 +7,17 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Despliegue Automatico al VPS
+
+El workflow `.github/workflows/deploy-vps.yml` prueba y despliega los merges a
+`main`, incluyendo migraciones, assets, agente clinico y configuracion OpenAI.
+Requiere enlazar GitHub con el VPS y registrar sus secretos **una sola vez**.
+La clave API nunca se incluye en Git; se transmite por SSH y se cifra en el VPS.
+Se conservan `.env`, APP_KEY, usuarios y datos existentes del servidor.
+
+Ver [configuracion y requisitos](docs/deployment-vps.md). El workflow no esta
+conectado a produccion hasta completar esos datos y verificar su primer despliegue.
+
 ## Frontend Assets After a Pull
 
 The generated `public/build` directory is not tracked by Git. After pulling

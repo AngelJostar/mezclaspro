@@ -46,6 +46,17 @@ test('mixture chat preserves history, unread badges, drafts and safe retry on de
                         readThrough = Math.max(readThrough, route.request().postDataJSON().through_id);
                         return json(route, { ok: true });
                     }
+                    if (url.pathname.endsWith('/soporte-clinico')) {
+                        assert.deepEqual(route.request().postDataJSON(), {});
+                        return json(route, { can_submit: false, can_view_internal: side === 'central', result: { status: 'needs_review',
+                            summary: 'Verificar parametros con el profesional responsable.',
+                            findings: [{ field: 'volumen_total', severity: 'review', message: 'Volumen total inconsistente.',
+                                calculation: '1200 mL - 1000 mL = 200 mL.', suggestion: 'El volumen final debe contener los componentes segun la orden medica.', source_ids: ['SYSTEM'] }],
+                            sources: [{id:'S1', title:'Protocolo interno de prueba', reference:'Referencia interna', reviewed:true, sha256:'a'.repeat(64)}],
+                            calculations: [{formula:'Suma de componentes', result:1200, unit:'mL', assumptions:'Supuestos internos de prueba.'}],
+                            technical_issues: ['Diagnostico interno del servicio.'],
+                            limitations: ['Contexto clinico incompleto.'], notice: 'La IA no autoriza la preparacion.' } });
+                    }
                     if (route.request().method() === 'POST') {
                         assert.equal(route.request().headers()['x-csrf-token'], 'test-token');
                         const body = route.request().postDataJSON();
@@ -58,7 +69,7 @@ test('mixture chat preserves history, unread badges, drafts and safe retry on de
                         return json(route, { message: tokens.get(body.client_token) });
                     }
                     return json(route, { target: { id: Number(key.split(':')[1]), hospital: 'Hospital de prueba', patient: 'Paciente de prueba' },
-                        side, can_send: side === 'hospital' || messages.length > 0,
+                        side, clinical_enabled: true, can_send: side === 'hospital' || messages.length > 0,
                         messages: messages.filter(message => message.id > Number(url.searchParams.get('after_id') || 0)), has_older: false });
                 });
                 await page.goto('http://localhost/fixture');
@@ -80,6 +91,15 @@ test('mixture chat preserves history, unread badges, drafts and safe retry on de
                 const input = dialog.getByRole('textbox', { name: 'Mensaje', exact: true });
                 await page.waitForFunction(() => !document.querySelector('#mixture-chat-body').disabled);
                 const send = dialog.getByRole('button', { name: 'Enviar mensaje', exact: true });
+                await dialog.getByText('Verificar parametros con el profesional responsable.', { exact: true }).waitFor();
+                const clinicalResult = dialog.locator('[data-chat-clinical-result]');
+                assert.equal(await clinicalResult.getByText('Volumen total inconsistente.', { exact: true }).isVisible(), true);
+                assert.equal(await clinicalResult.locator('.clinical-suggestion').isVisible(), true);
+                for (const label of ['Calculos y supuestos', 'Estado de la evidencia y del servicio', 'Fuentes utilizadas', 'La IA no autoriza la preparacion.']) {
+                    assert.equal(await clinicalResult.getByText(label, { exact: true }).count(), side === 'central' ? 1 : 0);
+                }
+                assert.equal(await clinicalResult.locator('details').count(), side === 'central' ? 3 : 0);
+                assert.equal(await clinicalResult.locator('.clinical-notice').count(), side === 'central' ? 2 : 0);
                 assert.equal(await send.isDisabled(), true);
                 if (side === 'central') await cell.locator('.mixture-message-unread').waitFor({ state: 'hidden' });
                 await input.fill('Borrador de la mezcla');

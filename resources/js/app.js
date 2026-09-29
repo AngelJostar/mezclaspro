@@ -20,6 +20,7 @@ import './workflow-modal';
 import './mixture-workflow';
 import './mixture-adjustments';
 import './mixture-messages';
+import './clinical-review';
 import './adjustment-proposal';
 import './agent-center';
 import './conciliation-agent';

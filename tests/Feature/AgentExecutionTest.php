@@ -234,6 +234,48 @@ class AgentExecutionTest extends TestCase
         $component->call('removeOpenAiKey')->assertForbidden();
     }
 
+    public function test_openai_settings_report_field_errors_without_saving_or_exposing_secrets(): void
+    {
+        $component = Livewire::test(AgentCenter::class)->call('toggleProviderForm');
+        $component->call('saveOpenAi', '', 'gpt-4.1-mini')
+            ->assertHasErrors('providerKey')->assertHasNoErrors('providerModel')
+            ->assertSee('Falta la clave API')->assertSet('showProviderForm', true);
+        $this->assertSame(0, AiAgentProviderSetting::count());
+
+        $badKey = 'not-an-api-key-secret';
+        $component->call('saveOpenAi', $badKey, 'gpt-4.1-mini')
+            ->assertHasErrors('providerKey')->assertHasNoErrors('providerModel')
+            ->assertSee('La clave API debe comenzar con sk-')->assertDontSee($badKey);
+        $this->assertStringNotContainsString($badKey, json_encode($component->snapshot));
+        $this->assertSame(0, AiAgentProviderSetting::count());
+
+        $key = 'sk-proj-'.str_repeat('aB9_-', 30);
+        $component->call('saveOpenAi', $key, 'invalid model')
+            ->assertHasErrors('providerModel')->assertHasNoErrors('providerKey')->assertDontSee($key);
+        $this->assertSame(0, AiAgentProviderSetting::count());
+        $component->call('saveOpenAi', "  $key\n", ' gpt-4.1-mini ')->assertHasNoErrors()
+            ->assertSet('showProviderForm', false)->assertDontSee($key);
+        $this->assertSame($key, AiAgentProviderSetting::find(1)->api_key);
+        $this->assertSame('gpt-4.1-mini', AiAgentProviderSetting::find(1)->model);
+
+        $component->call('toggleProviderForm')->call('saveOpenAi', 'sk-short', 'bad model')
+            ->assertHasErrors(['providerKey', 'providerModel']);
+        $this->assertSame($key, AiAgentProviderSetting::find(1)->api_key);
+        $this->assertSame('gpt-4.1-mini', AiAgentProviderSetting::find(1)->model);
+        Http::assertNothingSent();
+    }
+
+    public function test_openai_model_can_be_saved_without_replacing_an_environment_key(): void
+    {
+        $key = 'sk-test-'.str_repeat('b', 40);
+        config(['services.openai.api_key' => $key]);
+        Livewire::test(AgentCenter::class)->call('toggleProviderForm')->call('saveOpenAi', '', 'gpt-4.1-mini')
+            ->assertHasNoErrors()->assertSet('showProviderForm', false)->assertDontSee($key);
+        $this->assertNull(AiAgentProviderSetting::find(1)->api_key);
+        $this->assertSame($key, config('services.openai.api_key'));
+        Http::assertNothingSent();
+    }
+
     public function test_openai_receives_only_computed_facts_and_cannot_modify_inventory(): void
     {
         config(['services.openai.api_key' => 'sk-test-local']);

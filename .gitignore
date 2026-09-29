@@ -8,6 +8,11 @@
 .env
 .env.backup
 .env.production
+.env.*
+!.env.example
+/deploy-secrets/
+*.pem
+*.key
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
