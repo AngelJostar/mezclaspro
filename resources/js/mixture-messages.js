@@ -1,5 +1,6 @@
 import { createIcons, Phone, Send, X } from 'lucide';
 import '../css/mixture-messages.css';
+import { renderClinicalResult } from './clinical-review';
 
 function initializeMixtureMessages() {
     window.cleanupMixtureMessages?.();
@@ -16,6 +17,9 @@ function initializeMixtureMessages() {
     const send = form.querySelector('[type=submit]');
     const error = dialog.querySelector('[data-chat-error]');
     const status = dialog.querySelector('[data-chat-status]');
+    const clinicalPanel = dialog.querySelector('[data-chat-clinical]');
+    const clinicalResult = dialog.querySelector('[data-chat-clinical-result]');
+    const clinicalRetry = dialog.querySelector('[data-chat-clinical-retry]');
     const drafts = new Map();
     const summaryCache = new Map();
     let current = null;
@@ -156,6 +160,11 @@ function initializeMixtureMessages() {
             for (const message of data.messages) state.messages.set(message.id, message);
             if (initial || mode === 'older') older.hidden = !data.has_older;
             renderMessages(state);
+            if (data.clinical_enabled && clinicalPanel && !state.clinicalStarted) {
+                state.clinicalStarted = true;
+                clinicalPanel.hidden = false;
+                loadClinicalSupport(state);
+            }
             if (mode === 'older') scroll.scrollTop = previousTop + scroll.scrollHeight - previousHeight;
             else if (initial || wasAtBottom) scroll.scrollTop = scroll.scrollHeight;
             input.disabled = !state.canSend;
@@ -175,6 +184,7 @@ function initializeMixtureMessages() {
         input.disabled = true;
         input.readOnly = false;
         list.replaceChildren();
+        if (clinicalPanel) { clinicalPanel.hidden = true; clinicalResult.replaceChildren(); }
         older.hidden = true;
         empty.hidden = false;
         empty.textContent = 'Cargando mensajes...';
@@ -187,6 +197,22 @@ function initializeMixtureMessages() {
         dialog.showModal();
         loadMessages(current);
     }
+
+    async function loadClinicalSupport(state) {
+        if (state.clinicalBusy) return;
+        state.clinicalBusy = true; clinicalRetry.disabled = true;
+        clinicalResult.textContent = 'Revisando parametros registrados...';
+        try {
+            const data = await request(`${state.url}/soporte-clinico`, {});
+            if (current === state && dialog.open) renderClinicalResult(clinicalResult, data);
+        } catch (failure) {
+            if (current === state && !signal.aborted) clinicalResult.textContent = failure.message;
+        } finally {
+            state.clinicalBusy = false;
+            if (current === state) clinicalRetry.disabled = false;
+        }
+    }
+    clinicalRetry?.addEventListener('click', () => { if (current) loadClinicalSupport(current); }, { signal });
 
     document.addEventListener('click', event => {
         const button = event.target.closest('.mixture-message-history,.mixture-message-compose');

@@ -1,0 +1,30 @@
+.clinical-review { min-width: 0; margin-block: 18px; padding-block: 14px; border-top: 1px solid #c8d8e8; border-bottom: 1px solid #c8d8e8; color: #153962; font-size: 14px; letter-spacing: 0; }
+.clinical-review h3 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+.clinical-review [hidden] { display: none !important; }
+.clinical-notice { font-size: 12px; color: #526678; margin-bottom: 12px; }
+.clinical-review p, .clinical-review li { overflow-wrap: anywhere; white-space: pre-wrap; }
+.clinical-review ul { margin-block: 10px; padding-left: 20px; list-style: disc; }
+.clinical-review li { margin-block: 9px; }
+.clinical-review .clinical-suggestion { margin-block: 8px; padding-left: 10px; border-left: 3px solid #147664; color: #153962; }
+.clinical-review details { margin-block: 10px; }
+.clinical-review summary { cursor: pointer; font-weight: 600; }
+.clinical-review [data-clinical-ack] { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; }
+.clinical-review [data-clinical-ack] input { flex-shrink: 0; margin-top: 3px; }
+.clinical-error, .clinical-review [data-clinical-error], .clinical-review [data-severity=blocking] { color: #a32222; }
+.clinical-review [data-severity=review] { color: #8b580d; }
+.clinical-field-error, .clinical-field-required-error { outline: 2px solid #b42318 !important; outline-offset: 2px; border-color: #b42318 !important; }
+.clinical-status { font-weight: 600; color: #136639; }
+[data-clinical-status=blocked] .clinical-status { color: #a32222; }
+[data-clinical-status=needs_review] .clinical-status { color: #8b580d; }
+[data-clinical-status=authorization_required] .clinical-status { color: #8b580d; }
+.clinical-review [data-severity=authorization] { color: #8b580d; }
+.clinical-authorization { min-width: 0; margin-block: 18px; padding: 16px; border: 1px solid #c4d9e6; border-left: 4px solid #169056; border-radius: 4px; background: #f5fafc; }
+.clinical-authorization legend { font-weight: 600; color: #153962; padding-inline: 6px; }
+.clinical-authorization input:not([type=checkbox]) { width: 100%; min-width: 0; margin-top: 6px; padding: 8px; border: 1px solid #c8d8e8; border-radius: 4px; color: #153962; background: white; }
+.clinical-chat { padding: 14px 20px; margin: 0; }
+.clinical-chat > summary { font-size: 14px; }
+.clinical-chat button { border: 1px solid #147664; color: #147664; border-radius: 4px; padding: 6px 12px; }
+.clinical-context-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-block: 12px 20px; }
+.clinical-context-fields label { min-width: 0; font-size: 13px; }
+.clinical-context-fields textarea { display: block; width: 100%; min-height: 72px; margin-top: 6px; padding: 8px; border: 1px solid #c8d8e8; border-radius: 4px; color: #153962; background: white; }
+@media (max-width: 640px) { .clinical-context-fields { grid-template-columns: minmax(0, 1fr); } }

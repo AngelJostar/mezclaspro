@@ -66,9 +66,11 @@ class MixtureMessagesTest extends TestCase
             $this->summary($this->central, [$key])->assertJsonPath('summaries.'.$key.'.unread', 1);
             $this->send($this->central, $kind, $id, 'Estamos verificando la entrega.')->assertCreated();
             $this->summary($this->hospital, [$key])->assertJsonPath('summaries.'.$key.'.unread', 1);
-            $this->actingAs($this->central)->getJson($this->url($kind, $id))->assertOk()
-                ->assertHeader('Cache-Control', 'no-store, private')->assertJsonCount(2, 'messages')
+            $history = $this->actingAs($this->central)->getJson($this->url($kind, $id))->assertOk()
+                ->assertJsonCount(2, 'messages')
                 ->assertJsonPath('messages.0.id', $hospitalMessage->json('message.id'))->assertJsonPath('can_send', true);
+            $this->assertTrue($history->headers->hasCacheControlDirective('no-store'));
+            $this->assertTrue($history->headers->hasCacheControlDirective('private'));
         }
         $this->assertSame('preparada', DB::table('mezclas')->where('id', 1)->value('estado'));
         $this->assertDatabaseCount('mixture_messages', 6);
@@ -89,6 +91,15 @@ class MixtureMessagesTest extends TestCase
         $this->send($this->central)->assertNotFound();
         $this->hospital->forceFill(['is_active' => false]);
         $this->actingAs($this->hospital)->getJson($this->url())->assertForbidden();
+    }
+
+    public function test_clinical_support_cannot_read_another_hospital_or_wrong_category(): void
+    {
+        foreach (['oncologicos' => 3, 'nutricionales' => 12, 'antibioticos' => 1] as $kind => $target) {
+            $this->actingAs($this->hospital)->postJson(route('admin.solicitudes.mensajes.clinical', compact('kind', 'target')))->assertNotFound();
+        }
+        $this->central->revokePermissionTo('oncologicos_solicitudes_index');
+        $this->actingAs($this->central)->postJson(route('admin.solicitudes.mensajes.clinical', ['kind' => 'oncologicos', 'target' => 1]))->assertNotFound();
     }
 
     public function test_retry_is_idempotent_and_blank_oversize_or_invalid_requests_fail(): void

@@ -87,10 +87,12 @@
                             </div>
                         </div>
                         <div class="agent-heading-actions">
+                        @if ($agent->integration_key !== \App\Services\Clinical\ClinicalEvidence::KEY)
                         <button type="button" class="agent-command" wire:click="runAgent({{ $agent->id }})" wire:loading.attr="disabled" wire:target="runAgent" @disabled(! $agent->is_active)>
                             <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="play"></i></span>
                             <span wire:loading.remove wire:target="runAgent({{ $agent->id }})">Ejecutar ahora</span><span wire:loading wire:target="runAgent({{ $agent->id }})">Ejecutando...</span>
                         </button>
+                        @endif
                         <button type="button" class="agent-edit" wire:click="editAgent({{ $agent->id }})"
                             aria-label="Editar agente {{ $agent->name }}" title="Editar agente">
                             <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="pencil"></i></span>
@@ -101,7 +103,11 @@
                         <div><dt>Descripción</dt><dd>{{ $agent->description ?? 'Sin descripción' }}</dd></div>
                         <div><dt>Instrucciones</dt><dd class="agent-instructions" tabindex="0">{{ $agent->instructions ?? 'Sin instrucciones' }}</dd></div>
                     </dl>
-                    @include('livewire.admin.agent-center-details')
+                    @if ($agent->integration_key === \App\Services\Clinical\ClinicalEvidence::KEY)
+                        @include('livewire.admin.agent-clinical-details')
+                    @else
+                        @include('livewire.admin.agent-center-details')
+                    @endif
                 </article>
             @empty
                 <p class="agent-empty">No hay agentes registrados.</p>
@@ -140,7 +146,9 @@
                                 aria-invalid="{{ $errors->has('agentInstructions') ? 'true' : 'false' }}" aria-describedby="agent-instructions-error"></textarea>
                             <p id="agent-instructions-error" class="agent-error" role="alert">@error('agentInstructions'){{ $message }}@enderror</p>
                         </div>
-                        @include('livewire.admin.agent-center-config')
+                        @if (!$editingAgentId || \App\Models\AiAgent::find($editingAgentId)?->integration_key !== \App\Services\Clinical\ClinicalEvidence::KEY)
+                            @include('livewire.admin.agent-center-config')
+                        @endif
                     </div>
                     <footer class="agent-modal-actions">
                         <button type="button" class="agent-cancel" wire:click="closeAgentForm" wire:loading.attr="disabled" wire:target="saveAgent">Cancelar</button>

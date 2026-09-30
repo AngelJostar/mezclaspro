@@ -19,7 +19,8 @@ const livewire = readFileSync(path.join(root, 'vendor/livewire/livewire/dist/liv
 
 function fixture(count = 8) {
     const php = spawn('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3',
-        'tests/Browser/fixtures/agent-center.php', String(count)], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
+        'tests/Browser/fixtures/agent-center.php', String(count)], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, CACHE_DRIVER: 'array', SESSION_DRIVER: 'array' } });
     const waiting = [];
     let stderr = '';
     php.stderr.on('data', data => { stderr += data; });
@@ -237,10 +238,156 @@ test('agent carousel toggles information and creates, edits and persists agents 
                 if (process.env.AGENT_SCREENSHOTS) await page.screenshot({path: path.join(process.env.AGENT_SCREENSHOTS, `agent-execution-${width}.png`)});
                 await page.getByRole('button', {name:'Configurar OpenAI', exact:true}).click();
                 await dialog.getByLabel('Clave API nueva', {exact:true}).waitFor();
-                assert.equal(await dialog.getByLabel('Clave API nueva', {exact:true}).inputValue(), '');
+                const apiKey = dialog.getByLabel('Clave API nueva', {exact:true});
+                const reveal = dialog.getByRole('button', {name:'Mostrar clave API', exact:true});
+                assert.equal(await apiKey.inputValue(), '');
+                assert.equal(await apiKey.getAttribute('type'), 'password');
+                assert.equal(await reveal.getAttribute('aria-pressed'), 'false');
+                await reveal.locator('svg[data-agent-icon="eye"]').waitFor({state:'visible'});
+                const toggleRequests = [];
+                const recordToggleRequest = request => toggleRequests.push(request.url());
+                page.on('request', recordToggleRequest);
+                await apiKey.fill('clave-de-prueba-no-valida');
+                await reveal.click();
+                const conceal = dialog.getByRole('button', {name:'Ocultar clave API', exact:true});
+                assert.equal(await apiKey.getAttribute('type'), 'text');
+                assert.equal(await apiKey.inputValue(), 'clave-de-prueba-no-valida');
+                assert.equal(await conceal.getAttribute('aria-pressed'), 'true');
+                assert.equal(await conceal.getAttribute('title'), 'Ocultar clave API');
+                await conceal.locator('svg[data-agent-icon="eye-off"]').waitFor({state:'visible'});
+                const inputBox = await apiKey.boundingBox();
+                const toggleBox = await conceal.boundingBox();
+                assert.ok(toggleBox.x >= inputBox.x && toggleBox.x + toggleBox.width <= inputBox.x + inputBox.width);
+                assert.ok(toggleBox.y >= inputBox.y && toggleBox.y + toggleBox.height <= inputBox.y + inputBox.height);
+                await conceal.focus();
+                await page.keyboard.press('Space');
+                assert.equal(await apiKey.getAttribute('type'), 'password');
+                assert.equal(await apiKey.inputValue(), 'clave-de-prueba-no-valida');
+                assert.equal(await reveal.getAttribute('aria-pressed'), 'false');
+                page.off('request', recordToggleRequest);
+                assert.deepEqual(toggleRequests, [], 'Revealing or hiding a key must not submit it');
                 assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth), false);
                 if (process.env.AGENT_SCREENSHOTS) await page.screenshot({path:path.join(process.env.AGENT_SCREENSHOTS, `agent-openai-${width}.png`)});
+                await reveal.click();
                 await dialog.getByRole('button', {name:'Cancelar', exact:true}).click();
+                await dialog.waitFor({state:'hidden'});
+                await page.getByRole('button', {name:'Configurar OpenAI', exact:true}).click();
+                await apiKey.waitFor();
+                assert.equal(await apiKey.inputValue(), '');
+                assert.equal(await apiKey.getAttribute('type'), 'password');
+                assert.equal(await reveal.getAttribute('aria-pressed'), 'false');
+                await dialog.getByRole('button', {name:'Guardar conexión', exact:true}).click();
+                await dialog.locator('#openai-key-error').filter({hasText:'Falta la clave API'}).waitFor();
+                assert.equal(await apiKey.getAttribute('aria-invalid'), 'true');
+                await apiKey.fill('clave-de-prueba-no-valida');
+                await reveal.click();
+                await dialog.getByRole('button', {name:'Guardar conexión', exact:true}).click();
+                await dialog.locator('#openai-key-error').filter({hasText:'La clave API debe comenzar'}).waitFor();
+                assert.equal(await apiKey.inputValue(), 'clave-de-prueba-no-valida');
+                assert.equal(await apiKey.getAttribute('type'), 'password');
+                assert.equal(await dialog.getByLabel('Modelo', {exact:true}).getAttribute('aria-invalid'), 'false');
+                if (process.env.AGENT_SCREENSHOTS) await page.screenshot({path:path.join(process.env.AGENT_SCREENSHOTS, `agent-openai-validation-${width}.png`)});
+                const testKey = `sk-proj-${'aB9_-'.repeat(30)}`;
+                await apiKey.fill(testKey);
+                await dialog.getByLabel('Modelo', {exact:true}).fill('invalid model');
+                await dialog.getByRole('button', {name:'Guardar conexión', exact:true}).click();
+                await dialog.locator('#openai-model-error').filter({hasText:'Escribe un identificador'}).waitFor();
+                assert.equal(await apiKey.inputValue(), testKey);
+                assert.equal(await apiKey.getAttribute('aria-invalid'), 'false');
+                assert.equal(await dialog.locator('#openai-key-error').textContent(), '');
+                await dialog.getByLabel('Modelo', {exact:true}).fill('gpt-4.1-mini');
+                await dialog.getByRole('button', {name:'Guardar conexión', exact:true}).click();
+                await dialog.waitFor({state:'hidden'});
+                await page.getByRole('status').filter({hasText:'Configuración de OpenAI guardada.'}).waitFor();
+                await page.getByRole('button', {name:'Configurar OpenAI', exact:true}).click();
+                await apiKey.waitFor();
+                assert.equal(await apiKey.inputValue(), '');
+                assert.equal(await apiKey.getAttribute('type'), 'password');
+                await dialog.getByText('Clave API: configurada', {exact:true}).waitFor();
+                await dialog.getByRole('button', {name:'Cancelar', exact:true}).click();
+                assert.deepEqual(errors, []);
+            } finally {
+                await page.close();
+                await server.close();
+            }
+        }
+    } finally { await browser.close(); }
+});
+
+test('clinical agent chat sends, preserves private history, retries and adapts to mobile', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    try {
+        for (const width of [1366, 390, 320]) {
+            const server = fixture('clinical-chat');
+            const page = await browser.newPage({ viewport: { width, height: 900 } });
+            page.setDefaultTimeout(10000);
+            const errors = [];
+            page.on('pageerror', error => errors.push(error.message));
+            try {
+                await page.route('**/*', async route => {
+                    const url = new URL(route.request().url());
+                    if (url.origin !== 'http://agents.test') return route.abort();
+                    if (url.pathname === '/livewire/update') {
+                        const payload = route.request().postDataJSON();
+                        if (payload.components.some(component => component.calls.some(call => call.method === 'send'))) {
+                            await new Promise(resolve => setTimeout(resolve, 250));
+                        }
+                        const result = await server.send(payload);
+                        return route.fulfill({contentType:'application/json', body:JSON.stringify(result)});
+                    }
+                    const result = await server.send({type:'render'});
+                    return route.fulfill({contentType:'text/html', body:`<!doctype html><html lang="es"><head>
+                        <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+                        <style>${styles}</style>${result.styles}</head><body><main class="admin-content"><h1>Superadministrador</h1>${result.html}</main>
+                        <script>${icons}</script><script>window.livewireScriptConfig={uri:'http://agents.test/livewire/update',csrf:'test'};</script>
+                        <script>${livewire}</script><script>window.Livewire.start();</script></body></html>`});
+                });
+                await page.goto('http://agents.test/panel');
+                const chat = page.locator('.clinical-agent-chat');
+                await page.getByRole('button', {name:'Soporte quimico y clinico de solicitudes', exact:true}).click();
+                const draft = chat.getByLabel('Mensaje al agente', {exact:true});
+                const send = chat.getByRole('button', {name:'Enviar mensaje', exact:true});
+                await draft.fill('Hola, consulta de prueba');
+                await send.click();
+                const busy = chat.getByRole('button', {name:'Consultando...', exact:true});
+                await busy.waitFor();
+                assert.equal(await busy.isDisabled(), true);
+                await chat.getByText('Respuesta de prueba. Se requiere revision profesional. [S1]', {exact:true}).waitFor();
+                assert.equal(await draft.inputValue(), '');
+                assert.equal(await chat.locator('.clinical-chat-turn').count(), 1);
+                await chat.getByText('Fuentes citadas (1)', {exact:true}).click();
+                await chat.getByText('Pendiente de revision; no es evidencia aprobada', {exact:false}).waitFor();
+                if (process.env.AGENT_SCREENSHOTS) await chat.screenshot({path:path.join(process.env.AGENT_SCREENSHOTS, `clinical-agent-chat-${width}.png`)});
+                await draft.fill('Segunda pregunta');
+                await send.click();
+                await chat.getByText('Seguimiento de prueba recibido.', {exact:true}).waitFor();
+                await page.reload();
+                await page.getByRole('button', {name:'Soporte quimico y clinico de solicitudes', exact:true}).click();
+                await chat.getByText('Segunda pregunta', {exact:true}).waitFor();
+                assert.equal(await chat.locator('.clinical-chat-turn').count(), 2);
+                const firstConversation = await chat.getByRole('combobox', {name:'Historial de conversaciones'}).inputValue();
+                await chat.getByRole('button', {name:'Nueva conversacion', exact:true}).click();
+                await chat.getByText('Sin mensajes en esta conversacion.', {exact:true}).waitFor();
+                await draft.fill('Simular error');
+                await send.click();
+                await chat.getByRole('alert').filter({hasText:'limite de uso o cuota'}).waitFor();
+                assert.equal(await draft.inputValue(), 'Simular error');
+                assert.equal(await chat.locator('.clinical-chat-turn').count(), 0);
+                await draft.fill('Reintento de prueba');
+                await send.click();
+                await chat.getByText('Respuesta de prueba. Se requiere revision profesional. [S1]', {exact:true}).waitFor();
+                await chat.getByRole('combobox', {name:'Historial de conversaciones'}).selectOption(firstConversation);
+                await chat.getByText('Segunda pregunta', {exact:true}).waitFor();
+                assert.equal(await chat.locator('.clinical-chat-turn').count(), 2);
+                const activation = page.getByRole('switch', {name:'Estado de Soporte quimico y clinico de solicitudes', exact:true});
+                await activation.click();
+                await chat.getByText('El agente esta desactivado.', {exact:true}).waitFor();
+                assert.equal(await send.isDisabled(), true);
+                await activation.click();
+                await chat.getByText('El agente esta desactivado.', {exact:true}).waitFor({state:'hidden'});
+                assert.equal(await send.isDisabled(), false);
+                assert.equal(await chat.evaluate(el => el.scrollWidth > el.clientWidth), false);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
                 assert.deepEqual(errors, []);
             } finally {
                 await page.close();

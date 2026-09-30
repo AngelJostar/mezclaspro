@@ -95,12 +95,16 @@ Route::view('herramientas', 'admin.herramientas.index')
 
 Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
+Route::post('solicitudes/validacion-clinica/{kind}', [\App\Http\Controllers\Admin\ClinicalReviewController::class, 'validateRequest'])
+    ->where('kind', 'nutricionales|oncologicos|antibioticos')->middleware('throttle:10,1')->name('solicitudes.clinical.validate');
 Route::prefix('solicitudes/mensajes/{kind}/{target}')
     ->where(['kind' => 'nutricionales|oncologicos|antibioticos', 'target' => '[0-9]+'])
     ->group(function () {
         Route::get('/', [MixtureMessageController::class, 'show'])->name('solicitudes.mensajes.show');
         Route::post('/', [MixtureMessageController::class, 'store'])->middleware('throttle:30,1')->name('solicitudes.mensajes.store');
         Route::post('/leidos', [MixtureMessageController::class, 'read'])->name('solicitudes.mensajes.read');
+        Route::post('/soporte-clinico', [\App\Http\Controllers\Admin\ClinicalReviewController::class, 'conversation'])
+            ->middleware('throttle:10,1')->name('solicitudes.mensajes.clinical');
     });
 Route::post('solicitudes/ajustes/{adjustment}/autorizar', [MixtureAdjustmentController::class, 'hospitalAuthorize'])->name('solicitudes.ajustes.authorize');
 Route::post('solicitudes/ajustes/{adjustment}/aprobar', [MixtureAdjustmentController::class, 'approve'])->name('solicitudes.ajustes.approve');

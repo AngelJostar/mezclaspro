@@ -82,14 +82,14 @@
                     </select>
                 </div>
                 <div class="w-1/5">
-                    <label for="fecha_nacimiento">Fecha de Nacimiento</label>
-                    <input type="date" name="fecha_nacimiento" id="fecha_nacimiento"
+                    <label for="fecha_nacimiento">Fecha de Nacimiento*</label>
+                    <input type="date" name="fecha_nacimiento" id="fecha_nacimiento" required data-clinical-required max="{{ date('Y-m-d') }}"
                         value="{{ old('fecha_nacimiento') }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
                 </div>
                 <div class="w-1/5">
                     <label for="peso">Peso*</label>
-                    <input type="text" name="peso" id="peso" value="{{ old('peso') }}"
+                    <input type="number" name="peso" id="peso" value="{{ old('peso') }}" required data-clinical-required min="1" max="500" step="0.01"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Peso">
                 </div>
@@ -133,6 +133,21 @@
                         value="{{ old('medico_cedula') }}"
                         class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                         placeholder="Cédula del Médico">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="talla">Talla (cm)*</label>
+                    <input type="number" id="talla" name="talla" value="{{ old('talla') }}" required data-clinical-required min="0.01" max="300" step="0.01"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm @error('talla') clinical-field-required-error @enderror">
+                    @error('talla')<p class="clinical-error">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="superficie_corporal">Superficie corporal (m&sup2;)*</label>
+                    <input type="number" id="superficie_corporal" name="superficie_corporal" value="{{ old('superficie_corporal') }}" required data-clinical-required min="0.001" max="10" step="0.001"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm @error('superficie_corporal') clinical-field-required-error @enderror">
+                    @error('superficie_corporal')<p class="clinical-error">{{ $message }}</p>@enderror
                 </div>
             </div>
 
@@ -181,9 +196,10 @@
                 </div>
             </div>
 
+            @include('admin.solicitudes._clinical-review', ['clinicalKind' => $requestType ?? 'oncologicos'])
             <div class="flex justify-end gap-5 mt-4">
-                <x-button>
-                    GUARDAR SOLICITUD
+                <x-button data-clinical-submit>
+                    Validar y Continuar
                 </x-button>
             </div>
         </form>
@@ -822,22 +838,7 @@
 
             document.getElementById("mezclas_json").value = JSON.stringify(mezclas);
 
-            Swal.fire({
-                title: '¿Estás seguro?',
-                text: "Esta solicitud será registrada.",
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Sí, guardar',
-                cancelButtonText: 'Cancelar',
-                customClass: {
-                    confirmButton: 'swal-button-confirm',
-                    cancelButton: 'swal-button-cancel'
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    e.target.submit();
-                }
-            });
+            window.validateClinicalRequest?.(e.target);
         });
 
         document.addEventListener("DOMContentLoaded", () => {

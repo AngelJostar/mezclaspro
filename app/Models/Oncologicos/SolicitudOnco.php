@@ -21,6 +21,8 @@ class SolicitudOnco extends Model
         'fecha_entrega' => 'datetime',
         'fecha_nacimiento' => 'date',
         'peso' => 'decimal:2',
+        'talla' => 'decimal:2',
+        'superficie_corporal' => 'decimal:3',
         'edad' => 'integer',
     ];
 
@@ -33,6 +35,8 @@ class SolicitudOnco extends Model
         'sexo',
         'edad',
         'peso',
+        'talla',
+        'superficie_corporal',
         'cama',
         'piso',
         'registro_paciente',

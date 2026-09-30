@@ -44,6 +44,34 @@ class AgentCenter extends Component
     public string $findingFilter = 'open';
     public string $reviewStatus = 'review';
     public string $reviewReason = '';
+    public array $clinicalSource = ['title' => '', 'reference' => '', 'category' => 'nutricionales', 'content' => '',
+        'clinical_reviewer' => '', 'valid_until' => '', 'resolves_manual_ambiguities' => false, 'allows_medical_authorization' => false,
+        'allows_chemical_medical_authorization' => false, 'confirmed' => false];
+
+    public function saveClinicalSource(): void
+    {
+        $this->authorizeAccess();
+        $data = $this->validate([
+            'clinicalSource.title' => 'required|string|max:255', 'clinicalSource.reference' => 'required|string|max:1000',
+            'clinicalSource.category' => 'required|in:nutricionales,oncologicos,antibioticos',
+            'clinicalSource.content' => 'required|string|min:100|max:30000',
+            'clinicalSource.clinical_reviewer' => 'required|string|max:255', 'clinicalSource.valid_until' => 'required|date|after:today',
+            'clinicalSource.resolves_manual_ambiguities' => 'required|boolean', 'clinicalSource.confirmed' => 'accepted',
+            'clinicalSource.allows_medical_authorization' => 'required|boolean',
+            'clinicalSource.allows_chemical_medical_authorization' => 'required|boolean',
+        ])['clinicalSource'];
+        unset($data['confirmed']);
+        \App\Models\ClinicalSource::create($data + ['sha256' => hash('sha256', $data['content']), 'approved_by' => Auth::id(), 'approved_at' => now()]);
+        $this->reset('clinicalSource');
+        $this->status = 'Fuente clinica guardada. Las validaciones anteriores requieren nueva revision.';
+    }
+
+    public function revokeClinicalSource(int $id): void
+    {
+        $this->authorizeAccess();
+        \App\Models\ClinicalSource::findOrFail($id)->update(['approved_at' => null]);
+        $this->status = 'Fuente retirada del conjunto de evidencia aprobada.';
+    }
 
     private function authorizeAccess(): void
     {
@@ -139,6 +167,10 @@ class AgentCenter extends Component
         ]);
         if (! $agent->exists) $agent->created_by = Auth::id();
         $agent->configuration = $configuration;
+        if ($agent->integration_key === \App\Services\Clinical\ClinicalEvidence::KEY) {
+            $agent->configuration = array_merge(AgentConfiguration::defaults($agent), ['activation' => 'manual']);
+            $configuration['activation'] = 'manual';
+        }
         $agent->configured_by = Auth::id();
         $agent->source_fingerprint = null;
         $agent->next_run_at = $configuration['activation'] === 'manual' ? null : now();
@@ -203,23 +235,34 @@ class AgentCenter extends Component
         $this->resetValidation();
     }
 
-    public function saveOpenAi(string $key, string $model): void
+    public function saveOpenAi(string $key, string $model): bool
     {
         $this->authorizeAccess();
         abort_unless(request()->isSecure() || in_array(request()->getHost(), ['localhost', '127.0.0.1', '::1']), 403, 'La clave requiere HTTPS fuera del equipo local.');
         abort_unless($this->showProviderForm, 403);
         $key = trim($key);
         $model = trim($model);
-        if (($key !== '' && ! preg_match('/^sk-[A-Za-z0-9_-]{16,500}$/D', $key)) || ! preg_match('/^[a-zA-Z0-9._:-]{1,100}$/D', $model)) {
-            throw ValidationException::withMessages(['provider' => 'La clave API o el identificador de modelo no tienen un formato válido.']);
-        }
         $settings = AiAgentProviderSetting::firstOrNew(['id' => 1]);
+        $this->resetValidation();
+        $errors = [];
+        if ($key === '' && ! $settings->api_key && ! config('services.openai.api_key')) {
+            $errors['providerKey'] = 'Falta la clave API de tu proyecto de OpenAI. No uses la contraseña de tu cuenta.';
+        } elseif ($key !== '' && ! preg_match('/^sk-[A-Za-z0-9_-]{16,500}$/D', $key)) {
+            $errors['providerKey'] = 'La clave API debe comenzar con sk- y estar completa, sin espacios ni comillas. No es la contraseña de tu cuenta.';
+        }
+        if (! preg_match('/^[a-zA-Z0-9._:-]{1,100}$/D', $model)) {
+            $errors['providerModel'] = 'Escribe un identificador de modelo sin espacios, por ejemplo gpt-4.1-mini.';
+        }
+        if ($errors) throw ValidationException::withMessages($errors);
+
         if ($key !== '') $settings->api_key = $key;
         $settings->model = $model;
         $settings->updated_by = Auth::id();
         $settings->save();
         $this->showProviderForm = false;
         $this->status = 'Configuración de OpenAI guardada.';
+
+        return true;
     }
 
     public function removeOpenAiKey(): void

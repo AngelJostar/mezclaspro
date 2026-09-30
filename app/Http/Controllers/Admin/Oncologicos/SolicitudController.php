@@ -563,6 +563,7 @@ class SolicitudController extends Controller
 
     public function store(Request $request, OncologyMixtureDeliveryScheduleService $deliverySchedule)
     {
+        app(\App\Services\Clinical\ClinicalReviewService::class)->requireSubmission($request, $this->requestType($request->input('tipo_solicitud')));
         $quotation = $request->attributes->get('preparationQuotation');
 
         $request->validate([
@@ -580,6 +581,8 @@ class SolicitudController extends Controller
             ],
 
             'peso'             => 'required|numeric|min:1|max:500',
+            'talla'            => 'required|numeric|gt:0|max:300',
+            'superficie_corporal' => 'required|numeric|gt:0|max:10',
             'piso'             => 'required|string|max:50',
             'cama'             => 'required|string|max:50',
             'diagnostico'      => 'required|string|max:255',
@@ -690,6 +693,8 @@ class SolicitudController extends Controller
                 'sexo'              => $request->sexo,
                 'edad'              => null,
                 'peso'              => $request->peso,
+                'talla'             => $request->talla,
+                'superficie_corporal' => $request->superficie_corporal,
                 'cama'              => $request->cama,
                 'piso'              => $request->piso,
                 'registro_paciente' => $request->registro,
@@ -704,6 +709,7 @@ class SolicitudController extends Controller
                 'remision'          => null,
             ]);
 
+            app(\App\Services\Clinical\ClinicalReviewService::class)->consume($request, 'solicitud_oncos', $solicitud->id);
             foreach ($mezclas as $index => $mezclaData) {
                 $volumen = isset($mezclaData['volumen_dilucion']) ? (float) $mezclaData['volumen_dilucion'] : null;
                 $tiempo  = $mezclaData['tiempo_infusion'] ?? null;
