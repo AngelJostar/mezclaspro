@@ -24,6 +24,9 @@
         'c_' . $input->input_id,
         $stock && $stock->caducidad ? \Carbon\Carbon::parse($stock->caducidad)->format('Y-m-d') : '',
     );
+
+    // Los nombres extensos necesitan toda la tarjeta para no reducir el campo de cantidad.
+    $stackQuantity = mb_strlen(trim((string) $input->description)) > 48;
 @endphp
 
 <div data-nutrition-component
@@ -41,19 +44,28 @@
                 <span>{{ $layoutCategoryLabel ?? 'Campo nutricional' }}</span>
             </div>
         @endif
-        <div class="flex flex-col lg:flex-row lg:items-baseline gap-2 w-full">
-            <x-label class="mb-2 whitespace-nowrap font-bold">
+        <div class="flex flex-wrap items-end gap-x-2 gap-y-2 w-full">
+            <x-label @class([
+                'min-w-0 whitespace-normal break-words font-bold leading-tight',
+                'w-full basis-full' => $stackQuantity,
+                'flex-[1_1_18rem]' => !$stackQuantity,
+            ])>
                 {{ $input->description }}:
             </x-label>
 
-            <div class="flex w-full min-w-0">
-                <x-input-solicitud type="number" class="w-full" value="{{ $oldValue }}" name="{{ $fieldName }}"
+            <div @class([
+                'flex min-w-[14rem] items-center',
+                'w-full basis-full' => $stackQuantity,
+                'flex-[1_1_14rem]' => !$stackQuantity,
+            ])>
+                <x-input-solicitud type="number" class="min-w-0 w-full" value="{{ $oldValue }}" name="{{ $fieldName }}"
                     id="{{ $fieldName }}" step="0.0001" min="0" max="1000000" placeholder="" />
 
                 <span
-                    @if ($input->category_id == 4) data-original-unidad="{{ $input->unidad }}" class="unidad-span-electrolitos"
+                    @if ($input->category_id == 4) data-original-unidad="{{ $input->unidad }}" class="unidad-span-electrolitos inline-flex shrink-0 whitespace-nowrap"
                     @elseif(in_array($input->category_id, [1, 2, 3]))
-                        data-original-unidad="{{ $input->unidad }}" class="unidad-span" @endif>
+                        data-original-unidad="{{ $input->unidad }}" class="unidad-span inline-flex shrink-0 whitespace-nowrap"
+                    @else class="inline-flex shrink-0 whitespace-nowrap" @endif>
                     {{ $input->unidad }}
                 </span>
             </div>
