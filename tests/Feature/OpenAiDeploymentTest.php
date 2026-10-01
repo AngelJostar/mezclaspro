@@ -136,15 +136,16 @@ class OpenAiDeploymentTest extends TestCase
     public function test_bundled_manual_installs_idempotently_without_overwriting_human_decisions(): void
     {
         (require database_path('migrations/2026_09_29_000001_create_clinical_support.php'))->up();
-        $path = resource_path('clinical/manual-revision3.docx');
-        $this->assertSame('eaabcc7fcf5366d466200b651ff27289c33af333b5e52027b2fda835c7b3d0e9', hash_file('sha256', $path));
-        $this->assertSame(0, Artisan::call('clinical:import-manual', ['path' => $path]));
+        (require database_path('migrations/2026_09_30_000007_version_clinical_manual_sources.php'))->up();
+        $path = resource_path(ClinicalEvidence::MANUAL_FILE);
+        $this->assertSame(ClinicalEvidence::MANUAL_FILE_SHA256, hash_file('sha256', $path));
+        $this->assertSame(0, Artisan::call('clinical:import-manual', ['path' => $path, '--manual-version' => '4']));
         $agent = AiAgent::where('integration_key', ClinicalEvidence::KEY)->sole();
         $agent->update(['is_active' => false, 'instructions' => 'Instrucciones institucionales personalizadas']);
         $source = ClinicalSource::sole();
         $this->assertFalse($source->isReviewed());
         $source->update(['title' => 'Titulo institucional personalizado']);
-        $this->assertSame(0, Artisan::call('clinical:import-manual', ['path' => $path]));
+        $this->assertSame(0, Artisan::call('clinical:import-manual', ['path' => $path, '--manual-version' => '4']));
         $this->assertDatabaseCount('clinical_sources', 1);
         $this->assertFalse($agent->fresh()->is_active);
         $this->assertSame('Instrucciones institucionales personalizadas', $agent->fresh()->instructions);

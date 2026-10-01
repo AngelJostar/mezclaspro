@@ -28,6 +28,8 @@ class AgentCenter extends Component
     public ?int $editingAgentId = null;
     #[Locked]
     public string $status = '';
+    #[Locked]
+    public ?string $clinicalManualSha = null;
 
     public string $agentName = '';
     public string $agentDescription = '';
@@ -61,6 +63,13 @@ class AgentCenter extends Component
             'clinicalSource.allows_chemical_medical_authorization' => 'required|boolean',
         ])['clinicalSource'];
         unset($data['confirmed']);
+        if ($data['resolves_manual_ambiguities']) {
+            $manual = \App\Models\ClinicalSource::current()->where('is_manual', true)->where('category', $data['category'])->latest('id')->first();
+            if (!$manual || $manual->sha256 !== $this->clinicalManualSha) {
+                throw ValidationException::withMessages(['clinicalSource.confirmed' => 'El manual cambio. Recarga y revisa la version actual antes de registrar la aclaracion.']);
+            }
+            $data['resolved_manual_sha256'] = $manual->sha256;
+        }
         \App\Models\ClinicalSource::create($data + ['sha256' => hash('sha256', $data['content']), 'approved_by' => Auth::id(), 'approved_at' => now()]);
         $this->reset('clinicalSource');
         $this->status = 'Fuente clinica guardada. Las validaciones anteriores requieren nueva revision.';
@@ -81,6 +90,19 @@ class AgentCenter extends Component
     public function mount(): void
     {
         $this->authorizeAccess();
+        if (\Illuminate\Support\Facades\Schema::hasTable('clinical_sources')) {
+            $this->clinicalManualSha = \App\Models\ClinicalSource::current()->where('is_manual', true)->where('category', 'nutricionales')->latest('id')->value('sha256');
+        }
+    }
+
+    public function downloadClinicalManual(int $id)
+    {
+        $this->authorizeAccess();
+        $source = \App\Models\ClinicalSource::findOrFail($id);
+        abort_unless($source->is_manual && $source->manual_version === '4', 404);
+        $path = resource_path(\App\Services\Clinical\ClinicalEvidence::MANUAL_FILE);
+        abort_unless(is_file($path) && hash_equals(\App\Services\Clinical\ClinicalEvidence::MANUAL_FILE_SHA256, hash_file('sha256', $path)), 404);
+        return response()->download($path, 'Manual Maestro de Validacion V4.docx');
     }
 
     public function selectAgent(string $selection): void

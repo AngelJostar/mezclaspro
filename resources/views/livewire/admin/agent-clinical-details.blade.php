@@ -3,18 +3,35 @@
     @unless ($providerConfigured)<p class="agent-error">Conexion OpenAI pendiente: configura la clave API del proyecto. Sin conexion, la validacion no habilita el envio.</p>@endunless
     <p class="agent-muted">En la validacion de solicitudes se transmiten edad en dias, peso, sexo, componentes del catalogo, cantidades, unidades, vias, calculos y los campos de revision clinica capturados expresamente. No se envian los campos de nombre, fecha de nacimiento, expediente, notas generales ni mensajes de las mezclas. No incluir identificadores dentro del contexto clinico. Los datos ausentes se indican como limitaciones, nunca como ausencia de riesgo.</p>
     <h4>Fuentes y protocolos</h4>
-    @foreach (\App\Models\ClinicalSource::orderBy('id')->get() as $source)
+    @foreach (\App\Models\ClinicalSource::current()->orderByDesc('is_manual')->orderBy('id')->get() as $source)
         <details class="agent-run" wire:key="clinical-source-{{ $source->id }}">
             <summary>S{{ $source->id }} · {{ $source->title }} · {{ $source->isReviewed() ? 'Revisada' : 'Pendiente de revision o vencida' }}</summary>
             <div class="agent-run-content">
                 <p>{{ $source->reference }} · {{ $source->category }}</p>
+                @if ($source->is_manual && $source->manual_version === '4')
+                    <button type="button" class="agent-command" wire:click="downloadClinicalManual({{ $source->id }})" wire:loading.attr="disabled">Descargar Manual V4</button>
+                @endif
                 <p>Responsable: {{ $source->clinical_reviewer ?: 'Sin asignar' }} · Vigencia: {{ $source->valid_until?->format('d/m/Y') ?: 'Sin definir' }}</p>
                 <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto">{{ $source->content }}</pre>
                 @if ($source->isReviewed())<button type="button" class="agent-command" wire:click="revokeClinicalSource({{ $source->id }})">Retirar aprobacion de fuente</button>@endif
             </div>
         </details>
     @endforeach
-    <p class="agent-error">Revision 3 pendiente de aclaracion: unidades mEq/mL y mEq/L, conversion de fosfato, combinaciones y limites contradictorios. El documento original se conserva; una fuente revisada debe aclarar expresamente esas diferencias.</p>
+    @if (\App\Models\ClinicalSource::current()->where('is_manual', true)->where('manual_version', '4')->exists())
+        <p class="agent-error">{{ \App\Services\Clinical\ClinicalEvidence::MANUAL_LIMITATIONS }}</p>
+    @endif
+    @if (\App\Models\ClinicalSource::whereNotNull('superseded_at')->exists())
+        <details class="agent-run">
+            <summary>Manuales anteriores (historico)</summary>
+            <div class="agent-run-content">
+                @foreach (\App\Models\ClinicalSource::whereNotNull('superseded_at')->orderByDesc('id')->get() as $previousSource)
+                    <details><summary>S{{ $previousSource->id }} · {{ $previousSource->title }} · Sustituido</summary>
+                        <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto">{{ $previousSource->content }}</pre>
+                    </details>
+                @endforeach
+            </div>
+        </details>
+    @endif
     <details class="agent-run">
         <summary>Agregar protocolo o ficha tecnica revisada</summary>
         <form wire:submit="saveClinicalSource">
@@ -25,7 +42,7 @@
                 <label>Extracto aplicable, incluyendo condiciones y limites<textarea wire:model="clinicalSource.content" rows="8" required minlength="100" maxlength="30000"></textarea></label>
                 <label>Profesional que reviso la fuente y cedula<input type="text" wire:model="clinicalSource.clinical_reviewer" required maxlength="255"></label>
                 <label>Vigente hasta<input type="date" wire:model="clinicalSource.valid_until" required></label>
-                <label><input type="checkbox" wire:model="clinicalSource.resolves_manual_ambiguities"> Esta fuente aclara las contradicciones de las secciones 1, 6, 7 y 9 del manual.</label>
+                <label><input type="checkbox" wire:model="clinicalSource.resolves_manual_ambiguities"> Esta fuente aclara expresamente las discrepancias del manual actual, identificando version, supuesto, criterio, unidades y limites aplicables.</label>
                 <label><input type="checkbox" wire:model="clinicalSource.allows_medical_authorization"> El protocolo documenta excepciones a recomendaciones de dosis mediante autorizacion medica, sin omitir limites de seguridad ni compatibilidad.</label>
                 <label><input type="checkbox" wire:model="clinicalSource.allows_chemical_medical_authorization"> El protocolo permite expresamente autorizar advertencias sobre recomendaciones quimicas. No permite omitir rechazos por incompatibilidad, inestabilidad ni limites absolutos de seguridad.</label>
                 <label><input type="checkbox" wire:model="clinicalSource.confirmed" required> Confirmo la revision por el profesional indicado, su aplicabilidad y que no contiene datos de pacientes.</label>

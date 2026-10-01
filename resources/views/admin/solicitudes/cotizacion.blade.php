@@ -101,16 +101,17 @@
                         @foreach ($isHospitalView ? ['Tipo', 'Folio', 'Fecha', 'Paciente'] : ['Tipo', 'Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios'] as $column)
                             <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>{!! $column !!}</th>
                         @endforeach
+                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Productos / Precio unitario</th>
                         <th scope="col" class="px-2 py-3 text-center whitespace-nowrap" data-command-column
                             aria-sort="{{ $sort === 'total' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}">
                             <a class="inline-flex items-center gap-1" href="{{ route('admin.solicitudes.cotizacion.index', array_merge($filterQuery, ['orden' => 'total', 'direccion' => $sort === 'total' && $sortDirection === 'asc' ? 'desc' : 'asc'])) }}"
                                 title="Ordenar por total">Total MXN <i data-request-navigation-icon="arrow-up-down" class="h-3 w-3 shrink-0" aria-hidden="true"></i></a>
                         </th>
+                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Detalle</th>
                         @unless ($isHospitalView)
                             <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>Estado</th>
                         @endunless
-                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Detalle</th>
-                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Enviar</th>
+                        <th scope="col" class="px-2 py-3 text-center" data-command-column>Compartir</th>
                         <th scope="col" class="px-2 py-3 text-center" data-force-column-filter>Autorizaci&oacute;n</th>
                         <th scope="col" class="px-2 py-3 text-center" data-command-column>Solicitud (Foto o Archivo)</th>
                         <th scope="col" class="px-2 py-3 text-center whitespace-nowrap" data-command-column>Enviar a preparacion</th>
@@ -151,17 +152,29 @@
                                 <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->seller_name }}</td>
                                 <td class="min-w-[9rem] max-w-xs break-words px-2 py-3 text-center">{{ $quotation->price_list_name }}</td>
                             @endunless
+                            <td class="quotation-products" data-quotation-products>
+                                @if (!empty($quotation->pricing_snapshot['lines']))
+                                    <ul aria-label="Productos de {{ $quotation->folio }}">
+                                        @foreach ($quotation->pricing_snapshot['lines'] as $line)
+                                            <li class="quotation-product-line">
+                                                <div class="quotation-product-description">
+                                                    <p>{{ $line['description'] ?? 'Producto sin descripcion' }}</p>
+                                                </div>
+                                                <div class="quotation-product-price">
+                                                    @if (isset($line['unit_price']))
+                                                        <span>${{ number_format((float) $line['unit_price'], 4) }}</span>
+                                                    @else
+                                                        <span>Sin precio registrado</span>
+                                                    @endif
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <p class="text-center text-xs text-gray-400">Sin desglose registrado</p>
+                                @endif
+                            </td>
                             <td class="px-2 py-3 text-right whitespace-nowrap font-medium text-gray-700">{{ $quotation->total === null ? 'Sin registrar' : '$'.number_format((float) $quotation->total, 2) }}</td>
-                            @unless ($isHospitalView)
-                                <td class="px-2 py-3 text-center">
-                                    <span @class([
-                                        'quotation-row-pill',
-                                        'quotation-row-pill--pending' => $quotation->status === 'borrador',
-                                        'quotation-row-pill--success' => in_array($quotation->status, ['enviada', 'autorizada']),
-                                        'quotation-row-pill--primary' => $quotation->status === 'preparacion',
-                                    ])>{{ $quotation->status === 'borrador' ? 'Por enviar' : $quotation->status_label }}</span>
-                                </td>
-                            @endunless
                             <td class="px-2 py-3 text-center">
                                 <div class="quotation-row-actions">
                                 <button type="button" @click="$dispatch('quotation-detail', {{ Illuminate\Support\Js::from($detail) }})"
@@ -173,15 +186,25 @@
                                 @endif
                                 </div>
                             </td>
+                            @unless ($isHospitalView)
+                                <td class="px-2 py-3 text-center">
+                                    <span @class([
+                                        'quotation-row-pill',
+                                        'quotation-row-pill--pending' => $quotation->status === 'borrador',
+                                        'quotation-row-pill--success' => in_array($quotation->status, ['enviada', 'autorizada']),
+                                        'quotation-row-pill--primary' => $quotation->status === 'preparacion',
+                                    ])>{{ $quotation->status === 'borrador' ? 'Por enviar' : $quotation->status_label }}</span>
+                                </td>
+                            @endunless
                             <td class="px-2 py-3 text-center">
                                 <button type="button" data-quotation-send="{{ json_encode([
                                     'folio' => $quotation->folio,
                                     'filename' => App\Services\RequestQuotationPdf::filename($quotation),
                                     'pdf_url' => route('admin.solicitudes.cotizacion.pdf', $quotation),
                                     'url' => route('admin.solicitudes.cotizacion.email', $quotation),
-                                ], JSON_THROW_ON_ERROR) }}" aria-label="Enviar {{ $quotation->folio }}"
+                                ], JSON_THROW_ON_ERROR) }}" aria-label="Compartir {{ $quotation->folio }}"
                                     class="quotation-row-pill quotation-row-pill--success">
-                                    <i data-quotation-icon="send" class="h-3.5 w-3.5" aria-hidden="true"></i>Enviar
+                                    <i data-quotation-icon="send" class="h-3.5 w-3.5" aria-hidden="true"></i>Compartir
                                 </button>
                             </td>
                             <td class="min-w-[10rem] px-2 py-3 text-center">

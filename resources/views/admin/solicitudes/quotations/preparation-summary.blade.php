@@ -17,6 +17,11 @@
         [data-quotation-preparation] .flex.items-baseline,
         [data-quotation-preparation] .flex.items-stretch { flex-wrap: wrap; }
         [data-quotation-preparation] input, [data-quotation-preparation] select { min-width: 0; max-width: 100%; }
+        [data-quotation-preparation] [data-quoted-requirements] { min-width: 0; table-layout: fixed; }
+        [data-quotation-preparation] [data-quoted-requirements] th,
+        [data-quotation-preparation] [data-quoted-requirements] td { white-space: normal; overflow-wrap: anywhere; }
+        [data-quotation-preparation] [data-quoted-requirements] th:first-child { width: 20%; }
+        [data-quotation-preparation] [data-quoted-requirements] th:last-child { width: 40%; }
     }
 </style>
 <section class="mb-6 border-b border-gray-200 pb-4" aria-label="Cotizacion de origen">
@@ -31,8 +36,33 @@
             <p class="font-semibold">${{ number_format($preparationQuotation->total, 2) }} MXN</p>
         </div>
     </div>
+    @php $formatConcentration = fn ($value) => rtrim(rtrim(number_format($value, 4, '.', ','), '0'), '.'); @endphp
+    <section class="mb-4" aria-labelledby="quoted-requirements-heading">
+        <h2 id="quoted-requirements-heading" class="mb-2 font-semibold">Requerimiento del m&eacute;dico o solicitud del hospital</h2>
+        @if ($quotedRequirements)
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm" data-disable-column-filters data-quoted-requirements>
+                    <thead class="bg-gray-50"><tr>
+                        <th scope="col" class="p-2">Mezcla</th>
+                        <th scope="col" class="p-2">Medicamento solicitado</th>
+                        <th scope="col" class="p-2">Concentraci&oacute;n requerida</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach ($quotedRequirements as $requirement)
+                            <tr class="border-b border-gray-100">
+                                <td class="p-2">Mezcla {{ $requirement['mixture_number'] }}</td>
+                                <td class="p-2">{{ $requirement['medicine'] }}</td>
+                                <td class="p-2 whitespace-nowrap">{{ $formatConcentration($requirement['concentration']) }} {{ strtolower($requirement['unit']) === 'ml' ? 'mL' : $requirement['unit'] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <p class="text-sm text-gray-500">Sin requerimiento registrado en la cotizacion.</p>
+        @endif
+    </section>
     <div class="overflow-x-auto">
-        @php $formatConcentration = fn ($value) => rtrim(rtrim(number_format($value, 4, '.', ','), '0'), '.'); @endphp
         <table class="w-full text-left text-sm" data-disable-column-filters data-quoted-summary>
             <thead class="bg-gray-50"><tr><th scope="col" class="p-2">Medicamento cotizado</th><th scope="col" class="p-2">Concentraci&oacute;n por presentaci&oacute;n</th><th scope="col" class="p-2">Cantidad</th><th scope="col" class="p-2">Precio unitario</th></tr></thead>
             <tbody>

@@ -9,7 +9,7 @@ function initQuotationDocuments() {
     const find = selector => dialog.querySelector(selector);
     const form = dialog.querySelector('form');
     const video = find('[data-doc-video]');
-    let opener, selected, objectUrl, uploadKey, stream, loadController;
+    let opener, selected, objectUrl, uploadKey, stream, loadController, viewPosition;
     let documents = [], canUpload = false, saving = false, loading = false, cameraPending = false, cameraVersion = 0;
     const bytes = size => `${(size / 1024 / 1024).toFixed(2)} MB`;
     function updateRow(count, preparationUrl) {
@@ -42,7 +42,7 @@ function initQuotationDocuments() {
         find('[data-doc-upload]').hidden = !canUpload;
         find('[data-doc-save]').hidden = !canUpload;
         find('[data-doc-save]').disabled = unavailable || !selected || cameraPending || !!stream;
-        find('[data-doc-save-label]').textContent = saving ? 'Guardando...' : 'Guardar';
+        find('[data-doc-save-label]').textContent = saving ? 'Guardando...' : 'Guardar y cerrar';
         find('[data-doc-choose]').disabled = unavailable || cameraPending || !!stream;
         find('[data-doc-camera]').disabled = unavailable || cameraPending || !!stream;
         find('[data-doc-capture]').disabled = unavailable || !stream || video.readyState < 2;
@@ -121,6 +121,9 @@ function initQuotationDocuments() {
     }
     document.querySelectorAll('[data-quotation-documents]').forEach(button => button.addEventListener('click', () => {
         opener = button; canUpload = false; documents = []; saving = false; loading = false;
+        const tableViewport = button.closest('[data-sticky-x-position]');
+        viewPosition = { left: window.scrollX, top: window.scrollY, tableViewport,
+            tableLeft: tableViewport?.scrollLeft, tableTop: tableViewport?.scrollTop };
         stopCamera(); clearFile(); error(); renderDocuments();
         find('#quotation-documents-title').textContent = `Solicitud ${button.dataset.folio}`;
         dialog.showModal(); loadDocuments();
@@ -129,7 +132,15 @@ function initQuotationDocuments() {
         if (!saving) { stopCamera(); dialog.close(); }
     }));
     dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); else stopCamera(); });
-    dialog.addEventListener('close', () => { loadController?.abort(); loadController = null; stopCamera(); clearFile(); opener?.focus(); });
+    dialog.addEventListener('close', () => {
+        loadController?.abort(); loadController = null; stopCamera(); clearFile();
+        opener?.focus({ preventScroll: true });
+        // Native dialog focus restoration can also move the page or the table.
+        if (viewPosition) {
+            viewPosition.tableViewport?.scrollTo({ left: viewPosition.tableLeft, top: viewPosition.tableTop, behavior: 'instant' });
+            window.scrollTo({ left: viewPosition.left, top: viewPosition.top, behavior: 'instant' });
+        }
+    });
     window.addEventListener('pagehide', stopCamera);
     find('[data-doc-retry]').addEventListener('click', loadDocuments);
     find('[data-doc-choose]').addEventListener('click', () => find('[data-doc-file]').click());
@@ -179,6 +190,7 @@ function initQuotationDocuments() {
             documents = [result.document, ...documents.filter(document => document.id !== result.document.id)];
             updateRow(result.count, result.preparation_url);
             clearFile(); renderDocuments(); find('[data-doc-status]').textContent = result.message;
+            dialog.close();
         } catch (failure) {
             error(failure instanceof TypeError ? 'No se pudo confirmar el guardado. Revisa tu conexion y vuelve a intentar.' : failure.message);
         } finally { saving = false; sync(); }

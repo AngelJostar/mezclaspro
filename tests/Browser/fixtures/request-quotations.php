@@ -7,6 +7,14 @@ config(['database.default' => 'sqlite', 'database.connections.sqlite.database' =
     'session.driver' => 'array', 'cache.default' => 'array']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 $user = !empty($argv[2]) ? Tests\Fixtures\RequestQuotationCaptureData::seed() : Tests\Fixtures\RequestQuotationData::seed();
+if (empty($argv[2])) {
+    App\Models\RequestQuotation::whereKey(2)->update(['pricing_snapshot' => ['lines' => [
+        ['description' => 'Medicamento de prueba con descripcion extendida para verificar el desglose', 'presentation' => 'Frasco 100 mg',
+            'mixture_number' => 1, 'quantity' => 80, 'mixtures' => 1, 'unit' => 'mg', 'unit_price' => 2, 'vat' => 0, 'total' => 160],
+        ['description' => 'Medicamento de prueba B', 'presentation' => 'Frasco 50 mg',
+            'mixture_number' => 2, 'quantity' => 1, 'mixtures' => 1, 'unit' => 'frasco', 'unit_price' => 50, 'vat' => 0, 'total' => 50],
+    ]]]);
+}
 if (in_array($argv[3] ?? '', ['Cliente', 'Institucion'], true)) {
     $user->syncRoles(Spatie\Permission\Models\Role::findOrCreate($argv[3], 'web'));
 }

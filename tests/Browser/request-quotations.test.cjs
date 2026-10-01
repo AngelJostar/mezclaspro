@@ -825,8 +825,8 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
             await page.goto('http://localhost/admin/solicitudes/cotizacion');
             assert.equal(await page.locator('[data-quotation-dialog]').count(), 0, 'Sending works without the capture form');
             const row = page.locator('[data-quotation-row]').filter({ hasText: 'COT-000001' });
-            const originalStatus = await row.locator('td').nth(9).textContent();
-            const opener = page.getByRole('button', { name: 'Enviar COT-000001', exact: true });
+            const originalStatus = await row.locator('td').nth(11).textContent();
+            const opener = page.getByRole('button', { name: 'Compartir COT-000001', exact: true });
             await opener.click();
             const dialog = page.getByRole('dialog', { name: 'Enviar COT-000001', exact: true });
             const email = dialog.getByLabel('Correo del destinatario *', { exact: true });
@@ -854,7 +854,7 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
             assert.equal(posts.length, 2, 'Double click must not send twice');
             assert.deepEqual(posts[1], { email: 'destino@example.test', note: 'Buenos dias: revisi\u00f3n & precios + IVA.' });
             assert.equal(await submit.isDisabled(), true);
-            assert.equal(await row.locator('td').nth(9).textContent(), originalStatus);
+            assert.equal(await row.locator('td').nth(11).textContent(), originalStatus);
 
             await dialog.getByText('WhatsApp', { exact: true }).click();
             const phone = dialog.getByLabel('Telefono con codigo de pais *', { exact: true });
@@ -882,7 +882,7 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
             assert.match(await dialog.locator('[data-send-status]').textContent(), /Adjunta COT-000001.pdf/);
             assert.deepEqual(opened[0].slice(1), ['_blank', 'noopener,noreferrer']);
             assert.equal(posts.length, 2, 'WhatsApp must not call the email endpoint');
-            assert.equal(await row.locator('td').nth(9).textContent(), originalStatus);
+            assert.equal(await row.locator('td').nth(11).textContent(), originalStatus);
             const bounds = await dialog.boundingBox();
             assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width);
             assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= 900);
@@ -892,7 +892,7 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
             await page.keyboard.press('Escape');
             await dialog.waitFor({ state: 'hidden' });
             assert.equal(await opener.evaluate(el => document.activeElement === el), true);
-            await page.getByRole('button', { name: 'Enviar COT-000003', exact: true }).click();
+            await page.getByRole('button', { name: 'Compartir COT-000003', exact: true }).click();
             const other = page.getByRole('dialog', { name: 'Enviar COT-000003', exact: true });
             assert.equal(await other.getByLabel('Correo del destinatario *', { exact: true }).inputValue(), '');
             assert.equal(await other.getByLabel('Mensaje (opcional)', { exact: true }).inputValue(), '');
@@ -989,7 +989,7 @@ test('quotation authorization uses a branded confirmation with accurate details 
     } finally { await browser.close(); }
 });
 
-test('quotation support popup uploads files, captures photos, retries safely and stops the camera on close', async () => {
+test('quotation support popup saves and closes without scrolling, retries safely and stops the camera on close', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
     const html = screen('', true);
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ZkAAAAASUVORK5CYII=', 'base64');
@@ -1028,6 +1028,14 @@ test('quotation support popup uploads files, captures photos, retries safely and
             });
             await page.goto('http://localhost/admin/solicitudes/cotizacion');
             const opener = page.getByRole('button', { name: 'Solicitud de COT-000001', exact: true });
+            const position = () => page.evaluate(() => {
+                const table = document.querySelector('[data-sticky-x-position]');
+                return { left: window.scrollX, top: window.scrollY, tableLeft: table.scrollLeft, tableTop: table.scrollTop };
+            });
+            await opener.scrollIntoViewIfNeeded();
+            const originalPosition = await position();
+            assert.ok(originalPosition.tableLeft > 0, 'The table starts scrolled to the attachment column');
+            if (width === 390) assert.ok(originalPosition.top > 0, 'The mobile page starts vertically scrolled');
             assert.equal(await opener.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(234, 179, 8)');
             await opener.click();
             const dialog = page.locator('[data-quotation-documents-dialog]');
@@ -1038,15 +1046,19 @@ test('quotation support popup uploads files, captures photos, retries safely and
             await (await chooser).setFiles({ name: 'solicitud.png', mimeType: 'image/png', buffer: png });
             await dialog.locator('[data-doc-image]').waitFor();
             assert.equal(await dialog.locator('[data-doc-save]').isEnabled(), true);
+            assert.equal(await dialog.getByRole('button', { name: 'Guardar y cerrar', exact: true }).count(), 1);
             assert.equal(uploads.length, 0, 'Selecting a file never saves automatically');
             assert.equal(await opener.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(234, 179, 8)');
             if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-support-file-${width}.png`) });
             await dialog.locator('[data-doc-save]').click();
             await dialog.getByText('Error temporal de guardado.', { exact: true }).waitFor();
+            assert.equal(await dialog.isVisible(), true, 'An upload error leaves the popup open');
             assert.equal(await opener.evaluate(button => getComputedStyle(button).backgroundColor), 'rgb(234, 179, 8)');
             assert.equal(await dialog.locator('[data-doc-preview]').isVisible(), true);
             await dialog.locator('[data-doc-save]').click();
-            await dialog.getByText('Solicitud guardada en COT-000001.', { exact: true }).waitFor();
+            await dialog.waitFor({ state: 'hidden' });
+            await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Solicitud de COT-000001');
+            assert.deepEqual(await position(), originalPosition, 'Saving preserves page and table scroll positions');
             assert.match(uploads[0].contentType, /^multipart\/form-data; boundary=/);
             assert.match(uploads[1].body, /filename="solicitud.png"/);
             const key = upload => upload.body.match(/name="upload_key"\r\n\r\n([^\r]+)/)[1];
@@ -1058,6 +1070,8 @@ test('quotation support popup uploads files, captures photos, retries safely and
             assert.equal((await opener.innerText()).trim(), '/');
             assert.equal(await dialog.locator('[data-doc-list] a').count(), 1);
             assert.equal(await dialog.locator('[data-doc-save]').isDisabled(), true);
+            await opener.click(); await dialog.locator('[data-doc-choose]').waitFor();
+            assert.equal(await dialog.locator('[data-doc-list] a').count(), 1, 'The saved file is present when reopening');
             await dialog.locator('[data-doc-file]').setInputFiles({ name: 'bad.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') });
             await dialog.getByText('Selecciona un archivo JPG, PNG, WEBP o PDF.', { exact: true }).waitFor();
             assert.equal(await dialog.locator('[data-doc-save]').isDisabled(), true);
@@ -1071,8 +1085,11 @@ test('quotation support popup uploads files, captures photos, retries safely and
                 assert.equal(await page.evaluate(() => window.cameraTracks.at(-1).readyState), 'ended');
                 assert.match(await dialog.locator('[data-doc-filename]').textContent(), /Solicitud-COT-000001.jpg/);
                 await dialog.locator('[data-doc-save]').click();
-                await dialog.getByText('Solicitud guardada en COT-000001.', { exact: true }).waitFor();
+                await dialog.waitFor({ state: 'hidden' });
+                await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Solicitud de COT-000001');
+                assert.deepEqual(await position(), originalPosition, 'Saving a camera photo also preserves the viewport');
                 assert.match(uploads.at(-1).body, /filename="Solicitud-COT-000001.jpg"/);
+                await opener.click(); await dialog.locator('[data-doc-choose]').waitFor();
                 await dialog.locator('[data-doc-camera]').click();
                 await page.waitForFunction(() => !document.querySelector('[data-doc-capture]').disabled);
                 await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
@@ -1094,7 +1111,10 @@ test('quotation support popup uploads files, captures photos, retries safely and
                 await (await cameraChooser).setFiles({ name: 'foto.png', mimeType: 'image/png', buffer: png });
                 assert.equal(await dialog.locator('[data-doc-camera-file]').getAttribute('capture'), 'environment');
                 await dialog.locator('[data-doc-save]').click();
-                await dialog.getByText('Solicitud guardada en COT-000001.', { exact: true }).waitFor();
+                await dialog.waitFor({ state: 'hidden' });
+                await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Solicitud de COT-000001');
+                assert.deepEqual(await position(), originalPosition, 'Saving a mobile photo also preserves the viewport');
+                await opener.click(); await dialog.locator('[data-doc-choose]').waitFor();
             }
             const box = await dialog.boundingBox();
             assert.ok(box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= 960);
@@ -1161,8 +1181,7 @@ test('quotation preparation unlocks only after saving an attachment to an author
                     assert.equal(await cell.locator('a').count(), 0, 'A failed upload never unlocks preparation');
                     await dialog.locator('[data-doc-save]').click();
                 }
-                await dialog.getByText('Solicitud guardada.', { exact: true }).waitFor();
-                await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+                await dialog.waitFor({ state: 'hidden' });
                 if (id === 3) assert.equal(await cell.locator('a').getAttribute('href'), '/admin/solicitudes/cotizacion/3/preparacion');
                 else assert.equal(await cell.getByRole('button', { name: 'Pendiente', exact: true }).isDisabled(), true);
                 assert.equal((await opener.innerText()).trim(), '/');
@@ -1208,12 +1227,12 @@ test('client and institution quotation lists omit internal columns and keep filt
                     const clone = header.cloneNode(true);
                     clone.querySelectorAll('button').forEach(button => button.remove());
                     return clone.textContent.replace(/\s+/g, ' ').trim();
-                })), ['Tipo', 'Folio', 'Fecha', 'Paciente', 'Total MXN', 'Detalle', 'Enviar', 'Autorizaci\u00f3n', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion']);
+                })), ['Tipo', 'Folio', 'Fecha', 'Paciente', 'Productos / Precio unitario', 'Total MXN', 'Detalle', 'Compartir', 'Autorizaci\u00f3n', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion']);
                 assert.equal(await table.locator('[data-quotation-row]').count(), 4);
                 assert.equal(await table.locator('tbody button[data-quotation-documents]').count(), 4);
                 for (const row of await table.locator('[data-quotation-row]').all()) {
-                    assert.equal(await row.locator('td').count(), 10);
-                    for (let index = 0; index < 10; index++) {
+                    assert.equal(await row.locator('td').count(), 11);
+                    for (let index = 0; index < 11; index++) {
                         const heading = await table.locator('th').nth(index).boundingBox();
                         const cell = await row.locator('td').nth(index).boundingBox();
                         assert.ok(Math.abs(heading.x - cell.x) <= 1 && Math.abs(heading.width - cell.width) <= 1);
@@ -1237,6 +1256,12 @@ test('client and institution quotation lists omit internal columns and keep filt
                 await detail.waitFor({ state: 'visible' });
                 assert.match(await detail.innerText(), /Paciente de prueba 2/);
                 assert.match(await detail.innerText(), /\$210\.00 MXN/);
+                assert.match(await detail.innerText(), /Mezcla 1:/);
+                assert.match(await detail.innerText(), /Mezcla 2:/);
+                assert.match(await detail.innerText(), /Frasco 100 mg/);
+                assert.match(await detail.innerText(), /Frasco 50 mg/);
+                assert.match(await detail.innerText(), /80 mg/);
+                assert.match(await detail.innerText(), /1 frasco/);
                 await page.keyboard.press('Escape');
                 assert.deepEqual(errors, []);
                 await page.close();
@@ -1269,13 +1294,31 @@ test('quotation list matches request navigation and filters without layout overf
             assert.equal(await categories.getByRole('link').count(), 4);
             assert.deepEqual(await statuses.getByRole('link').allTextContents(), ['Todas', 'Recibidas', 'Enviadas', 'Autorizadas', 'En preparacion']);
             assert.equal(await page.locator('[data-quotation-row]').count(), 5);
-            assert.equal(await page.locator('#request-quotations-table th').count(), 15);
+            assert.equal(await page.locator('#request-quotations-table th').count(), 16);
             assert.deepEqual((await page.locator('[data-quotation-row] td:first-child').allTextContents()).map(text => text.trim()),
                 ['Antibiotico', 'Nutricional', 'Oncologica', 'Oncologica', 'Oncologica']);
             assert.equal(await page.getByRole('button', { name: 'Filtrar Tipo', exact: true }).count(), 1);
-            assert.deepEqual((await page.locator('[data-quotation-row] td:nth-child(10)').allTextContents()).map(text => text.trim()),
+            assert.equal(await page.locator('#request-quotations-table th').nth(8).textContent(), 'Productos / Precio unitario');
+            assert.equal(await page.locator('#request-quotations-table th').nth(10).textContent(), 'Detalle');
+            assert.equal(await page.locator('[data-quotation-row] td:nth-child(11) button[aria-label^="Ver COT-"]').count(), 5);
+            const breakdown = page.getByRole('list', { name: 'Productos de COT-000002', exact: true });
+            assert.equal(await breakdown.getByRole('listitem').count(), 2);
+            assert.match(await breakdown.innerText(), /Medicamento de prueba B/);
+            assert.match(await breakdown.innerText(), /\$2\.0000/);
+            assert.match(await breakdown.innerText(), /\$50\.0000/);
+            assert.doesNotMatch(await breakdown.innerText(), /Mezcla [12]|Frasco|MXN \/|mg/);
+            assert.equal(await breakdown.locator('small').count(), 0);
+            for (const line of await breakdown.getByRole('listitem').all()) {
+                const description = await line.locator('.quotation-product-description').boundingBox();
+                const price = await line.locator('.quotation-product-price').boundingBox();
+                const bounds = await line.boundingBox();
+                assert.ok(description.x + description.width <= price.x, 'Product and price do not overlap');
+                assert.ok(price.x + price.width <= bounds.x + bounds.width + 1, 'Price fits in the breakdown');
+                assert.equal(await line.evaluate(el => el.scrollWidth <= el.clientWidth), true);
+            }
+            assert.deepEqual((await page.locator('[data-quotation-row] td:nth-child(12)').allTextContents()).map(text => text.trim()),
                 ['En preparacion', 'Autorizada', 'Enviada', 'Enviada', 'Por enviar']);
-            assert.deepEqual((await page.locator('[data-quotation-row] td:nth-child(13)').allTextContents()).map(text => text.trim()),
+            assert.deepEqual((await page.locator('[data-quotation-row] td:nth-child(14)').allTextContents()).map(text => text.trim()),
                 ['Autorizado', 'Autorizado', 'Pendiente', 'Pendiente', 'Pendiente']);
             const pills = await page.locator('#request-quotations-table .quotation-row-pill').evaluateAll(elements => elements.map(element => {
                 const style = getComputedStyle(element), box = element.getBoundingClientRect();
@@ -1303,6 +1346,9 @@ test('quotation list matches request navigation and filters without layout overf
                 path: path.join(process.env.QUOTATION_SCREENSHOTS, `request-quotations-${width}.png`), fullPage: true,
             });
             if (process.env.QUOTATION_SCREENSHOTS) {
+                const products = page.getByRole('list', { name: 'Productos de COT-000002', exact: true });
+                await products.scrollIntoViewIfNeeded();
+                await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-products-${width}.png`), fullPage: true });
                 await page.locator('[data-quotation-row] td:last-child').first().scrollIntoViewIfNeeded();
                 await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-row-controls-${width}.png`), fullPage: true });
             }

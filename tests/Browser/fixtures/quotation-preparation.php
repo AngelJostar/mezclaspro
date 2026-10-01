@@ -13,6 +13,7 @@ $count = (int) ($argv[3] ?? 1);
 $quote = ($argv[4] ?? '') === 'presentations'
     ? Tests\Fixtures\QuotationPreparationData::presentationGroups($category, $unit)
     : Tests\Fixtures\QuotationPreparationData::quotation($category, $unit, $count, null, $count > 1);
+if (($argv[5] ?? '') === 'requirements') Tests\Fixtures\QuotationPreparationData::withRequirements($quote);
 $request = Illuminate\Http\Request::create(route('admin.solicitudes.cotizacion.preparation', $quote));
 $request->setUserResolver(fn () => $user);
 $request->setRouteResolver(fn () => app('router')->getRoutes()->getByName('admin.solicitudes.cotizacion.preparation'));

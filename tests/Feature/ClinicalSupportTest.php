@@ -30,6 +30,7 @@ class ClinicalSupportTest extends TestCase
         parent::setUp();
         $this->user = AgentFixture::seed();
         (require database_path('migrations/2026_09_29_000001_create_clinical_support.php'))->up();
+        (require database_path('migrations/2026_09_30_000007_version_clinical_manual_sources.php'))->up();
         (require database_path('migrations/2026_09_29_000002_add_context_to_clinical_reviews.php'))->up();
         (require database_path('migrations/2026_09_29_000003_create_clinical_agent_conversations.php'))->up();
         Schema::create('solicitud_oncos', fn (Blueprint $t) => $t->id());
@@ -568,6 +569,93 @@ class ClinicalSupportTest extends TestCase
         $component = Livewire::test(AgentCenter::class);
         $this->actingAs($other);
         $component->call('revokeClinicalSource', 1)->assertForbidden();
+    }
+
+    public function test_v4_install_replaces_active_manual_preserves_history_and_custom_agent_settings(): void
+    {
+        $this->fake();
+        $review = $this->review();
+        $oldManual = ClinicalSource::find(1);
+        $this->agent->update(['instructions' => 'Instruccion institucional personalizada.', 'is_active' => false]);
+        $install = require database_path('migrations/2026_09_30_000008_install_clinical_manual_v4.php');
+        $install->up();
+        $install->up();
+        $manual = ClinicalSource::current()->where('is_manual', true)->sole();
+        $this->assertSame('4', $manual->manual_version);
+        $this->assertSame(ClinicalEvidence::MANUAL_TITLE, $manual->title);
+        $this->assertStringContainsString('SUPUESTO 1.- RECHAZO', $manual->content);
+        $this->assertStringContainsString('SUPUESTO 2.- SUGERENCIA', $manual->content);
+        $this->assertStringContainsString('60%', $manual->content);
+        $this->assertStringContainsString('45 mEq', $manual->content);
+        $this->assertSame(hash('sha256', $manual->content), $manual->sha256);
+        $this->assertFalse($manual->isReviewed());
+        $this->assertNotNull($oldManual->fresh()->superseded_at);
+        $this->assertSame($oldManual->content, $oldManual->fresh()->content);
+        $this->assertTrue(ClinicalSource::find(2)->isReviewed());
+        $this->assertFalse($this->agent->fresh()->is_active);
+        $this->assertStringContainsString('Instruccion institucional personalizada.', $this->agent->fresh()->instructions);
+        $this->assertSame(1, substr_count($this->agent->fresh()->instructions, ClinicalEvidence::MANUAL_POLICY));
+        $this->assertNotSame($review->sources_hash, app(ClinicalEvidence::class)->fingerprint('nutricionales'));
+        $this->assertDatabaseCount('clinical_sources', 3);
+        $this->artisan('clinical:import-manual', ['path' => resource_path(ClinicalEvidence::MANUAL_FILE)])->assertSuccessful();
+        $this->assertSame($manual->id, ClinicalSource::current()->where('is_manual', true)->sole()->id);
+        $this->assertDatabaseCount('clinical_sources', 3);
+        $this->artisan('clinical:import-manual', ['path' => resource_path('clinical/manual-revision3.docx')])->assertSuccessful();
+        $this->assertSame($manual->id, ClinicalSource::current()->where('is_manual', true)->sole()->id);
+    }
+
+    public function test_v4_needs_its_own_professional_clarification_and_download_is_superadmin_only(): void
+    {
+        (require database_path('migrations/2026_09_30_000008_install_clinical_manual_v4.php'))->up();
+        $evidence = app(ClinicalEvidence::class);
+        $manual = ClinicalSource::current()->where('is_manual', true)->sole();
+        $this->assertContains(ClinicalEvidence::MANUAL_LIMITATIONS, $evidence->limitations('nutricionales', $evidence->sources('nutricionales')));
+        ClinicalSource::find(2)->update(['resolved_manual_sha256' => $manual->sha256]);
+        $this->assertSame([], $evidence->limitations('nutricionales', $evidence->sources('nutricionales')));
+        $this->assertFalse($manual->isReviewed());
+        $component = Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)
+            ->assertSee(ClinicalEvidence::MANUAL_TITLE)->assertSee('Descargar Manual V4')->assertSee('Manuales anteriores (historico)')
+            ->call('downloadClinicalManual', $manual->id)->assertFileDownloaded('Manual Maestro de Validacion V4.docx');
+        $this->actingAs(User::forceCreate(['name' => 'Sin permiso']));
+        $component->call('downloadClinicalManual', $manual->id)->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    public function test_v4_sources_and_instructions_reach_both_validation_and_chat_without_old_manual(): void
+    {
+        (require database_path('migrations/2026_09_30_000008_install_clinical_manual_v4.php'))->up();
+        $manual = ClinicalSource::current()->where('is_manual', true)->sole();
+        $this->fake();
+        $review = $this->review();
+        $this->assertFalse($review->can_submit);
+        Http::assertSent(function ($request) use ($manual) {
+            $input = json_decode($request['input'], true);
+            $this->assertStringContainsString(ClinicalEvidence::MANUAL_TITLE, $request['instructions']);
+            $this->assertStringContainsString('Supuesto 1', $request['instructions']);
+            $this->assertStringNotContainsString('Evidencia sintetica de prueba.', collect($input['sources'])->firstWhere('is_manual', true)['content']);
+            $this->assertSame(['S2', 'S'.$manual->id], array_column($input['sources'], 'id'));
+            return true;
+        });
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::preventStrayRequests();
+        Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'output' => [
+            ['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['answer' => 'Respuesta sintetica.', 'citations' => []])]]],
+        ]])]);
+        app(\App\Services\Clinical\OpenAiClinicalChat::class)->reply($this->agent->fresh(), [], 'Pregunta tecnica de prueba sin pacientes.', $this->user->id);
+        Http::assertSent(fn ($request) => isset(json_decode($request['input'], true)['question'])
+            && array_column(json_decode($request['input'], true)['sources'], 'id') === ['S2', 'S'.$manual->id]
+            && str_contains($request['instructions'], ClinicalEvidence::MANUAL_TITLE));
+    }
+
+    public function test_v4_import_rejects_a_different_file_without_superseding_existing_sources(): void
+    {
+        $this->artisan('clinical:import-manual', ['path' => resource_path('clinical/manual-revision3.docx'), '--manual-version' => '4'])->assertFailed();
+        $this->assertDatabaseCount('clinical_sources', 2);
+        $this->assertNull(ClinicalSource::find(1)->superseded_at);
+        $this->artisan('clinical:import-manual', ['path' => resource_path(ClinicalEvidence::MANUAL_FILE), '--manual-version' => '3'])->assertFailed();
+        $this->assertDatabaseCount('clinical_sources', 2);
+        $this->assertNull(ClinicalSource::find(1)->superseded_at);
+        Http::assertNothingSent();
     }
 
     public function test_import_registers_the_protected_integration_key_and_is_idempotent(): void

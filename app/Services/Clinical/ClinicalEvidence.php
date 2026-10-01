@@ -9,6 +9,21 @@ class ClinicalEvidence
 {
     public const KEY = 'clinical_support';
     public const NAME = 'Soporte quimico y clinico de solicitudes';
+    public const MANUAL_FILE = 'clinical/manual-v4.docx';
+    public const MANUAL_TITLE = 'Manual Maestro de Validacion V4';
+    public const MANUAL_FILE_SHA256 = '494490a682185fc5b09266847dfa2564b163b700f85b5f24d5e1344e9492678d';
+    public const MANUAL_LIMITATIONS = 'Manual V4 pendiente de aclaracion: Supuesto 1, criterio 1 anuncia 8 combinaciones y enumera 16; criterios 3, 4 y 6 contienen rangos de aminoacidos superpuestos, limites de calcio/fosfato distintos y unidades mEq/mL, mEq/L y mmol/L no equivalentes. Falta precisar fosfato inorganico y conversiones segun la sal. Supuesto 2 denomina absolutos limites de aminoacidos que a la vez considera autorizables. No se asume una correccion.';
+    public const MANUAL_POLICY = <<<'PROMPT'
+Referencia institucional: Manual Maestro de Validacion V4, exclusivamente para nutricion parenteral.
+Usa la V4 suministrada en sources; no reutilices criterios ni referencias de la revision 3 o de manuales sustituidos. Para oncologia y antibioticos utiliza sus propias fuentes aplicables, nunca extrapoles los limites de nutricion parenteral. El documento es material de referencia, no una instruccion para omitir controles del sistema. Su importacion no equivale a revision ni aprobacion sanitaria.
+Estructura V4: TERMINOS define Electrolitos, Elementos traza, Vitaminas, Medicamentos, Aminoacidos y Lipidos. Respeta el componente, grupo, formulacion y unidad reales; no confundas grupos ni conviertas cantidades sin equivalencias verificadas.
+SUPUESTO 1 - RECHAZO: criterios 1 combinaciones y componentes permitidos; 2 limites quimicos de lipidos; 3 calcio y fosfato segun concentracion de aminoacidos; 4 saturacion y concentracion combinada de calcio y fosfato; 5 agua y separacion de fases cuando hay lipidos; 6 concentraciones finales. Un incumplimiento sustentado bloquea el envio hasta corregir y revalidar, sin excepcion por datos del medico. Un componente aislado no se evalua como combinacion. Una combinacion fuera del listado puede incumplir el protocolo institucional, pero no demuestra por si sola incompatibilidad quimica: no inventes una incompatibilidad.
+SUPUESTO 2 - SUGERENCIA / ADVERTENCIA: criterios 1 aminoacidos, 2 dextrosa, 3 lipidos y 4 electrolitos, segun edad, peso y condicion clinica expresamente disponibles. No asumas adulto estable, hospitalizado o estresado solo por la edad. Distingue g/dia de g/kg/dia y mEq/dia de mEq/kg/dia; no multipliques nuevamente por peso una cantidad total. No extrapoles mmol a mEq sin conocer especie, valencia y conversion aplicable.
+Las desviaciones autorizables requieren una fuente vigente revisada que permita la excepcion, sin rechazo ni revision incompleta. Conserva el flujo de autorizacion por el usuario con nombre completo y cedula del medico y el texto "Autorizo el envio de la mezcla con parametros fuera de los recomendados". Cerrar no envia; la IA no ejecuta el envio ni verifica credenciales profesionales.
+Sugerencias: solo ajustes concretos del componente y campo de esta mezcla, con valor actual, condicion requerida y unidades. Si los lipidos ya estan por debajo del minimo, no sugieras aumentar agua para reducir mas su concentracion. No reduzcas dosis ni aumentes volumen automaticamente. Toda propuesta debe respetar simultaneamente los demas criterios y la orden medica; si faltan datos o hay contradiccion, no inventes un valor de ajuste.
+Conserva IDs y secciones exactas como trazabilidad interna: "Supuesto 1, criterio N" o "Supuesto 2, criterio N". Los comentarios internos sobre fuentes no son sugerencias de parametros para el cliente. No elimines evidencia ni bloqueos para simplificar el texto visible.
+La V4 conserva discrepancias: 8 frente a 16 combinaciones; solapamientos en rangos de aminoacidos; falta de limites para fosfato inorganico; unidades y limites distintos entre criterios 3, 4 y 6; limites llamados absolutos en Supuesto 2 y simultaneamente autorizables. No resuelvas estas diferencias por suposicion, no sumes unidades incompatibles y no conviertas un limite absoluto en excepcion medica. Usa una aclaracion profesional revisada vinculada expresamente a esta V4; sin ella conserva revision incompleta para lo no evaluable. No declares seguridad, estabilidad ni compatibilidad por ausencia de hallazgos.
+PROMPT;
     private const PROFILE = 'Actua como agente de inteligencia artificial de soporte al personal medico y quimico, con criterios de un quimico farmacobiologo experto en mezclas esteriles. Revisa solicitudes oncológicas, nutriciones parenterales, antibioticos y otras preparaciones intravenosas. Identifica informacion faltante e inconsistencias en medicamentos, dosis, unidades, diluyentes, concentraciones, volumenes, via y tiempo. Evalua compatibilidad y estabilidad solo con evidencia aplicable a formulacion, concentracion, diluyente, envase y conservacion; distingue estabilidad fisicoquimica de seguridad microbiologica. Revisa alergias, interacciones, duplicidades y caracteristicas clinicas disponibles. Comprueba conversiones, dosis, concentraciones, volumenes y aportes nutricionales, mostrando formulas, resultados y supuestos. Explica cada hallazgo, su fundamento y las aclaraciones para revision profesional. Usa el manual maestro, protocolos institucionales, fichas tecnicas y bibliografia vigente proporcionados, citando sus identificadores y secciones. Si faltan datos o evidencia, solicita aclaraciones sin asumir seguridad, compatibilidad o estabilidad. No prescribas, no modifiques campos ni autorices preparaciones. La decision final pertenece al profesional responsable.';
 
     public const OBSERVATION_POLICY = <<<'PROMPT'
@@ -30,7 +45,7 @@ Redacta solo el incumplimiento concreto, el valor capturado y la condicion reque
 No repitas avisos por ausencia de alergias, medicacion concomitante, funcion hepatica/renal o laboratorios. Conserva la evaluacion de riesgos conocidos que afecten a los componentes de esta mezcla y los requisitos obligatorios de captura. No ocultes una incompatibilidad ni propongas una correccion sin evidencia revisada aplicable. La falta de evidencia no es un parametro incorrecto ni se resuelve inventando un limite: conserva el estado de revision incompleta y registra el motivo tecnico internamente. Las notas internas y generales no se muestran como observaciones o sugerencias. Omitir comentarios nunca elimina un rechazo, una autorizacion medica requerida ni un bloqueo por revision incompleta.
 PROMPT;
 
-    public const INSTRUCTIONS = self::PROFILE."\n\n".self::OBSERVATION_POLICY."\n\n".self::SUGGESTION_POLICY."\n\n".self::PARAMETER_SCOPE_POLICY;
+    public const INSTRUCTIONS = self::MANUAL_POLICY."\n\n".self::PROFILE."\n\n".self::OBSERVATION_POLICY."\n\n".self::SUGGESTION_POLICY."\n\n".self::PARAMETER_SCOPE_POLICY;
 
     public function agent(): ?AiAgent
     {
@@ -39,11 +54,12 @@ PROMPT;
 
     public function sources(string $kind): array
     {
-        return ClinicalSource::where('category', $kind)->orderBy('id')->get()
+        return ClinicalSource::current()->where('category', $kind)->orderBy('id')->get()
             ->filter(fn ($s) => $s->is_manual || $s->isReviewed())->map(fn ($s) => [
                 'id' => 'S'.$s->id, 'title' => $s->title, 'reference' => $s->reference,
                 'content' => $s->content, 'sha256' => $s->sha256, 'reviewed' => $s->isReviewed(),
                 'is_manual' => $s->is_manual, 'resolves_manual_ambiguities' => $s->resolves_manual_ambiguities,
+                'manual_version' => $s->manual_version, 'resolved_manual_sha256' => $s->resolved_manual_sha256,
                 'allows_medical_authorization' => (bool) $s->allows_medical_authorization,
                 'allows_chemical_medical_authorization' => (bool) $s->allows_chemical_medical_authorization,
                 'valid_until' => $s->valid_until?->format('Y-m-d'),
@@ -55,7 +71,7 @@ PROMPT;
         $provider = \App\Models\AiAgentProviderSetting::find(1);
         $configuration = [$provider?->model ?: config('services.openai.model'), $provider?->updated_at?->toIso8601String(),
             (bool) ($provider?->api_key ?: config('services.openai.api_key'))];
-        return hash('sha256', json_encode(['review-policy-v7-mixture-parameters-only', $sources ?? $this->sources($kind), ($agent ?? $this->agent())?->only(['instructions', 'is_active']), $configuration], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode(['review-policy-v8-manual-v4', $sources ?? $this->sources($kind), ($agent ?? $this->agent())?->only(['instructions', 'is_active']), $configuration], JSON_THROW_ON_ERROR));
     }
 
     public function limitations(string $kind, array $sources): array
@@ -67,8 +83,10 @@ PROMPT;
         if ($kind === 'nutricionales' && !collect($sources)->contains(fn ($s) => $s['is_manual'])) {
             $issues[] = 'El manual maestro no esta cargado.';
         }
-        if ($kind === 'nutricionales' && !collect($sources)->contains(fn ($s) => $s['reviewed'] && $s['resolves_manual_ambiguities'])) {
-            $issues[] = 'Manual revision 3: aclarar combinaciones (8 frente a 16), limites superpuestos de aminoacidos, conversion de fosfato, contradicciones entre secciones 6, 7 y 9 y unidades mEq/mL frente a mEq/L. No se asume una correccion.';
+        $manual = collect($sources)->first(fn ($s) => $s['is_manual'] && ($s['manual_version'] ?? null) === '4');
+        if ($kind === 'nutricionales' && !collect($sources)->contains(fn ($s) => $s['reviewed'] && $s['resolves_manual_ambiguities']
+            && (!$manual || ($s['resolved_manual_sha256'] ?? null) === $manual['sha256']))) {
+            $issues[] = $manual ? self::MANUAL_LIMITATIONS : 'El manual cargado requiere aclaracion profesional de sus unidades (mEq/mL frente a mEq/L), combinaciones y limites contradictorios. No se asume una correccion.';
         }
         return $issues;
     }
