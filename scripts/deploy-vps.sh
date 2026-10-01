@@ -53,7 +53,7 @@ php artisan route:clear --no-interaction
 php artisan view:clear --no-interaction
 php artisan migrate --force --no-interaction
 php artisan db:seed --class=PromesaAiAgentsSeeder --force --no-interaction
-php artisan clinical:import-manual resources/clinical/manual-revision3.docx --no-interaction
+php artisan clinical:import-manual resources/clinical/manual-v4.docx --manual-version=4 --no-interaction
 provider_args=(agents:configure-openai --from-stdin --verify --no-interaction)
 if [[ -n $model ]]; then provider_args+=("--model=$model"); fi
 printf '%s' "$api_key" | php artisan "${provider_args[@]}"

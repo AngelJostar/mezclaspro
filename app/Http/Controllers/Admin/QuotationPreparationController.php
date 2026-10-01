@@ -23,9 +23,11 @@ class QuotationPreparationController extends Controller
         $response = $quotation->category === 'nutricionales'
             ? app(NutritionController::class)->create($request) : app(OncologyController::class)->create($request);
         if ($response instanceof \Illuminate\Contracts\View\View) {
+            $requirements = $service->requirements($quotation);
             $response->with(['preparationQuotation' => $quotation, 'quotedItems' => $items,
+                'quotedRequirements' => $requirements,
                 'quotedMedications' => $service->medicationGroups($items),
-                'quotedMixtures' => collect($service->groupItems($items))->map(fn ($group) => $service->medicationGroups($group->all()))->all(),
+                'quotedMixtures' => collect($service->groupItems($items))->map(fn ($group) => $service->medicationGroups($group->all(), $requirements))->all(),
                 'quotationDefaults' => $service->defaults($quotation, $items)]);
         }
         return $response;

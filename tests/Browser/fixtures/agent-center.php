@@ -15,6 +15,7 @@ if (($argv[1] ?? '') === 'promesa') {
 Tests\Fixtures\AgentAuditData::seed();
 if (($argv[1] ?? '') === 'clinical-chat') {
     (require database_path('migrations/2026_09_29_000001_create_clinical_support.php'))->up();
+    (require database_path('migrations/2026_09_30_000007_version_clinical_manual_sources.php'))->up();
     (require database_path('migrations/2026_09_29_000003_create_clinical_agent_conversations.php'))->up();
     $clinicalAgent = App\Models\AiAgent::forceCreate(['name' => App\Services\Clinical\ClinicalEvidence::NAME,
         'integration_key' => App\Services\Clinical\ClinicalEvidence::KEY, 'instructions' => App\Services\Clinical\ClinicalEvidence::INSTRUCTIONS, 'is_active' => true]);

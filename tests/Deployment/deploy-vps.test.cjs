@@ -70,7 +70,7 @@ test('deployment updates dependencies, migrations and agent without leaking or r
     const log = readLog();
     assert.ok(log.includes('git:merge --ff-only ' + sha));
     assert.ok(log.indexOf('npm:run build') < log.indexOf('php:artisan migrate --force'));
-    assert.ok(log.includes('php:artisan clinical:import-manual resources/clinical/manual-revision3.docx'));
+    assert.ok(log.includes('php:artisan clinical:import-manual resources/clinical/manual-v4.docx --manual-version=4'));
     assert.ok(log.includes('provider:stdin-ok'));
     assert.ok(log.includes('--model=gpt-4.1-mini'));
     assert.ok(log.indexOf('provider:stdin-ok') < log.indexOf('php:artisan up'));

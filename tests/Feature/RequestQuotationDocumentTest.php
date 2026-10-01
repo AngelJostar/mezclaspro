@@ -173,8 +173,10 @@ class RequestQuotationDocumentTest extends TestCase
         @$dom->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
         $xpath = new \DOMXPath($dom);
         $headers = $xpath->query('//table[@id="request-quotations-table"]//th');
-        $this->assertSame('Solicitud (Foto o Archivo)', trim($headers->item(13)->textContent));
-        $this->assertCount(5, $xpath->query('//tr[@data-quotation-row]/td[14]/button[@data-quotation-documents]'));
+        $this->assertSame('Autorización', trim($headers->item(13)->textContent));
+        $this->assertSame('Solicitud (Foto o Archivo)', trim($headers->item(14)->textContent));
+        $this->assertCount(5, $xpath->query('//tr[@data-quotation-row]/td[15]/button[@data-quotation-documents]'));
+        $this->assertSame('Guardar y cerrar', trim($xpath->query('//span[@data-doc-save-label]')->item(0)->textContent));
         $this->assertCount(5, $xpath->query('//button[@data-quotation-documents]/i[@data-quotation-document-icon="camera"]'));
         $this->assertCount(5, $xpath->query('//button[@data-quotation-documents]/i[@data-quotation-document-icon="paperclip"]'));
         $this->assertCount(5, $xpath->query('//button[@data-quotation-documents]/span[text()="/"]'));

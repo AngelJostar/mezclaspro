@@ -272,6 +272,80 @@ class QuotationPreparationTest extends TestCase
         }
     }
 
+    public function test_prescription_requirements_are_shown_per_mixture_without_repricing_or_assigning_doses(): void
+    {
+        $quote = Data::presentationGroups();
+        $snapshot = $quote->pricing_snapshot;
+        Data::withRequirements($quote);
+        $service = app(QuotationPreparationService::class);
+        $items = $service->items($quote);
+        $requirements = $service->requirements($quote);
+        $this->assertSame($snapshot['lines'], $quote->pricing_snapshot['lines']);
+        $this->assertSame($snapshot['total'], $quote->pricing_snapshot['total']);
+        $this->assertSame([null, null, null, null], array_column($items, 'clinical_quantity'));
+        $groups = $service->groupItems($items);
+        $this->assertSame([175.5555, 50.0], array_column($service->medicationGroups($groups[1]->all(), $requirements), 'required_concentration'));
+        $this->assertSame([20.0], array_column($service->medicationGroups($groups[2]->all(), $requirements), 'required_concentration'));
+        $this->get(route('admin.solicitudes.cotizacion.preparation', $quote))->assertOk()
+            ->assertSee('Requerimiento del m&eacute;dico o solicitud del hospital', false)
+            ->assertSee('175.5555 mg')->assertSee('50 mg')->assertSee('20 mg')
+            ->assertViewHas('quotedRequirements', $requirements);
+        $this->assertNull($quote->refresh()->request_id);
+    }
+
+    public function test_requirement_matching_uses_frozen_names_mixture_and_unit_and_never_guesses(): void
+    {
+        $quote = Data::withRequirements(Data::presentationGroups());
+        $service = app(QuotationPreparationService::class);
+        $items = $service->groupItems($service->items($quote))[1]->all();
+        $requirements = $service->requirements($quote);
+        $requirements[0]['medicine'] = '  '.mb_strtoupper($requirements[0]['medicine']).'  ';
+        $this->assertSame(175.5555, $service->medicationGroups($items, $requirements)[0]['required_concentration']);
+        foreach (['mixture_number' => 2, 'medicine' => 'Otro medicamento', 'unit' => 'ml', 'concentration' => 0] as $field => $value) {
+            $changed = $requirements;
+            $changed[0][$field] = $value;
+            $this->assertNull($service->medicationGroups($items, $changed)[0]['required_concentration']);
+        }
+        $requirements[] = $requirements[0];
+        $this->assertNull($service->medicationGroups($items, $requirements)[0]['required_concentration']);
+        $this->assertNull($service->medicationGroups($items)[0]['required_concentration']);
+    }
+
+    public function test_requirement_snapshot_takes_priority_and_legacy_quotes_use_saved_capture_only(): void
+    {
+        $quote = Data::withRequirements(Data::presentationGroups());
+        $service = app(QuotationPreparationService::class);
+        $original = $service->requirements($quote);
+        $data = $quote->clinical_data;
+        $data['requirements'][0]['concentration'] = 99;
+        $quote->clinical_data = $data;
+        $this->assertSame($original, $service->requirements($quote));
+        $snapshot = $quote->pricing_snapshot;
+        unset($snapshot['requirements']);
+        $quote->pricing_snapshot = $snapshot;
+        $this->assertSame($data['requirements'], $service->requirements($quote));
+        unset($data['requirements']);
+        $quote->clinical_data = $data;
+        $this->assertSame([], $service->requirements($quote));
+    }
+
+    public function test_nutrition_requirements_keep_the_saved_milliliters_in_each_mixture(): void
+    {
+        $quote = Data::quotation('nutricionales', 'frasco', 2, null, true);
+        $data = $quote->clinical_data;
+        $data['requirements'] = [
+            ['mixture_number' => 1, 'medicine' => $data['items'][0]['product_name'], 'concentration' => 65.5],
+            ['mixture_number' => 2, 'medicine' => $data['items'][1]['product_name'], 'concentration' => 45],
+        ];
+        $capture = app(\App\Services\RequestQuotationCaptureService::class)->capture(auth()->user(), $data, true);
+        unset($capture['pricing_token']);
+        $quote->forceFill($capture)->save();
+        $this->get(route('admin.solicitudes.cotizacion.preparation', $quote))->assertOk()
+            ->assertSee('65.5 mL')->assertSee('45 mL')
+            ->assertViewHas('quotedMixtures', fn ($mixtures) => $mixtures[1][0]['required_concentration'] === 65.5
+                && $mixtures[2][0]['required_concentration'] === 45.0);
+    }
+
     public function test_drafts_and_users_without_request_permission_cannot_prepare(): void
     {
         $quote = Data::quotation();

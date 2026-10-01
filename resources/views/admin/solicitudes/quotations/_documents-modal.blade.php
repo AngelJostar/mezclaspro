@@ -37,7 +37,7 @@
         </div>
         <footer class="quotation-modal-footer">
             <button type="button" class="quotation-button quotation-outline" data-doc-close>Cerrar</button>
-            <button type="submit" class="quotation-button quotation-primary" data-doc-save disabled><i data-quotation-document-icon="save"></i><span data-doc-save-label>Guardar</span></button>
+            <button type="submit" class="quotation-button quotation-primary" data-doc-save disabled><i data-quotation-document-icon="save"></i><span data-doc-save-label>Guardar y cerrar</span></button>
         </footer>
     </form>
 </dialog>

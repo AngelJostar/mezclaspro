@@ -10,6 +10,7 @@ use App\Models\Oncologicos\SolicitudOnco;
 use App\Models\RequestQuotation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class QuotationPreparationService
@@ -126,13 +127,28 @@ class QuotationPreparationService
         return collect($items)->groupBy('mixture_number', preserveKeys: true)->sortKeys()->all();
     }
 
-    public function medicationGroups(array $items): array
+    public function requirements(RequestQuotation $quotation): array
     {
-        return collect($items)->groupBy('catalog_id', preserveKeys: true)->map(function ($rows) {
+        return $quotation->pricing_snapshot['requirements'] ?? $quotation->clinical_data['requirements'] ?? [];
+    }
+
+    public function medicationGroups(array $items, array $requirements = []): array
+    {
+        return collect($items)->groupBy('catalog_id', preserveKeys: true)->map(function ($rows) use ($requirements) {
             $first = $rows->first();
+            // The recipe stores medicine names, not presentation IDs. Match the frozen name within its mixture.
+            $name = fn ($value) => mb_strtolower(Str::ascii(trim($value)));
+            $matches = collect($requirements)->filter(fn ($requirement) =>
+                (int) $requirement['mixture_number'] === $first['mixture_number']
+                && $name($requirement['medicine']) === $name($first['name'])
+                && strtolower($requirement['unit']) === strtolower($first['concentration_unit']));
+            $required = $rows->pluck('mixture_number')->unique()->count() === 1 && $matches->count() === 1
+                ? $matches->first()['concentration'] : null;
             return [
                 'catalog_id' => $first['catalog_id'], 'name' => $first['name'],
                 'concentration_unit' => $first['concentration_unit'], 'items' => $rows->all(),
+                'required_concentration' => is_numeric($required) && is_finite((float) $required) && $required > 0
+                    ? (float) $required : null,
                 'quoted_concentration' => $rows->contains(fn ($row) => $row['quoted_concentration'] === null)
                     ? null : round($rows->sum('quoted_concentration'), 4),
             ];

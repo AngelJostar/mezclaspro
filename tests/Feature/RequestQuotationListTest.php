@@ -30,16 +30,22 @@ class RequestQuotationListTest extends TestCase
         $response = $this->screen()->assertOk()->assertSee('Lista de Cotizaciones')
             ->assertViewHas('quotations', fn ($rows) => $rows->count() === 5)
             ->assertSeeInOrder(['Tipo', 'Folio', 'Fecha', 'Instituci&oacute;n', 'Hospital', 'Paciente', 'Vendedor', 'Lista de precios',
-                'Total MXN', 'Estado', 'Detalle', 'Enviar', 'Autorizaci&oacute;n', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion'], false);
+                'Productos / Precio unitario', 'Total MXN', 'Detalle', 'Estado', 'Compartir', 'Autorizaci&oacute;n', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion'], false);
         $xpath = $this->xpath($response->getContent());
-        $this->assertCount(15, $xpath->query('//table[@id="request-quotations-table"]//th'));
+        $this->assertCount(16, $xpath->query('//table[@id="request-quotations-table"]//th'));
         $this->assertSame('Tipo', trim($xpath->query('//table[@id="request-quotations-table"]//th')->item(0)->textContent));
         $this->assertSame(['Antibiotico', 'Nutricional', 'Oncologica', 'Oncologica', 'Oncologica'], array_map(
             fn ($cell) => trim($cell->textContent), iterator_to_array($xpath->query('//tr[@data-quotation-row]/td[1]'))));
         foreach ($xpath->query('//tr[@data-quotation-row]') as $row) {
-            $this->assertCount(15, $xpath->query('./td', $row));
+            $this->assertCount(16, $xpath->query('./td', $row));
+            $this->assertCount(1, $xpath->query('./td[11]//button[starts-with(@aria-label,"Ver COT-")]', $row));
         }
         $this->assertCount(5, $xpath->query('//table[@id="request-quotations-table"]//button[@data-quotation-send]'));
+        foreach ($xpath->query('//table[@id="request-quotations-table"]//button[@data-quotation-send]') as $button) {
+            $this->assertSame('Compartir', trim($button->textContent));
+            $data = json_decode($button->getAttribute('data-quotation-send'), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertSame('Compartir '.$data['folio'], $button->getAttribute('aria-label'));
+        }
         $this->assertSame(['Todas', 'Recibidas', 'Enviadas', 'Autorizadas', 'En preparacion'], array_map(
             fn ($link) => trim($link->textContent), iterator_to_array($xpath->query('//nav[@aria-label="Estado de las cotizaciones"]/a'))));
         $this->assertCount(4, $xpath->query('//nav[@aria-label="Tipo de solicitudes"]//a'));
@@ -53,18 +59,18 @@ class RequestQuotationListTest extends TestCase
         $row = fn (int $id) => '//tr[@data-quotation-row][td[2]="COT-'.str_pad((string) $id, 6, '0', STR_PAD_LEFT).'"]';
         foreach ([1 => ['Por enviar', 'pending'], 2 => ['Enviada', 'success'],
             3 => ['Autorizada', 'success'], 4 => ['En preparacion', 'primary']] as $id => [$label, $tone]) {
-            $state = $xpath->query($row($id).'/td[10]/span')->item(0);
+            $state = $xpath->query($row($id).'/td[12]/span')->item(0);
             $this->assertSame($label, trim($state->textContent));
             $this->assertStringContainsString('quotation-row-pill--'.$tone, $state->getAttribute('class'));
         }
         foreach ([1, 2, 5] as $id) {
-            $pending = $xpath->query($row($id).'/td[13]/button[@disabled]')->item(0);
+            $pending = $xpath->query($row($id).'/td[14]/button[@disabled]')->item(0);
             $this->assertNotNull($pending);
             $this->assertSame('Pendiente', trim($pending->textContent));
             $this->assertStringContainsString('quotation-row-pill--pending', $pending->getAttribute('class'));
         }
         foreach ([3, 4] as $id) {
-            $authorized = $xpath->query($row($id).'/td[13]/span')->item(0);
+            $authorized = $xpath->query($row($id).'/td[14]/span')->item(0);
             $this->assertSame('Autorizado', trim($authorized->textContent));
             $this->assertStringContainsString('quotation-row-pill--success', $authorized->getAttribute('class'));
             $this->assertStringContainsString(RequestQuotation::findOrFail($id)->authorized_at->format('d/m/Y H:i'), $authorized->getAttribute('title'));
@@ -75,7 +81,7 @@ class RequestQuotationListTest extends TestCase
 
         $this->user->givePermissionTo(Permission::create(['name' => 'oncologicos_solicitudes_update', 'guard_name' => 'web']));
         $xpath = $this->xpath($this->screen()->assertOk()->getContent());
-        $form = $xpath->query($row(2).'/td[13]/form')->item(0);
+        $form = $xpath->query($row(2).'/td[14]/form')->item(0);
         $this->assertSame(route('admin.solicitudes.cotizacion.authorize', 2), $form->getAttribute('action'));
         $this->assertFalse($form->hasAttribute('onsubmit'));
         $this->assertSame('POST', $form->getAttribute('method'));
@@ -88,7 +94,7 @@ class RequestQuotationListTest extends TestCase
         $this->assertSame('button', $button->getAttribute('type'));
         $this->assertTrue($button->hasAttribute('data-quotation-authorize'));
         $this->assertFalse($button->hasAttribute('disabled'));
-        $this->assertCount(1, $xpath->query($row(1).'/td[13]/button[@disabled]'));
+        $this->assertCount(1, $xpath->query($row(1).'/td[14]/button[@disabled]'));
     }
 
     public function test_client_and_institution_tables_omit_internal_columns_and_preserve_row_alignment(): void
@@ -98,21 +104,56 @@ class RequestQuotationListTest extends TestCase
             foreach ([[], ['estado' => 'enviadas'], ['buscar' => 'NO-EXISTE']] as $filters) {
                 $response = $this->screen($filters)->assertOk()->assertViewHas('isHospitalView', true);
                 $xpath = $this->xpath($response->getContent());
-                $this->assertSame(['Tipo', 'Folio', 'Fecha', 'Paciente', 'Total MXN', 'Detalle', 'Enviar',
+                $this->assertSame(['Tipo', 'Folio', 'Fecha', 'Paciente', 'Productos / Precio unitario', 'Total MXN', 'Detalle', 'Compartir',
                     'Autorización', 'Solicitud (Foto o Archivo)', 'Enviar a preparacion'], array_map(
                         fn ($header) => trim($header->textContent), iterator_to_array($xpath->query('//table[@id="request-quotations-table"]//th'))));
                 foreach ($xpath->query('//tr[@data-quotation-row]') as $row) {
-                    $this->assertCount(10, $xpath->query('./td', $row));
+                    $this->assertCount(11, $xpath->query('./td', $row));
                     $this->assertStringStartsWith('Paciente de prueba ', trim($xpath->query('./td[4]', $row)->item(0)->textContent));
-                    $this->assertStringStartsWith('$', trim($xpath->query('./td[5]', $row)->item(0)->textContent));
-                    $this->assertCount(1, $xpath->query('./td[7]/button[@data-quotation-send]', $row));
-                    $this->assertCount(1, $xpath->query('./td[9]/button[@data-quotation-documents]', $row));
-                    $this->assertCount(1, $xpath->query('./td[6]//button[starts-with(@aria-label,"Ver COT-")]', $row));
+                    $this->assertStringStartsWith('$', trim($xpath->query('./td[6]', $row)->item(0)->textContent));
+                    $this->assertCount(1, $xpath->query('./td[8]/button[@data-quotation-send]', $row));
+                    $this->assertSame('Compartir', trim($xpath->query('./td[8]/button[@data-quotation-send]', $row)->item(0)->textContent));
+                    $this->assertCount(1, $xpath->query('./td[10]/button[@data-quotation-documents]', $row));
+                    $this->assertCount(1, $xpath->query('./td[7]//button[starts-with(@aria-label,"Ver COT-")]', $row));
                     $this->assertStringNotContainsString('Lista del hospital', $row->textContent);
                     $this->assertStringNotContainsString('Sin asignar', $row->textContent);
                 }
             }
         }
+    }
+
+    public function test_product_breakdown_shows_only_descriptions_and_saved_prices_for_all_profiles_without_repricing(): void
+    {
+        $snapshot = ['lines' => [
+            ['description' => 'Producto A', 'presentation' => 'Frasco 100 mg', 'mixture_number' => 1, 'unit' => 'mg', 'unit_price' => 0.1234],
+            ['description' => 'Producto A', 'presentation' => 'Frasco 100 mg', 'mixture_number' => 2, 'unit' => 'frasco', 'unit_price' => 1234.5678],
+            ['description' => 'Diluyente', 'presentation' => 'Bolsa 100 mL', 'unit' => 'ml', 'unit_price' => 0],
+            ['description' => 'Preparacion', 'unit' => 'servicio', 'unit_price' => 25],
+            ['description' => '<script>alert(1)</script>', 'unit_price' => null],
+        ]];
+        $quotation = RequestQuotation::findOrFail(2);
+        $quotation->update(['pricing_snapshot' => $snapshot]);
+        foreach (['Admin', 'Cliente', 'Institucion'] as $role) {
+            $this->user->syncRoles(Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']));
+            $xpath = $this->xpath($this->screen()->assertOk()->getContent());
+            $cell = $xpath->query('//tr[@data-quotation-row][td[2]="COT-000002"]/td[@data-quotation-products]')->item(0);
+            $this->assertCount(5, $xpath->query('./ul/li', $cell));
+            foreach (['Producto A', 'Diluyente', 'Preparacion', '$0.1234', '$1,234.5678', '$0.0000', '$25.0000',
+                'Sin precio registrado', '<script>alert(1)</script>'] as $text) {
+                $this->assertStringContainsString($text, $cell->textContent);
+            }
+            foreach (['Frasco 100 mg', 'Bolsa 100 mL', 'Mezcla 1', 'Mezcla 2', 'MXN /', 'servicio'] as $text) {
+                $this->assertStringNotContainsString($text, $cell->textContent);
+            }
+            $this->assertCount(0, $xpath->query('.//small', $cell));
+            $this->assertCount(0, $xpath->query('.//script', $cell));
+            $this->assertSame('$210.00', trim($xpath->query('./following-sibling::td[1]', $cell)->item(0)->textContent));
+            $this->assertCount(1, $xpath->query('./following-sibling::td[2]//button[@aria-label="Ver COT-000002"]', $cell));
+            $empty = $xpath->query('//tr[@data-quotation-row][td[2]="COT-000001"]/td[@data-quotation-products]')->item(0);
+            $this->assertSame('Sin desglose registrado', trim($empty->textContent));
+        }
+        $this->assertSame($snapshot, $quotation->fresh()->pricing_snapshot);
+        $this->assertSame(210.0, (float) $quotation->fresh()->total);
     }
 
     public function test_category_and_status_filters_combine_without_hiding_drafts_from_all(): void

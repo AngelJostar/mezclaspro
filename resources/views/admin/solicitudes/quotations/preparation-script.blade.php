@@ -45,7 +45,6 @@
             requiredHeading.textContent = 'Concentraci\u00f3n requerida';
             heading.after(requiredHeading);
             const medications = Object.values(quotedMixtures)[index];
-            const requiredConcentrations = new Map();
             let previousCatalog;
             mixture.querySelectorAll('[data-name="medicamento"]').forEach((medicine, medicineIndex) => {
                 const item = group[medicineIndex];
@@ -66,10 +65,9 @@
                     const required = document.createElement('td');
                     required.className = 'border quoted-concentration'; required.rowSpan = span;
                     required.dataset.requiredConcentration = String(item.catalog_id);
-                    required.setAttribute('aria-live', 'polite');
-                    required.setAttribute('aria-atomic', 'true');
+                    required.textContent = medication.required_concentration === null ? 'No registrada'
+                        : `${quantity(medication.required_concentration)} ${item.concentration_unit}`;
                     total.after(required);
-                    requiredConcentrations.set(item.catalog_id, { cell: required, unit: item.concentration_unit, doses: [] });
                 } else {
                     medicine.closest('td').hidden = true;
                 }
@@ -86,25 +84,7 @@
                 } else {
                     dose.max = String(item.quantity * item.capacity);
                 }
-                requiredConcentrations.get(item.catalog_id).doses.push(dose);
                 for (const name of ['diluyente', 'via_administracion']) row.querySelector(`[data-name="${name}"]`).required = true;
-            });
-            requiredConcentrations.forEach(({ cell, unit, doses }) => {
-                const update = () => {
-                    if (doses.some(dose => dose.value === '')) {
-                        cell.textContent = 'Pendiente';
-                    } else if (doses.some(dose => !dose.validity.valid || !Number.isFinite(dose.valueAsNumber))) {
-                        cell.textContent = 'Revisar dosis';
-                    } else {
-                        const total = doses.reduce((sum, dose) => sum + Math.round(dose.valueAsNumber * 10000), 0) / 10000;
-                        cell.textContent = `${quantity(total)} ${unit}`;
-                    }
-                };
-                doses.forEach(dose => {
-                    dose.addEventListener('input', update);
-                    dose.addEventListener('change', update);
-                });
-                update();
             });
             for (const name of ['volumen_dilucion', 'tiempo_infusion']) {
                 mixture.querySelector(`[data-name="${name}"]`).required = true;

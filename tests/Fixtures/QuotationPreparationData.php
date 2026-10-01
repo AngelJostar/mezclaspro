@@ -29,7 +29,7 @@ class QuotationPreparationData
             'administration_routes' => ['name'],
             'administration_route_medicine_catalog' => ['medicine_catalog_id', 'administration_route_id'],
             'infusors' => ['nombre_generico', 'nombre_comercial', 'is_active'],
-            'solicitud_oncos' => ['servicio', 'sexo', 'edad', 'peso', 'cama', 'piso', 'registro_paciente', 'fecha_nacimiento', 'diagnostico', 'alergias', 'observaciones', 'nombre_medico', 'cedula_medico', 'remision'],
+            'solicitud_oncos' => ['servicio', 'sexo', 'edad', 'peso', 'talla', 'superficie_corporal', 'cama', 'piso', 'registro_paciente', 'fecha_nacimiento', 'diagnostico', 'alergias', 'observaciones', 'nombre_medico', 'cedula_medico', 'remision'],
             'mezclas' => ['tiempo_infusion', 'set_infusion', 'infusor_id'],
             'mezcla_medicamentos' => ['medicamento_id', 'diluyente_id', 'via_administracion_id', 'charge_by', 'precio_mg_snapshot', 'precio_ml_snapshot', 'requires_infusor_snapshot', 'conc_min_snapshot', 'conc_max_snapshot'],
             'solicitud_inputs' => ['solicitud_id', 'input_id', 'nutrition_medicine_presentation_id', 'valor', 'valor_ml', 'valor_sobrellenado', 'precio_ml'],
@@ -122,6 +122,20 @@ class QuotationPreparationData
         return $quote;
     }
 
+    public static function withRequirements(RequestQuotation $quote): RequestQuotation
+    {
+        $data = $quote->clinical_data;
+        $data['requirements'] = [
+            ['mixture_number' => 1, 'medicine' => $data['items'][0]['product_name'], 'concentration' => 175.5555],
+            ['mixture_number' => 1, 'medicine' => 'Segundo medicamento', 'concentration' => 50],
+            ['mixture_number' => 2, 'medicine' => 'Segundo medicamento', 'concentration' => 20],
+        ];
+        $capture = app(RequestQuotationCaptureService::class)->capture(auth()->user(), $data, true);
+        unset($capture['pricing_token']);
+        $quote->forceFill($capture)->save();
+        return $quote;
+    }
+
     public static function payload(string $category = 'oncologicos', int $count = 1): array
     {
         if ($category === 'nutricionales') return [
@@ -133,6 +147,7 @@ class QuotationPreparationData
         return [
             'tipo_solicitud' => $category, 'paciente_nombre' => 'Paciente Prueba', 'servicio' => 'Servicio de prueba',
             'registro' => 'TEST-001', 'sexo' => 'F', 'fecha_nacimiento' => '1990-01-01', 'peso' => 60,
+            'talla' => 160, 'superficie_corporal' => 1.6,
             'piso' => '1', 'cama' => '2', 'diagnostico' => 'Diagnostico de prueba',
             'medico_nombre' => 'Medico de prueba', 'medico_cedula' => 'TEST-123', 'cantidad_mezclas' => $count,
             'mezclas' => json_encode(array_fill(0, $count, ['volumen_dilucion' => 100, 'tiempo_infusion' => 60,

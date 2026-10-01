@@ -25,6 +25,7 @@ class ClinicalAgentChatTest extends TestCase
         parent::setUp();
         AgentFixture::seed();
         (require database_path('migrations/2026_09_29_000001_create_clinical_support.php'))->up();
+        (require database_path('migrations/2026_09_30_000007_version_clinical_manual_sources.php'))->up();
         (require database_path('migrations/2026_09_29_000003_create_clinical_agent_conversations.php'))->up();
         $this->agent = AiAgent::forceCreate(['name' => ClinicalEvidence::NAME, 'integration_key' => ClinicalEvidence::KEY,
             'instructions' => ClinicalEvidence::INSTRUCTIONS, 'is_active' => true]);

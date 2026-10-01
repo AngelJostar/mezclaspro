@@ -32,6 +32,8 @@ test('quoted requests reuse category forms and lock commercial quantities on des
                     assert.equal(await form.locator('[data-quoted-summary] thead th').count(), 4);
                     const concentrationUnit = category === 'nutricionales' ? 'mL' : 'mg';
                     const content = category === 'antibioticos' ? 500 : 100;
+                    assert.equal(await form.getByText('Sin requerimiento registrado en la cotizacion.', { exact: true }).count(), 1);
+                    assert.deepEqual(await form.locator('[data-required-concentration]').allTextContents(), Array(count).fill('No registrada'));
                     assert.deepEqual(await form.locator('[data-presentation-concentration]').allTextContents(), Array(count).fill(`${content} ${concentrationUnit}`));
                     assert.equal(await form.locator('[data-quoted-medication-total] td').textContent(), `${formatQuantity((unit === 'frasco' ? content * 2 : 50) * count)} ${concentrationUnit}`);
                     assert.deepEqual(await form.locator('[data-quoted-concentration]').allTextContents(), Array(count).fill(`${formatQuantity(unit === 'frasco' ? content * 2 : 50)} ${concentrationUnit}`));
@@ -46,7 +48,6 @@ test('quoted requests reuse category forms and lock commercial quantities on des
                         assert.equal(await form.locator('[name=apellidos_paciente]').inputValue(), 'Prueba');
                         assert.equal(await form.locator('[name=volumen_total]').isDisabled(), true);
                     } else {
-                        assert.deepEqual(await form.locator('[data-required-concentration]').allTextContents(), Array(count).fill(unit === 'frasco' ? 'Pendiente' : '50 mg'));
                         assert.equal(await form.locator('[name=cantidad_mezclas]').inputValue(), String(count));
                         const medicine = form.locator('[data-name=medicamento]');
                         assert.equal(await medicine.count(), count);
@@ -72,13 +73,13 @@ test('quoted requests reuse category forms and lock commercial quantities on des
     } finally { await browser.close(); }
 });
 
-test('presentations share a medication name and quoted concentration without merging their dose inputs', async () => {
+test('original requirements remain per medicine and mixture independently of presentations and dose inputs', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
     try {
         for (const category of ['oncologicos', 'antibioticos']) {
             for (const unit of ['frasco', 'mg']) {
                 const source = execFileSync('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3',
-                    'tests/Browser/fixtures/quotation-preparation.php', category, unit, '2', 'presentations'], { cwd: root, encoding: 'utf8' });
+                    'tests/Browser/fixtures/quotation-preparation.php', category, unit, '2', 'presentations', 'requirements'], { cwd: root, encoding: 'utf8' });
                 for (const width of [1440, 390]) {
                     const page = await browser.newPage({ viewport: { width, height: 1100 } });
                     const errors = [];
@@ -88,6 +89,11 @@ test('presentations share a medication name and quoted concentration without mer
                     await page.goto('http://localhost/test-preparation');
                     const form = page.locator('[data-quotation-preparation]');
                     const summary = form.locator('[data-quoted-summary]');
+                    const recipe = form.locator('[data-quoted-requirements]');
+                    assert.equal(await recipe.locator('tbody tr').count(), 3);
+                    assert.deepEqual(await recipe.locator('tbody tr td:first-child').allTextContents(), ['Mezcla 1', 'Mezcla 1', 'Mezcla 2']);
+                    assert.deepEqual(await recipe.locator('tbody tr td:last-child').allTextContents(), ['175.5555 mg', '50 mg', '20 mg']);
+                    assert.equal(await recipe.evaluate(table => table.scrollWidth <= table.parentElement.clientWidth + 1), true);
                     assert.deepEqual(await summary.locator('[data-presentation-concentration]').allTextContents(), ['100 mg', '50 mg', '25 mg', '25 mg']);
                     assert.deepEqual(await summary.locator('[data-quoted-medication-total] td').allTextContents(), unit === 'frasco' ? ['250 mg', '100 mg'] : ['50 mg', '25 mg']);
                     const tables = form.locator('.quoted-medicine-table');
@@ -102,39 +108,32 @@ test('presentations share a medication name and quoted concentration without mer
                     assert.equal(await first.locator('[data-quoted-concentration]').first().getAttribute('rowspan'), '2');
                     const required = first.locator('[data-required-concentration]');
                     assert.equal(await required.first().getAttribute('rowspan'), '2');
-                    assert.deepEqual(await required.allTextContents(), unit === 'frasco' ? ['Pendiente', 'Pendiente'] : ['50 mg', '20 mg']);
+                    assert.deepEqual(await required.allTextContents(), ['175.5555 mg', '50 mg']);
+                    assert.equal(await tables.nth(1).locator('[data-required-concentration]').textContent(), '20 mg');
                     assert.deepEqual(await first.locator('[data-name=medicamento]').evaluateAll(inputs => inputs.map(input => input.value)), [category === 'antibioticos' ? '2' : '1', category === 'antibioticos' ? '2' : '1', '10']);
                     const doses = first.locator('[data-name=dosis]');
                     if (unit === 'frasco') {
+                        assert.deepEqual(await doses.evaluateAll(inputs => inputs.map(input => input.value)), ['', '', '']);
                         await doses.nth(0).fill('150');
-                        assert.equal(await required.first().textContent(), 'Pendiente');
                         await doses.nth(1).fill('25');
-                        assert.deepEqual(await required.allTextContents(), ['175 mg', 'Pendiente']);
                         await doses.nth(2).fill('50');
-                        assert.deepEqual(await required.allTextContents(), ['175 mg', '50 mg']);
-                        assert.equal(await tables.nth(1).locator('[data-required-concentration]').textContent(), 'Pendiente');
                         await tables.nth(1).locator('[data-name=dosis]').fill('20');
-                        assert.equal(await tables.nth(1).locator('[data-required-concentration]').textContent(), '20 mg');
-                        assert.deepEqual(await required.allTextContents(), ['175 mg', '50 mg']);
+                        assert.deepEqual(await required.allTextContents(), ['175.5555 mg', '50 mg']);
                         assert.equal(await doses.nth(0).inputValue(), '150');
                         assert.equal(await doses.nth(1).inputValue(), '25');
                         assert.equal(await doses.nth(0).getAttribute('max'), '200');
                         assert.equal(await doses.nth(1).getAttribute('max'), '50');
                         await doses.nth(1).fill('51');
                         assert.equal(await doses.nth(1).evaluate(input => input.validity.rangeOverflow), true);
-                        assert.equal(await required.first().textContent(), 'Revisar dosis');
-                        await doses.nth(1).fill('0');
-                        assert.equal(await required.first().textContent(), 'Revisar dosis');
-                        await doses.nth(1).fill('');
-                        assert.equal(await required.first().textContent(), 'Pendiente');
-                        await doses.nth(0).fill('150.1234'); await doses.nth(1).fill('25.4321');
                         assert.equal(await required.first().textContent(), '175.5555 mg');
-                        await doses.nth(0).fill('150');
+                        await doses.nth(1).fill('0');
+                        assert.equal(await required.first().textContent(), '175.5555 mg');
+                        await doses.nth(1).fill('');
+                        assert.equal(await required.first().textContent(), '175.5555 mg');
                         await doses.nth(1).fill('25');
-                        assert.deepEqual(await required.allTextContents(), ['175 mg', '50 mg']);
+                        assert.deepEqual(await required.allTextContents(), ['175.5555 mg', '50 mg']);
                         assert.deepEqual(await first.locator('[data-quoted-concentration]').allTextContents(), ['250 mg', '75 mg']);
                     } else {
-                        assert.equal(await tables.nth(1).locator('[data-required-concentration]').textContent(), '5 mg');
                         assert.deepEqual(await doses.evaluateAll(inputs => inputs.map(input => input.value)), ['40', '10', '20']);
                         assert.equal(await doses.evaluateAll(inputs => inputs.every(input => input.readOnly)), true);
                     }

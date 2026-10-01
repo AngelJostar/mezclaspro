@@ -6,6 +6,7 @@
             <table class="quoted-nutrition-table" data-disable-column-filters>
                 <thead class="bg-gray-50"><tr>
                     <th scope="col">Medicamento</th><th scope="col">Concentraci&oacute;n cotizada</th>
+                    <th scope="col">Concentraci&oacute;n requerida</th>
                     <th scope="col">Presentaci&oacute;n</th><th scope="col">Volumen (mL)</th>
                 </tr></thead>
                 <tbody>
@@ -15,6 +16,7 @@
                                 @if ($loop->first)
                                     <th scope="rowgroup" rowspan="{{ count($medication['items']) }}">{{ $medication['name'] }}</th>
                                     <td rowspan="{{ count($medication['items']) }}" data-quoted-concentration="{{ $medication['catalog_id'] }}">{{ $medication['quoted_concentration'] === null ? 'Concentracion incompleta' : $formatConcentration($medication['quoted_concentration']).' mL' }}</td>
+                                    <td rowspan="{{ count($medication['items']) }}" data-required-concentration="{{ $medication['catalog_id'] }}">{{ $medication['required_concentration'] === null ? 'No registrada' : $formatConcentration($medication['required_concentration']).' mL' }}</td>
                                 @endif
                                 <td>{{ $item['presentation'] }}</td>
                                 <td>
