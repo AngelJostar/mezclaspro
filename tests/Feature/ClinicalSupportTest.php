@@ -812,6 +812,56 @@ class ClinicalSupportTest extends TestCase
         }
     }
 
+    public function test_reviewed_non_blocking_suggestion_allows_submission_after_risk_acknowledgement(): void
+    {
+        $answer = $this->answer('needs_review');
+        $answer['findings'] = [[
+            'field' => 'i_4_g/Kg',
+            'severity' => 'advisory',
+            'category' => 'dose_recommendation',
+            'message' => 'La fuente revisada presenta una alternativa opcional para este parámetro.',
+            'calculation' => '',
+            'suggestion' => 'Componente de prueba: considerar 45 g/Kg conforme a S2, sección de recomendaciones opcionales.',
+            'source_ids' => ['S2'],
+        ]];
+        $this->fake($answer);
+        $review = $this->review();
+        $response = app(ClinicalReviewService::class)->response($review, $this->user);
+
+        $this->assertTrue($review->can_submit);
+        $this->assertSame('advisory', $review->result['status']);
+        $this->assertSame('sugerencia', $review->result['findings'][0]['observation_type']);
+        $this->assertTrue($response['requires_risk_acknowledgement']);
+        $this->assertFalse($response['requires_medical_authorization']);
+
+        $data = $this->data() + ['clinical_review_token' => $review->id, 'clinical_acknowledged' => '1'];
+        app(ClinicalReviewService::class)->requireSubmission($this->request($data), 'nutricionales');
+        $this->assertTrue(true);
+    }
+
+    public function test_advisory_cannot_bypass_safety_or_unreviewed_evidence(): void
+    {
+        foreach ([['category' => 'safety', 'source_ids' => ['S2']], ['category' => 'dose_recommendation', 'source_ids' => ['S1']]] as $invalid) {
+            $answer = $this->answer('needs_review');
+            $answer['findings'] = [[
+                'field' => 'i_4_g/Kg',
+                'severity' => 'advisory',
+                'category' => $invalid['category'],
+                'message' => 'Hallazgo sintetico que no debe habilitar el envio.',
+                'calculation' => '',
+                'suggestion' => 'Ajuste sintetico de prueba.',
+                'source_ids' => $invalid['source_ids'],
+            ]];
+            $this->fake($answer);
+            $review = $this->review();
+
+            $this->assertFalse($review->can_submit);
+            $this->assertSame('needs_review', $review->result['status']);
+            $this->assertSame('review', $review->result['findings'][0]['severity']);
+            $this->assertFalse($review->result['requires_risk_acknowledgement']);
+        }
+    }
+
     public function test_policy_migration_updates_visible_instructions_without_resetting_profile_or_approving_sources(): void
     {
         $this->agent->update(['instructions' => 'Perfil personalizado de prueba.', 'is_active' => false]);

@@ -10,6 +10,8 @@ use App\Models\Oncologicos\MedicinePresentation;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class MedicineCatalogController extends Controller
 {
@@ -88,13 +90,15 @@ class MedicineCatalogController extends Controller
 
         $selectedDiluents = $medicamento->diluents->pluck('id')->all();
         $selectedRoutes   = $medicamento->administrationRoutes->pluck('id')->all();
+        $deletionBlockers = $this->deletionBlockers($medicamento);
 
         return view('admin.oncologicos.catalog.edit', compact(
             'medicamento',
             'diluents',
             'routes',
             'selectedDiluents',
-            'selectedRoutes'
+            'selectedRoutes',
+            'deletionBlockers'
         ));
     }
 
@@ -176,13 +180,71 @@ class MedicineCatalogController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
+        $this->ensureSuperAdminCanEdit();
         $medicamento = MedicinesCatalog::findOrFail($id);
-        $medicamento->update(['state' => false]);
 
-        return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'oncologicos'])
-            ->with('success', 'Medicamento deshabilitado correctamente.');
+        $request->validate([
+            'confirmation' => ['required', Rule::in([$medicamento->denominacion])],
+        ], [
+            'confirmation.required' => 'Escribe la denominación para confirmar la eliminación.',
+            'confirmation.in' => 'La denominación capturada no coincide con el medicamento.',
+        ]);
+
+        try {
+            DB::transaction(function () use ($medicamento) {
+                $lockedMedicine = MedicinesCatalog::query()->lockForUpdate()->findOrFail($medicamento->id);
+                $blockers = $this->deletionBlockers($lockedMedicine);
+
+                if ($blockers !== []) {
+                    throw new \DomainException('No se puede eliminar porque tiene '.implode(', ', $blockers).'. Deshabilítalo para conservar el historial.');
+                }
+
+                $presentationIds = $lockedMedicine->presentations()->pluck('id');
+                if ($presentationIds->isNotEmpty() && Schema::hasTable('minimum_stock_settings')) {
+                    DB::table('minimum_stock_settings')
+                        ->where('product_type', 'medicine')
+                        ->whereIn('presentation_id', $presentationIds)
+                        ->delete();
+                }
+
+                $lockedMedicine->delete();
+            });
+
+            return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'oncologicos'])
+                ->with('success', 'El medicamento y sus presentaciones se eliminaron definitivamente.');
+        } catch (\DomainException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->back()->withErrors([
+                'error' => 'No fue posible eliminar el medicamento. No se realizó ningún cambio.',
+            ]);
+        }
+    }
+
+    private function deletionBlockers(MedicinesCatalog $medicine): array
+    {
+        $presentationIds = $medicine->presentations()->pluck('id');
+        $blockers = [];
+
+        if ($medicine->medicineOncos()->exists()) {
+            $blockers[] = 'solicitudes o listas históricas';
+        }
+        if ($presentationIds->isNotEmpty() && DB::table('medicine_batches')->whereIn('medicine_presentation_id', $presentationIds)->exists()) {
+            $blockers[] = 'inventario o movimientos';
+        }
+        if ($presentationIds->isNotEmpty() && DB::table('medicine_list_presentation')->whereIn('medicine_presentation_id', $presentationIds)->exists()) {
+            $blockers[] = 'listas de precios';
+        }
+        if ($presentationIds->isNotEmpty() && Schema::hasTable('medicine_remainders')
+            && DB::table('medicine_remainders')->whereIn('medicine_presentation_id', $presentationIds)->exists()) {
+            $blockers[] = 'remanentes registrados';
+        }
+
+        return $blockers;
     }
 
     private function ensureSuperAdminCanEdit(): void

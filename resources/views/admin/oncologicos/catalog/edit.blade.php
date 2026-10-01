@@ -25,6 +25,30 @@
             <section><div class="mb-3 flex justify-between"><h2 class="text-lg font-semibold">Presentaciones</h2><button type="button" id="add-presentation" class="rounded bg-blue-900 px-3 py-2 text-sm font-semibold text-white">Agregar presentacion</button></div><div id="presentation-rows" class="space-y-4"></div></section>
             <div class="flex justify-end"><x-button>Guardar cambios</x-button></div>
         </form>
+
+        <section class="mt-6 rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-red-800">Eliminar medicamento definitivamente</h2>
+            @if ($deletionBlockers === [])
+                <p class="mt-2 text-sm text-red-700">
+                    Esta acción eliminará el medicamento, sus presentaciones y relaciones de catálogo. No se puede deshacer.
+                </p>
+                <form id="delete-oncology-medicine-form" class="mt-4"
+                    action="{{ route('admin.oncologicos.medicines.catalog.destroy', $medicamento) }}" method="POST">
+                    @csrf
+                    @method('DELETE')
+                    <input type="hidden" name="confirmation" id="delete-oncology-medicine-confirmation">
+                    <button type="button" id="delete-oncology-medicine-button"
+                        class="inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 focus:outline-none focus:ring-4 focus:ring-red-300">
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                        Eliminar medicamento
+                    </button>
+                </form>
+            @else
+                <p class="mt-2 text-sm text-red-700">
+                    No puede eliminarse porque tiene {{ implode(', ', $deletionBlockers) }}. Puedes deshabilitarlo para conservar el historial.
+                </p>
+            @endif
+        </section>
     </div>
 
     <template id="presentation-template">
@@ -73,6 +97,39 @@
             }
             (initialPresentations.length ? initialPresentations : [{}]).forEach(addPresentation);
             document.getElementById('add-presentation').onclick = () => addPresentation({is_available: 1});
+
+            const deleteButton = document.getElementById('delete-oncology-medicine-button');
+            if (deleteButton) {
+                const expectedName = @json($medicamento->denominacion);
+                deleteButton.addEventListener('click', async function() {
+                    const escapedName = expectedName.replace(/[&<>'"]/g, character => ({
+                        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+                    })[character]);
+                    const result = await Swal.fire({
+                        icon: 'warning',
+                        title: 'Eliminar medicamento definitivamente',
+                        html: `Para confirmar, escribe exactamente:<br><strong>${escapedName}</strong>`,
+                        input: 'text',
+                        inputAttributes: { autocomplete: 'off' },
+                        showCancelButton: true,
+                        confirmButtonText: 'Eliminar definitivamente',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#b91c1c',
+                        preConfirm: value => {
+                            if (value !== expectedName) {
+                                Swal.showValidationMessage('La denominación no coincide.');
+                                return false;
+                            }
+                            return value;
+                        }
+                    });
+
+                    if (result.isConfirmed) {
+                        document.getElementById('delete-oncology-medicine-confirmation').value = result.value;
+                        document.getElementById('delete-oncology-medicine-form').submit();
+                    }
+                });
+            }
         </script>
     @endpush
 </x-admin-layout>

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AiAgentProviderSetting;
+use App\Services\OpenAiProviderConfiguration;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -33,8 +34,9 @@ class ConfigureOpenAiDeployment extends Command
         try {
             $settings = AiAgentProviderSetting::firstOrNew(['id' => 1]);
             $storedKey = $settings->api_key;
-            $effectiveKey = $key ?: ($storedKey ?: config('services.openai.api_key'));
-            $model = trim((string) ($this->option('model') ?: ($settings->model ?: config('services.openai.model'))));
+            $provider = OpenAiProviderConfiguration::resolve($settings);
+            $effectiveKey = $key ?: $provider['key'];
+            $model = trim((string) ($this->option('model') ?: $provider['model']));
             if (!$effectiveKey) {
                 $this->error('OpenAI sin configurar: agrega OPENAI_API_KEY a los secretos de GitHub o al entorno del VPS.');
                 return self::FAILURE;

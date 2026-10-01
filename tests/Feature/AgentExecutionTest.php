@@ -29,7 +29,7 @@ class AgentExecutionTest extends TestCase
         AgentAuditData::seed();
         $this->travelTo(now()->setDate(2026, 9, 14)->setTime(12, 0));
         Http::preventStrayRequests();
-        config(['services.openai.api_key' => null]);
+        config(['services.openai.api_key' => null, 'services.openai.prefer_environment' => false]);
     }
 
     private function agent(string $rule, array $overrides = []): AiAgent
@@ -288,6 +288,33 @@ class AgentExecutionTest extends TestCase
         Http::assertSent(fn ($request) => $request['store'] === false && $request['text']['format']['type'] === 'json_schema'
             && ! isset($request['tools']) && ! str_contains($request['input'], 'RAW-LOT-NOT-SENT'));
         $this->assertEquals(5, DB::table('medicine_batches')->value('stock_actual'));
+    }
+
+    public function test_local_environment_credentials_can_take_priority_over_database_credentials(): void
+    {
+        AiAgentProviderSetting::updateOrCreate(['id' => 1], [
+            'api_key' => 'sk-database-'.str_repeat('d', 32),
+            'model' => 'database-model',
+        ]);
+        config([
+            'services.openai.api_key' => 'sk-environment-'.str_repeat('e', 32),
+            'services.openai.model' => 'environment-model',
+            'services.openai.prefer_environment' => true,
+        ]);
+        Http::fake(['api.openai.com/v1/responses' => Http::response([
+            'status' => 'completed',
+            'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode([
+                'summary' => 'Revision completada.',
+                'recommendations' => [],
+            ])]]]],
+        ], 200)]);
+
+        $this->batch();
+        $run = $this->executeAgent($this->agent('expiry', ['analysis' => 'openai']));
+
+        $this->assertSame('completed', $run->status);
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer sk-environment-'.str_repeat('e', 32))
+            && $request['model'] === 'environment-model');
     }
 
     public function test_openai_failure_or_missing_key_preserves_local_results_and_reports_partial_status(): void

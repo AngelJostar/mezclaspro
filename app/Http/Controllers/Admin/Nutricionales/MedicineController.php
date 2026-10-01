@@ -9,6 +9,7 @@ use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class MedicineController extends Controller
@@ -119,8 +120,9 @@ class MedicineController extends Controller
         ]);
 
         $categories = Category::orderBy('name')->get();
+        $deletionBlockers = $this->deletionBlockers($medicine);
 
-        return view('admin.nutricionales.medicines.edit', compact('medicine', 'categories'));
+        return view('admin.nutricionales.medicines.edit', compact('medicine', 'categories', 'deletionBlockers'));
     }
 
     public function update(Request $request, NutritionMedicineCatalog $medicine)
@@ -233,30 +235,79 @@ class MedicineController extends Controller
         }
     }
 
-    public function destroy(NutritionMedicineCatalog $medicine)
+    public function destroy(Request $request, NutritionMedicineCatalog $medicine)
     {
-        DB::beginTransaction();
+        $this->ensureSuperAdminCanEdit();
+
+        $request->validate([
+            'confirmation' => ['required', Rule::in([$medicine->denominacion_generica])],
+        ], [
+            'confirmation.required' => 'Escribe la denominación genérica para confirmar la eliminación.',
+            'confirmation.in' => 'La denominación capturada no coincide con el medicamento.',
+        ]);
 
         try {
-            $medicine->presentations()->delete();
-            $medicine->delete();
+            DB::transaction(function () use ($medicine) {
+                $lockedMedicine = NutritionMedicineCatalog::query()->lockForUpdate()->findOrFail($medicine->id);
+                $blockers = $this->deletionBlockers($lockedMedicine);
 
-            DB::commit();
+                if ($blockers !== []) {
+                    throw new \DomainException('No se puede eliminar porque tiene '.implode(', ', $blockers).'. Inactívalo para conservar el historial.');
+                }
+
+                $presentationIds = $lockedMedicine->presentations()->pluck('id');
+                if ($presentationIds->isNotEmpty() && Schema::hasTable('minimum_stock_settings')) {
+                    DB::table('minimum_stock_settings')
+                        ->where('product_type', 'nutrition')
+                        ->whereIn('presentation_id', $presentationIds)
+                        ->delete();
+                }
+
+                $input = $lockedMedicine->input;
+                $lockedMedicine->delete();
+                $input?->delete();
+            });
 
             session()->flash('swal', [
-                'title' => '¡Bien hecho!',
-                'text' => 'El medicamento genérico se eliminó correctamente.',
-                'icon' => 'success'
+                'title' => 'Medicamento eliminado',
+                'text' => 'El medicamento, sus presentaciones y su campo de solicitud se eliminaron definitivamente.',
+                'icon' => 'success',
             ]);
 
             return redirect()->route('admin.catalogo-listas.catalog', ['category' => 'nutricionales']);
+        } catch (\DomainException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
-            DB::rollBack();
+            report($e);
 
             return redirect()->back()->withErrors([
-                'error' => $e->getMessage()
+                'error' => 'No fue posible eliminar el medicamento. No se realizó ningún cambio.',
             ]);
         }
+    }
+
+    private function deletionBlockers(NutritionMedicineCatalog $medicine): array
+    {
+        $presentationIds = $medicine->presentations()->pluck('id');
+        $blockers = [];
+
+        if (DB::table('solicitud_inputs')->where('input_id', $medicine->input_id)
+            ->when($presentationIds->isNotEmpty(), fn ($query) => $query->orWhereIn('nutrition_medicine_presentation_id', $presentationIds))
+            ->exists()) {
+            $blockers[] = 'solicitudes registradas';
+        }
+        if ($presentationIds->isNotEmpty() && DB::table('medicine_laboratory_stocks')->whereIn('nutrition_medicine_presentation_id', $presentationIds)->exists()) {
+            $blockers[] = 'inventario o movimientos';
+        }
+        if ($presentationIds->isNotEmpty() && DB::table('nutri_medicine_list_items')->whereIn('nutrition_medicine_presentation_id', $presentationIds)->exists()) {
+            $blockers[] = 'listas de precios';
+        }
+        if ($presentationIds->isNotEmpty() && Schema::hasTable('medicine_remainders')
+            && DB::table('medicine_remainders')->whereIn('nutrition_medicine_presentation_id', $presentationIds)->exists()) {
+            $blockers[] = 'remanentes registrados';
+        }
+
+        return $blockers;
     }
 
     private function ensureSuperAdminCanEdit(): void

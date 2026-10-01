@@ -6,6 +6,8 @@ use App\Models\Nutricionales\Category;
 use App\Models\Nutricionales\Input;
 use App\Models\Nutricionales\NutritionMedicineCatalog;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
+use App\Models\Nutricionales\NutriMedicineList;
+use App\Models\Nutricionales\NutriMedicineListItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -145,6 +147,87 @@ class NutritionMedicineRequestFieldTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.nutricionales.medicines.create'))
             ->assertRedirect(route('admin.catalogo-listas.products.create', ['category' => 'nutricionales']));
+    }
+
+    public function test_super_admin_can_permanently_delete_an_unused_duplicate_medicine(): void
+    {
+        $admin = $this->superAdmin();
+        [$input, $medicine, $presentation] = $this->nutritionMedicine('Duplicado de prueba');
+
+        $this->actingAs($admin)
+            ->delete(route('admin.nutricionales.medicines.destroy', $medicine), [
+                'confirmation' => 'Duplicado de prueba',
+            ])
+            ->assertRedirect(route('admin.catalogo-listas.catalog', ['category' => 'nutricionales']))
+            ->assertSessionHas('swal');
+
+        $this->assertDatabaseMissing('nutrition_medicine_presentations', ['id' => $presentation->id]);
+        $this->assertDatabaseMissing('nutrition_medicines_catalog', ['id' => $medicine->id]);
+        $this->assertDatabaseMissing('inputs', ['id' => $input->id]);
+    }
+
+    public function test_permanent_delete_is_blocked_when_a_price_list_uses_the_medicine(): void
+    {
+        $admin = $this->superAdmin();
+        [, $medicine, $presentation] = $this->nutritionMedicine('Medicamento con historial');
+        $list = NutriMedicineList::query()->create(['name' => 'Lista vigente']);
+        NutriMedicineListItem::query()->create([
+            'nutri_medicine_list_id' => $list->id,
+            'nutrition_medicine_presentation_id' => $presentation->id,
+            'precio_ml' => 10,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.nutricionales.medicines.edit', $medicine))
+            ->delete(route('admin.nutricionales.medicines.destroy', $medicine), [
+                'confirmation' => 'Medicamento con historial',
+            ])
+            ->assertRedirect(route('admin.nutricionales.medicines.edit', $medicine))
+            ->assertSessionHasErrors('error');
+
+        $this->assertDatabaseHas('nutrition_medicines_catalog', ['id' => $medicine->id]);
+        $this->assertDatabaseHas('nutrition_medicine_presentations', ['id' => $presentation->id]);
+    }
+
+    public function test_non_super_admin_cannot_permanently_delete_a_nutrition_medicine(): void
+    {
+        $permission = Permission::query()->create(['name' => 'medicamentos_nutricionales', 'guard_name' => 'web']);
+        $role = Role::query()->create(['name' => 'Admin', 'guard_name' => 'web']);
+        $role->givePermissionTo($permission);
+        $user = User::query()->create([
+            'name' => 'Administrador', 'lastname' => 'Limitado', 'username' => 'nutrition.limited',
+            'password' => Hash::make('secret'), 'is_active' => true,
+        ]);
+        $user->assignRole($role);
+        [, $medicine] = $this->nutritionMedicine('Duplicado protegido');
+
+        $this->actingAs($user)
+            ->delete(route('admin.nutricionales.medicines.destroy', $medicine), [
+                'confirmation' => 'Duplicado protegido',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('nutrition_medicines_catalog', ['id' => $medicine->id]);
+    }
+
+    private function nutritionMedicine(string $name): array
+    {
+        $category = Category::query()->create(['name' => 'Categoría '.$name]);
+        $input = Input::query()->create([
+            'description' => $name, 'unidad' => 'mL', 'is_active' => true, 'tipo_input' => 'ambos',
+            'orden_enum' => 50, 'category_id' => $category->id, 'mult' => 1, 'div' => 1,
+        ]);
+        $medicine = NutritionMedicineCatalog::query()->create([
+            'denominacion_generica' => $name, 'category_id' => $category->id,
+            'input_id' => $input->id, 'is_active' => true,
+        ]);
+        $presentation = NutritionMedicinePresentation::query()->create([
+            'nutrition_medicine_catalog_id' => $medicine->id,
+            'denominacion_comercial' => 'Marca '.$name, 'presentacion' => 'Frasco 10 mL',
+            'presentacion_ml' => 10, 'stability_hours' => 24, 'is_available' => true,
+        ]);
+
+        return [$input, $medicine, $presentation];
     }
 
     private function superAdmin(): User

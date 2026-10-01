@@ -10,6 +10,7 @@ use App\Models\Oncologicos\Laboratory;
 use App\Models\Warehouse;
 use App\Services\Agents\AgentConfiguration;
 use App\Services\Agents\AgentRunner;
+use App\Services\OpenAiProviderConfiguration;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -275,6 +276,7 @@ class AgentCenter extends Component
     public function render()
     {
         $this->authorizeAccess();
+        $provider = OpenAiProviderConfiguration::resolve();
 
         return view('livewire.admin.agent-center', [
             'agents' => AiAgent::query()->orderBy('name')->get(),
@@ -282,8 +284,8 @@ class AgentCenter extends Component
             'institutions' => $this->showAgentForm ? Institucion::orderBy('nombre')->get(['id', 'nombre']) : collect(),
             'laboratories' => $this->showAgentForm ? Laboratory::orderBy('nombre')->get(['id', 'nombre']) : collect(),
             'warehouses' => $this->showAgentForm ? Warehouse::orderBy('name')->get(['id', 'name', 'laboratory_id']) : collect(),
-            'providerConfigured' => (bool) config('services.openai.api_key') || AiAgentProviderSetting::whereNotNull('api_key')->exists(),
-            'providerModel' => AiAgentProviderSetting::value('model') ?: config('services.openai.model'),
+            'providerConfigured' => (bool) $provider['key'],
+            'providerModel' => $provider['model'],
             'schedulerSeen' => Cache::get('agents:scheduler-heartbeat'),
         ]);
     }

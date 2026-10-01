@@ -12,11 +12,14 @@
 .clinical-review [data-clinical-ack] input { flex-shrink: 0; margin-top: 3px; }
 .clinical-error, .clinical-review [data-clinical-error], .clinical-review [data-severity=blocking] { color: #a32222; }
 .clinical-review [data-severity=review] { color: #8b580d; }
+.clinical-review [data-severity=advisory] { color: #8b580d; }
 .clinical-field-error, .clinical-field-required-error { outline: 2px solid #b42318 !important; outline-offset: 2px; border-color: #b42318 !important; }
+.clinical-field-advisory { outline: 2px solid #b7791f !important; outline-offset: 2px; border-color: #b7791f !important; }
 .clinical-status { font-weight: 600; color: #136639; }
 [data-clinical-status=blocked] .clinical-status { color: #a32222; }
 [data-clinical-status=needs_review] .clinical-status { color: #8b580d; }
 [data-clinical-status=authorization_required] .clinical-status { color: #8b580d; }
+[data-clinical-status=advisory] .clinical-status { color: #8b580d; }
 .clinical-review [data-severity=authorization] { color: #8b580d; }
 .clinical-authorization { min-width: 0; margin-block: 18px; padding: 16px; border: 1px solid #c4d9e6; border-left: 4px solid #169056; border-radius: 4px; background: #f5fafc; }
 .clinical-authorization legend { font-weight: 600; color: #153962; padding-inline: 6px; }

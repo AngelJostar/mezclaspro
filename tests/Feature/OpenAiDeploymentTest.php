@@ -22,7 +22,7 @@ class OpenAiDeploymentTest extends TestCase
     {
         parent::setUp();
         AgentCenter::seed();
-        config(['services.openai.api_key' => null, 'services.openai.model' => 'gpt-4.1-mini']);
+        config(['services.openai.api_key' => null, 'services.openai.model' => 'gpt-4.1-mini', 'services.openai.prefer_environment' => false]);
         Http::preventStrayRequests();
     }
 

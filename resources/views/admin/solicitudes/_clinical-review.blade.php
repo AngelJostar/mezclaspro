@@ -26,6 +26,6 @@
         </div>
         <p class="clinical-notice">Los datos de autorizacion quedan en PROMESA. No se envian a OpenAI. Esta captura no verifica automaticamente la identidad ni la cedula del medico.</p>
     </fieldset>
-    <label data-clinical-ack hidden><input type="checkbox" name="clinical_acknowledged" value="1"> He revisado las observaciones de la IA y confirmo los cambios que capture. Enviar la solicitud no autoriza su preparacion.</label>
+    <label data-clinical-ack hidden><input type="checkbox" name="clinical_acknowledged" value="1"> <span data-clinical-ack-text>He revisado las observaciones de la IA y confirmo los cambios que capture. Enviar la solicitud no autoriza su preparacion.</span></label>
     @error('clinical_review')<p class="clinical-error" role="alert">{{ $message }}</p>@enderror
 </section>

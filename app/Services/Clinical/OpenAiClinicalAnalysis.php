@@ -3,6 +3,7 @@
 namespace App\Services\Clinical;
 
 use App\Models\AiAgentProviderSetting;
+use App\Services\OpenAiProviderConfiguration;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
@@ -22,6 +23,7 @@ No pidas talla ni superficie corporal en nutricion; usa peso y edad. En oncologi
 sin deducirlas ni modificar dosis. Un campo lleno no garantiza suficiencia clinica.
 Clasifica las observaciones del manual como ADVERTENCIA (severity=warning) o RECHAZO (severity=blocking).
 Toda ADVERTENCIA impide el envio sin autorizacion medica registrada. No la uses como nota informativa no bloqueante.
+Usa advisory unicamente para sugerencias opcionales que la fuente revisada no clasifica como limite, requisito, advertencia o rechazo. Advisory permite continuar bajo responsabilidad profesional; nunca lo uses para riesgos de seguridad, evidencia incompleta ni datos obligatorios faltantes.
 Para desviaciones de recomendaciones de dosis usa category=dose_recommendation y cita un protocolo revisado
 allows_medical_authorization=true que expresamente permita esa excepcion para el caso.
 Para desviaciones de recomendaciones quimicas usa category=chemical_recommendation y un protocolo revisado
@@ -52,11 +54,12 @@ PROMPT;
     public function analyze(array $payload, array $sources, string $instructions): array
     {
         $settings = AiAgentProviderSetting::find(1);
-        $key = $settings?->api_key ?: config('services.openai.api_key');
+        $provider = OpenAiProviderConfiguration::resolve($settings);
+        $key = $provider['key'];
         if (!$key) throw new \RuntimeException('Falta configurar la clave API de OpenAI en Superadministrador.');
         if (RateLimiter::tooManyAttempts('clinical-openai', 10)) throw new \RuntimeException('Limite temporal de consultas clinicas alcanzado. Intenta mas tarde.');
         RateLimiter::hit('clinical-openai', 60);
-        $model = $settings?->model ?: config('services.openai.model');
+        $model = $provider['model'];
         $string = ['type' => 'string'];
         $sourceIds = array_values(array_unique(array_column($sources, 'id')));
         $ids = ['type' => 'array', 'items' => $sourceIds ? $string + ['enum' => $sourceIds] : $string,
@@ -67,7 +70,7 @@ PROMPT;
             'properties' => ['status' => ['type' => 'string', 'enum' => ['blocked', 'needs_review', 'no_blockers']], 'summary' => $string,
                 'findings' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => false,
                     'required' => ['field', 'severity', 'category', 'message', 'calculation', 'suggestion', 'source_ids'], 'properties' => [
-                        'field' => $field, 'severity' => ['type' => 'string', 'enum' => ['blocking', 'review', 'warning', 'authorization', 'information']],
+                        'field' => $field, 'severity' => ['type' => 'string', 'enum' => ['blocking', 'review', 'warning', 'authorization', 'advisory', 'information']],
                         'category' => $string + ['enum' => ['safety', 'dose_recommendation', 'chemical_recommendation', 'missing_clinical_context', 'information', 'internal_comment']],
                         'message' => $string + ['description' => 'Solo el incumplimiento o riesgo concreto del componente y campo de esta mezcla, con valor capturado y criterio aplicable. Sin comentarios generales ni internos.'], 'calculation' => $string,
                         'suggestion' => $string + ['description' => 'Solo ajuste concreto: campo, valor actual y requerido, unidades y criterio de la fuente revisada. Vacio si no hay un ajuste sustentado; nunca avisos genericos.'],
@@ -90,7 +93,7 @@ PROMPT;
             $result = json_decode($text, true, flags: JSON_THROW_ON_ERROR);
             Validator::make($result, ['status' => 'required|in:blocked,needs_review,no_blockers', 'summary' => 'required|string|max:6000',
                 'findings' => 'present|array|max:60', 'findings.*.field' => 'required|string|max:150',
-                'findings.*.severity' => 'required|in:blocking,review,warning,authorization,information', 'findings.*.message' => 'required|string|max:3000',
+                'findings.*.severity' => 'required|in:blocking,review,warning,authorization,advisory,information', 'findings.*.message' => 'required|string|max:3000',
                 'findings.*.category' => 'required|in:safety,dose_recommendation,chemical_recommendation,missing_clinical_context,information,internal_comment',
                 'findings.*.calculation' => 'present|string|max:1500', 'findings.*.suggestion' => 'present|string|max:3000',
                 'findings.*.source_ids' => 'present|array|max:20',
@@ -127,6 +130,11 @@ PROMPT;
                     };
                     $allowed = $permission && collect($finding['source_ids'])->contains(fn ($id) => $known[$id]['reviewed'] && ($known[$id][$permission] ?? false));
                     $finding['severity'] = $allowed ? 'authorization' : 'review';
+                    if ($result['status'] !== 'blocked') $result['status'] = 'needs_review';
+                }
+                if ($finding['severity'] === 'advisory'
+                    && (!in_array($finding['category'], ['dose_recommendation', 'chemical_recommendation'], true) || $finding['suggestion'] === '')) {
+                    $finding['severity'] = 'review';
                     if ($result['status'] !== 'blocked') $result['status'] = 'needs_review';
                 }
                 if ($finding['severity'] === 'information' && !in_array($finding['category'], ['information', 'internal_comment'], true)) {

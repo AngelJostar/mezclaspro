@@ -10,13 +10,13 @@ export function renderClinicalResult(container, data) {
         if (className) element.className = className;
         return element;
     };
-    const titles = { blocked: 'SOLICITUD RECHAZADA', needs_review: 'Revision incompleta', no_blockers: 'Sin bloqueos detectados en la revision', authorization_required: 'Advertencia: requiere autorizacion medica' };
+    const titles = { blocked: 'SOLICITUD RECHAZADA', needs_review: 'Revision incompleta', no_blockers: 'Sin bloqueos detectados en la revision', authorization_required: 'Advertencia: requiere autorizacion medica', advisory: 'Sugerencias no bloqueantes' };
     container.append(paragraph(titles[result.status] || 'Revision pendiente', 'clinical-status'), paragraph(result.summary));
     const list = document.createElement('ul');
     for (const finding of result.findings || []) {
         const item = document.createElement('li'); item.dataset.severity = finding.severity;
-        const observation = finding.observation_type || ({ blocking: 'rechazo', warning: 'advertencia', authorization: 'advertencia' })[finding.severity];
-        if (observation) item.append(paragraph(observation === 'rechazo' ? 'Rechazo:' : 'Advertencia:', 'clinical-status'));
+        const observation = finding.observation_type || ({ blocking: 'rechazo', warning: 'advertencia', authorization: 'advertencia', advisory: 'sugerencia' })[finding.severity];
+        if (observation) item.append(paragraph(observation === 'rechazo' ? 'Rechazo:' : (observation === 'sugerencia' ? 'Sugerencia no bloqueante:' : 'Advertencia:'), 'clinical-status'));
         item.append(paragraph(finding.message));
         if (finding.calculation) item.append(paragraph(finding.calculation));
         if (finding.suggestion) item.append(paragraph(`Sugerencia: ${finding.suggestion}`, 'clinical-suggestion'));
@@ -42,7 +42,7 @@ export function renderClinicalResult(container, data) {
 const states = new WeakMap();
 const fingerprint = form => JSON.stringify([...new FormData(form)].filter(([key]) => !['_token', 'clinical_review_token', 'clinical_acknowledged'].includes(key) && !key.startsWith('medical_authorization[')));
 
-function markField(form, name, required = false) {
+function markField(form, name, required = false, advisory = false) {
     const bracketName = name.replace(/\.([^.[\]]+)/g, '[$1]');
     let field = form.elements.namedItem(name) || form.elements.namedItem(bracketName);
     const match = /^mezclas\.(\d+)\.(?:medicamentos\.(\d+)\.)?(\w+)$/.exec(name);
@@ -52,7 +52,7 @@ function markField(form, name, required = false) {
             : mixture?.querySelector(`[data-name="${match[3]}"]`);
     }
     if (!(field instanceof HTMLElement)) return;
-    field.classList.add(required ? 'clinical-field-required-error' : 'clinical-field-error');
+    field.classList.add(required ? 'clinical-field-required-error' : (advisory ? 'clinical-field-advisory' : 'clinical-field-error'));
     field.setAttribute('aria-invalid', 'true');
     const details = field.closest('[data-clinical-context]');
     if (details) details.open = true;
@@ -63,10 +63,11 @@ function bind(form) {
     const panel = form.querySelector('[data-clinical-review]'), button = form.querySelector('[data-clinical-submit]');
     if (!panel || !button) return null;
     const state = { panel, button, busy: false, snapshot: '', expires: 0, token: form.elements.clinical_review_token,
-        ack: form.elements.clinical_acknowledged, error: panel.querySelector('[data-clinical-error]'), result: panel.querySelector('[data-clinical-result]'),
+        ack: form.elements.clinical_acknowledged, ackText: panel.querySelector('[data-clinical-ack-text]'), error: panel.querySelector('[data-clinical-error]'), result: panel.querySelector('[data-clinical-result]'),
         authorization: panel.querySelector('[data-medical-authorization]'), requiresAuthorization: false, fieldError: false };
     const reset = () => {
         state.token.value = ''; state.snapshot = ''; state.ack.checked = false;
+        if (state.ackText) state.ackText.textContent = 'He revisado las observaciones de la IA y confirmo los cambios que capture. Enviar la solicitud no autoriza su preparacion.';
         panel.querySelector('[data-clinical-ack]').hidden = true;
         state.requiresAuthorization = false;
         if (state.authorization) {
@@ -77,7 +78,9 @@ function bind(form) {
             });
         }
         if (!state.busy) button.textContent = 'Validar y Continuar';
-        form.querySelectorAll('.clinical-field-error').forEach(el => { el.classList.remove('clinical-field-error'); el.removeAttribute('aria-invalid'); });
+        form.querySelectorAll('.clinical-field-error, .clinical-field-advisory').forEach(el => {
+            el.classList.remove('clinical-field-error', 'clinical-field-advisory'); el.removeAttribute('aria-invalid');
+        });
     };
     const changed = event => {
         const field = event.target;
@@ -133,9 +136,12 @@ window.validateClinicalRequest = async form => {
         renderClinicalResult(state.result, data);
         for (const finding of data.result.findings || []) {
             if (finding.severity === 'information') continue;
-            markField(form, finding.field);
+            markField(form, finding.field, false, finding.severity === 'advisory');
         }
         state.requiresAuthorization = Boolean(data.requires_medical_authorization);
+        if (state.ackText && data.result.status === 'advisory') {
+            state.ackText.textContent = 'He revisado las sugerencias no bloqueantes y acepto continuar bajo responsabilidad profesional con los valores capturados. Enviar la solicitud no autoriza su preparacion.';
+        }
         if (state.requiresAuthorization && state.authorization) {
             state.authorization.disabled = false; state.authorization.hidden = false;
         }

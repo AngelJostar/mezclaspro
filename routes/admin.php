@@ -245,7 +245,7 @@ Route::patch('/hospitals/{hospital}/institution', [HospitalController::class, 'c
     ->middleware(['can:hospitales']);
 
 Route::resource('nutricionales/medicines', MedicineController::class)
-    ->except(['show', 'destroy'])
+    ->except(['show'])
     ->middleware(['can:medicamentos_nutricionales'])
     ->names('nutricionales.medicines');
 

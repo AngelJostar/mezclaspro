@@ -4,6 +4,7 @@ namespace App\Services\Agents;
 
 use App\Models\AiAgent;
 use App\Models\AiAgentProviderSetting;
+use App\Services\OpenAiProviderConfiguration;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
@@ -13,11 +14,12 @@ class OpenAiAgentAnalysis
     public function analyze(AiAgent $agent, array $findings, array $issues, array $coverage): array
     {
         $settings = AiAgentProviderSetting::find(1);
-        $key = $settings?->api_key ?: config('services.openai.api_key');
+        $provider = OpenAiProviderConfiguration::resolve($settings);
+        $key = $provider['key'];
         if (! $key) throw new \RuntimeException('OpenAI: falta configurar la clave API. La auditoría local sí se realizó.');
         if (RateLimiter::tooManyAttempts('agent-openai', 20)) throw new \RuntimeException('OpenAI: límite local de 20 consultas por minuto alcanzado.');
         RateLimiter::hit('agent-openai', 60);
-        $model = $settings?->model ?: config('services.openai.model');
+        $model = $provider['model'];
         // Only computed findings leave the application; raw records and patient data never do.
         $facts = collect($findings)->take(30)->map(fn ($finding, $index) => [
             'index' => $index, 'rule' => $finding['rule'], 'finding' => $finding['title'],

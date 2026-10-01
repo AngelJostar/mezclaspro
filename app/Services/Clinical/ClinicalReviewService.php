@@ -51,16 +51,19 @@ class ClinicalReviewService
         // Missing evidence, incomplete responses and local checks cannot be overridden by the model.
         $complete = !$issues && empty($case['missing_context']) && count($result['coverage']) === 4
             && !collect($result['coverage'])->contains(fn ($c) => $c['state'] !== 'reviewed')
-            && !collect($result['findings'])->contains(fn ($f) => !in_array($f['severity'], ['information', 'authorization'], true));
+            && !collect($result['findings'])->contains(fn ($f) => !in_array($f['severity'], ['information', 'authorization', 'advisory'], true));
         $hasException = collect($result['findings'])->contains(fn ($f) => $f['severity'] === 'authorization');
+        $hasAdvisory = collect($result['findings'])->contains(fn ($f) => $f['severity'] === 'advisory');
         $requiresAuthorization = $complete && $hasException && $result['status'] !== 'blocked';
-        $canSubmit = $complete && !$hasException && $result['status'] === 'no_blockers';
+        $canSubmit = $complete && !$hasException && ($result['status'] === 'no_blockers' || ($hasAdvisory && $result['status'] !== 'blocked'));
         if (!$canSubmit && $result['status'] === 'no_blockers') $result['status'] = 'needs_review';
         if (collect($result['findings'])->contains(fn ($f) => $f['severity'] === 'blocking')) $result['status'] = 'blocked';
         if ($requiresAuthorization) $result['status'] = 'authorization_required';
+        elseif ($canSubmit && $hasAdvisory) $result['status'] = 'advisory';
         foreach ($result['findings'] as &$finding) {
             if ($finding['severity'] === 'blocking') $finding['observation_type'] = 'rechazo';
             elseif ($finding['severity'] === 'authorization') $finding['observation_type'] = 'advertencia';
+            elseif ($finding['severity'] === 'advisory') $finding['observation_type'] = 'sugerencia';
         }
         unset($finding);
         // Decide submission before filtering comments; hidden notes cannot clear a clinical block.
@@ -75,11 +78,13 @@ class ClinicalReviewService
         $result['summary'] = match ($result['status']) {
             'blocked' => 'Corrige los parametros senalados y vuelve a validar. No se permite enviar esta formulacion.',
             'authorization_required' => 'La mezcla requiere autorizacion del area medica para enviarse con parametros fuera de los limites clinicos o quimicos recomendados. Registra los datos del medico y la autorizacion antes del envio.',
+            'advisory' => 'La revision encontro sugerencias no bloqueantes. Puedes corregirlas y volver a validar o continuar bajo responsabilidad profesional despues de confirmar que las revisaste.',
             'no_blockers' => 'La revision no detecto bloqueos. Confirma la revision antes de enviar; la preparacion requiere su aprobacion habitual.',
             default => 'La revision no esta completa. No se habilito el envio ni se considera validada la seguridad de la mezcla.',
         };
         $result['technical_issues'] = $issues;
         $result['requires_medical_authorization'] = $requiresAuthorization && $purpose === 'submission';
+        $result['requires_risk_acknowledgement'] = $canSubmit && $hasAdvisory && $purpose === 'submission';
         $result['sources'] = array_map(fn ($s) => array_diff_key($s, array_flip(['content'])), $sources);
         $result['calculations'] = $case['calculations'];
         $result['limitations'] = [];
@@ -98,13 +103,14 @@ class ClinicalReviewService
         $canViewInternal = !$viewer->hasAnyRole(['Cliente', 'Institucion']);
         if (!$canViewInternal) {
             // Only actionable review data leaves the server for hospital users, including cached reviews.
-            $result = Arr::only($result, ['status', 'summary', 'findings', 'requires_medical_authorization']);
+            $result = Arr::only($result, ['status', 'summary', 'findings', 'requires_medical_authorization', 'requires_risk_acknowledgement']);
             $result['findings'] = array_map(fn ($finding) => Arr::only($finding,
                 ['field', 'severity', 'observation_type', 'message', 'calculation', 'suggestion']), $result['findings']);
         }
         return ['review_id' => $review->id, 'can_submit' => $review->can_submit, 'expires_at' => $review->expires_at->toIso8601String(),
             'can_view_internal' => $canViewInternal,
-            'requires_medical_authorization' => (bool) ($result['requires_medical_authorization'] ?? false), 'result' => $result];
+            'requires_medical_authorization' => (bool) ($result['requires_medical_authorization'] ?? false),
+            'requires_risk_acknowledgement' => (bool) ($result['requires_risk_acknowledgement'] ?? false), 'result' => $result];
     }
 
     public function resultForDisplay(ClinicalReview $review): array

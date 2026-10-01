@@ -200,6 +200,30 @@
         </div>
     </form>
 
+    <section class="mt-6 rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm lg:w-[70rem] mx-auto">
+        <h2 class="text-lg font-semibold text-red-800">Eliminar medicamento definitivamente</h2>
+        @if ($deletionBlockers === [])
+            <p class="mt-2 text-sm text-red-700">
+                Esta acción eliminará el medicamento, todas sus presentaciones y su campo de la solicitud nutricional. No se puede deshacer.
+            </p>
+            <form id="delete-medicine-form" class="mt-4"
+                action="{{ route('admin.nutricionales.medicines.destroy', $medicine) }}" method="POST">
+                @csrf
+                @method('DELETE')
+                <input type="hidden" name="confirmation" id="delete-medicine-confirmation">
+                <button type="button" id="delete-medicine-button"
+                    class="inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 focus:outline-none focus:ring-4 focus:ring-red-300">
+                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    Eliminar medicamento
+                </button>
+            </form>
+        @else
+            <p class="mt-2 text-sm text-red-700">
+                No puede eliminarse porque tiene {{ implode(', ', $deletionBlockers) }}. Puedes marcarlo como inactivo para conservar el historial.
+            </p>
+        @endif
+    </section>
+
     @push('js')
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -321,6 +345,39 @@
 
                 bindRemoveButtons();
                 updateTitles();
+
+                const deleteButton = document.getElementById('delete-medicine-button');
+                if (deleteButton) {
+                    const expectedName = @json($medicine->denominacion_generica);
+                    deleteButton.addEventListener('click', async function() {
+                        const escapedName = expectedName.replace(/[&<>'"]/g, character => ({
+                            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+                        })[character]);
+                        const result = await Swal.fire({
+                            icon: 'warning',
+                            title: 'Eliminar medicamento definitivamente',
+                            html: `Para confirmar, escribe exactamente:<br><strong>${escapedName}</strong>`,
+                            input: 'text',
+                            inputAttributes: { autocomplete: 'off' },
+                            showCancelButton: true,
+                            confirmButtonText: 'Eliminar definitivamente',
+                            cancelButtonText: 'Cancelar',
+                            confirmButtonColor: '#b91c1c',
+                            preConfirm: value => {
+                                if (value !== expectedName) {
+                                    Swal.showValidationMessage('La denominación no coincide.');
+                                    return false;
+                                }
+                                return value;
+                            }
+                        });
+
+                        if (result.isConfirmed) {
+                            document.getElementById('delete-medicine-confirmation').value = result.value;
+                            document.getElementById('delete-medicine-form').submit();
+                        }
+                    });
+                }
             });
         </script>
     @endpush

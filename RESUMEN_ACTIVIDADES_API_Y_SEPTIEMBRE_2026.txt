@@ -1,0 +1,161 @@
+RESUMEN DE ACTIVIDADES REALIZADAS
+Fecha de corte: 30 de septiembre de 2026
+
+CRITERIO DEL RESUMEN
+
+- El apartado 1 reúne el desarrollo de API identificado en todo el historial disponible del proyecto hasta la fecha de corte.
+- El apartado 2 reúne únicamente desarrollos nuevos realizados entre el 1 y el 30 de septiembre de 2026.
+- Se excluyen merges y cambios incorporados directamente desde las ramas ggh.
+- Se excluyen correcciones menores, ajustes visuales y reparaciones de funcionalidades anteriores.
+- Las horas son una estimación técnica retrospectiva basada en el alcance y complejidad de los cambios; no sustituyen un registro de tiempo.
+
+
+============================================================
+1. DESARROLLO DE API — HISTÓRICO COMPLETO HASTA HOY
+============================================================
+
+1.1 Integración con Dr. Sam y solicitudes externas
+
+- Diseño e implementación de endpoints internos para recibir solicitudes externas de mezclas.
+- Recepción y almacenamiento de documentos asociados a solicitudes externas.
+- Catálogo de unidades médicas y códigos externos para homologar información entre sistemas.
+- Prevalidación de solicitudes antes de materializarlas dentro de MezclasPro.
+- Conversión de solicitudes externas en solicitudes nutricionales u oncológicas del sistema.
+- Seguimiento y conciliación de estados entre MezclasPro y Dr. Sam.
+- Notificación por webhook de cambios de estado hacia Dr. Sam.
+- Registro de intentos de entrega de webhooks y mecanismo de reintentos.
+- Comando para reintentar notificaciones que no pudieron entregarse.
+- Generación de tokens de integración y configuración de credenciales mediante variables de entorno.
+- Notificaciones internas relacionadas con cambios de estado de las mezclas integradas.
+- Pruebas automatizadas de solicitudes, documentos, materialización, notificaciones y reintentos.
+
+Estimación: 38 a 48 horas.
+
+1.2 API para mensajería y seguimiento móvil
+
+- Autenticación móvil mediante token para mensajeros y usuarios de hospital.
+- Consulta del usuario autenticado y cierre de sesión.
+- Consulta de rutas asignadas, rutas disponibles, catálogo e historial.
+- Consulta del detalle de una ruta de distribución.
+- Aceptación y liberación de rutas por el mensajero.
+- Inicio operativo de recorridos.
+- Recepción y almacenamiento de coordenadas de ubicación.
+- Confirmación de entregas realizadas.
+- Cierre automático del recorrido cuando se confirman todas las entregas programadas.
+- Panel de información para usuarios de hospital.
+- Consulta de notificaciones móviles y función para marcarlas como leídas.
+- Estructura de base de datos para ejecuciones de ruta, actualizaciones de ubicación y confirmaciones de entrega.
+- Reglas para consultar únicamente información autorizada según el usuario y su función.
+- Pruebas y datos de demostración para validar el flujo de distribución.
+
+Estimación: 42 a 57 horas.
+
+1.3 Total estimado del desarrollo de API
+
+Total histórico estimado: 80 a 105 horas.
+Referencia equilibrada para presentación: 92 horas.
+
+Alcance pendiente de la aplicación móvil, no contabilizado como terminado:
+
+- Aplicación Android instalable.
+- Botones móviles de pausa y finalización manual.
+- Rastreo real en segundo plano desde el teléfono.
+- Notificación persistente de Android durante el rastreo.
+- Envío periódico desde el dispositivo con manejo de desconexiones.
+- Gestión de permisos de ubicación y optimización de batería.
+- Instalación y pruebas de aceptación en celulares reales.
+
+
+=======================================================================
+2. DESARROLLOS NUEVOS DEL 1 AL 30 DE SEPTIEMBRE DE 2026, SIN API
+=======================================================================
+
+2.1 Módulo de insumos y consumibles de producción
+
+- Creación del catálogo de consumibles y sus presentaciones.
+- Creación del inventario de consumibles por almacén y lote.
+- Registro de existencias, lotes y datos necesarios para surtimiento.
+- Creación del flujo para solicitar insumos de producción.
+- Registro de partidas incluidas en cada solicitud de insumos.
+- Consulta del listado y detalle de solicitudes de producción.
+- Vinculación de solicitudes de producción con lotes disponibles.
+- Incorporación de las nuevas opciones en almacenes, catálogo y navegación administrativa.
+- Pruebas funcionales del flujo de solicitudes e inventario de consumibles.
+
+Estimación: 18 a 24 horas.
+
+2.2 Catálogo e inventario de diluyentes
+
+- Creación de presentaciones comerciales para diluyentes.
+- Incorporación del catálogo unificado de diluyentes.
+- Captura y edición de presentaciones de diluyentes.
+- Manejo de existencias de diluyentes dentro del almacén.
+- Integración de presentaciones y lotes de diluyentes con el proceso oncológico.
+- Pruebas del flujo de creación de catálogo e inventario.
+
+Estimación: 10 a 14 horas.
+
+2.3 Panel web de distribución y monitoreo
+
+- Creación de la vista de monitoreo de rutas de distribución.
+- Visualización de la ubicación registrada para el recorrido.
+- Consulta administrativa de rutas programadas y recorridos.
+- Integración de confirmaciones de entrega e información operativa de la ruta.
+- Incorporación de accesos y controles para el seguimiento desde el sistema web.
+
+Nota: este punto comprende el panel web. Los endpoints móviles correspondientes están contabilizados en el apartado de API.
+
+Estimación: 10 a 14 horas.
+
+2.4 Configuración avanzada del catálogo nutricional
+
+- Incorporación de densidad al registro de medicamentos nutricionales.
+- Incorporación del valor de calorías al catálogo nutricional.
+- Configuración de la disposición de campos utilizados en las solicitudes.
+- Creación de componentes reutilizables para relacionar medicamentos con los campos de captura.
+- Configuración de medicamentos aplicables a pacientes adultos, pediátricos o ambos.
+- Separación y alineación de Multivitamínico adulto, Multivitamínico pediátrico, Oligoelementos y Oligometales.
+- Restricción del multivitamínico adulto a las solicitudes NPT de adulto.
+- Ajuste de nombres extensos para permitir una presentación ordenada en dos líneas.
+
+Estimación: 12 a 16 horas.
+
+2.5 Peso teórico e inspección nutricional
+
+- Creación del servicio de cálculo del peso teórico de la nutrición a partir de componentes y densidades.
+- Almacenamiento de densidad y peso teórico dentro del registro de inspección.
+- Registro explícito de cuándo una inspección quedó realmente completada.
+- Separación entre una inspección pendiente y una inspección guardada.
+- Incorporación de datos de auditoría para validación e inspección nutricional.
+- Recuperación controlada de información de validación basada en movimientos de inventario existentes.
+
+Estimación: 12 a 16 horas.
+
+2.6 Orden de preparación y trazabilidad nutricional
+
+- Definición centralizada del orden de adición de componentes nutricionales.
+- Aplicación del orden de adición requerido en la orden de preparación.
+- Presentación de la trazabilidad de captura, validación, preparación, inspección y aprobación.
+- Registro de usuario, fecha y hora correspondientes a cada etapa disponible.
+- Simplificación del PDF de la orden de preparación para separar la inspección en su propio documento.
+- Pruebas del orden de adición, estructura del PDF y visualización de aprobaciones.
+
+Estimación: 12 a 16 horas.
+
+2.7 Total estimado de desarrollos nuevos de septiembre, sin API
+
+Total estimado: 74 a 100 horas.
+Referencia equilibrada para presentación: 86 horas.
+
+
+============================================================
+3. RESUMEN GENERAL DE HORAS ESTIMADAS
+============================================================
+
+- API histórica completa: 80 a 105 horas (referencia: 92 horas).
+- Desarrollo nuevo de septiembre sin API: 74 a 100 horas (referencia: 86 horas).
+- Total de ambos apartados: 154 a 205 horas (referencia: 178 horas).
+
+IMPORTANTE
+
+Los totales no incluyen el tiempo dedicado únicamente a ejecutar merges con ramas ggh ni el contenido desarrollado originalmente en esas ramas. Tampoco incluyen correcciones menores de funciones anteriores. Si durante una integración fue necesario resolver manualmente un conflicto con trabajo propio, ese esfuerzo debería documentarse por separado únicamente cuando exista evidencia concreta del conflicto y de la solución aplicada.
