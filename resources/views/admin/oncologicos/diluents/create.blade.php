@@ -25,6 +25,11 @@
                 </div>
             </div>
 
+            <label class="flex items-start gap-3 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-gray-700">
+                <input type="checkbox" name="available_for_nutrition" value="1" class="mt-1 rounded border-gray-300 text-emerald-600" @checked(old('available_for_nutrition'))>
+                <span><strong>Disponible para nutrición parenteral</strong><br>Permite capturar este producto como diluyente o vehículo, con volumen explícito, en solicitudes NPT.</span>
+            </label>
+
             <section class="border-t pt-5">
                 <h2 class="mb-3 text-lg font-semibold">Presentación comercial</h2>
                 <div class="grid gap-4 rounded border bg-slate-50 p-4 md:grid-cols-2">

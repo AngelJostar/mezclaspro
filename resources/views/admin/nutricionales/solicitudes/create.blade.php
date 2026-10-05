@@ -344,6 +344,9 @@
             </div>
 
             @endif
+
+            @include('admin.nutricionales.solicitudes.partials.nutrition-diluents')
+
             <div class="mb-4">
                 <x-label class="mb-2 font-bold">
                     OBSERVACIONES

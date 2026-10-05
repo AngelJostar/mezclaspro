@@ -42,6 +42,7 @@ class DiluentController extends Controller
             'catalog_presentation.commercial_name' => 'nullable|string|max:255',
             'catalog_presentation.manufacturer' => 'nullable|string|max:255',
             'catalog_presentation.volume_ml' => 'nullable|numeric|min:0',
+            'available_for_nutrition' => 'nullable|boolean',
             'laboratory_id' => 'nullable|integer|exists:laboratories,id',
             'warehouse_id' => 'nullable|integer|exists:warehouses,id',
         ], [
@@ -81,7 +82,14 @@ class DiluentController extends Controller
 
         $diluent = $data['generic_mode'] === 'existing'
             ? Diluent::query()->findOrFail($data['diluent_id'])
-            : Diluent::create(['denominacion_generica' => $genericName]);
+            : Diluent::create([
+                'denominacion_generica' => $genericName,
+                'available_for_nutrition' => $request->boolean('available_for_nutrition'),
+            ]);
+
+        if ($data['generic_mode'] === 'existing' && $request->has('available_for_nutrition')) {
+            $diluent->update(['available_for_nutrition' => $request->boolean('available_for_nutrition')]);
+        }
 
         if ($diluent->catalogPresentations()
             ->whereRaw('LOWER(presentation) = ?', [mb_strtolower(trim($data['catalog_presentation']['presentation']))])
@@ -125,6 +133,7 @@ class DiluentController extends Controller
             'catalog_presentation.commercial_name' => 'nullable|string|max:255',
             'catalog_presentation.manufacturer' => 'nullable|string|max:255',
             'catalog_presentation.volume_ml' => 'nullable|numeric|min:0',
+            'available_for_nutrition' => 'nullable|boolean',
         ], [
             'denominacion_generica.required' => 'La denominación genérica es obligatoria.',
             'denominacion_generica.unique'   => 'Ya existe un diluyente con esa denominación.',
@@ -141,6 +150,7 @@ class DiluentController extends Controller
 
         $diluent->update([
             'denominacion_generica' => $genericName,
+            'available_for_nutrition' => $request->boolean('available_for_nutrition'),
         ]);
         if ($request->filled('catalog_presentation.id')) {
             $presentationData = $request->input('catalog_presentation');

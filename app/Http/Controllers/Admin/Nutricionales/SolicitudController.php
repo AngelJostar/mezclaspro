@@ -38,6 +38,7 @@ use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Services\InstitutionBillingPricingService;
 use App\Services\MedicineRemainderService;
 use App\Services\NutritionTheoreticalWeightService;
+use App\Services\NutritionDiluentService;
 use App\Support\SolicitudStatusFilter;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -767,10 +768,13 @@ class SolicitudController extends Controller
         });
 
 
+        $nutritionDiluents = app(NutritionDiluentService::class)->optionsForHospital($hospital);
+
         return view('admin.nutricionales.solicitudes.create', compact(
             'inputs',
             'presentationsByInput',
-            'activeSelections'
+            'activeSelections',
+            'nutritionDiluents'
         ));
     }
 
@@ -926,7 +930,10 @@ class SolicitudController extends Controller
                 return redirect()->route('admin.solicitudes.index');
             }
             $registro = SolicitudDetail::find($solicitud_detalles_resp->id);
-            $suma_volumen_ml = 0.0;
+            $explicitDiluentVolume = app(NutritionDiluentService::class)
+                ->syncFromRequest($request, $solicitud_nueva, $hospital);
+            $hasExplicitNutritionDiluents = $explicitDiluentVolume > 0;
+            $suma_volumen_ml = $explicitDiluentVolume;
 
             foreach ($inputQuantities as $numero => $rawValue) {
                 if ($rawValue === null || $rawValue === '') {
@@ -1121,6 +1128,11 @@ class SolicitudController extends Controller
                 } else {
                     $registro->volumen_total_final = $suma_volumen_ml;
                 }
+            }
+
+            if ($hasExplicitNutritionDiluents) {
+                SolicitudInput::where('solicitud_id', $solicitud_nueva->id)->where('input_id', 37)->delete();
+                $registro->volumen_total_final = $suma_volumen_ml + (float) ($registro->sobrellenado_ml ?? 0);
             }
 
             $registro->suma_volumen = $suma_volumen_ml;
@@ -1382,13 +1394,18 @@ class SolicitudController extends Controller
             ];
         });
 
+        $nutritionDiluents = app(NutritionDiluentService::class)->optionsForHospital($hospital, $solicitud);
+        $selectedNutritionDiluents = $solicitud->diluents()->get()->keyBy('diluent_id');
+
         return view('admin.nutricionales.solicitudes.edit', compact(
             'solicitud',
             'inputs',
             'inputs_solicitud',
             'presentationsByInput',
             'activeSelections',
-            'inventarioPorInput'
+            'inventarioPorInput',
+            'nutritionDiluents',
+            'selectedNutritionDiluents'
         ));
     }
 
@@ -1574,7 +1591,10 @@ class SolicitudController extends Controller
             }
 
             $registro = SolicitudDetail::findOrFail($solicitud->solicitud_detail_id);
-            $suma_volumen_ml = 0;
+            $explicitDiluentVolume = app(NutritionDiluentService::class)
+                ->syncFromRequest($request, $solicitud, $hospital);
+            $hasExplicitNutritionDiluents = $explicitDiluentVolume > 0;
+            $suma_volumen_ml = $explicitDiluentVolume;
 
             $setInfusionActivo = isset($tripletas[40]) && (int) ($tripletas[40]['i_40'] ?? 0) === 1;
 
@@ -1755,6 +1775,11 @@ class SolicitudController extends Controller
                 } else {
                     $registro->volumen_total_final = $suma_volumen_ml;
                 }
+            }
+
+            if ($hasExplicitNutritionDiluents) {
+                SolicitudInput::where('solicitud_id', $solicitud->id)->where('input_id', 37)->delete();
+                $registro->volumen_total_final = $suma_volumen_ml + (float) ($registro->sobrellenado_ml ?? 0);
             }
 
             $registro->suma_volumen = $suma_volumen_ml;

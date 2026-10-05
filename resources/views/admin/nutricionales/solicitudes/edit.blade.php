@@ -415,6 +415,8 @@
                 @endif
             @endforeach
 
+            @include('admin.nutricionales.solicitudes.partials.nutrition-diluents')
+
             @php
                 $bolsaInputSeleccionada = $inputs->firstWhere('input_id', $bolsaSeleccionadaId);
                 $rowBolsa = $bolsaInputSeleccionada ? $renderInputRow($bolsaInputSeleccionada) : null;

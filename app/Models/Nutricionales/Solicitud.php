@@ -83,6 +83,11 @@ class Solicitud extends Model
         return $this->hasMany(SolicitudInput::class);
     }
 
+    public function diluents()
+    {
+        return $this->hasMany(SolicitudDiluent::class);
+    }
+
 
     public function inspeccionNutricional()
     {

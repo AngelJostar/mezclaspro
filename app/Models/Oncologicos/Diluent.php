@@ -8,7 +8,10 @@ class Diluent extends Model
 {
     protected $fillable = [
         'denominacion_generica',   // nuevo campo
+        'available_for_nutrition',
     ];
+
+    protected $casts = ['available_for_nutrition' => 'boolean'];
 
     public function medicines()
     {
