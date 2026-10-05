@@ -10,7 +10,6 @@ use App\Models\Hospital;
 use App\Models\Institucion;
 use App\Models\RequestQuotation;
 use App\Models\User;
-use App\Notifications\QuotationAssigned;
 use App\Services\RequestQuotationCaptureService;
 use App\Services\RequestQuotationPdf;
 use App\Support\QuotationDocument;
@@ -122,7 +121,7 @@ class RequestQuotationController extends Controller
                     'status' => $request->validated('action') === 'send' ? 'enviada' : 'borrador',
                     'sent_at' => $request->validated('action') === 'send' ? now() : null, 'attachment_path' => $path,
                 ]);
-                $this->notifySeller($quotation);
+                $this->linkHospitalRequest($request, $quotation);
                 return $quotation;
             });
         } catch (UniqueConstraintViolationException $error) {
@@ -148,13 +147,20 @@ class RequestQuotationController extends Controller
                 $locked = RequestQuotation::lockForUpdate()->findOrFail($quotation->id);
                 abort_unless($locked->canBeEditedBy($request->user()), 403);
                 $attributes['seller_id'] = $this->sellerId($request, $locked);
+                $sourceId = $locked->clinical_data['hospital_request_id'] ?? null;
+                if ($sourceId) {
+                    if ($request->validated('hospital_request_id') && (int) $request->validated('hospital_request_id') !== (int) $sourceId) {
+                        throw ValidationException::withMessages(['hospital_request_id' => 'La cotización ya está relacionada con otra solicitud.']);
+                    }
+                    $attributes['clinical_data']['hospital_request_id'] = $sourceId;
+                }
                 $previousPath = $locked->attachment_path;
                 $locked->forceFill($attributes + [
                     'status' => $request->validated('action') === 'send' ? 'enviada' : 'borrador',
                     'sent_at' => $request->validated('action') === 'send' ? now() : null,
                     'attachment_path' => $path ?: ($attributes['category'] === 'oncologicos' ? $previousPath : null),
                 ])->save();
-                $this->notifySeller($locked);
+                $this->linkHospitalRequest($request, $locked);
             });
         } catch (\Throwable $error) {
             if ($path) Storage::disk('local')->delete($path);
@@ -175,6 +181,10 @@ class RequestQuotationController extends Controller
             }
             $id = $assignedId;
         }
+        if (!$id && !$quotation) {
+            $assigned = Hospital::find($request->validated('hospital_id'))?->salespeople()->activeSalespeople()->get();
+            if ($assigned?->count() === 1) $id = $assigned->first()->id;
+        }
         if (!$id) return null;
         // An inactive assignment may remain in a draft, but cannot receive a new submission.
         if ($quotation && (int) $quotation->seller_id === (int) $id && $request->validated('action') === 'save') {
@@ -183,15 +193,23 @@ class RequestQuotationController extends Controller
         if (!User::activeSalespeople()->whereKey($id)->exists()) {
             throw ValidationException::withMessages(['seller_id' => 'Selecciona un vendedor activo.']);
         }
+        if (!Hospital::whereKey($request->validated('hospital_id'))->whereHas('salespeople', fn ($q) => $q->where('users.id', $id))->exists()) {
+            throw ValidationException::withMessages(['seller_id' => 'El vendedor debe estar asignado al hospital seleccionado.']);
+        }
         return (int) $id;
     }
 
-    private function notifySeller(RequestQuotation $quotation): void
+    private function linkHospitalRequest(StoreRequestQuotationRequest $request, RequestQuotation $quotation): void
     {
-        if ($quotation->status === 'enviada' && $quotation->seller_id
-            && (int) $quotation->seller_id !== (int) $quotation->created_by) {
-            User::activeSalespeople()->find($quotation->seller_id)?->notify(new QuotationAssigned($quotation));
+        $id = $request->validated('hospital_request_id') ?: ($quotation->clinical_data['hospital_request_id'] ?? null);
+        if (!$id) return;
+        $source = \App\Models\HospitalQuotationRequest::lockForUpdate()->findOrFail($id);
+        abort_unless($source->canQuote($request->user()), 403);
+        if ((int) $source->hospital_id !== (int) $quotation->hospital_id || $source->category !== $quotation->category
+            || ($source->quotation_id && (int) $source->quotation_id !== (int) $quotation->id)) {
+            throw ValidationException::withMessages(['hospital_request_id' => 'La solicitud ya fue cotizada o no corresponde al hospital y categoría seleccionados.']);
         }
+        $source->forceFill(['quotation_id' => $quotation->id, 'seller_id' => $quotation->seller_id ?? $source->seller_id])->save();
     }
 
     private function storeAttachment(StoreRequestQuotationRequest $request): ?string
@@ -204,7 +222,7 @@ class RequestQuotationController extends Controller
 
     private function saved(RequestQuotation $quotation)
     {
-        return response()->json(['folio' => $quotation->folio, 'status' => $quotation->status, 'total' => $quotation->total,
+        return response()->json(['id' => $quotation->id, 'folio' => $quotation->folio, 'status' => $quotation->status, 'total' => $quotation->total,
             'redirect_url' => route('admin.solicitudes.cotizacion.index')]);
     }
 
@@ -215,6 +233,7 @@ class RequestQuotationController extends Controller
 
     public function authorizeQuotation(Request $request, RequestQuotation $quotation)
     {
+        abort_unless($request->user()->is_active && !$request->user()->isBlockedByOrganization(), 403);
         abort_unless($quotation->canBeAuthorizedBy($request->user()), 403);
 
         DB::transaction(function () use ($quotation, $request) {
@@ -232,6 +251,7 @@ class RequestQuotationController extends Controller
             ])->save();
         });
 
+        if ($request->expectsJson()) return $this->saved($quotation->refresh());
         return back()->with('quotation_status', 'Cotizacion autorizada por Prodifem.');
     }
 
@@ -243,6 +263,13 @@ class RequestQuotationController extends Controller
     private function screenData(Request $request): array
     {
         $user = $request->user();
+        $hospitalRequestSource = null;
+        if ($request->filled('hospital_request_id')) {
+            $request->validate(['hospital_request_id' => 'required|integer|min:1']);
+            $source = \App\Models\HospitalQuotationRequest::with('hospital.instituciones')->findOrFail($request->integer('hospital_request_id'));
+            abort_unless($source->canQuote($user) && !$source->quotation_id, 403);
+            $hospitalRequestSource = $source->summary() + ['institution_id' => $source->hospital->instituciones->where('is_active', true)->first()?->id];
+        }
         $isSalesperson = $user->isSalesperson();
         $isHospitalView = $user->hasAnyRole(['Cliente', 'Institucion']);
         $canViewNutrition = $isSalesperson || $user->can('nutricionales_solicitudes_index');
@@ -277,7 +304,10 @@ class RequestQuotationController extends Controller
         $sortDirection = $request->query('direccion') === 'asc' ? 'asc' : 'desc';
         $sort = $request->query('orden') === 'total' ? 'total' : 'fecha';
 
+        $laboratoryId = $user->hasAnyRole(['Admin', 'Super Admin', 'Cliente', 'Institucion']) || $user->isSalesperson()
+            ? null : $user->personnelProfile?->laboratory_id;
         $hospitals = Hospital::query()->select('id', 'name')->with('instituciones:id,nombre')
+            ->when($laboratoryId, fn ($query) => $query->where('laboratory_id', $laboratoryId))
             ->when($isHospitalView, fn ($query) => $query->whereKey($user->hospital_id ?: 0))
             ->orderBy('name')->get();
         $institutions = Institucion::query()->select('id', 'nombre')
@@ -318,6 +348,7 @@ class RequestQuotationController extends Controller
         $createTypes = array_values(array_filter(['nutricionales', 'oncologicos', 'antibioticos'], fn ($type) => RequestQuotation::canCreate($user, $type)));
         $sellers = $isSalesperson ? collect() : User::activeSalespeople()->orderBy('name')->orderBy('lastname')->get(['id', 'name', 'lastname']);
         return compact('quotations', 'hospitals', 'institutions', 'filters', 'createTypes',
+            'hospitalRequestSource',
             'sellers', 'isSalesperson', 'isHospitalView',
             'selectedType', 'statusFilter', 'statusFilters', 'sort', 'sortDirection', 'filterQuery', 'canViewNutrition', 'canViewOncology');
     }

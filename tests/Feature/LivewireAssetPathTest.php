@@ -16,11 +16,15 @@ class LivewireAssetPathTest extends TestCase
                 'SCRIPT_FILENAME' => '/var/www/public/index.php',
             ]);
             $this->app->instance('request', $request);
+            $this->app['url']->setRequest($request);
 
             $this->assertSame($basePath, $request->getBaseUrl());
             $html = view('layouts.includes.livewire-scripts')->render();
             $this->assertStringContainsString('src="'.$basePath.'/livewire/livewire.js?id=', $html);
-            $this->assertStringContainsString('data-update-uri', $html);
+            $this->assertStringContainsString(
+                "setAttribute('data-update-uri', ".\Illuminate\Support\Js::from($basePath.'/livewire/update')->toHtml().');',
+                $html
+            );
         }
     }
 }

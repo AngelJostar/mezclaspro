@@ -100,7 +100,10 @@ class SuperAdministratorController extends Controller
             'frascos' => (float) $item->quantity_containers, 'mL' => (float) $item->quantity_ml,
         ]));
 
+        $mobilePersonnel = User::with('personnelProfile')->whereHas('personnelProfile', fn ($q) => $q
+            ->whereJsonContains('positions', \App\Models\PersonnelProfile::POSITION_MOBILE))->orderBy('name')->get();
         return view('admin.superadministrator.index', compact(
+            'mobilePersonnel',
             'administrators',
             'wasteRecords',
             'wasteSummary',

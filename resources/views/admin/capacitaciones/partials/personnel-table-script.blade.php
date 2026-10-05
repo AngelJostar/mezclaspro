@@ -24,6 +24,15 @@
         let activeSort = null;
         let initialized = false;
         let selectedDepartment = '';
+        let quickFilter = 'all';
+        const quickButtons = Array.from(root.querySelectorAll('[data-personnel-quick-filter]'));
+        const matchesQuickFilter = row => {
+            const status = row.querySelector('[data-student-status]')?.value;
+            return quickFilter === 'all'
+                || (quickFilter === 'active' && status === 'hired')
+                || (quickFilter === 'inactive' && status === 'inactive')
+                || (quickFilter === 'sellers' && row.dataset.personnelSeller === '1');
+        };
 
         // Read displayed values, excluding avatars, edit forms and hidden access menus.
         const cellValue = (row, column) => {
@@ -84,6 +93,7 @@
 
         function renderPage() {
             const matches = orderedRows.filter(row => row.dataset.columnFilterMatch !== '0'
+                && matchesQuickFilter(row)
                 && (!selectedDepartment || cellValue(row, 7) === selectedDepartment));
             const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
             currentPage = Math.min(Math.max(1, currentPage), pageCount);
@@ -139,10 +149,19 @@
             renderPage();
         };
         department.addEventListener('change', applyDepartment);
+        quickButtons.forEach(button => button.addEventListener('click', () => {
+            quickFilter = button.dataset.personnelQuickFilter;
+            currentPage = 1;
+            quickButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+            filters.close();
+            renderPage();
+        }));
         root.querySelector('[data-personnel-apply-department]').addEventListener('click', applyDepartment);
         root.querySelector('[data-personnel-clear-filters]').addEventListener('click', () => {
             department.value = '';
             selectedDepartment = '';
+            quickFilter = 'all';
+            quickButtons.forEach(item => item.setAttribute('aria-pressed', String(item.dataset.personnelQuickFilter === 'all')));
             filters.clear();
         });
         previous.addEventListener('click', () => { currentPage--; renderPage(); });

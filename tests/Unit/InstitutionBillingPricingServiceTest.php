@@ -285,11 +285,14 @@ class InstitutionBillingPricingServiceTest extends TestCase
         $this->assertSame(138.0, $medicine->total());
     }
 
-    public function test_standard_billing_export_includes_the_bottle_quantity_column(): void
+    public function test_standard_billing_export_separates_sale_unit_and_labels_tax_included_prices(): void
     {
         $headings = (new InstitutionBillingExport([]))->headings();
 
-        $this->assertSame('Cantidad de Frascos', $headings[7]);
+        $this->assertSame('Unidad', $headings[7]);
+        $this->assertSame('Precio unitario IVA incluido', $headings[9]);
+        $this->assertSame('Precio de venta total editable', $headings[12]);
+        $this->assertSame('Fecha de factura', $headings[16]);
         $this->assertCount(19, $headings);
     }
 }

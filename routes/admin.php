@@ -66,7 +66,13 @@ Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
 
 Route::get('solicitudes/cotizacion', [RequestQuotationController::class, 'index'])
     ->name('solicitudes.cotizacion.index');
+Route::get('ventas/hospitales', [\App\Http\Controllers\Admin\SalesHospitalAssignmentController::class, 'index'])
+    ->middleware('role_or_permission:Super Admin|menu.instituciones.hospitals')->name('sales.hospitals.index');
+Route::put('ventas/hospitales/{hospital}', [\App\Http\Controllers\Admin\SalesHospitalAssignmentController::class, 'update'])
+    ->middleware('role_or_permission:Super Admin|menu.instituciones.hospitals')->name('sales.hospitals.update');
 Route::get('solicitudes/cotizacion/opciones', [RequestQuotationController::class, 'options'])->name('solicitudes.cotizacion.options');
+Route::get('solicitudes/cotizacion/solicitudes-clientes', [\App\Http\Controllers\Admin\HospitalQuotationRequestController::class, 'index'])->name('solicitudes.cotizacion.hospital-requests.index');
+Route::get('solicitudes/cotizacion/solicitudes-clientes/{hospitalRequest}/adjunto', [\App\Http\Controllers\Admin\HospitalQuotationRequestController::class, 'attachment'])->name('solicitudes.cotizacion.hospital-requests.attachment');
 Route::get('solicitudes/cotizacion/exportar', [RequestQuotationController::class, 'export'])->name('solicitudes.cotizacion.export');
 Route::post('solicitudes/cotizacion', [RequestQuotationController::class, 'store'])->name('solicitudes.cotizacion.store');
 Route::post('solicitudes/cotizacion/revisar', [RequestQuotationController::class, 'preview'])->name('solicitudes.cotizacion.preview');
@@ -89,9 +95,12 @@ Route::get('solicitudes/cotizacion/{quotation}/preparacion', [\App\Http\Controll
 Route::post('solicitudes/cotizacion/{quotation}/preparacion', [\App\Http\Controllers\Admin\QuotationPreparationController::class, 'store'])
     ->whereNumber('quotation')->name('solicitudes.cotizacion.prepare');
 
-Route::view('herramientas', 'admin.herramientas.index')
+Route::get('herramientas', [\App\Http\Controllers\Admin\ClientToolsController::class, 'index'])
     ->middleware('role:Cliente|Institucion')
     ->name('herramientas.index');
+
+Route::get('herramientas/conciliaciones/{submission}/descargar', [\App\Http\Controllers\Admin\ClientToolsController::class, 'download'])
+    ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.download');
 
 Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
@@ -742,6 +751,11 @@ Route::get('capacitaciones/personal/{personnel}/edit', [TrainingPersonnelControl
 Route::patch('capacitaciones/personal/{personnel}', [TrainingPersonnelController::class, 'update'])
     ->name('capacitaciones.personal.update')
     ->middleware('role_or_permission:Super Admin|Admin|menu.capacitaciones.personal');
+
+Route::get('capacitaciones/personal/{personnel}/hospitales', [\App\Http\Controllers\Admin\SalesHospitalAssignmentController::class, 'personnel'])
+    ->middleware('role_or_permission:Super Admin|Admin|menu.capacitaciones.personal')->name('capacitaciones.personal.hospitals');
+Route::put('capacitaciones/personal/{personnel}/hospitales', [\App\Http\Controllers\Admin\SalesHospitalAssignmentController::class, 'savePersonnel'])
+    ->middleware('role_or_permission:Super Admin|Admin|menu.capacitaciones.personal')->name('capacitaciones.personal.hospitals.save');
 
 Route::get('instituciones/{institucion}/hospitals', [InstitucionController::class, 'hospitales'])
     ->name('instituciones.hospitals')

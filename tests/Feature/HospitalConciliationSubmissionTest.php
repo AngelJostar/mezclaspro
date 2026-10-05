@@ -42,6 +42,83 @@ class HospitalConciliationSubmissionTest extends TestCase
         $this->actingAs($this->hospital->refresh());
     }
 
+    public function test_client_tools_show_only_own_hospital_submissions_and_block_other_downloads(): void
+    {
+        $own = HospitalConciliationSubmission::create([
+            'submission_key' => (string) Str::uuid(), 'hospital_id' => $this->hospital->hospital_id,
+            'hospital_name' => 'Hospital propio', 'sender_name' => 'Remitente propio',
+            'filters' => [], 'mixture_count' => 3, 'conciliable_count' => 2, 'snapshot' => [],
+        ]);
+        $other = $own->replicate();
+        $other->submission_key = (string) Str::uuid();
+        $other->hospital_id = 2;
+        $other->hospital_name = 'Hospital ajeno';
+        $other->save();
+
+        $this->get(route('admin.herramientas.index', ['seccion' => 'conciliacion', 'hospital_id' => 2]))
+            ->assertOk()->assertSee('Fecha de envío')->assertSee('Conciliables Sí')
+            ->assertSee('Remitente propio')->assertDontSee('Hospital ajeno')
+            ->assertViewHas('submissions', fn ($rows) => $rows->total() === 1);
+        $this->get(route('admin.herramientas.conciliaciones.download', $other))->assertNotFound();
+        $this->get(route('admin.herramientas.conciliaciones.download', $own))->assertOk();
+    }
+
+    public function test_client_billing_displays_requested_columns(): void
+    {
+        $this->mock(\App\Http\Controllers\Admin\InstitucionBillingController::class, function ($mock) {
+            $mock->shouldReceive('clientRecords')->once()->andReturn(new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15));
+        });
+        $this->get(route('admin.herramientas.index', ['seccion' => 'facturacion']))->assertOk()
+            ->assertSee('No. de remisión')->assertSee('Nombre del médico')->assertSee('Nombre del paciente')
+            ->assertSee('Precio unitario IVA incluido')->assertSee('Folio factura UUID')->assertSee('Fecha de factura');
+    }
+
+    public function test_internal_adjustment_log_lists_versions_and_blocks_client_access(): void
+    {
+        Schema::create('clinical_reviews', function (Blueprint $table) {
+            $table->string('id')->primary(); $table->string('kind'); $table->unsignedBigInteger('target_id')->nullable();
+            $table->string('purpose')->nullable(); $table->text('result')->nullable(); $table->text('medical_authorization')->nullable();
+            $table->timestamps();
+        });
+        $url = route('admin.instituciones.reportes', ['seccion' => 'ajustes']);
+        $this->get($url)->assertForbidden();
+        $this->actingAs($this->internalUser())->get($url)->assertOk()
+            ->assertSee('Bitácora de ajustes por mezcla')->assertSee('Propuesta de prueba')
+            ->assertSee('AJUSTE AJENO')->assertSee('Autorización del hospital')
+            ->assertSee('Sin revisión previa registrada');
+        \App\Models\ClinicalReview::create([
+            'id' => 'review-log-test', 'kind' => 'oncologicos', 'target_id' => 1, 'purpose' => 'approval',
+            'result' => ['summary' => 'Comentario IA de prueba', 'findings' => []],
+            'medical_authorization' => ['doctor_name' => 'Médico de prueba', 'doctor_license' => 'DEMO-123'],
+            'created_at' => '2026-09-13 10:00:00',
+        ]);
+        $this->get($url)->assertOk()->assertSee('Comentario IA de prueba')->assertSee('Médico de prueba');
+        DB::table('clinical_reviews')->where('id', 'review-log-test')->update(['result' => 'invalid-ciphertext']);
+        $this->get($url)->assertOk()->assertSee('No se puede descifrar la revisión.');
+    }
+
+    public function test_billing_rows_separate_quantity_and_sale_unit_and_include_applicable_vat(): void
+    {
+        $pricing = \Mockery::mock(\App\Services\InstitutionBillingPricingService::class)->makePartial();
+        $pricing->shouldReceive('priceOncoMix')->andReturn([
+            'lines' => collect([
+                ['description' => 'Gravado', 'quantity' => 2, 'unit_label' => 'frasco', 'unit_price' => 100, 'subtotal' => 200, 'vat' => 32, 'total_with_vat' => 232],
+                ['description' => 'Exento', 'quantity' => 5, 'unit_label' => 'mg', 'unit_price' => 10, 'subtotal' => 50, 'vat' => 0, 'total_with_vat' => 50],
+            ]), 'total_iva_included' => 282,
+        ]);
+        $controller = new \App\Http\Controllers\Admin\InstitucionBillingController($pricing, app(\App\Services\InstitutionBillingDueDateService::class));
+        $mix = (new \App\Models\Oncologicos\Mezcla)->forceFill(['id' => 1]);
+        $order = (new \App\Models\Oncologicos\SolicitudOnco)->forceFill(['id' => 1]);
+        $order->setRelation('hospital', null);
+        $mix->setRelation('solicitud', $order)->setRelation('billing', null);
+        $method = new \ReflectionMethod($controller, 'transformRecord');
+        $row = $method->invoke($controller, $mix, 'onco', null);
+        $this->assertSame(['2', '5'], $row['quantity_lines']);
+        $this->assertSame(['frasco', 'mg'], $row['sale_unit_lines']);
+        $this->assertSame(['$116.00', '$10.00'], $row['unit_price_lines']);
+        $this->assertSame("frasco\nmg", $row['export_row'][7]);
+    }
+
     private function send(array $data = [])
     {
         $input = array_merge([

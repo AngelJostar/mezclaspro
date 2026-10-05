@@ -24,6 +24,16 @@
         </div>
     @endif
 
+    <details class="mt-6 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
+        <summary class="cursor-pointer px-4 py-5 text-lg font-semibold text-gray-900">Aplicación móvil <span class="ml-2 rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">{{ $mobilePersonnel->count() }}</span></summary>
+        <div class="overflow-x-auto border-t border-gray-200">
+            <table class="w-full text-left text-sm"><thead class="bg-gray-50"><tr><th class="p-4">Personal</th><th class="p-4">Departamento</th><th class="p-4">Acceso a Ventas móvil</th></tr></thead><tbody>
+                @forelse ($mobilePersonnel as $mobilePerson)
+                    <tr class="border-t"><td class="p-4">{{ $mobilePerson->name }} {{ $mobilePerson->lastname }}</td><td class="p-4">{{ $mobilePerson->personnelProfile->department }}</td><td class="p-4">{{ $mobilePerson->is_active && $mobilePerson->isSalesperson() && $mobilePerson->personnelProfile->employment_status === 'hired' ? 'Habilitado' : 'Inactivo o sin perfil Vendedor' }}</td></tr>
+                @empty <tr><td colspan="3" class="p-4 text-gray-500">No hay personal con la casilla Aplicación Móvil seleccionada.</td></tr> @endforelse
+            </tbody></table>
+        </div>
+    </details>
     <section class="mt-6 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm"
         aria-labelledby="authorizations-title" x-data="{ authorizationsOpen: false }">
         <button type="button"

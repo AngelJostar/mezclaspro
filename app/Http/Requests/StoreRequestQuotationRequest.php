@@ -23,6 +23,7 @@ class StoreRequestQuotationRequest extends FormRequest
                 'hospital_id' => ['required', 'integer', 'min:1'],
                 'institution_id' => ['required', 'integer', 'min:1'],
                 'seller_id' => ['nullable', 'integer', 'min:1'],
+                'hospital_request_id' => ['nullable', 'integer', 'min:1'],
                 'submission_key' => ['required', 'uuid'],
                 'action' => ['required', Rule::in(['save', 'send'])],
                 'no_commercial_relationship' => ['required', 'boolean'],

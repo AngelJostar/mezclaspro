@@ -17,6 +17,8 @@ class PersonnelEditingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+        \Illuminate\Support\Facades\DB::purge('sqlite');
 
         // Isolate this workflow from unrelated inventory migrations requiring MySQL.
         foreach ([
@@ -29,6 +31,8 @@ class PersonnelEditingTest extends TestCase
             '2026_08_19_000007_add_credential_password_to_users_table.php',
             '2026_08_19_000008_add_training_credentials_to_users_table.php',
             '2026_08_20_000006_create_personnel_profiles_table.php',
+            '2026_10_02_000001_add_institutional_email_to_personnel_profiles.php',
+            '2026_10_02_000002_create_hospital_salesperson_table.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -37,6 +41,64 @@ class PersonnelEditingTest extends TestCase
         $manager->assignRole(Role::create(['name' => 'Usuario general', 'guard_name' => 'web']));
         $manager->givePermissionTo(Permission::create(['name' => 'menu.capacitaciones.personal', 'guard_name' => 'web']));
         $this->actingAs($manager);
+    }
+
+    public function test_institutional_email_is_validated_saved_loaded_and_can_be_cleared(): void
+    {
+        $user = $this->createUser();
+        $profile = $this->createProfile($user);
+        $payload = $this->payload($profile->laboratory_id);
+        $payload['institutional_email'] = '  OFICINA@example.test  ';
+        $this->patchJson(route('admin.capacitaciones.personal.update', $user), $payload)->assertOk();
+        $this->assertSame('oficina@example.test', $profile->fresh()->institutional_email);
+        $this->getJson(route('admin.capacitaciones.personal.edit', $user))->assertOk()
+            ->assertJsonPath('fields.institutional_email', 'oficina@example.test');
+        $payload['institutional_email'] = 'correo-invalido';
+        $this->patchJson(route('admin.capacitaciones.personal.update', $user), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('institutional_email');
+        $payload['institutional_email'] = '';
+        $this->patchJson(route('admin.capacitaciones.personal.update', $user), $payload)->assertOk();
+        $this->assertNull($profile->fresh()->institutional_email);
+    }
+
+    public function test_mobile_sales_access_requires_checkbox_seller_role_and_active_employment(): void
+    {
+        $user = $this->createUser();
+        $profile = $this->createProfile($user);
+        $user->assignRole(Role::findOrCreate('Vendedor', 'web'));
+        $this->actingAs($user);
+        $this->getJson('/api/mobile/me')->assertForbidden();
+        $profile->update(['positions' => ['Vendedor', PersonnelProfile::POSITION_MOBILE]]);
+        $this->actingAs($user->fresh())->getJson('/api/mobile/me')->assertOk()->assertJsonPath('user.module', 'sales');
+        $profile->update(['positions' => ['Vendedor']]);
+        $this->actingAs($user->fresh())->getJson('/api/mobile/me')->assertForbidden();
+        $this->getJson('/api/mobile/sales/clients')->assertForbidden();
+        $profile->update(['positions' => ['Vendedor', PersonnelProfile::POSITION_MOBILE], 'employment_status' => 'inactive']);
+        $this->actingAs($user->fresh())->getJson('/api/mobile/me')->assertForbidden();
+    }
+
+    public function test_seller_hospital_assignment_is_saved_validated_and_restricted(): void
+    {
+        \Illuminate\Support\Facades\Schema::create('clientes', function (\Illuminate\Database\Schema\Blueprint $table) { $table->id(); $table->string('nombre'); });
+        \Illuminate\Support\Facades\Schema::create('cliente_hospital', function (\Illuminate\Database\Schema\Blueprint $table) { $table->unsignedBigInteger('hospital_id'); $table->unsignedBigInteger('cliente_id'); });
+        $seller = $this->createUser();
+        $seller->assignRole(Role::findOrCreate('Vendedor', 'web'));
+        $hospital = \App\Models\Hospital::create(['name' => 'Hospital asignable', 'adress' => 'Demo']);
+        $other = $this->createUser();
+        $other->assignRole('Vendedor');
+        $hospital->salespeople()->attach($other->id);
+        $url = route('admin.capacitaciones.personal.hospitals', $seller);
+        $this->getJson($url)->assertOk()->assertJsonPath('hospitals.0.name', 'Hospital asignable');
+        $this->putJson($url, ['hospital_ids' => [$hospital->id]])->assertOk();
+        $this->getJson($url)->assertOk()->assertJsonPath('selected.0', $hospital->id);
+        $this->assertSame(2, $hospital->salespeople()->count());
+        $this->putJson($url, ['hospital_ids' => [999999]])->assertUnprocessable();
+        $this->putJson($url, ['hospital_ids' => []])->assertOk();
+        $this->assertSame([$other->id], $hospital->salespeople()->pluck('users.id')->all());
+        $unauthorized = $this->createUser();
+        $unauthorized->assignRole(Role::findOrCreate('Usuario general', 'web'));
+        $this->actingAs($unauthorized)->getJson($url)->assertForbidden();
+        $this->putJson($url, ['hospital_ids' => [$hospital->id]])->assertForbidden();
     }
 
     public function test_edit_returns_general_information_without_exposing_credentials(): void
@@ -232,7 +294,7 @@ class PersonnelEditingTest extends TestCase
     {
         $view = app(\App\Http\Controllers\Admin\TrainingPersonnelController::class)
             ->index(\Illuminate\Http\Request::create('/admin/capacitaciones/personal'));
-        $this->assertSame(['Vendedor', 'Soporte a ventas (Cotizaciones)'], $view->getData()['jobCatalog']['Ventas']);
+        $this->assertSame(['Vendedor', 'Soporte a ventas (Cotizaciones)', PersonnelProfile::POSITION_MOBILE], $view->getData()['jobCatalog']['Ventas']);
         foreach (['personnel-create-modal', 'personnel-edit-modal'] as $modal) {
             $html = view('admin.capacitaciones.partials.'.$modal, $view->getData() + [
                 'errors' => new \Illuminate\Support\ViewErrorBag,

@@ -42,6 +42,10 @@
                             <span>Correo personal *</span>
                             <input type="email" name="personal_email" required maxlength="255" autocomplete="email">
                         </label>
+                        <label class="personnel-field">
+                            <span>Correo institucional</span>
+                            <input type="email" name="institutional_email" maxlength="255" autocomplete="off">
+                        </label>
                     </div>
                 </section>
 
@@ -81,6 +85,9 @@
                                         <label>
                                             <input type="checkbox" name="positions[]" value="{{ $job }}">
                                             <span>{{ $job }}</span>
+                                            @if ($job === \App\Models\PersonnelProfile::POSITION_SELLER)
+                                                <button type="button" data-assign-seller-hospitals class="ml-2 rounded border border-teal-500 px-2 py-1 text-teal-700">Asignar hospitales</button>
+                                            @endif
                                         </label>
                                     @endforeach
                                 </div>

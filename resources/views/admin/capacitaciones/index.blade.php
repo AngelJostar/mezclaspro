@@ -1087,7 +1087,10 @@
                         <i class="fa-solid fa-plus" aria-hidden="true"></i>
                         <span>Nuevo personal</span>
                     </button>
-                    <button type="button" class="training-secondary-button">Personal concluido</button>
+                    @foreach (['all' => 'Todo el personal', 'active' => 'Personal Activo', 'inactive' => 'Personal de baja', 'sellers' => 'Vendedores'] as $filter => $label)
+                        <button type="button" class="training-secondary-button personnel-quick-filter"
+                            data-personnel-quick-filter="{{ $filter }}" aria-pressed="{{ $filter === 'all' ? 'true' : 'false' }}">{{ $label }}</button>
+                    @endforeach
                 </div>
             @endif
 
@@ -1134,7 +1137,7 @@
                     <thead>
                         @if ($isPersonnelPage)
                             <tr>
-                                <x-filterable-table-header rowspan="2" scope="col" column="0" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Personal</x-filterable-table-header>
+                                <x-filterable-table-header class="training-personnel-fixed" rowspan="2" scope="col" column="0" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Personal</x-filterable-table-header>
                                 <th rowspan="2">Editar</th>
                                 <x-filterable-table-header rowspan="2" scope="col" column="2" trigger-class="js-personnel-filter" sort-class="js-personnel-sort">Puesto(s)</x-filterable-table-header>
                                 <x-filterable-table-header rowspan="2" scope="col" column="3" trigger-class="js-personnel-filter" sort-class="js-personnel-sort" sort-type="date">Fecha de ingreso</x-filterable-table-header>
@@ -1188,9 +1191,10 @@
                                     : null;
                             @endphp
                             <tr data-student-row data-student-name="{{ $person['name'] }}"
+                                data-personnel-seller="{{ collect($person['positions'] ?? [])->contains('name', \App\Models\PersonnelProfile::POSITION_SELLER) ? '1' : '0' }}"
                                 data-student-index="{{ $loop->index }}"
                                 @if ($isPersonnelPage && ($loop->index < $personnelOffset || $loop->index >= $personnelOffset + $personnelPageSize)) hidden @endif>
-                                <td>
+                                <td @class(['training-personnel-fixed' => $isPersonnelPage])>
                                     <div class="training-person">
                                         <span class="training-avatar is-{{ $person['avatar'] }}">{{ $person['initials'] }}</span>
                                         <strong>{{ $person['name'] }}</strong>
@@ -1204,6 +1208,11 @@
                                                 aria-label="Editar datos de {{ $person['name'] }}">
                                                 <span>Editar</span>
                                             </button>
+                                            @if ($personUser->isSalesperson())
+                                                <button type="button" class="training-user-edit-button" style="margin-top:6px"
+                                                    data-assign-seller-hospitals data-seller-endpoint="{{ route('admin.capacitaciones.personal.hospitals', $personUser) }}"
+                                                    aria-label="Ver clientes de {{ $person['name'] }}">Ver clientes</button>
+                                            @endif
                                         @else
                                             <span class="training-empty-program">-</span>
                                         @endif
@@ -1454,6 +1463,7 @@
             @if ($isPersonnelPage)
                 @include('admin.capacitaciones.partials.personnel-create-modal')
                 @include('admin.capacitaciones.partials.personnel-edit-modal')
+                @include('admin.capacitaciones.partials.seller-hospitals-modal')
                 @include('admin.capacitaciones.partials.personnel-user-management')
                 @include('admin.capacitaciones.partials.personnel-table-script')
             @endif
@@ -4106,6 +4116,12 @@
                 min-width: 250rem;
             }
 
+            .personnel-quick-filter[aria-pressed="true"] {
+                background: #00a88f;
+                border-color: #00a88f;
+                color: #ffffff;
+            }
+
             .training-personnel-table thead th[rowspan="2"] {
                 vertical-align: middle;
             }
@@ -6143,6 +6159,19 @@
             .training-personnel-table table {
                 min-width: 188rem;
                 font-size: 0.76rem;
+            }
+
+            .training-personnel-table .training-personnel-fixed {
+                position: sticky;
+                left: 0;
+                z-index: 2;
+                background: #ffffff;
+                box-shadow: 3px 0 5px rgba(15, 23, 42, 0.10);
+            }
+
+            .training-personnel-table th.training-personnel-fixed {
+                z-index: 3;
+                background: #fbfdff;
             }
 
             .training-personnel-table th,

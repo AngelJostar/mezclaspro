@@ -255,7 +255,7 @@
                         <x-filterable-table-header column="1" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Institucion</x-filterable-table-header>
                         <x-filterable-table-header column="2" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">Unidad</x-filterable-table-header>
+                            class="border border-slate-300">Hospital</x-filterable-table-header>
                         <x-filterable-table-header column="3" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Nombre del Medico</x-filterable-table-header>
                         <x-filterable-table-header column="4" trigger-class="js-billing-column-filter" compact
@@ -266,19 +266,18 @@
                             class="border border-slate-300">Cantidad</x-filterable-table-header>
                         <x-filterable-table-header column="7" trigger-class="js-billing-column-filter" compact
                             class="w-[110px] min-w-[110px] max-w-[110px] border border-slate-300">
-                            <span class="block leading-tight">Cantidad de</span>
-                            <span class="block leading-tight">Frascos</span>
+                            Unidad
                         </x-filterable-table-header>
                         <x-filterable-table-header column="8" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Descripcion</x-filterable-table-header>
                         <x-filterable-table-header column="9" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">P.V. unitario antes de IVA</x-filterable-table-header>
+                            class="border border-slate-300">Precio unitario IVA incluido</x-filterable-table-header>
                         <x-filterable-table-header column="10" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">P.V. total IVA Incluido</x-filterable-table-header>
                         <x-filterable-table-header column="11" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Empresa</x-filterable-table-header>
                         <x-filterable-table-header column="12" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">Precio Total</x-filterable-table-header>
+                            class="border border-slate-300">Precio de venta total editable</x-filterable-table-header>
                         <x-filterable-table-header column="13" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Conciliable</x-filterable-table-header>
                         <x-filterable-table-header column="14" trigger-class="js-billing-column-filter" compact
@@ -286,7 +285,7 @@
                         <x-filterable-table-header column="15" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Folio Factura Interno</x-filterable-table-header>
                         <x-filterable-table-header column="16" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">Fecha Facturacion</x-filterable-table-header>
+                            class="border border-slate-300">Fecha de factura</x-filterable-table-header>
                         <x-filterable-table-header column="17" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Numero Carta Factura</x-filterable-table-header>
                         <x-filterable-table-header column="18" trigger-class="js-billing-column-filter" compact
@@ -362,8 +361,8 @@
                                 @endforeach
                             </td>
                             <td class="w-[110px] min-w-[110px] max-w-[110px] border border-slate-200 px-2 py-1 text-center">
-                                @foreach ($item['bottle_quantity_lines'] as $bottleQuantityLine)
-                                    <div class="whitespace-nowrap">{{ $bottleQuantityLine }}</div>
+                                @foreach ($item['sale_unit_lines'] as $saleUnitLine)
+                                    <div class="whitespace-nowrap">{{ $saleUnitLine }}</div>
                                 @endforeach
                             </td>
                             <td class="border border-slate-200 px-2 py-1 min-w-[300px]">
