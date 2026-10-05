@@ -16,13 +16,21 @@ class MobileNotificationController extends Controller
     {
         /** @var User $messenger */
         $messenger = $request->user();
-        $this->synchronizeOperationalNotifications($messenger);
+        abort_unless($messenger->is_active && !$messenger->isBlockedByOrganization(), 403);
+        if ($messenger->hasAnyRole(['Cliente', 'Institucion'])) {
+            abort_unless($messenger->hospital_id, 403);
+            $this->synchronizeHospitalNotifications($messenger);
+        } elseif (!$messenger->isSalesperson()) {
+            $this->synchronizeOperationalNotifications($messenger);
+        }
 
         $notifications = $messenger->notifications()->latest()->limit(50)->get()->map(fn ($notification) => [
             'id' => $notification->id,
             'title' => (string) data_get($notification->data, 'title', 'Notificación'),
             'message' => (string) data_get($notification->data, 'message', ''),
             'kind' => (string) data_get($notification->data, 'kind', 'info'),
+            'quotation_id' => data_get($notification->data, 'quotation_id'),
+            'status' => data_get($notification->data, 'status'),
             'read_at' => $notification->read_at?->toIso8601String(),
             'created_at' => $notification->created_at?->toIso8601String(),
             'relative_time' => $notification->created_at?->locale('es')->diffForHumans(short: true) ?? '',
@@ -36,9 +44,26 @@ class MobileNotificationController extends Controller
 
     public function readAll(Request $request): JsonResponse
     {
+        abort_unless($request->user()->is_active && !$request->user()->isBlockedByOrganization(), 403);
         $request->user()->unreadNotifications()->update(['read_at' => now()]);
 
         return response()->json(['message' => 'Notificaciones marcadas como leídas.']);
+    }
+
+    private function synchronizeHospitalNotifications(User $user): void
+    {
+        \App\Models\RequestQuotation::where('hospital_id', $user->hospital_id)->where('status', '<>', 'borrador')
+            ->latest('id')->limit(30)->get()->each(function ($q) use ($user) {
+                if ($user->notifications()->where('data->quotation_id', $q->id)->exists()) return;
+                $this->createOnce($user, 'hospital-quote-'.$q->id, [
+                    'quotation_id' => $q->id, 'status' => $q->status,
+                    'title' => 'Cotización disponible', 'message' => 'La cotización '.$q->folio.' está disponible. Consulta Cotizaciones recibidas.', 'kind' => 'quotation_updated',
+                ], $q->sent_at ?? $q->created_at);
+            });
+        DistributionDeliveryConfirmation::whereHas('schedule', fn ($q) => $q->where('hospital_id', $user->hospital_id))
+            ->latest('delivered_at')->limit(30)->get()->each(fn ($c) => $this->createOnce($user, 'hospital-delivery-'.$c->id, [
+                'title' => 'Entrega confirmada', 'message' => 'El mensajero confirmó la entrega en tu hospital. Consulta el detalle en Entregas.', 'kind' => 'delivery_completed',
+            ], $c->delivered_at));
     }
 
     private function synchronizeOperationalNotifications(User $messenger): void

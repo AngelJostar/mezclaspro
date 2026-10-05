@@ -37,6 +37,22 @@ class InstitucionBillingController extends Controller
         return $this->renderIndex($request, 'pending');
     }
 
+    public function clientRecords(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user->hasAnyRole(['Cliente', 'Institucion']) && $user->hospital_id, 403);
+        $records = collect();
+        if ($user->can('oncologicos_solicitudes_index')) {
+            $records = $records->concat($this->buildOncoQuery(null, $user->hospital_id, '', null, null, '')
+                ->get()->map(fn ($record) => $this->transformRecord($record, 'onco', null)));
+        }
+        if ($user->can('nutricionales_solicitudes_index')) {
+            $records = $records->concat($this->buildNutriQuery(null, $user->hospital_id, '', null, null, '')
+                ->get()->map(fn ($record) => $this->transformRecord($record, 'nutri', null)));
+        }
+        return $this->paginateCollection($records->sortByDesc('sort_date')->values(), 15, $request);
+    }
+
     public function receivable(Request $request)
     {
         return $this->renderIndex($request, 'receivable');
@@ -675,9 +691,12 @@ class InstitucionBillingController extends Controller
             ? $pricing['lines']->map(function ($line) {
                 $quantity = rtrim(rtrim(number_format((float) $line['quantity'], 2, '.', ''), '0'), '.');
 
-                return $quantity . ' ' . $line['unit_label'];
+                return $quantity;
             })->all()
             : ['1'];
+        $saleUnitLines = $type === 'onco'
+            ? $pricing['lines']->pluck('unit_label')->all()
+            : ['mezcla'];
         $bottleQuantityLines = $type === 'onco'
             ? $pricing['lines']->map(function ($line) {
                 $quantity = $line['bottle_quantity'] ?? null;
@@ -691,9 +710,13 @@ class InstitucionBillingController extends Controller
             : ['—'];
         $unitPriceLines = $type === 'onco'
             ? $pricing['lines']->map(function ($line) {
-                return $this->pricing->formatMoney((float) $line['unit_price']) . ' / ' . $line['unit_label'];
+                $quantity = (float) $line['quantity'];
+                $unitWithVat = $quantity > 0
+                    ? (float) $line['total_with_vat'] / $quantity
+                    : (float) $line['unit_price'];
+                return $this->pricing->formatMoney($unitWithVat);
             })->all()
-            : [$this->pricing->formatMoney((float) $pricing['subtotal_before_vat'])];
+            : [$this->pricing->formatMoney((float) $pricing['total_iva_included'])];
         $totalPrice = (float) $pricing['total_iva_included'];
         $formattedTotalPrice = $totalPrice > 0 ? $this->pricing->formatMoney($totalPrice) : '—';
         $remision = $record->remision;
@@ -721,6 +744,7 @@ class InstitucionBillingController extends Controller
             'breakdown_lines' => $this->buildBillingBreakdownLines($record, $type, $pricing),
             'description_lines' => $descriptionLines,
             'quantity_lines' => $quantityLines,
+            'sale_unit_lines' => $saleUnitLines,
             'bottle_quantity_lines' => $bottleQuantityLines,
             'unit_price_lines' => $unitPriceLines,
             'pv_total' => $formattedTotalPrice,
@@ -735,7 +759,7 @@ class InstitucionBillingController extends Controller
                 $remision ?: '—',
                 $fecha,
                 implode("\n", $quantityLines),
-                implode("\n", $bottleQuantityLines),
+                implode("\n", $saleUnitLines),
                 implode("\n", $descriptionLines),
                 implode("\n", $unitPriceLines),
                 $formattedTotalPrice,

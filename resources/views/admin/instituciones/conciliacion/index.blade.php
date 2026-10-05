@@ -1,4 +1,20 @@
 <x-admin-layout>
+    @push('css')
+        <style>
+            .admin-content:has([data-conciliation-inbox]) {
+                min-height: calc(100dvh - var(--corporate-header-height) - 12px - 1.5rem);
+                display: flex;
+                flex-direction: column;
+            }
+            [data-conciliation-inbox] { flex: 1; display: flex; flex-direction: column; }
+            [data-conciliation-inbox] > .conciliation-inbox-pagination { margin-top: auto; padding-top: 1rem; }
+            @media (max-width: 767px) {
+                .admin-content:has([data-conciliation-inbox]) {
+                    min-height: calc(100dvh - var(--corporate-header-height) - 12px - .75rem);
+                }
+            }
+        </style>
+    @endpush
     <div class="mt-2 mb-4"><h1 class="text-2xl font-medium text-gray-800">Panel Administrativo</h1></div>
     <div class="conciliation-agent-toolbar" data-conciliation-agent>
         @include('admin.instituciones.partials.administration-carousel', ['administrationSection' => 'conciliacion'])
@@ -53,7 +69,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="mt-4">{{ $submissions->links() }}</div>
+        <div class="conciliation-inbox-pagination">{{ $submissions->links() }}</div>
         <dialog class="ht-review-dialog" data-conciliation-review aria-labelledby="conciliation-review-title">
             <header class="ht-review-heading"><h2 id="conciliation-review-title" tabindex="-1">Resumen de conciliación</h2><button type="button" class="ht-icon" data-close-review aria-label="Cerrar resumen" title="Cerrar"><i data-tools-icon="x" aria-hidden="true"></i></button></header>
             <div class="ht-review-body">

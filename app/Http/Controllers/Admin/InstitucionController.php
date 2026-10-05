@@ -52,7 +52,10 @@ class InstitucionController extends Controller
         if ($administrationSection === 'conciliacion') {
             return app(ConciliationSubmissionController::class)->index($request);
         }
-        if (in_array($administrationSection, ['ajustes', 'pagos'], true)) {
+        if ($administrationSection === 'ajustes') {
+            return app(AdjustmentLogController::class)->index($request);
+        }
+        if ($administrationSection === 'pagos') {
             return view('admin.instituciones.administration-section', compact('administrationSection'));
         }
 
@@ -371,6 +374,8 @@ class InstitucionController extends Controller
 
         $hospitals = $institucion->hospitals()
             ->with([
+                'distributionRoutes' => fn ($query) => $query->orderBy('name'),
+                'salespeople' => fn ($query) => $query->orderBy('name'),
                 'users' => fn ($query) => $query
                     ->select('id', 'hospital_id', 'username', 'credential_password', 'training_credential_password', 'is_active')
                     ->whereHas('roles', fn ($roleQuery) => $roleQuery

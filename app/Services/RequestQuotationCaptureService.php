@@ -15,13 +15,16 @@ class RequestQuotationCaptureService
 {
     public function __construct(private InstitutionBillingPricingService $pricing) {}
 
-    public function catalog(User $user, string $category, int $hospitalId, bool $noCommercial = false, ?string $billingMode = null): array
+    public function catalog(User $user, string $category, int $hospitalId, bool $noCommercial = false, ?string $billingMode = null, bool $requestOnly = false): array
     {
-        abort_unless(RequestQuotation::canCreate($user, $category), 403);
+        abort_unless(RequestQuotation::canCreate($user, $category) || ($requestOnly && $user->hasAnyRole(['Cliente', 'Institucion']) && $user->is_active), 403);
         if ($user->hasAnyRole(['Cliente', 'Institucion'])) {
             abort_unless($user->hospital_id && (int) $user->hospital_id === $hospitalId, 403);
         }
         $hospital = Hospital::with('instituciones')->findOrFail($hospitalId);
+        if ($user->isSalesperson()) {
+            abort_unless($hospital->salespeople()->where('users.id', $user->id)->exists(), 403, 'Solo puedes cotizar a tus hospitales asignados.');
+        }
         if (!$hospital->is_active || !$hospital->access_is_active) {
             $this->fail('hospital_id', 'El hospital no esta activo.');
         }
@@ -138,10 +141,10 @@ class RequestQuotationCaptureService
         ];
     }
 
-    public function commercialCatalog(User $user, array $data): array
+    public function commercialCatalog(User $user, array $data, bool $requestOnly = false): array
     {
         $catalog = $this->catalog($user, $data['category'], (int) $data['hospital_id'],
-            (bool) ($data['no_commercial_relationship'] ?? false), $data['billing_mode'] ?? null);
+            (bool) ($data['no_commercial_relationship'] ?? false), $data['billing_mode'] ?? null, $requestOnly);
         $unit = $data['category'] === 'nutricionales' ? 'ml' : 'mg';
         foreach ($catalog['products'] as &$product) {
             // Legacy nutrition tariffs store price per mL even for whole-bottle billing.
@@ -162,9 +165,9 @@ class RequestQuotationCaptureService
         return $catalog;
     }
 
-    public function capture(User $user, array $data, bool $preview = false): array
+    public function capture(User $user, array $data, bool $preview = false, bool $requestOnly = false): array
     {
-        if (($data['flow'] ?? null) === 'commercial') return $this->captureCommercial($user, $data, $preview);
+        if (($data['flow'] ?? null) === 'commercial') return $this->captureCommercial($user, $data, $preview, $requestOnly);
         $catalog = $this->catalog($user, $data['category'], (int) $data['hospital_id']);
         if (!in_array((int) $data['institution_id'], array_column($catalog['institutions'], 'id'), true)) {
             $this->fail('institution_id', 'La institucion seleccionada no corresponde al hospital.');
@@ -262,7 +265,7 @@ class RequestQuotationCaptureService
         }
     }
 
-    private function captureCommercial(User $user, array $data, bool $preview): array
+    private function captureCommercial(User $user, array $data, bool $preview, bool $requestOnly = false): array
     {
         $grouped = isset($data['mixture_count']);
         if ($grouped) {
@@ -279,7 +282,7 @@ class RequestQuotationCaptureService
             if (count($numbers) !== $data['mixture_count']) $this->fail('items', 'Agrega al menos un medicamento a cada mezcla.');
             usort($data['items'], fn ($left, $right) => $left['mixture_number'] <=> $right['mixture_number']);
         }
-        $catalog = $this->commercialCatalog($user, $data);
+        $catalog = $this->commercialCatalog($user, $data, $requestOnly);
         if (!in_array((int) $data['institution_id'], array_column($catalog['institutions'], 'id'), true)) {
             $this->fail('institution_id', 'La institucion seleccionada no corresponde al hospital.');
         }

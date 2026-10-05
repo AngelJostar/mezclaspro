@@ -39,6 +39,7 @@ class QuotationSellerTest extends TestCase
 
     public function test_assignment_is_saved_displayed_exported_and_delivered_once_on_send(): void
     {
+        \App\Models\Hospital::findOrFail(1)->salespeople()->syncWithoutDetaching([$this->seller->id]);
         $payload = Fixture::payload() + ['seller_id' => $this->seller->id];
         $this->store($payload)->assertOk();
         $quote = RequestQuotation::latest('id')->firstOrFail();
@@ -62,11 +63,11 @@ class QuotationSellerTest extends TestCase
 
         $this->actingAs($this->seller);
         $this->screen(['estado' => 'recibidas'])->assertOk()
-            ->assertViewHas('quotations', fn ($rows) => $rows->modelKeys() === [$quote->id]);
+            ->assertViewHas('quotations', fn ($rows) => $rows->modelKeys() === [$quote->id, 2]);
         Excel::fake();
         $this->get(route('admin.solicitudes.cotizacion.export'))->assertOk();
         Excel::assertDownloaded('Cotizaciones-'.now()->format('Y-m-d').'.xlsx', function (RequestQuotationsExport $export) use ($quote) {
-            $this->assertSame([$quote->id], $export->collection()->modelKeys());
+            $this->assertSame([$quote->id, 4, 3, 2], $export->collection()->modelKeys());
             $this->assertSame('Vendedora Prueba', $export->map($quote->fresh())[6]);
             return true;
         });
@@ -74,6 +75,7 @@ class QuotationSellerTest extends TestCase
 
     public function test_seller_is_automatically_assigned_and_cannot_forge_another_recipient(): void
     {
+        \App\Models\Hospital::findOrFail(1)->salespeople()->syncWithoutDetaching([$this->seller->id]);
         $this->actingAs($this->seller);
         $this->screen()->assertOk()->assertSee('Vendedora Prueba')->assertDontSee('name="seller_id"', false)
             ->assertDontSee('href="'.route('admin.solicitudes.index').'"', false)
@@ -111,6 +113,7 @@ class QuotationSellerTest extends TestCase
 
     public function test_invalid_and_inactive_assignments_are_rejected_and_existing_draft_is_preserved(): void
     {
+        \App\Models\Hospital::findOrFail(1)->salespeople()->syncWithoutDetaching([$this->seller->id]);
         $payload = Fixture::payload() + ['seller_id' => $this->seller->id];
         $this->store($payload)->assertOk();
         $quote = RequestQuotation::latest('id')->firstOrFail();
@@ -131,6 +134,7 @@ class QuotationSellerTest extends TestCase
 
     public function test_hospital_can_assign_a_seller_without_seeing_other_hospitals(): void
     {
+        \App\Models\Hospital::findOrFail(1)->salespeople()->syncWithoutDetaching([$this->seller->id]);
         $this->admin->syncRoles(Role::findOrCreate('Cliente', 'web'));
         $this->store(Fixture::payload() + ['seller_id' => $this->seller->id])->assertOk();
         $this->screen()->assertOk()->assertDontSee('Paciente ajeno');

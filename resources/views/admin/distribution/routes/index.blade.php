@@ -186,6 +186,7 @@
                                     aria-hidden="true">{!! $sortSymbol('stops') !!}</span>
                             </a>
                         </th>
+                        <th scope="col" class="w-[8%] px-4 py-3 text-center">Monitorear</th>
                         <th scope="col" class="w-[8%] px-4 py-3 text-center">Editar</th>
                         @role('Super Admin')
                             <th scope="col" class="w-[8%] px-4 py-3 text-center">Eliminar</th>
@@ -272,11 +273,17 @@
                                     <span class="text-xs font-semibold text-slate-500">Ruta cerrada</span>
                                 @else
                                 <a href="{{ route('admin.distribution.routes.monitor', $distributionRoute) }}"
-                                    class="mb-2 inline-flex h-9 items-center justify-center gap-2 rounded-md border border-emerald-600 bg-white px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-emerald-600 bg-white px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-300"
                                     title="Monitorear {{ $distributionRoute->name }}">
                                     <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
                                     <span>Monitorear</span>
                                 </a>
+                                @endif
+                            </td>
+                            <td class="px-4 py-4 text-center">
+                                @if ($distributionRoute->status === \App\Models\DistributionRoute::STATUS_COMPLETED)
+                                    <span class="text-xs font-semibold text-slate-500">Ruta cerrada</span>
+                                @else
                                 <button type="button" data-route-modal-edit
                                     data-route-id="{{ $distributionRoute->id }}"
                                     data-route-name="{{ $distributionRoute->name }}"

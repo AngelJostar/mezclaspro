@@ -387,6 +387,7 @@ final class AdminMenuAccess
         }
 
         if (str_starts_with($routeName, 'admin.hospitals.')
+            || str_starts_with($routeName, 'admin.sales.hospitals.')
             || str_starts_with($routeName, 'admin.instituciones.hospitals')) {
             return 'menu.instituciones.hospitals';
         }
@@ -401,6 +402,8 @@ final class AdminMenuAccess
                 'admin.capacitaciones.personal',
                 'admin.capacitaciones.personal.edit',
                 'admin.capacitaciones.personal.update',
+                'admin.capacitaciones.personal.hospitals',
+                'admin.capacitaciones.personal.hospitals.save',
                 'admin.capacitaciones.personal.store' => 'menu.capacitaciones.personal',
                 default => 'menu.capacitaciones.programas',
             };

@@ -146,6 +146,7 @@ class TrainingPersonnelController extends Controller
                 'maternal_surname' => $profile?->maternal_surname,
                 'phone' => $profile?->phone,
                 'personal_email' => $profile?->personal_email,
+                'institutional_email' => $profile?->institutional_email,
                 'laboratory_id' => $laboratory?->id,
                 'department' => $profile?->department,
                 'hire_date' => $profile?->hire_date?->toDateString(),
@@ -170,7 +171,11 @@ class TrainingPersonnelController extends Controller
         }
 
         // Validate scalar input before applying the same name normalization used for new personnel.
+        if (is_string($request->input('institutional_email'))) {
+            $request->merge(['institutional_email' => Str::lower(trim($request->input('institutional_email')))]);
+        }
         $validated = $request->validate([
+            'institutional_email' => ['nullable', 'email:rfc', 'max:255'],
             'first_name' => ['required', 'string', 'max:120'],
             'paternal_surname' => ['required', 'string', 'max:120'],
             'maternal_surname' => ['nullable', 'string', 'max:120'],
@@ -222,6 +227,7 @@ class TrainingPersonnelController extends Controller
                     'maternal_surname' => $maternalSurname ?: null,
                     'phone' => $validated['phone'] ?? null,
                     'personal_email' => Str::lower(trim($validated['personal_email'])),
+                    'institutional_email' => array_key_exists('institutional_email', $validated) ? ($validated['institutional_email'] ?: null) : $profile->institutional_email,
                     'department' => $validated['department'],
                     'hire_date' => $validated['hire_date'],
                     'positions' => $positions,
@@ -276,6 +282,7 @@ class TrainingPersonnelController extends Controller
             'maternal_surname' => $maternalSurname !== '' ? $maternalSurname : null,
             'username' => Str::lower(trim((string) $request->input('username'))),
             'personal_email' => Str::lower(trim((string) $request->input('personal_email'))),
+            'institutional_email' => is_string($request->input('institutional_email')) ? Str::lower(trim($request->input('institutional_email'))) : $request->input('institutional_email'),
         ]);
 
         $validated = $request->validate([
@@ -284,6 +291,7 @@ class TrainingPersonnelController extends Controller
             'maternal_surname' => ['nullable', 'string', 'max:120'],
             'phone' => ['nullable', 'string', 'max:40'],
             'personal_email' => ['required', 'email:rfc', 'max:255', 'unique:personnel_profiles,personal_email'],
+            'institutional_email' => ['nullable', 'email:rfc', 'max:255'],
             'laboratory_id' => [
                 'required',
                 'integer',
@@ -363,6 +371,7 @@ class TrainingPersonnelController extends Controller
                         : null,
                     'phone' => $validated['phone'] ?? null,
                     'personal_email' => $validated['personal_email'],
+                    'institutional_email' => $validated['institutional_email'] ?? null,
                     'positions' => array_values(array_unique($validated['positions'])),
                     'department' => $validated['department'],
                     'hire_date' => $validated['hire_date'],
@@ -440,9 +449,11 @@ class TrainingPersonnelController extends Controller
     private function syncSalesRole(User $user, array $positions): void
     {
         if (in_array(PersonnelProfile::POSITION_SELLER, $positions, true)) {
-            $user->assignRole(Role::findOrCreate(PersonnelProfile::POSITION_SELLER, 'web'));
-        } elseif ($user->hasRole(PersonnelProfile::POSITION_SELLER)) {
-            $user->removeRole(PersonnelProfile::POSITION_SELLER);
+            $user->assignRole(Role::findOrCreate(PersonnelProfile::POSITION_SELLER, 'web'), Role::findOrCreate('Ventas', 'web'));
+        } elseif ($user->hasAnyRole([PersonnelProfile::POSITION_SELLER, 'Ventas'])) {
+            foreach ([PersonnelProfile::POSITION_SELLER, 'Ventas'] as $role) {
+                if ($user->hasRole($role)) $user->removeRole($role);
+            }
             if ($user->roles()->doesntExist()) {
                 $user->assignRole(Role::findOrCreate('Capacitacion', 'web'));
             }
@@ -474,7 +485,7 @@ class TrainingPersonnelController extends Controller
                 PersonnelProfile::POSITION_COURIER,
                 'Capturista administrativo',
             ],
-            'Ventas' => [PersonnelProfile::POSITION_SELLER, PersonnelProfile::POSITION_SALES_SUPPORT],
+            'Ventas' => [PersonnelProfile::POSITION_SELLER, PersonnelProfile::POSITION_SALES_SUPPORT, PersonnelProfile::POSITION_MOBILE],
         ];
     }
 

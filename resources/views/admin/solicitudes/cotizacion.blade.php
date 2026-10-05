@@ -23,6 +23,12 @@
             @endforeach
         </nav>
         <div class="ml-auto flex flex-wrap justify-end gap-2">
+            @if (!auth()->user()->hasAnyRole(['Cliente', 'Institucion']) && count($createTypes))
+                <a href="{{ route('admin.solicitudes.cotizacion.hospital-requests.index') }}" class="rounded-full border border-emerald-600 px-5 py-2.5 text-xs font-semibold text-emerald-700">Solicitudes de hospitales</a>
+            @endif
+            @if (auth()->user()->hasRole('Super Admin') || auth()->user()->can('menu.instituciones.hospitals'))
+                <a href="{{ route('admin.sales.hospitals.index') }}" class="rounded-full border border-emerald-600 px-5 py-2.5 text-xs font-semibold text-emerald-700">Asignar hospitales a vendedores</a>
+            @endif
             @if (count($createTypes))
                 <button type="button" data-quotation-new
                     title="Nueva cotizacion"
@@ -323,6 +329,9 @@
         @if (count($createTypes))
             @include('admin.solicitudes.quotations._capture-modal')
             @include('admin.solicitudes.quotations._commercial-modal')
+            @if ($hospitalRequestSource ?? null)
+                <script type="application/json" data-hospital-request-source>@json($hospitalRequestSource)</script>
+            @endif
         @endif
     </div>
 </x-admin-layout>

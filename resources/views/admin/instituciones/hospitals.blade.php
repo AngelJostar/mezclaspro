@@ -1,4 +1,7 @@
 <x-admin-layout>
+    <style>
+        [data-hospital-password-cell] [data-inline-input] { min-width: 0; width: 0; }
+    </style>
     <section class="rounded-lg bg-white p-5 shadow-lg">
         <div class="flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -106,17 +109,19 @@
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[1500px] text-left text-xs text-gray-600">
+                <table class="w-full min-w-[1280px] text-left text-xs text-gray-600">
                     <thead class="bg-gray-50 text-[11px] uppercase text-gray-700">
                         <tr>
                             <th class="px-4 py-3 font-semibold">Hospital</th>
                             <th class="px-4 py-3 font-semibold">Usuario</th>
-                            <th class="px-4 py-3 font-semibold">Contrase&ntilde;a</th>
+                            <th class="px-2 py-3 font-semibold" style="width:176px">Contrase&ntilde;a</th>
                             <th class="px-4 py-3 font-semibold">Clave</th>
                             <th class="px-4 py-3 font-semibold">Tipo de unidad</th>
                             <th class="px-4 py-3 font-semibold">Municipio</th>
                             <th class="px-4 py-3 font-semibold">L&iacute;neas de servicio</th>
                             <th class="px-4 py-3 font-semibold">Estatus</th>
+                            <th class="px-4 py-3 font-semibold">Ruta asignada</th>
+                            <th class="px-4 py-3 font-semibold">Vendedor asignado</th>
                             <th class="px-4 py-3 text-center font-semibold">Bloqueo</th>
                             <th class="px-4 py-3 text-center font-semibold">Editar</th>
                         </tr>
@@ -155,14 +160,14 @@
                                         @endcan
                                     @endforelse
                                 </td>
-                                <td class="min-w-72 px-4 py-3 align-top">
+                                <td data-hospital-password-cell class="px-2 py-3 align-top" style="width:176px;max-width:176px">
                                     @forelse ($hospital->users as $accessUser)
                                         @php
                                             $accessPassword = (string) ($accessUser->credential_password
                                                 ?: $accessUser->training_credential_password
                                                 ?: '');
                                         @endphp
-                                        <div class="{{ ! $loop->first ? 'mt-2 border-t border-gray-100 pt-2' : '' }}">
+                                        <div style="width:160px" class="{{ ! $loop->first ? 'mt-2 border-t border-gray-100 pt-2' : '' }}">
                                             @can('usuarios')
                                                 <x-inline-user-credential-editor :user="$accessUser" field="password" compact
                                                     :display-value="$accessPassword" empty-label="Sin contrasena" />
@@ -208,6 +213,23 @@
                                         {{ $hospital->is_active ? 'Activo' : 'Inactivo' }}
                                     </span>
                                 </td>
+                                <td class="min-w-[180px] px-4 py-3">
+                                    @forelse ($hospital->distributionRoutes as $distributionRoute)
+                                        <div class="{{ ! $loop->first ? 'mt-1' : '' }}">
+                                            <span class="font-medium text-gray-900">{{ $distributionRoute->name }}</span>
+                                            @if ($distributionRoute->code)<span class="block text-gray-500">{{ $distributionRoute->code }}</span>@endif
+                                        </div>
+                                    @empty
+                                        <span class="text-gray-400">Sin ruta asignada</span>
+                                    @endforelse
+                                </td>
+                                <td class="min-w-[180px] px-4 py-3">
+                                    @forelse ($hospital->salespeople as $salesperson)
+                                        <div class="font-medium text-gray-900 {{ ! $loop->first ? 'mt-1' : '' }}">{{ $salesperson->name }}</div>
+                                    @empty
+                                        <span class="text-gray-400">Sin vendedor asignado</span>
+                                    @endforelse
+                                </td>
                                 <td class="px-4 py-3 text-center whitespace-nowrap">
                                     <form method="POST"
                                         action="{{ route('admin.users.hospitals.status.update', $hospital) }}"
@@ -248,7 +270,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="10" class="px-4 py-10 text-center text-sm text-gray-500">
+                                <td colspan="12" class="px-4 py-10 text-center text-sm text-gray-500">
                                     No hay hospitales relacionados con estos filtros.
                                 </td>
                             </tr>

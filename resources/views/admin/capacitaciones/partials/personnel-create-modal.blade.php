@@ -6,6 +6,7 @@
         'maternal_surname',
         'phone',
         'personal_email',
+        'institutional_email',
         'laboratory_id',
         'department',
         'hire_date',
@@ -99,6 +100,11 @@
                             <input type="email" name="personal_email" value="{{ old('personal_email') }}"
                                 maxlength="255" autocomplete="email" required>
                             @error('personal_email')<small>{{ $message }}</small>@enderror
+                        </label>
+                        <label class="personnel-field">
+                            <span>Correo institucional</span>
+                            <input type="email" name="institutional_email" value="{{ old('institutional_email') }}" maxlength="255" autocomplete="off">
+                            @error('institutional_email')<small>{{ $message }}</small>@enderror
                         </label>
                     </div>
                 </section>

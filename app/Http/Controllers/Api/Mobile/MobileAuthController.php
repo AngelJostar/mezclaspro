@@ -84,6 +84,7 @@ class MobileAuthController extends Controller
     private function isHospitalUser(User $user): bool
     {
         return (bool) $user->hospital_id
+            && ! $user->isBlockedByOrganization()
             && $user->hasAnyRole(['Cliente', 'Institucion'])
             && $user->hospital
             && $user->hospital->is_active
@@ -92,6 +93,10 @@ class MobileAuthController extends Controller
 
     private function accessModule(User $user): ?string
     {
+        if ($user->isSalesperson() && $user->personnelProfile?->employment_status === 'hired'
+            && in_array(PersonnelProfile::POSITION_MOBILE, $user->personnelProfile->positions ?? [], true)) {
+            return 'sales';
+        }
         if ($this->isMessenger($user)) {
             return 'courier';
         }
@@ -111,7 +116,7 @@ class MobileAuthController extends Controller
             'name' => trim($user->name.' '.$user->lastname),
             'username' => $user->username,
             'module' => $module,
-            'profile' => $module === 'courier' ? [
+            'profile' => in_array($module, ['courier', 'sales'], true) ? [
                 'position' => $user->personnelProfile?->positions[0] ?? 'Mensajero',
                 'email' => $user->personnelProfile?->personal_email,
                 'phone' => $user->personnelProfile?->phone,

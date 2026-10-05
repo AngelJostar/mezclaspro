@@ -13,6 +13,7 @@ class PersonnelProfile extends Model
     public const POSITION_SALES_SUPPORT = 'Soporte a ventas (Cotizaciones)';
 
     public const POSITION_COURIER = 'Mensajero de red fria';
+    public const POSITION_MOBILE = 'Aplicación Móvil';
 
     protected $fillable = [
         'user_id',
@@ -21,6 +22,7 @@ class PersonnelProfile extends Model
         'maternal_surname',
         'phone',
         'personal_email',
+        'institutional_email',
         'positions',
         'department',
         'hire_date',

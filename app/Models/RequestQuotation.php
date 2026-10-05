@@ -8,6 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RequestQuotation extends Model
 {
+    protected static function booted(): void
+    {
+        static::saved(fn (self $quotation) => app(\App\Services\QuotationWorkflowService::class)->record($quotation));
+    }
+
     public const STATUS_FILTERS = [
         'todas' => 'Todas',
         'recibidas' => 'Recibidas',
@@ -39,12 +44,16 @@ class RequestQuotation extends Model
     public function canBeViewedBy(User $user): bool
     {
         $type = $this->category === 'nutricionales' ? 'nutricionales' : 'oncologicos';
+        $laboratoryId = $user->hasAnyRole(['Admin', 'Super Admin', 'Cliente', 'Institucion']) || $user->isSalesperson()
+            ? null : $user->personnelProfile?->laboratory_id;
 
         return ($user->isSalesperson() || $user->can($type.'_solicitudes_index'))
             && (!$user->hasSalesOnlyAccess() || (int) $this->created_by === (int) $user->id
-                || ((int) $this->seller_id === (int) $user->id && $this->status !== 'borrador'))
+                || ((int) $this->seller_id === (int) $user->id && $this->status !== 'borrador')
+                || (!$this->seller_id && $this->status !== 'borrador' && $this->hospital?->salespeople()->where('users.id', $user->id)->exists()))
             && (!$user->hasAnyRole(['Cliente', 'Institucion'])
-                || ($user->hospital_id && (int) $user->hospital_id === (int) $this->hospital_id));
+                || ($user->hospital_id && (int) $user->hospital_id === (int) $this->hospital_id))
+            && (!$laboratoryId || (int) $this->hospital?->laboratory_id === (int) $laboratoryId);
     }
 
     public function canBeEditedBy(User $user): bool
@@ -105,11 +114,16 @@ class RequestQuotation extends Model
 
     public function scopeForSalesperson($query, User $user)
     {
-        return $query->when($user->hasSalesOnlyAccess(), fn ($query) => $query->where(
+        $laboratoryId = $user->hasAnyRole(['Admin', 'Super Admin', 'Cliente', 'Institucion']) || $user->isSalesperson()
+            ? null : $user->personnelProfile?->laboratory_id;
+        return $query->when($laboratoryId, fn ($q) => $q->whereHas('hospital', fn ($h) => $h->where('laboratory_id', $laboratoryId)))
+            ->when($user->hasSalesOnlyAccess(), fn ($query) => $query->where(
             fn ($query) => $query->where('created_by', $user->id)->orWhere(
                 fn ($assigned) => $assigned->where('seller_id', $user->id)->where('status', '<>', 'borrador')
+            )->orWhere(fn ($unassigned) => $unassigned->whereNull('seller_id')->where('status', '<>', 'borrador')
+                ->whereHas('hospital.salespeople', fn ($s) => $s->where('users.id', $user->id)))
             )
-        ));
+        );
     }
 
     public function getFolioAttribute(): string

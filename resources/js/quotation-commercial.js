@@ -15,6 +15,7 @@ function initCommercialQuotation() {
     let step = 0, category = '', catalog = null, items = [], loading = false, busy = false;
     let controller, version = 0, submissionKey, updateUrl, pricingToken, documentIdentity;
     let mixtureCount = 1, mixtureSections = [], recipeSections = [], requirements = [];
+    let hospitalRequestId = null;
     const normalize = text => String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const mixtureItems = number => items.filter(item => item.mixture_number === number);
     const recipeRows = number => requirements.filter(row => row.mixture_number === number);
@@ -414,6 +415,7 @@ function initCommercialQuotation() {
     }
     function payload(action = 'save') {
         return { flow: 'commercial', category, hospital_id: Number(field('hospital_id').value), institution_id: Number(field('institution_id').value),
+            ...(hospitalRequestId ? { hospital_request_id: hospitalRequestId } : {}),
             ...(field('seller_id') ? { seller_id: field('seller_id').value || null } : {}),
             no_commercial_relationship: noCommercial(), ...(noCommercial() ? { billing_mode: field('billing_mode').value } : {}),
             patient_name: field('patient_name').value, observations: field('observations').value,
@@ -502,6 +504,7 @@ function initCommercialQuotation() {
         form.reset(); form.querySelectorAll('[data-qw-inactive-seller]').forEach(option => option.remove());
         step = 0; category = ''; catalog = null; items = []; loading = false; busy = false; updateUrl = null; pricingToken = null; documentIdentity = null;
         mixtureCount = 1; requirements = [];
+        hospitalRequestId = null;
         submissionKey = crypto.randomUUID(); error();
         find('#quote-wizard-title').textContent = 'Nueva cotizacion';
         filterHospitals(); renderRecipes(); renderItems(); renderResults(); sync();
@@ -575,6 +578,29 @@ function initCommercialQuotation() {
             busy = false; find('#quote-wizard-title').textContent = `Editar ${data.folio}`; go(2); await loadCatalog(true);
         } catch (failure) { if (current === version) { busy = false; sync(); error(failure.message); } }
     }));
+    const sourceNode = document.querySelector('[data-hospital-request-source]');
+    if (sourceNode) {
+        const source = JSON.parse(sourceNode.textContent);
+        reset(); hospitalRequestId = source.id; category = source.category;
+        const selectedCategory = dialog.querySelector(`[name=category][value="${category}"]`);
+        if (selectedCategory) selectedCategory.checked = true;
+        field('institution_id').value = source.institution_id || ''; filterHospitals(); field('hospital_id').value = source.hospital_id;
+        field('patient_name').value = source.patient_name || ''; field('observations').value = source.observations || '';
+        if (field('seller_id')) field('seller_id').value = source.seller_id || '';
+        const capture = source.capture_data?.clinical_data;
+        if (capture) {
+            field('institution_id').value = capture.institution_id || source.institution_id || '';
+            filterHospitals(); field('hospital_id').value = source.hospital_id;
+            ['patient_name', 'patient_paternal_surname', 'patient_maternal_surname', 'patient_platform_id', 'observations'].forEach(key => { field(key).value = capture[key] || ''; });
+            requirements = (capture.requirements || []).map(item => ({ mixture_number: item.mixture_number, medicine: item.medicine, concentration: item.concentration }));
+            items = (capture.items || []).map(item => ({ presentation_id: item.presentation_id, mixture_number: item.mixture_number,
+                quantity: item.bottle_count ?? item.concentration, unit: item.bottle_count != null ? 'frasco' : category === 'nutricionales' ? 'ml' : 'mg' }));
+            mixtureCount = capture.mixture_count || Math.max(1, ...items.map(item => item.mixture_number));
+        } else {
+            requirements = (source.items || []).map(item => ({ mixture_number: item.mixture_number || 1, medicine: item.name, concentration: item.quantity }));
+        }
+        renderRecipes(); go(1); loadCatalog(true);
+    }
     icons();
 }
 

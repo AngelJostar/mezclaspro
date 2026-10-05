@@ -77,6 +77,11 @@ class Hospital extends Model
         return $this->hasMany(User::class);
     }
 
+    public function salespeople(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'hospital_salesperson')->withTimestamps();
+    }
+
     public function distributionRoutes(): BelongsToMany
     {
         return $this->belongsToMany(DistributionRoute::class, 'distribution_route_hospital')
