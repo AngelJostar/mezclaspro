@@ -6,9 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class ClinicalSource extends Model
 {
-    protected $guarded = ['id'];
+    protected $fillable = [
+        'title', 'reference', 'category', 'content', 'sha256', 'is_manual',
+        'resolves_manual_ambiguities', 'allows_medical_authorization', 'allows_chemical_medical_authorization',
+        'approved_by', 'clinical_reviewer', 'approved_at', 'valid_until', 'superseded_at',
+        'manual_version', 'resolved_manual_sha256', 'manual_type', 'file_path', 'file_name',
+        'file_sha256', 'uploaded_by', 'manual_analysis',
+    ];
     protected $casts = ['is_manual' => 'boolean', 'resolves_manual_ambiguities' => 'boolean', 'allows_medical_authorization' => 'boolean',
-        'allows_chemical_medical_authorization' => 'boolean', 'approved_at' => 'datetime', 'valid_until' => 'date', 'superseded_at' => 'datetime'];
+        'allows_chemical_medical_authorization' => 'boolean', 'approved_at' => 'datetime', 'valid_until' => 'date', 'superseded_at' => 'datetime', 'manual_analysis' => 'array'];
 
     public function scopeCurrent($query)
     {

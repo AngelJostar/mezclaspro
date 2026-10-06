@@ -71,38 +71,7 @@
         @if ($selection !== '')
             @forelse ($agents->filter(fn ($agent) => $selection === 'all' || $selection === (string) $agent->id) as $agent)
                 <article class="agent-information" wire:key="agent-information-{{ $agent->id }}" data-agent-information="{{ $agent->id }}">
-                    <div class="agent-information-heading">
-                        <div class="agent-information-title">
-                            <h3>{{ $agent->name }}</h3>
-                            <div class="agent-activation" data-active="{{ $agent->is_active ? 'true' : 'false' }}">
-                                <button type="button" class="agent-switch" role="switch"
-                                    aria-checked="{{ $agent->is_active ? 'true' : 'false' }}"
-                                    aria-label="Estado de {{ $agent->name }}"
-                                    title="{{ $agent->is_active ? 'Desactivar agente' : 'Activar agente' }}"
-                                    wire:click="setAgentActive({{ $agent->id }}, {{ $agent->is_active ? 'false' : 'true' }})"
-                                    wire:loading.attr="disabled" wire:target="setAgentActive">
-                                    <span class="agent-switch-text" aria-hidden="true">{{ $agent->is_active ? 'ON' : 'OFF' }}</span>
-                                    <span class="agent-switch-thumb" aria-hidden="true"></span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="agent-heading-actions">
-                        @if ($agent->integration_key !== \App\Services\Clinical\ClinicalEvidence::KEY)
-                        <button type="button" class="agent-command" wire:click="runAgent({{ $agent->id }})" wire:loading.attr="disabled" wire:target="runAgent" @disabled(! $agent->is_active)>
-                            <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="play"></i></span>
-                            <span wire:loading.remove wire:target="runAgent({{ $agent->id }})">Ejecutar ahora</span><span wire:loading wire:target="runAgent({{ $agent->id }})">Ejecutando...</span>
-                        </button>
-                        @endif
-                        <button type="button" class="agent-edit" wire:click="editAgent({{ $agent->id }})"
-                            aria-label="Editar agente {{ $agent->name }}" title="Editar agente">
-                            <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="pencil"></i></span>
-                        </button>
-                        </div>
-                    </div>
-                    <dl class="agent-information-grid">
-                        <div><dt>Descripción</dt><dd>{{ $agent->description ?? 'Sin descripción' }}</dd></div>
-                        <div><dt>Instrucciones</dt><dd class="agent-instructions" tabindex="0">{{ $agent->instructions ?? 'Sin instrucciones' }}</dd></div>
-                    </dl>
+                    @include('livewire.admin.agent-overview')
                     @if ($agent->integration_key === \App\Services\Clinical\ClinicalEvidence::KEY)
                         @include('livewire.admin.agent-clinical-details')
                     @else

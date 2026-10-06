@@ -23,6 +23,11 @@ class Handler extends ExceptionHandler
      */
     public function register(): void
     {
+        $this->renderable(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception, \Illuminate\Http\Request $request) {
+            if ($exception->getStatusCode() === 419 && $request->isMethod('POST') && $request->is('login') && !$request->expectsJson()) {
+                return redirect('/login')->with('status', 'El formulario venció. Ingresa nuevamente tus credenciales para iniciar sesión.');
+            }
+        });
         $this->reportable(function (Throwable $e) {
             //
         });

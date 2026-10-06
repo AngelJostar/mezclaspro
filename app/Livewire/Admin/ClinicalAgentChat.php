@@ -26,6 +26,15 @@ class ClinicalAgentChat extends Component
     #[Reactive]
     public bool $configured = false;
     public string $draft = '';
+    public string $search = '';
+    #[Locked]
+    public bool $showChat = false;
+
+    public function closeChat(): void
+    {
+        $this->authorizeAccess();
+        $this->showChat = false;
+    }
 
     private function authorizeAccess(): AiAgent
     {
@@ -60,6 +69,7 @@ class ClinicalAgentChat extends Component
         $conversation = $this->conversations()->find($id);
         abort_unless($conversation, 404);
         $this->conversationId = $conversation->id;
+        $this->showChat = true;
         $this->revision = count($conversation->messages);
         $this->reset('draft');
         $this->resetValidation();
@@ -70,6 +80,7 @@ class ClinicalAgentChat extends Component
     {
         $this->authorizeAccess();
         if ($this->conversation() && !$this->conversation()->messages) {
+            $this->showChat = true;
             $this->reset('draft');
             $this->resetValidation();
             return;
@@ -81,6 +92,7 @@ class ClinicalAgentChat extends Component
     public function send(): void
     {
         $agent = $this->authorizeAccess();
+        $this->showChat = true;
         $this->resetValidation();
         $this->draft = trim($this->draft);
         $this->validate(['draft' => 'required|string|max:4000'], [
@@ -128,7 +140,10 @@ class ClinicalAgentChat extends Component
             'active' => $agent->is_active,
             'configured' => (bool) config('services.openai.api_key') || AiAgentProviderSetting::whereNotNull('api_key')->exists(),
             'messages' => $this->conversation()?->messages ?? [],
-            'conversations' => $this->conversations()->latest('id')->limit(50)->get(['id', 'created_at']),
+            'conversations' => $this->conversations()->latest('updated_at')->get()->map(function ($conversation) {
+                $conversation->chat_title = \Illuminate\Support\Str::limit($conversation->messages[0]['question'] ?? 'Nueva conversación', 70);
+                return $conversation;
+            })->filter(fn ($conversation) => $this->search === '' || mb_stripos($conversation->chat_title, $this->search) !== false),
         ]);
     }
 }

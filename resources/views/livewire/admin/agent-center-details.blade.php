@@ -8,17 +8,8 @@
     $findings = $findingsQuery->orderByRaw("CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END")->latest('last_seen_at')->limit($findingLimit)->get();
     $priorityLabels = ['high' => 'Alta', 'medium' => 'Media', 'low' => 'Baja'];
 @endphp
-<dl class="agent-criteria">
-    @if($agent->integration_key === 'admin_conciliation')<div><dt>Sección</dt><dd><a href="{{ route('admin.instituciones.reportes', ['seccion' => 'conciliacion']) }}">Administración · Conciliación</a></dd></div>@endif
-    <div><dt>Objetivo</dt><dd>{{ $configuration['objective'] ?: 'Sin definir' }}</dd></div>
-    <div><dt>Alcance</dt><dd>@if (!$agent->configuration) Pendiente de configurar @elseif ($configuration['scope_all']) Todo el sistema @elseif (! $configuration['institutions'] && ! $configuration['laboratories'] && ! $configuration['warehouses']) Sin alcance seleccionado @else Instituciones: {{ implode(', ', $configuration['institutions']) ?: 'Sin filtro' }} · Centrales: {{ implode(', ', $configuration['laboratories']) ?: 'Sin filtro' }} · Almacenes: {{ implode(', ', $configuration['warehouses']) ?: 'Sin filtro' }} @endif</dd></div>
-    <div><dt>Datos</dt><dd>{{ collect($configuration['sources'])->map(fn ($key) => $configOptions::SOURCES[$key] ?? $key)->implode(', ') ?: 'Sin fuentes' }}</dd></div>
-    <div><dt>Herramientas</dt><dd>{{ collect($configuration['tools'])->map(fn ($key) => $configOptions::TOOLS[$key] ?? $key)->implode(', ') ?: 'Ninguna' }}</dd></div>
-    <div><dt>Activación</dt><dd>{{ $configOptions::ACTIVATIONS[$configuration['activation']] }} @if ($configuration['activation'] !== 'manual') · Programador {{ $schedulerSeen ? 'en línea' : 'sin señal reciente' }} @endif</dd></div>
-    <div><dt>Permisos</dt><dd>Sin modificaciones operativas · {{ $configuration['analysis'] === 'openai' ? 'Análisis con OpenAI' : 'Análisis local' }}</dd></div>
-    <div><dt>Resultado</dt><dd>{{ collect($configuration['results'])->map(fn ($key) => $configOptions::RESULTS[$key] ?? $key)->implode(', ') }}</dd></div>
-    <div><dt>Responsable</dt><dd>{{ $configuration['owner'] ?: 'Sin asignar' }}</dd></div>
-</dl>
+
+<div class="agent-results-panel">
 <details class="agent-run-history" open>
     <summary>Seguimiento <span class="agent-count">{{ $agent->runs()->count() }} ejecuciones</span></summary>
     @forelse ($runs as $run)
@@ -55,6 +46,8 @@
     @empty<p class="agent-empty">Sin ejecuciones registradas.</p>@endforelse
     @if ($runs->count() === $historyLimit)<button class="agent-command" type="button" wire:click="loadMore('runs')">Más ejecuciones</button>@endif
 </details>
+</div>
+<section class="agent-results-panel" aria-label="Hallazgos del agente">
 <div class="agent-findings-heading">
     <h4>Hallazgos <span class="agent-count">{{ $findingCount }}</span></h4>
     <label>Estado <select wire:model.live="findingFilter"><option value="open">Abiertos</option><option value="all">Todos</option>@foreach (\App\Models\AiAgentFinding::statusLabels() as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></label>
@@ -80,3 +73,5 @@
     </details>
 @empty<p class="agent-empty">Sin hallazgos en este estado.</p>@endforelse
 @if ($findingCount > $findingLimit)<button class="agent-command" type="button" wire:click="loadMore('findings')">Más hallazgos</button>@endif
+
+</section>

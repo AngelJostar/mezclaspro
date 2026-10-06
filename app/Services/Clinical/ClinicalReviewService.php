@@ -34,8 +34,10 @@ class ClinicalReviewService
     public function evaluate(Request $request, string $kind, array $case, string $purpose, ?int $target = null): ClinicalReview
     {
         $agent = $this->evidence->agent();
-        $sources = $this->evidence->sources($kind);
-        $sourcesFingerprint = $this->evidence->fingerprint($kind, $sources, $agent);
+        $mode = $kind === 'nutricionales' ? ($case['mixtures'][0]['mode'] ?? '') : null;
+        $sources = $this->evidence->sources($kind, $mode);
+        // Track the full category to invalidate receipts if either population's library changes.
+        $sourcesFingerprint = $this->evidence->fingerprint($kind, null, $agent);
         $issues = $this->evidence->limitations($kind, $sources);
         $result = ['status' => 'needs_review', 'summary' => 'Revision pendiente del profesional responsable.', 'findings' => [], 'coverage' => [], 'model' => null];
         if (!$agent?->is_active) $issues[] = 'El agente de soporte clinico esta inactivo. Solicita su configuracion al superadministrador.';

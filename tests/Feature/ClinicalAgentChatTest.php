@@ -73,7 +73,9 @@ class ClinicalAgentChatTest extends TestCase
         $chat->set('draft', 'Consulta de seguimiento')->call('send')->assertHasNoErrors();
         $this->assertCount(2, $conversation->fresh()->messages);
         Http::assertSent(fn ($request) => count(json_decode($request['input'], true)['history']) === 1);
-        $this->chat()->assertSee('Consulta sintetica inicial')->assertSee('Consulta de seguimiento')->assertSet('draft', '');
+        $this->chat()->assertSee('Consulta sintetica inicial')->assertSet('showChat', false)
+            ->call('selectConversation', $conversation->id)->assertSee('Consulta de seguimiento')->assertSet('draft', '')
+            ->call('closeChat')->assertSet('showChat', false)->assertDontSee('Consulta de seguimiento');
     }
 
     public function test_new_conversation_and_history_selection_are_private_to_the_user(): void
@@ -81,7 +83,7 @@ class ClinicalAgentChatTest extends TestCase
         $this->fake();
         $chat = $this->chat()->set('draft', 'Mensaje privado')->call('send');
         $first = ClinicalAgentConversation::first()->id;
-        $chat->call('newConversation')->assertDontSee('Mensaje privado')->assertSet('revision', 0);
+        $chat->call('newConversation')->assertSee('Sin mensajes en esta conversacion.')->assertSet('revision', 0)->assertSet('showChat', true);
         $this->assertSame(2, ClinicalAgentConversation::count());
         $chat->call('newConversation');
         $this->assertSame(2, ClinicalAgentConversation::count());

@@ -54,14 +54,21 @@ PROMPT;
         return AiAgent::where('integration_key', self::KEY)->first();
     }
 
-    public function sources(string $kind): array
+    public function sources(string $kind, ?string $nutritionMode = null): array
     {
         return ClinicalSource::current()->where('category', $kind)->orderBy('id')->get()
-            ->filter(fn ($s) => $s->is_manual || $s->isReviewed())->map(fn ($s) => [
+            ->filter(function ($source) use ($kind, $nutritionMode) {
+                if ($kind !== 'nutricionales' || !$source->is_manual || $nutritionMode === null) return true;
+                $type = $source->manual_type ?: 'npt_adulto';
+                if ($type === 'nutricionales') $type = 'npt_adulto';
+                return $type === match ($nutritionMode) { 'ADULT' => 'npt_adulto', 'INF' => 'npt_pediatrico', default => '' };
+            })
+            ->filter(fn ($s) => ($s->is_manual && !$s->manual_type) || $s->isReviewed())->map(fn ($s) => [
                 'id' => 'S'.$s->id, 'title' => $s->title, 'reference' => $s->reference,
                 'content' => $s->content, 'sha256' => $s->sha256, 'reviewed' => $s->isReviewed(),
                 'is_manual' => $s->is_manual, 'resolves_manual_ambiguities' => $s->resolves_manual_ambiguities,
                 'manual_version' => $s->manual_version, 'resolved_manual_sha256' => $s->resolved_manual_sha256,
+                'manual_type' => $s->manual_type,
                 'allows_medical_authorization' => (bool) $s->allows_medical_authorization,
                 'allows_chemical_medical_authorization' => (bool) $s->allows_chemical_medical_authorization,
                 'valid_until' => $s->valid_until?->format('Y-m-d'),
@@ -84,6 +91,9 @@ PROMPT;
         }
         if ($kind === 'nutricionales' && !collect($sources)->contains(fn ($s) => $s['is_manual'])) {
             $issues[] = 'El manual maestro no esta cargado.';
+        }
+        if ($kind === 'antibioticos' && !collect($sources)->contains(fn ($s) => $s['is_manual'])) {
+            $issues[] = 'Falta el manual maestro de antibioticos vigente y revisado; la interpretacion requiere el manual de esta categoria.';
         }
         $manual = collect($sources)->first(fn ($s) => $s['is_manual'] && ($s['manual_version'] ?? null) === '4');
         if ($kind === 'nutricionales' && !collect($sources)->contains(fn ($s) => $s['reviewed'] && $s['resolves_manual_ambiguities']

@@ -21,6 +21,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/admin/manuales-clinicos/{source}/documento', \App\Http\Controllers\Admin\ClinicalManualFileController::class)
+    ->middleware(['auth', 'active.user', 'role:Super Admin'])->name('admin.clinical-manuals.document');
+
 Route::get('/aviso-de-privacidad', function () {
     return view('aviso-de-privacidad');
 });

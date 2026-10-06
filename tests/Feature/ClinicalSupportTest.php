@@ -31,6 +31,7 @@ class ClinicalSupportTest extends TestCase
         $this->user = AgentFixture::seed();
         (require database_path('migrations/2026_09_29_000001_create_clinical_support.php'))->up();
         (require database_path('migrations/2026_09_30_000007_version_clinical_manual_sources.php'))->up();
+        (require database_path('migrations/2026_10_05_000001_add_clinical_manual_library.php'))->up();
         (require database_path('migrations/2026_09_29_000002_add_context_to_clinical_reviews.php'))->up();
         (require database_path('migrations/2026_09_29_000003_create_clinical_agent_conversations.php'))->up();
         Schema::create('solicitud_oncos', fn (Blueprint $t) => $t->id());
@@ -185,7 +186,8 @@ class ClinicalSupportTest extends TestCase
         $this->assertSame($suggestion, $review->result['audit_findings'][0]['suggestion']);
         $this->assertFalse($review->can_submit);
         $this->assertStringNotContainsString($suggestion, DB::table('clinical_reviews')->value('result'));
-        Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)->assertSee('Sugerencia: '.$suggestion);
+        $this->assertSame($suggestion, app(ClinicalReviewService::class)->resultForDisplay($review)['findings'][0]['suggestion']);
+        Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)->assertDontSee('Revisiones recientes');
     }
 
     public function test_unreviewed_or_missing_sources_cannot_supply_numeric_correction_suggestions(): void
@@ -260,7 +262,7 @@ class ClinicalSupportTest extends TestCase
         $this->assertFalse($response['can_submit']);
         $this->assertSame($original, $review->fresh()->result);
         Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)
-            ->assertDontSee($legacy)->assertDontSee('Hallazgo pendiente de evidencia revisada')->assertSee('Hallazgo historico de prueba.');
+            ->assertDontSee($legacy)->assertDontSee('Hallazgo pendiente de evidencia revisada')->assertDontSee('Revisiones recientes');
     }
 
     public function test_hospital_responses_exclude_internal_data_but_keep_observations_suggestions_and_decisions(): void
@@ -562,7 +564,7 @@ class ClinicalSupportTest extends TestCase
 
     public function test_source_management_is_superadmin_only_and_retains_audit(): void
     {
-        Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)->assertSee('Fuentes y protocolos')
+        Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)->assertDontSee('Fuentes y protocolos')
             ->call('revokeClinicalSource', 2)->assertHasNoErrors();
         $this->assertFalse(ClinicalSource::find(2)->isReviewed());
         $other = User::forceCreate(['name' => 'Sin permiso']);
@@ -614,7 +616,7 @@ class ClinicalSupportTest extends TestCase
         $this->assertSame([], $evidence->limitations('nutricionales', $evidence->sources('nutricionales')));
         $this->assertFalse($manual->isReviewed());
         $component = Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)
-            ->assertSee(ClinicalEvidence::MANUAL_TITLE)->assertSee('Descargar Manual V4')->assertSee('Manuales anteriores (historico)')
+            ->assertSee(ClinicalEvidence::MANUAL_TITLE)->assertSee('Historial de versiones')
             ->call('downloadClinicalManual', $manual->id)->assertFileDownloaded('Manual Maestro de Validacion V4.docx');
         $this->actingAs(User::forceCreate(['name' => 'Sin permiso']));
         $component->call('downloadClinicalManual', $manual->id)->assertForbidden();
@@ -1066,7 +1068,9 @@ class ClinicalSupportTest extends TestCase
             $this->assertArrayNotHasKey($removed, $review->fresh()->medical_authorization);
         }
         Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)
-            ->assertSee('MEDICO FICTICIO PRIVADO')->assertSee('CEDULA-PRUEBA');
+            ->assertDontSee('MEDICO FICTICIO PRIVADO')->assertDontSee('CEDULA-PRUEBA');
+        $this->assertSame('MEDICO FICTICIO PRIVADO', $review->fresh()->medical_authorization['doctor_name']);
+        $this->assertSame('CEDULA-PRUEBA', $review->fresh()->medical_authorization['doctor_license']);
         $this->assertSame(456, $review->fresh()->record_id);
         $this->assertStringNotContainsString('MEDICO FICTICIO', DB::table('clinical_reviews')->value('medical_authorization'));
         Http::assertSent(fn ($request) => !str_contains($request['input'], 'MEDICO FICTICIO'));
@@ -1098,7 +1102,9 @@ class ClinicalSupportTest extends TestCase
 
         $review->update(['medical_authorization' => $stored + ['reference' => 'LEGACY-REF', 'reason' => 'LEGACY-REASON']]);
         Livewire::test(AgentCenter::class)->call('selectAgent', (string) $this->agent->id)
-            ->assertSee('LEGACY-REF')->assertSee('LEGACY-REASON');
+            ->assertDontSee('LEGACY-REF')->assertDontSee('LEGACY-REASON');
+        $this->assertSame('LEGACY-REF', $review->fresh()->medical_authorization['reference']);
+        $this->assertSame('LEGACY-REASON', $review->fresh()->medical_authorization['reason']);
     }
 
     public function test_capture_migration_only_updates_the_obsolete_instruction_and_preserves_agent_settings(): void
