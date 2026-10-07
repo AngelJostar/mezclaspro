@@ -62,27 +62,28 @@
             </style>
         @endpush
         <section class="hospital-tools client-conciliation-panel mt-6" aria-labelledby="client-conciliation-title">
-            <div class="ht-log-heading"><h2 id="client-conciliation-title">Solicitudes de conciliación enviadas</h2></div>
-            <div class="ht-table-scroll" data-sticky-x-position="viewport" tabindex="0" aria-label="Solicitudes de conciliación enviadas">
+            <div class="ht-log-heading"><h2 id="client-conciliation-title">Solicitudes de conciliación</h2></div>
+            <div class="ht-table-scroll" data-sticky-x-position="viewport" tabindex="0" aria-label="Solicitudes de conciliación">
                 <table class="ht-table">
-                    <thead><tr><th>Folio</th><th>Fecha de envío</th><th>Institución</th><th>Hospital</th><th>Enviado por</th><th>Periodo</th><th>Mezclas</th><th>Conciliables Sí</th><th>Conciliables No</th><th>Acciones</th></tr></thead>
+                    <thead><tr><th>Folio</th><th>Fecha de envío</th><th>Institución</th><th>Hospital</th><th>Enviado por</th><th>Periodo</th><th>Mezclas</th><th>Conciliables Sí</th><th>Conciliables No</th><th>Estatus</th><th>Acciones</th></tr></thead>
                     <tbody>
                         @forelse ($submissions as $submission)
                             @php($noCount = $submission->mixture_count - $submission->conciliable_count)
                             <tr>
                                 <td>{{ $submission->folio() }}</td>
                                 <td class="ht-nowrap">{{ $submission->created_at->format('d/m/Y H:i') }}</td>
-                                <td>{{ $institutionName ?: 'Sin institución' }}</td>
+                                <td>{{ data_get($submission->snapshot, '0.cells.institution') ?: ($institutionName ?: 'Sin institución') }}</td>
                                 <td>{{ $submission->hospital_name }}</td>
                                 <td>{{ $submission->sender_name }}</td>
                                 <td>{{ $submission->periodLabel() }}</td>
                                 <td>{{ $submission->mixture_count }}</td>
                                 <td>{{ $submission->conciliable_count }}</td>
                                 <td data-column-filter-value="{{ $noCount }}">@if ($noCount > 0)<span class="ht-no-count" title="{{ $noCount }} mezclas no conciliables">{{ $noCount }}</span>@else 0 @endif</td>
+                                <td>{{ $submission->direction === 'sent' ? 'Recibida' : 'Enviada' }}</td>
                                 <td><a class="ht-secondary" href="{{ route('admin.herramientas.conciliaciones.download', $submission) }}">Descargar reporte</a></td>
                             </tr>
                         @empty
-                            <tr><td colspan="10" class="ht-empty">No hay solicitudes de conciliación enviadas.</td></tr>
+                            <tr><td colspan="11" class="ht-empty">No hay solicitudes de conciliación.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

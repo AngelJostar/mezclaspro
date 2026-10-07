@@ -9,7 +9,8 @@ if (typeof window.createExcelColumnFilters !== 'function') {
         const rows = Array.from(table.querySelectorAll(config.rowSelector));
         const triggers = Array.from(table.querySelectorAll(config.triggerSelector));
         const columnIndexes = triggers.map((trigger) => Number(trigger.dataset.column));
-        const appliedFilters = new Map();
+        const appliedFilters = new Map(Object.entries(config.selectedByColumn || {})
+            .map(([column, values]) => [Number(column), new Set(values)]));
         const panel = document.createElement('div');
         let activeColumn = null;
         let activeTrigger = null;
@@ -235,6 +236,11 @@ if (typeof window.createExcelColumnFilters !== 'function') {
                 appliedFilters.set(activeColumn, new Set(draftValues));
             }
 
+            if (config.onAccept) {
+                config.onAccept(new Map(appliedFilters));
+                closePanel();
+                return;
+            }
             applyFilters();
             updateTriggerStates();
             closePanel();
@@ -256,6 +262,7 @@ if (typeof window.createExcelColumnFilters !== 'function') {
         }, listenerOptions);
 
         applyFilters();
+        updateTriggerStates();
 
         const instance = {
             matches(row) {

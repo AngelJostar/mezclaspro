@@ -127,6 +127,12 @@ function isCommandColumn(table, header, columnIndex) {
 
 function createTrigger(header, columnIndex, triggerClass, server) {
     const label = normalize(header.textContent);
+    const existing = header.querySelector('[data-table-column-trigger]');
+    if (existing) {
+        existing.dataset.column = String(columnIndex);
+        existing.classList.add(triggerClass);
+        return existing;
+    }
     const wrapper = document.createElement('div');
     const content = document.createElement('span');
     const trigger = document.createElement('button');
@@ -405,10 +411,17 @@ function scheduleScan() {
     scanTimer = window.setTimeout(scanTables, 80);
 }
 
-window.addEventListener('load', () => {
+let tableObserver = null;
+function initializeTableFilters() {
     scanTables();
-    new MutationObserver(scheduleScan).observe(document.querySelector('.admin-page') || document.body, {
+    if (tableObserver) return;
+    tableObserver = new MutationObserver(scheduleScan);
+    tableObserver.observe(document.body, {
         childList: true,
         subtree: true,
     });
-});
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeTableFilters);
+else initializeTableFilters();
+document.addEventListener('livewire:navigated', initializeTableFilters);
+window.addEventListener('load', initializeTableFilters);

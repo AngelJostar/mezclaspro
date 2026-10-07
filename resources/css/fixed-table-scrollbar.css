@@ -14,6 +14,13 @@
     box-shadow: 0 -3px 12px #172d5214;
 }
 .fixed-table-scrollbar[hidden] { display: none; }
+.fixed-table-scrollbar--native { display: block; height: auto; padding: 4px 0 calc(4px + env(safe-area-inset-bottom, 0px)); border-left: 0; border-right: 0; border-radius: 0; background: rgba(255, 255, 255, .95); }
+.fixed-table-scrollbar-native { width: 100%; overflow-x: scroll; overflow-y: hidden; scrollbar-color: #94a3b8 #f1f5f9; }
+.fixed-table-scrollbar-spacer { height: 4px; }
+.fixed-table-scrollbar-native::-webkit-scrollbar { height: 12px; }
+.fixed-table-scrollbar-native::-webkit-scrollbar-track { background: #f1f5f9; }
+.fixed-table-scrollbar-native::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
+.fixed-table-scrollbar-native::-webkit-scrollbar-thumb:hover { background: #64748b; }
 .fixed-table-scrollbar button { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 3px; color: #334e74; }
 .fixed-table-scrollbar button:hover:not(:disabled) { background: #e2e8f0; }
 .fixed-table-scrollbar button:disabled { color: #94a3b8; cursor: default; }

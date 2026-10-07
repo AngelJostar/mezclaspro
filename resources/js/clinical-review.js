@@ -86,6 +86,7 @@ function bind(form) {
         const field = event.target;
         if (field.validity?.valid) { field.classList.remove('clinical-field-required-error'); field.removeAttribute('aria-invalid'); }
         if (field !== state.ack && !field.closest('[data-medical-authorization]')) reset();
+        if (field.name === 'npt') state.result.replaceChildren();
         if (state.fieldError && !form.querySelector(':invalid')) {
             state.error.hidden = true; state.fieldError = false;
         }

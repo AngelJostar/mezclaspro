@@ -98,6 +98,55 @@ class ClinicalSupportTest extends TestCase
         return app(ClinicalReviewService::class)->evaluate($this->request($data), 'nutricionales', app(ClinicalPayload::class)->normalize('nutricionales', $data), 'submission');
     }
 
+    public function test_npt_choice_routes_validation_to_its_reviewed_manual_without_mixing_populations(): void
+    {
+        $adult = ClinicalSource::findOrFail(1);
+        $adult->update(['manual_type' => 'npt_adulto', 'manual_version' => '1', 'approved_by' => $this->user->id,
+            'approved_at' => now(), 'clinical_reviewer' => 'Responsable de pruebas']);
+        ClinicalSource::findOrFail(2)->update(['resolved_manual_sha256' => $adult->sha256]);
+        $pediatric = $adult->replicate();
+        $pediatric->fill(['title' => 'Manual pediátrico de pruebas', 'manual_type' => 'npt_pediatrico', 'manual_version' => '4', 'sha256' => str_repeat('c', 64)])->save();
+
+        foreach (['ADULT' => [$adult, ['S1', 'S2']], 'INF' => [$pediatric, ['S'.$pediatric->id]]] as $mode => [$manual, $sourceIds]) {
+            $answer = $this->answer();
+            foreach ($answer['coverage'] as &$coverage) $coverage['source_ids'] = ['S'.$manual->id];
+            unset($coverage);
+            $this->fake($answer);
+            // Keep the same birth date: the selected NPT, not inferred age, routes the manual.
+            $data = array_replace($this->data(), ['npt' => $mode, 'peso' => '5', 'i_4_g/Kg' => '2']);
+            $review = $this->review($data);
+            $this->assertTrue($review->can_submit);
+            $this->assertSame($manual->manual_type, $review->result['manual_selection']['manual_type']);
+            Http::assertSent(function ($request) use ($mode, $manual, $sourceIds) {
+                $input = json_decode($request['input'], true);
+                $this->assertSame($sourceIds, array_column($input['sources'], 'id'));
+                $this->assertSame($mode, $input['case']['mixtures'][0]['mode']);
+                $this->assertSame($manual->manual_type, $input['case']['manual_selection']['manual_type']);
+                $this->assertStringContainsString(ClinicalEvidence::NPT_SELECTION_POLICY, $request['instructions']);
+                return true;
+            });
+        }
+
+        $pediatric->update(['valid_until' => now()->subDay()]);
+        $this->fake();
+        $review = $this->review(array_replace($this->data(), ['npt' => 'INF', 'peso' => '5', 'i_4_g/Kg' => '2']));
+        $this->assertFalse($review->can_submit);
+        $this->assertStringContainsString('Nutrición Parenteral Pediátrico', implode(' ', $review->result['technical_issues']));
+        $this->assertSame([], $review->result['sources']);
+    }
+
+    public function test_npt_population_must_be_explicit_and_cannot_be_supplied_as_manual_metadata(): void
+    {
+        foreach (['', 'unknown'] as $mode) {
+            try {
+                app(ClinicalPayload::class)->normalize('nutricionales', array_replace($this->data(), [
+                    'npt' => $mode, 'manual_selection' => ['manual_type' => 'npt_adulto'],
+                ]));
+                $this->fail('An unspecified NPT was accepted');
+            } catch (ValidationException $e) { $this->assertArrayHasKey('npt', $e->errors()); }
+        }
+    }
+
     public function test_numeric_payload_omits_identifiers_and_preserves_adult_and_infant_units(): void
     {
         $this->fake(); $review = $this->review();
@@ -481,7 +530,7 @@ class ClinicalSupportTest extends TestCase
         $otherRequest->setUserResolver(fn () => User::forceCreate(['name' => 'Otro usuario']));
         try { $service->requireSubmission($otherRequest, 'nutricionales'); $this->fail('Other user receipt accepted'); }
         catch (ValidationException $e) { $this->assertArrayHasKey('clinical_review', $e->errors()); }
-        foreach ([['peso' => '51'], ['clinical_acknowledged' => '0'], ['clinical_review_token' => 'forged'], ['observaciones' => 'changed']] as $change) {
+        foreach ([['npt' => 'INF'], ['peso' => '51'], ['clinical_acknowledged' => '0'], ['clinical_review_token' => 'forged'], ['observaciones' => 'changed']] as $change) {
             try { $service->requireSubmission($this->request(array_replace($data, $change)), 'nutricionales'); $this->fail('Untrusted receipt accepted'); }
             catch (ValidationException $e) { $this->assertArrayHasKey('clinical_review', $e->errors()); }
         }
@@ -535,6 +584,10 @@ class ClinicalSupportTest extends TestCase
         $this->assertSame(40.0, $case['mixtures'][0]['components'][0]['quantity']);
         $this->assertNotNull($case['context_recorded_at']);
         $this->assertStringNotContainsString('IDENTIDAD_PRIVADA', json_encode($case));
+        $detail->npt = 'INF';
+        $case = app(ClinicalPayload::class)->fromTarget(['kind' => 'nutricionales', 'model' => $model]);
+        $this->assertSame('INF', $case['mixtures'][0]['mode']);
+        $this->assertSame('npt_pediatrico', $case['manual_selection']['manual_type']);
     }
 
     public function test_receipt_consumption_is_single_use_and_rolls_back_with_request(): void

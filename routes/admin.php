@@ -593,6 +593,16 @@ Route::resource('/instituciones', InstitucionController::class)
     ->middleware(['role_or_permission:Super Admin|menu.instituciones.list']);
 
 $administrationReportsMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.administracion.reports'];
+Route::get('instituciones-reportes/conciliacion-periodos/detalle', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'detail'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.detail');
+Route::get('instituciones-reportes/conciliacion-periodos/remisiones', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'candidates'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.candidates');
+Route::post('instituciones-reportes/conciliacion-periodos', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'store'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.store');
+Route::post('instituciones-reportes/conciliacion-periodos/aceptar', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'accept'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.accept');
+Route::post('instituciones-reportes/conciliacion-periodos/enviar', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'send'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.send');
 Route::get('instituciones-reportes/agente-conciliacion', [\App\Http\Controllers\Admin\ConciliationAgentController::class, 'show'])
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.agent');
 Route::post('instituciones-reportes/agente-conciliacion', [\App\Http\Controllers\Admin\ConciliationAgentController::class, 'run'])
@@ -601,6 +611,18 @@ Route::get('instituciones-reportes/conciliaciones/{submission}', [\App\Http\Cont
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.show');
 Route::get('instituciones-reportes/conciliaciones/{submission}/descargar', [\App\Http\Controllers\Admin\ConciliationSubmissionController::class, 'download'])
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.download');
+Route::patch('instituciones-reportes/conciliaciones/{submission}/mezclas/{kind}/{target}/conciliable', [\App\Http\Controllers\Admin\ConciliationSubmissionController::class, 'conciliable'])
+    ->whereIn('kind', ['nutricionales', 'oncologicos', 'antibioticos'])->whereNumber('target')
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.conciliable');
+Route::patch('instituciones-reportes/conciliaciones/{submission}/mezclas/{kind}/{target}/precio', [\App\Http\Controllers\Admin\ConciliationSubmissionController::class, 'price'])
+    ->whereIn('kind', ['nutricionales', 'oncologicos', 'antibioticos'])->whereNumber('target')
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.price');
+Route::patch('instituciones-reportes/conciliaciones/mezclas/{kind}/{target}/conciliable', [\App\Http\Controllers\Admin\ConciliationSubmissionController::class, 'requestConciliable'])
+    ->whereIn('kind', ['nutricionales', 'oncologicos', 'antibioticos'])->whereNumber('target')
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.request-conciliable');
+Route::patch('instituciones-reportes/conciliaciones/mezclas/{kind}/{target}/precio', [\App\Http\Controllers\Admin\ConciliationSubmissionController::class, 'requestPrice'])
+    ->whereIn('kind', ['nutricionales', 'oncologicos', 'antibioticos'])->whereNumber('target')
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliaciones.request-price');
 $billingPendingMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.pending'];
 $billingReceivableMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.receivable'];
 $billingHistoryMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.facturacion.history'];

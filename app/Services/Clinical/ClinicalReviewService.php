@@ -38,7 +38,7 @@ class ClinicalReviewService
         $sources = $this->evidence->sources($kind, $mode);
         // Track the full category to invalidate receipts if either population's library changes.
         $sourcesFingerprint = $this->evidence->fingerprint($kind, null, $agent);
-        $issues = $this->evidence->limitations($kind, $sources);
+        $issues = $this->evidence->limitations($kind, $sources, $mode);
         $result = ['status' => 'needs_review', 'summary' => 'Revision pendiente del profesional responsable.', 'findings' => [], 'coverage' => [], 'model' => null];
         if (!$agent?->is_active) $issues[] = 'El agente de soporte clinico esta inactivo. Solicita su configuracion al superadministrador.';
         elseif (count($sources) > 20 || strlen(json_encode($sources)) > 250000) $issues[] = 'Las fuentes exceden el limite de revision. Reduce su alcance antes de continuar.';
@@ -88,6 +88,7 @@ class ClinicalReviewService
         $result['requires_medical_authorization'] = $requiresAuthorization && $purpose === 'submission';
         $result['requires_risk_acknowledgement'] = $canSubmit && $hasAdvisory && $purpose === 'submission';
         $result['sources'] = array_map(fn ($s) => array_diff_key($s, array_flip(['content'])), $sources);
+        if ($kind === 'nutricionales') $result['manual_selection'] = NutritionManual::selection($mode);
         $result['calculations'] = $case['calculations'];
         $result['limitations'] = [];
         $result['notice'] = 'Soporte de IA. No es una autorizacion de preparacion ni sustituye la revision del profesional responsable.';

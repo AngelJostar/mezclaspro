@@ -333,14 +333,7 @@
                         name="volumen_total" step="0.0001" class="w-full" placeholder="" disabled />
                 </div>
                 <div class="mb-4 flex items-stretch gap-2 w-full">
-                    <x-label class="mb-2">
-                        NPT:
-                    </x-label>
-                    <x-select class="w-full" name="npt" id="npt-select" disabled>
-                        <option value="" disabled selected>Seleccionar NPT</option>
-                        <option value="INF" @if (old('npt', $solicitud->solicitud_detail->npt) == 'INF') selected @endif>PEDIÁTRICO</option>
-                        <option value="ADULT" @if (old('npt', $solicitud->solicitud_detail->npt) == 'ADULT') selected @endif>ADULTO</option>
-                    </x-select>
+                    @include('admin.nutricionales.solicitudes._npt-selection', ['selectedNpt' => $solicitud->solicitud_detail->npt ?? '', 'readonlyNpt' => true])
                 </div>
             </div>
 

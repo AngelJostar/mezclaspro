@@ -8,6 +8,21 @@
         #billing-table-scroll::-webkit-scrollbar {
             display: none;
         }
+
+        .billing-conciliable-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 2px; border-radius: 999px; }
+        .billing-conciliable-toggle button { min-width: 38px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1; transition: background-color .15s, color .15s; }
+        .billing-conciliable-toggle [data-value="Si"] { background: #d1fae5; color: #047857; }
+        .billing-conciliable-toggle [data-value="No"] { background: #fee2e2; color: #dc2626; }
+        .billing-conciliable-toggle [data-value="Si"][aria-pressed="true"] { background: #009d71; color: #fff; }
+        .billing-conciliable-toggle [data-value="No"][aria-pressed="true"] { background: #dc2626; color: #fff; }
+        .billing-conciliable-toggle button:hover { filter: brightness(.95); }
+        .billing-conciliable-toggle button:focus-visible { outline: 2px solid #243b7b; outline-offset: 2px; }
+        .billing-conciliable-toggle[data-save-state="saving"] { opacity: .65; }
+        .billing-conciliable-toggle[data-save-state="error"] { outline: 2px solid #dc2626; outline-offset: 1px; }
+        .billing-conciliation-status { display: inline-flex; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #fef3c7; color: #92400e; white-space: nowrap; }
+        .billing-conciliation-status[data-status="Conciliado"] { background: #d1fae5; color: #047857; }
+        .billing-conciliation-status[data-status="Recibida"] { background: #dbeafe; color: #1d4ed8; }
+        .billing-conciliation-status[data-status="Enviada"] { background: #ede9fe; color: #6d28d9; }
     </style>
 
     @php
@@ -281,17 +296,19 @@
                         <x-filterable-table-header column="13" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Conciliable</x-filterable-table-header>
                         <x-filterable-table-header column="14" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">Folio Factura UUID</x-filterable-table-header>
+                            class="border border-slate-300"><span class="inline-block leading-tight">Estatus de<br> conciliación</span></x-filterable-table-header>
                         <x-filterable-table-header column="15" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">Folio Factura Interno</x-filterable-table-header>
+                            class="border border-slate-300">Folio Factura UUID</x-filterable-table-header>
                         <x-filterable-table-header column="16" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">Fecha de factura</x-filterable-table-header>
+                            class="border border-slate-300">Folio Factura Interno</x-filterable-table-header>
                         <x-filterable-table-header column="17" trigger-class="js-billing-column-filter" compact
-                            class="border border-slate-300">Numero Carta Factura</x-filterable-table-header>
+                            class="border border-slate-300">Fecha de factura</x-filterable-table-header>
                         <x-filterable-table-header column="18" trigger-class="js-billing-column-filter" compact
+                            class="border border-slate-300">Numero Carta Factura</x-filterable-table-header>
+                        <x-filterable-table-header column="19" trigger-class="js-billing-column-filter" compact
                             class="border border-slate-300">Fecha Carta Factura</x-filterable-table-header>
                         <th class="border border-slate-300 px-2 py-1 text-center font-semibold whitespace-nowrap">Facturar</th>
-                        <x-filterable-table-header column="20" trigger-class="js-billing-column-filter" compact
+                        <x-filterable-table-header column="21" trigger-class="js-billing-column-filter" compact
                             align="center" class="border border-slate-300">Vencimiento</x-filterable-table-header>
                         @if ($isReceivable)
                             <th class="min-w-[165px] border border-slate-300 px-2 py-1 text-center font-semibold whitespace-nowrap">
@@ -387,16 +404,24 @@
                                 <input type="text" form="{{ $formId }}" name="precio_total" value="{{ $billing?->precio_total ?? $item['computed_total_input'] }}"
                                     class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
                             </td>
-                            <td class="border border-slate-200 px-2 py-1 min-w-[160px]">
+                            <td class="border border-slate-200 px-2 py-1 min-w-[120px] text-center">
                                 @php
                                     $conciliableActual = trim((string) ($billing?->conciliable ?? ''));
                                     $conciliableSeleccionado = in_array($conciliableActual, ['No', 'No conciliable'], true) ? 'No' : 'Si';
                                 @endphp
 
-                                <select form="{{ $formId }}" name="conciliable" class="js-billing-autosave-field h-7 w-full rounded-sm border-slate-300 px-2 py-1 text-xs">
+                                <select form="{{ $formId }}" name="conciliable" data-billing-conciliable-field hidden class="js-billing-autosave-field hidden">
                                     <option value="Si" @selected($conciliableSeleccionado === 'Si')>Si</option>
                                     <option value="No" @selected($conciliableSeleccionado === 'No')>No</option>
                                 </select>
+                                <div class="billing-conciliable-toggle" role="group" aria-label="Conciliable: {{ $patientName }} · Remisión {{ $item['remision'] }}">
+                                    <button type="button" data-value="Si" aria-pressed="{{ $conciliableSeleccionado === 'Si' ? 'true' : 'false' }}" onclick="setBillingConciliable(this)">Sí</button>
+                                    <button type="button" data-value="No" aria-pressed="{{ $conciliableSeleccionado === 'No' ? 'true' : 'false' }}" onclick="setBillingConciliable(this)">No</button>
+                                </div>
+                            </td>
+                            <td data-billing-conciliation-status data-filter-value="{{ $item['conciliation_status'] }}"
+                                class="border border-slate-200 px-2 py-1 min-w-[145px] text-center">
+                                <span class="billing-conciliation-status" data-status="{{ $item['conciliation_status'] }}">{{ $item['conciliation_status'] }}</span>
                             </td>
                             <td class="border border-slate-200 px-2 py-1 min-w-[190px]">
                                 <input type="text" form="{{ $formId }}" name="folio_factura_uuid" value="{{ $billing?->folio_factura_uuid }}"
@@ -518,7 +543,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $isReceivable ? 24 : 22 }}" class="border border-slate-200 px-2 py-6 text-center text-slate-400">
+                            <td colspan="{{ $isReceivable ? 25 : 23 }}" class="border border-slate-200 px-2 py-6 text-center text-slate-400">
                                 No se encontraron registros para los filtros seleccionados.
                             </td>
                         </tr>
@@ -574,10 +599,10 @@
                 triggerSelector: '.js-billing-column-filter',
                 instanceId: `billing-requests-${billingSection}`,
                 valuesByColumn: {
-                    20: ['Sin Color', 'Rojo', 'Amarillo'],
+                    21: ['Sin Color', 'Rojo', 'Amarillo'],
                 },
                 swatchesByColumn: {
-                    20: {
+                    21: {
                         'Sin Color': 'border-slate-300 bg-white',
                         'Rojo': 'border-red-300 bg-red-100',
                         'Amarillo': 'border-amber-300 bg-amber-100',
@@ -934,6 +959,11 @@
                 field.style.borderColor = borderColor;
                 field.style.backgroundColor = backgroundColor;
                 field.setAttribute('aria-busy', state === 'saving' ? 'true' : 'false');
+                if (field.matches('[data-billing-conciliable-field]')) {
+                    const toggle = field.closest('td').querySelector('.billing-conciliable-toggle');
+                    toggle.dataset.saveState = state;
+                    toggle.setAttribute('aria-busy', state === 'saving' ? 'true' : 'false');
+                }
             });
 
             const previousTimer = billingFeedbackTimers.get(form);
@@ -987,8 +1017,17 @@
 
                     return response.json().catch(() => ({}));
                 })
-                .then(() => {
+                .then((payload) => {
                     const row = form.closest('tr');
+                    const statusCell = row?.querySelector('[data-billing-conciliation-status]');
+                    if (statusCell && payload.conciliation_status) {
+                        statusCell.dataset.filterValue = payload.conciliation_status;
+                        const badge = statusCell.querySelector('.billing-conciliation-status');
+                        badge.dataset.status = payload.conciliation_status;
+                        badge.textContent = payload.conciliation_status;
+                        const section = document.querySelector('[data-billing-section]')?.dataset.billingSection;
+                        window.__excelColumnFilterInstances?.[`billing-requests-${section}`]?.apply?.();
+                    }
                     const currentVersion = Number(form.dataset.autosaveVersion || 0);
 
                     if (currentVersion === submittedVersion) {
@@ -1347,13 +1386,35 @@
             }, delay));
         }
 
+        function setBillingConciliable(button) {
+            const field = button.closest('td').querySelector('[data-billing-conciliable-field]');
+            if (!field) return;
+            if (field.value === button.dataset.value) {
+                if (field.form?.dataset.dirty === '1') queueBillingAutosave(field, 0, false);
+                return;
+            }
+            field.value = button.dataset.value;
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function syncBillingConciliable(field) {
+            if (!field.matches('[data-billing-conciliable-field]')) return;
+            field.closest('td').querySelectorAll('.billing-conciliable-toggle button').forEach(button => {
+                button.setAttribute('aria-pressed', button.dataset.value === field.value ? 'true' : 'false');
+            });
+        }
+
         function initBillingAutosave() {
             document.querySelectorAll('.js-billing-autosave-field').forEach((field) => {
                 if (field.dataset.autosaveBound === '1') return;
                 field.dataset.autosaveBound = '1';
 
                 if (field.matches('select')) {
-                    field.addEventListener('change', () => queueBillingAutosave(field, 0));
+                    syncBillingConciliable(field);
+                    field.addEventListener('change', () => {
+                        syncBillingConciliable(field);
+                        queueBillingAutosave(field, 0);
+                    });
                     return;
                 }
 

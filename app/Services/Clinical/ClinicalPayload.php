@@ -62,8 +62,10 @@ class ClinicalPayload
 
     private function nutrition(array $base, array $data): array
     {
+        Validator::make($data, ['npt' => 'required|in:ADULT,INF'])->validate();
+        $base['manual_selection'] = NutritionManual::selection($data['npt']);
         if (!empty($data['clinical_quotation_id'])) return $this->quotedNutrition($base, $data);
-        Validator::make($data, ['npt' => 'required|in:ADULT,INF', 'volumen_total' => 'required|numeric|gt:0|max:100000',
+        Validator::make($data, ['volumen_total' => 'required|numeric|gt:0|max:100000',
             'sobrellenado_ml' => 'nullable|numeric|min:0|max:100000',
             'via_administracion' => 'required|in:Central,Periférica', 'tiempo_infusion_min' => 'nullable|numeric|gt:0|max:1000',
             'velocidad_infusion' => 'nullable|numeric|gt:0|max:100000'])->validate();
@@ -119,6 +121,7 @@ class ClinicalPayload
         Validator::make($data, ['quoted_volumes' => 'required|array', 'quoted_volumes.*' => 'required|numeric|gt:0|max:100000',
             'via_administracion' => 'required|in:Central,Periférica', 'tiempo_infusion_min' => 'nullable|numeric|gt:0|max:1000'])->validate();
         $base['mixtures'] = []; $base['local_blockers'] = [];
+        $base['fields'][] = 'npt';
         foreach ($groups as $group) {
             $components = []; $volume = 0;
             foreach ($group as $index => $item) {
@@ -135,7 +138,7 @@ class ClinicalPayload
                 $base['fields'][] = $field;
                 $volume += (float) $ml;
             }
-            $base['mixtures'][] = ['components' => $components, 'volume_ml' => $volume, 'route' => $data['via_administracion'] ?? null,
+            $base['mixtures'][] = ['components' => $components, 'mode' => $data['npt'], 'volume_ml' => $volume, 'route' => $data['via_administracion'] ?? null,
                 'infusion_hours' => $data['tiempo_infusion_min'] ?? null, 'container' => null];
             $base['calculations'][] = ['field' => 'observaciones', 'formula' => 'Suma de volumenes cotizados', 'result' => $volume,
                 'unit' => 'mL', 'assumptions' => 'Sin agua adicional; cantidades activas calculadas con factores de catalogo pendientes de verificar.'];

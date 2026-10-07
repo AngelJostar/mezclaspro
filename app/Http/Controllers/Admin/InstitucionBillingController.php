@@ -6,6 +6,7 @@ use App\Exports\Instituciones\InstitutionBillingExpandedExport;
 use App\Exports\Instituciones\InstitutionBillingExport;
 use App\Http\Controllers\Controller;
 use App\Models\Hospital;
+use App\Models\HospitalConciliationSubmission;
 use App\Models\Institucion;
 use App\Models\InstitutionBilling;
 use App\Models\InstitutionBillingMovement;
@@ -14,6 +15,8 @@ use App\Models\Oncologicos\Mezcla;
 use App\Services\InstitutionBillingDueDateService;
 use App\Services\InstitutionBillingPendingSummaryService;
 use App\Services\InstitutionBillingPricingService;
+use App\Services\ConciliationInboxData;
+use App\Support\ConciliationInboxTable;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -35,6 +38,15 @@ class InstitucionBillingController extends Controller
     public function index(Request $request)
     {
         return $this->renderIndex($request, 'pending');
+    }
+
+    public function conciliationRequests(?int $institutionId, ?int $hospitalId, string $search = ''): array
+    {
+        // Use the same eligible requests as billing, without limiting its workflow stage.
+        return [
+            'onco' => $this->buildOncoQuery($institutionId, $hospitalId, $search, null, null, '', '', '', false)->get(),
+            'nutrition' => $this->buildNutriQuery($institutionId, $hospitalId, $search, null, null, '', '', '', false)->get(),
+        ];
     }
 
     public function clientRecords(Request $request)
@@ -158,6 +170,14 @@ class InstitucionBillingController extends Controller
 
         $summary = $this->buildSummaryFromCollection($records);
         $paginatedRecords = $this->paginateCollection($records, 200, $request);
+        $latestSubmissions = ConciliationInboxData::indexSubmissions(HospitalConciliationSubmission::query()
+            ->whereIn('hospital_id', $paginatedRecords->getCollection()->pluck('hospital.id')->filter()->unique())->get());
+        $paginatedRecords->setCollection($paginatedRecords->getCollection()->map(function ($item) use ($latestSubmissions) {
+            $kind = $item['type'] === 'nutri' ? 'nutricionales' : $item['record']->solicitud?->tipo_solicitud;
+            $key = $item['hospital']?->id.':'.$kind.':'.$item['record']->id;
+            $item['conciliation_status'] = ConciliationInboxTable::status($item['billing']?->conciliable, $latestSubmissions[$key] ?? null);
+            return $item;
+        }));
 
         return view('admin.instituciones.billing.index', [
             'institucionId' => $institucionId,
@@ -254,7 +274,7 @@ class InstitucionBillingController extends Controller
             $billingAttributes['observaciones'] = $observaciones !== '' ? $observaciones : null;
         }
 
-        DB::transaction(function () use ($data, $billingAttributes) {
+        $billing = DB::transaction(function () use ($data, $billingAttributes) {
             $billing = InstitutionBilling::firstOrNew([
                 'origen_tipo' => $data['origen_tipo'],
                 'origen_id' => $data['origen_id'],
@@ -269,12 +289,17 @@ class InstitucionBillingController extends Controller
             $this->recordBillingMovement($billing, $fromStage, $billing->workflowStage(), [
                 'source' => 'billing_update',
             ]);
+            return $billing;
         });
 
         if ($request->expectsJson() || $request->ajax()) {
+            $kind = $billing->origen_tipo === 'nutricional_solicitud' ? 'nutricionales'
+                : Mezcla::find($billing->origen_id)?->solicitud?->tipo_solicitud;
             return response()->json([
                 'ok' => true,
                 'message' => 'Facturación actualizada correctamente.',
+                'conciliation_status' => ConciliationInboxTable::status($billing->conciliable,
+                    $kind ? ConciliationInboxData::latestSubmission((int) $billing->hospital_id, $kind, $billing->origen_id) : null),
             ]);
         }
 
@@ -467,17 +492,17 @@ class InstitucionBillingController extends Controller
             ->values();
     }
 
-    protected function buildOncoQuery($institucionId, $hospitalId, string $search, $dateFrom, $dateTo, string $billingStatus, string $facturacionStatus = '', string $conciliableFilter = '')
+    protected function buildOncoQuery($institucionId, $hospitalId, string $search, $dateFrom, $dateTo, string $billingStatus, string $facturacionStatus = '', string $conciliableFilter = '', bool $withPricing = true)
     {
         return Mezcla::query()
-            ->with([
+            ->with($withPricing ? [
                 'solicitud.hospital.instituciones',
                 'solicitud.hospital.oncoMedicineList',
                 'medicamentos.medicamentoOnco.catalog.presentations',
                 'medicamentos.presentacionesUsadas.batch.presentation',
                 'infusor',
                 'billing',
-            ])
+            ] : ['solicitud.hospital.instituciones', 'billing'])
             ->whereHas('solicitud.hospital.instituciones', function ($query) use ($institucionId) {
                 if ($institucionId) {
                     $query->where('clientes.id', $institucionId);
@@ -534,17 +559,17 @@ class InstitucionBillingController extends Controller
             ->latest('id');
     }
 
-    protected function buildNutriQuery($institucionId, $hospitalId, string $search, $dateFrom, $dateTo, string $billingStatus, string $facturacionStatus = '', string $conciliableFilter = '')
+    protected function buildNutriQuery($institucionId, $hospitalId, string $search, $dateFrom, $dateTo, string $billingStatus, string $facturacionStatus = '', string $conciliableFilter = '', bool $withPricing = true)
     {
         return NutricionalSolicitud::query()
-            ->with([
+            ->with($withPricing ? [
                 'hospital.instituciones',
                 'solicitud_patient',
                 'solicitud_detail',
                 'input.input.nutritionMedicineCatalog',
                 'input.presentation',
                 'billing',
-            ])
+            ] : ['hospital.instituciones', 'solicitud_patient', 'solicitud_detail', 'billing'])
             ->whereHas('hospital.instituciones', function ($query) use ($institucionId) {
                 if ($institucionId) {
                     $query->where('clientes.id', $institucionId);

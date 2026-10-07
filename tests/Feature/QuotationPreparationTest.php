@@ -29,6 +29,18 @@ class QuotationPreparationTest extends TestCase
         }
     }
 
+    public function test_quoted_nutrition_carries_the_selected_npt_to_clinical_review(): void
+    {
+        $quote = Data::quotation('nutricionales', 'ml');
+        foreach (['INF' => 'npt_pediatrico', 'ADULT' => 'npt_adulto'] as $mode => $manualType) {
+            $data = array_replace(Data::payload('nutricionales'), ['clinical_quotation_id' => $quote->id, 'npt' => $mode]);
+            $case = app(\App\Services\Clinical\ClinicalPayload::class)->normalize('nutricionales', $data);
+            $this->assertSame($manualType, $case['manual_selection']['manual_type']);
+            $this->assertContains('npt', $case['fields']);
+            foreach ($case['mixtures'] as $mixture) $this->assertSame($mode, $mixture['mode']);
+        }
+    }
+
     public function test_each_category_and_billing_mode_preserves_prices_hospital_folio_and_is_idempotent(): void
     {
         $stock = DB::table('medicine_batches')->sum('stock_actual');

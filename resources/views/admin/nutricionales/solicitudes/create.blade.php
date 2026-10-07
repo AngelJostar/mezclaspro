@@ -239,17 +239,7 @@
                 </div>
 
                 <div class="mb-4 flex items-stretch gap-2 w-full">
-                    <x-label class="mb-2 font-bold">
-                        NPT:*
-                    </x-label>
-                    <x-select class="w-full" name="npt" id="npt-select">
-                        <option value="" disabled selected>Seleccionar NPT</option>
-                        <option value="INF" @if (old('npt') == 'INF') selected @endif>PEDIÁTRICO</option>
-                        <option value="ADULT" @if (old('npt') == 'ADULT') selected @endif>ADULTO</option>
-                    </x-select>
-                    @error('npt')
-                        <div class="text-red-500 text-sm">{{ $message }}</div>
-                    @enderror
+                    @include('admin.nutricionales.solicitudes._npt-selection', ['selectedNpt' => old('npt', '')])
                 </div>
             </div>
 

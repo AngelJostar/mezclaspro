@@ -15,6 +15,7 @@ config(['session.driver' => 'array']);
         <input id="test-birth" name="fecha_nacimiento" type="date" value="1986-01-01" required data-clinical-required>
         <label for="volume">Volumen total (mL)</label>
         <input id="volume" name="volumen_total" type="number" value="1000" min="1" required>
+        <?php echo view('admin.nutricionales.solicitudes._npt-selection', ['selectedNpt' => 'ADULT', 'errors' => new Illuminate\Support\ViewErrorBag])->render(); ?>
         <label for="notes">Observaciones</label>
         <textarea id="notes" name="observaciones">Nota del usuario</textarea>
         <?php echo view('admin.solicitudes._clinical-review', ['clinicalKind' => 'nutricionales', 'errors' => new Illuminate\Support\ViewErrorBag])->render(); ?>

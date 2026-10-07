@@ -318,11 +318,7 @@
                 </div>
 
                 <div>
-                    <x-label class="mb-2 font-bold">NPT:</x-label>
-                    <x-select class="w-full" name="npt" id="npt-select">
-                        <option value="INF" @selected(old('npt', $solicitud->solicitud_detail->npt) == 'INF')>PEDIÁTRICO</option>
-                        <option value="ADULT" @selected(old('npt', $solicitud->solicitud_detail->npt) == 'ADULT')>ADULTO</option>
-                    </x-select>
+                    @include('admin.nutricionales.solicitudes._npt-selection', ['selectedNpt' => old('npt', $solicitud->solicitud_detail->npt) ?? ''])
                 </div>
             </div>
 

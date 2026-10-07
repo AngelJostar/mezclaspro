@@ -8,7 +8,7 @@ class HospitalConciliationSubmission extends Model
 {
     protected $fillable = [
         'submission_key', 'hospital_id', 'submitted_by', 'hospital_name', 'sender_name',
-        'period_from', 'period_to', 'filters', 'mixture_count', 'conciliable_count', 'snapshot', 'request_hash',
+        'period_from', 'period_to', 'filters', 'mixture_count', 'conciliable_count', 'snapshot', 'request_hash', 'direction',
     ];
 
     protected $casts = [

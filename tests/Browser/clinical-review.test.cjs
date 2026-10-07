@@ -8,7 +8,7 @@ const { buildSync } = require('esbuild');
 const root = path.resolve(__dirname, '../..');
 const html = execFileSync('php', ['tests/Browser/fixtures/clinical-review.php'], { cwd: root, encoding: 'utf8' });
 const css = readFileSync(path.join(root, 'resources/css/clinical-review.css'), 'utf8');
-const script = buildSync({ entryPoints: [path.join(root, 'resources/js/clinical-review.js')], bundle: true,
+const script = buildSync({ stdin: { contents: "import './resources/js/clinical-review.js'; import './resources/js/nutrition-manual-selection.js';", resolveDir: root }, bundle: true,
     write: false, format: 'iife', loader: { '.css': 'empty' } }).outputFiles[0].text;
 
 const result = passed => ({ review_id: 'synthetic-receipt', can_submit: passed, can_view_internal: true,
@@ -54,6 +54,7 @@ test('clinical review gates submission, preserves notes and rejects stale respon
                 return route.fulfill({ contentType: 'application/json', body: JSON.stringify(result(mode !== 'blocked')) });
             });
             await page.goto('http://localhost/fixture');
+            assert.match(await page.locator('[data-npt-manual-description]').innerText(), /Nutrición Parenteral Adulto/);
             const setContextOpen = async open => {
                 const context = page.locator('[data-clinical-context]');
                 if (await context.evaluate(element => element.open) !== open) {
@@ -157,6 +158,11 @@ test('clinical review gates submission, preserves notes and rejects stale respon
             await button.click();
             await page.getByText('Confirma que revisaste los hallazgos antes de enviar.', { exact: true }).waitFor();
             assert.equal(saves, 0);
+            await page.locator('[name=npt]').selectOption('INF');
+            assert.match(await page.locator('[data-npt-manual-description]').innerText(), /Nutrición Parenteral Pediátrico/);
+            assert.equal(await page.locator('[data-clinical-result]').innerText(), '');
+            assert.equal(await page.locator('[name=clinical_review_token]').inputValue(), '');
+            assert.equal(await button.innerText(), 'Validar y Continuar');
             await page.locator('#volume').fill('1100');
             assert.equal(await button.innerText(), 'Validar y Continuar');
             assert.equal(await page.locator('[name=clinical_review_token]').inputValue(), '');

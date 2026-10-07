@@ -7,20 +7,27 @@ let sequence = 0;
 let observer;
 
 function attach(source) {
+    const native = source.hasAttribute('data-sticky-x-native');
     const bar = document.createElement('div');
-    bar.className = 'fixed-table-scrollbar';
+    bar.className = `fixed-table-scrollbar${native ? ' fixed-table-scrollbar--native' : ''}`;
     bar.hidden = true;
     bar.setAttribute('role', 'group');
     bar.setAttribute('aria-label', 'Desplazamiento horizontal de la tabla');
-    bar.innerHTML = `
+    bar.innerHTML = native ? `
+        <div class="fixed-table-scrollbar-native" tabindex="0" role="region" aria-label="Desplazar columnas de la tabla">
+            <div class="fixed-table-scrollbar-spacer"></div>
+        </div>` : `
         <button type="button" data-scroll-left aria-label="Desplazar columnas a la izquierda" title="Desplazar a la izquierda"><i data-table-scroll-icon="chevron-left" aria-hidden="true"></i></button>
         <input type="range" min="0" max="0" step="1" value="0" aria-label="Desplazar columnas de la tabla">
         <button type="button" data-scroll-right aria-label="Desplazar columnas a la derecha" title="Desplazar a la derecha"><i data-table-scroll-icon="chevron-right" aria-hidden="true"></i></button>`;
     document.body.append(bar);
-    createIcons({ icons: { ChevronLeft, ChevronRight }, nameAttr: 'data-table-scroll-icon', root: bar });
+    if (!native) createIcons({ icons: { ChevronLeft, ChevronRight }, nameAttr: 'data-table-scroll-icon', root: bar });
     source.classList.add('sticky-x-source', 'is-sticky-x-managed');
     const fallbackId = `fixed-table-scroll-source-${++sequence}`;
     const range = bar.querySelector('input');
+    const nativeScroll = bar.querySelector('.fixed-table-scrollbar-native');
+    const spacer = bar.querySelector('.fixed-table-scrollbar-spacer');
+    const control = nativeScroll || range;
     const left = bar.querySelector('[data-scroll-left]');
     const right = bar.querySelector('[data-scroll-right]');
     const events = new AbortController();
@@ -29,6 +36,11 @@ function attach(source) {
     function sync() {
         const maximum = Math.max(0, source.scrollWidth - source.clientWidth);
         const position = Math.max(0, Math.min(maximum, source.scrollLeft));
+        if (native) {
+            nativeScroll.scrollLeft = position;
+            nativeScroll.setAttribute('aria-disabled', String(maximum === 0));
+            return;
+        }
         range.max = String(maximum);
         range.value = String(position);
         left.disabled = position <= 1;
@@ -46,17 +58,21 @@ function attach(source) {
         const leftEdge = Math.max(0, rect.left);
         const rightEdge = Math.min(document.documentElement.clientWidth, rect.right);
         const width = Math.max(0, rightEdge - leftEdge);
-        const visible = source.scrollWidth > source.clientWidth + 2 && source.getClientRects().length > 0
+        const visible = (source.hasAttribute('data-sticky-x-always-visible') || source.scrollWidth > source.clientWidth + 2) && source.getClientRects().length > 0
             && rect.top < window.innerHeight && rect.bottom > 0 && width > 96;
         bar.hidden = !visible;
         if (!visible) return;
         source.classList.add('sticky-x-source', 'is-sticky-x-managed');
         if (!source.id) source.id = fallbackId;
-        range.setAttribute('aria-controls', source.id);
+        control.setAttribute('aria-controls', source.id);
         bar.style.left = `${leftEdge}px`;
         bar.style.width = `${width}px`;
-        const thumbWidth = Math.max(28, range.clientWidth * source.clientWidth / source.scrollWidth);
-        range.style.setProperty('--scroll-thumb-width', `${Math.min(range.clientWidth, thumbWidth)}px`);
+        if (native) {
+            spacer.style.width = `${nativeScroll.clientWidth + Math.max(0, source.scrollWidth - source.clientWidth)}px`;
+        } else {
+            const thumbWidth = Math.max(28, range.clientWidth * source.clientWidth / source.scrollWidth);
+            range.style.setProperty('--scroll-thumb-width', `${Math.min(range.clientWidth, thumbWidth)}px`);
+        }
         sync();
     }
 
@@ -66,8 +82,11 @@ function attach(source) {
     }
 
     source.addEventListener('scroll', sync, { passive: true, signal: events.signal });
-    range.addEventListener('input', () => moveTo(Number(range.value)), { signal: events.signal });
-    range.addEventListener('keydown', event => {
+    if (native) nativeScroll.addEventListener('scroll', () => {
+        if (Math.abs(source.scrollLeft - nativeScroll.scrollLeft) > 1) moveTo(nativeScroll.scrollLeft);
+    }, { passive: true, signal: events.signal });
+    else range.addEventListener('input', () => moveTo(Number(range.value)), { signal: events.signal });
+    control.addEventListener('keydown', event => {
         const maximum = source.scrollWidth - source.clientWidth;
         const targets = {
             ArrowLeft: source.scrollLeft - 80, ArrowRight: source.scrollLeft + 80,
@@ -78,8 +97,8 @@ function attach(source) {
         event.preventDefault();
         moveTo(targets[event.key]);
     }, { signal: events.signal });
-    left.addEventListener('click', () => moveTo(source.scrollLeft - source.clientWidth * 0.8), { signal: events.signal });
-    right.addEventListener('click', () => moveTo(source.scrollLeft + source.clientWidth * 0.8), { signal: events.signal });
+    left?.addEventListener('click', () => moveTo(source.scrollLeft - source.clientWidth * 0.8), { signal: events.signal });
+    right?.addEventListener('click', () => moveTo(source.scrollLeft + source.clientWidth * 0.8), { signal: events.signal });
 
     const resizeObserver = window.ResizeObserver ? new ResizeObserver(schedule) : null;
     resizeObserver?.observe(source);

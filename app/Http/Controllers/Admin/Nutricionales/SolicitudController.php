@@ -1488,7 +1488,7 @@ class SolicitudController extends Controller
                 'tiempo_infusion_min' => 'nullable|numeric|gt:0|max:1000',
                 'sobrellenado_ml' => 'nullable|numeric',
                 'volumen_total' => 'nullable|numeric',
-                'npt' => 'required',
+                'npt' => 'required|in:INF,ADULT',
                 'observaciones' => 'nullable|string|max:500',
                 'fecha_hora_entrega' => 'required|date_format:Y-m-d\TH:i',
                 'nombre_medico' => 'required|string|max:255',
