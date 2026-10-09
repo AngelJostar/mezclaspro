@@ -11,12 +11,16 @@ export function renderClinicalResult(container, data) {
         return element;
     };
     const titles = { blocked: 'SOLICITUD RECHAZADA', needs_review: 'Revision incompleta', no_blockers: 'Sin bloqueos detectados en la revision', authorization_required: 'Advertencia: requiere autorizacion medica', advisory: 'Sugerencias no bloqueantes' };
-    container.append(paragraph(titles[result.status] || 'Revision pendiente', 'clinical-status'), paragraph(result.summary));
+    const compatibilityWarning = (result.findings || []).some(finding => finding.category === 'compatibility_limitation');
+    const title = result.status === 'advisory' && compatibilityWarning
+        ? 'Advertencia informativa: revisión parcial de compatibilidad'
+        : (titles[result.status] || 'Revision pendiente');
+    container.append(paragraph(title, 'clinical-status'), paragraph(result.summary));
     const list = document.createElement('ul');
     for (const finding of result.findings || []) {
         const item = document.createElement('li'); item.dataset.severity = finding.severity;
         const observation = finding.observation_type || ({ blocking: 'rechazo', warning: 'advertencia', authorization: 'advertencia', advisory: 'sugerencia' })[finding.severity];
-        if (observation) item.append(paragraph(observation === 'rechazo' ? 'Rechazo:' : (observation === 'sugerencia' ? 'Sugerencia no bloqueante:' : 'Advertencia:'), 'clinical-status'));
+        if (observation) item.append(paragraph(observation === 'rechazo' ? 'Rechazo:' : (observation === 'sugerencia' ? 'Sugerencia no bloqueante:' : (observation === 'advertencia informativa' ? 'Advertencia informativa:' : 'Advertencia:')), 'clinical-status'));
         item.append(paragraph(finding.message));
         if (finding.calculation) item.append(paragraph(finding.calculation));
         if (finding.suggestion) item.append(paragraph(`Sugerencia: ${finding.suggestion}`, 'clinical-suggestion'));
@@ -141,7 +145,10 @@ window.validateClinicalRequest = async form => {
         }
         state.requiresAuthorization = Boolean(data.requires_medical_authorization);
         if (state.ackText && data.result.status === 'advisory') {
-            state.ackText.textContent = 'He revisado las sugerencias no bloqueantes y acepto continuar bajo responsabilidad profesional con los valores capturados. Enviar la solicitud no autoriza su preparacion.';
+            const compatibilityWarning = (data.result.findings || []).some(finding => finding.category === 'compatibility_limitation');
+            state.ackText.textContent = compatibilityWarning
+                ? 'Confirmo que revise la advertencia informativa de compatibilidad y acepto continuar bajo responsabilidad profesional con los datos capturados. Enviar la solicitud no autoriza su preparacion.'
+                : 'He revisado las sugerencias no bloqueantes y acepto continuar bajo responsabilidad profesional con los valores capturados. Enviar la solicitud no autoriza su preparacion.';
         }
         if (state.requiresAuthorization && state.authorization) {
             state.authorization.disabled = false; state.authorization.hidden = false;

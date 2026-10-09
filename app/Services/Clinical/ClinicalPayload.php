@@ -6,6 +6,7 @@ use App\Models\Nutricionales\Input;
 use App\Models\Oncologicos\MedicinesCatalog;
 use App\Models\Oncologicos\Diluent;
 use App\Models\Oncologicos\AdministrationRoute;
+use Illuminate\Support\Str;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +21,25 @@ class ClinicalPayload
         'patient_factors' => 'Otros factores relevantes del paciente (si se conocen)',
         'preparation_storage' => 'Envase, diluyente, conservacion, tiempos hasta administracion y condiciones asepticas',
     ];
+
+    public function withNutritionUnits(array $data): array
+    {
+        $ids = collect(array_keys($data))
+            ->map(fn ($key) => preg_match('/^i_(\d+)$/', (string) $key, $match) ? (int) $match[1] : null)
+            ->filter()
+            ->unique()
+            ->values();
+        if ($ids->isEmpty()) return $data;
+
+        $units = Input::query()->whereIn('id', $ids)->pluck('unidad', 'id');
+        foreach ($ids as $id) {
+            $unit = trim((string) ($units[$id] ?? ''));
+            if ($unit === '') continue;
+            $data['i_'.$id.'_'.$unit] = $data['i_'.$id] ?? null;
+        }
+
+        return $data;
+    }
 
     public function normalize(string $kind, array $data): array
     {
@@ -87,30 +107,90 @@ class ClinicalPayload
             $unit = $input->unidad;
             if ($data['npt'] === 'ADULT' && in_array((int) $input->category_id, [1, 2, 3])) $unit = 'g/dia';
             if ($data['npt'] === 'ADULT' && (int) $input->category_id === 4) $unit = 'mEq/dia';
-            $components[] = ['field' => $field, 'medicine' => $input->description, 'quantity' => (float) $value,
+            $components[] = ['field' => $field, 'input_id' => $input->id, 'category_id' => (int) $input->category_id,
+                'medicine' => $input->description, 'quantity' => (float) $value,
                 'unit' => $unit, 'weight_factor_applied' => $weighted, 'total_amount' => $total,
                 'catalog_multiplier' => (float) $input->mult, 'catalog_divisor' => (float) $input->div,
                 'volume_ml' => round($ml, 6)];
             $base['fields'][] = $field;
             $volume += $ml;
         }
+        $explicitDiluents = $this->nutritionDiluents($data);
+        foreach ($explicitDiluents as $diluent) {
+            $components[] = $diluent;
+            $base['fields'][] = $diluent['field'];
+            $volume += $diluent['volume_ml'];
+        }
         if (!$components) throw ValidationException::withMessages(['observaciones' => 'Captura al menos un componente nutricional.']);
         $base['fields'] = array_merge($base['fields'], ['npt', 'volumen_total', 'sobrellenado_ml', 'via_administracion', 'tiempo_infusion_min', 'velocidad_infusion']);
+        $declaredVolume = (float) $data['volumen_total'];
+        $calculatedWater = 0.0;
+        if (!$explicitDiluents && $volume < $declaredVolume) {
+            $calculatedWater = $declaredVolume - $volume;
+            $components[] = [
+                'field' => 'volumen_total', 'rule_component_id' => -PHP_INT_MAX, 'category_id' => 7,
+                'composition_group' => 'water', 'medicine' => 'AGUA INYECTABLE DE AFORO',
+                'quantity' => $calculatedWater, 'unit' => 'mL', 'weight_factor_applied' => false,
+                'total_amount' => $calculatedWater, 'catalog_multiplier' => 1.0, 'catalog_divisor' => 1.0,
+                'volume_ml' => round($calculatedWater, 6), 'calculated' => true,
+            ];
+        }
         $base['mixtures'] = [['components' => $components, 'mode' => $data['npt'],
-            'volume_ml' => (float) $data['volumen_total'], 'route' => $data['via_administracion'],
+            'volume_ml' => $declaredVolume, 'route' => $data['via_administracion'],
             'overfill_ml' => (float) ($data['sobrellenado_ml'] ?? 0),
+            'calculated_water_ml' => round($calculatedWater, 6),
             // The existing field name says min, but this form and storage use hours.
             'infusion_hours' => !empty($data['tiempo_infusion_min']) ? (float) $data['tiempo_infusion_min'] : null,
             'infusion_ml_hour' => !empty($data['velocidad_infusion']) ? (float) $data['velocidad_infusion'] : null]];
         $base['calculations'][] = ['field' => 'volumen_total', 'formula' => 'Suma(cantidad * factor_peso * multiplicador_catalogo / divisor_catalogo)',
-            'result' => round($volume, 6), 'unit' => 'mL', 'assumptions' => 'Factores del catalogo local; no equivalen a validacion de fichas tecnicas. Agua de aforo no inferida.'];
-        $declaredVolume = (float) $data['volumen_total'];
+            'result' => round($volume, 6), 'unit' => 'mL', 'assumptions' => $explicitDiluents
+                ? 'Factores del catalogo local y diluyentes capturados; no se agrega agua de aforo automatica cuando hay diluyentes explicitos.'
+                : 'Factores del catalogo local; el agua de aforo corresponde a la diferencia positiva contra el volumen total, como en el guardado de la solicitud.'];
         $base['local_blockers'] = $volume > $declaredVolume + .0001
             ? [['field' => 'volumen_total', 'message' => 'El volumen total es menor que la suma de componentes capturados.',
                 'calculation' => round($volume, 4).' mL de componentes - '.round($declaredVolume, 4).' mL de volumen total = '.round($volume - $declaredVolume, 4).' mL de diferencia.',
                 'suggestion' => 'Volumen total capturado: '.round($declaredVolume, 4).' mL. Para contener los componentes registrados se requieren al menos '.round($volume, 4).' mL para esta comprobacion aritmetica. '
                     .'Corrige el volumen total solo si corresponde a la orden medica. Si deben mantenerse los '.round($declaredVolume, 4).' mL prescritos, se requiere una formulacion revisada que quepa en ese volumen; no reduzcas dosis ni agregues agua automaticamente.']] : [];
         return $base;
+    }
+
+    private function nutritionDiluents(array $data): array
+    {
+        $payload = $data['nutrition_diluents'] ?? [];
+        Validator::make(['nutrition_diluents' => $payload], [
+            'nutrition_diluents' => ['nullable', 'array'],
+            'nutrition_diluents.*' => ['array'],
+            'nutrition_diluents.*.volume_ml' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+        ])->validate();
+
+        $rows = collect(is_array($payload) ? $payload : [])->filter(fn ($row) => (float) ($row['volume_ml'] ?? 0) > 0);
+        if ($rows->isEmpty()) return [];
+
+        $diluents = Diluent::query()->where('available_for_nutrition', true)
+            ->whereIn('id', $rows->keys()->map(fn ($id) => (int) $id))->get()->keyBy('id');
+
+        return $rows->map(function (array $row, $id) use ($diluents) {
+            $diluent = $diluents->get((int) $id);
+            $field = "nutrition_diluents.{$id}.volume_ml";
+            if (!$diluent) {
+                throw ValidationException::withMessages([$field => 'El diluyente no está autorizado para nutrición parenteral.']);
+            }
+            $name = Str::upper(Str::ascii($diluent->denominacion_generica));
+            $group = str_contains($name, 'AGUA') ? 'water'
+                : (str_contains($name, 'CLORURO') && str_contains($name, 'SODIO') ? 'saline' : null);
+            if (!$group) {
+                throw ValidationException::withMessages([$field => 'El diluyente no tiene un grupo de composición reconocido.']);
+            }
+            $volume = (float) $row['volume_ml'];
+
+            return [
+                'field' => $field, 'rule_component_id' => -(1000000 + (int) $id),
+                'category_id' => $group === 'water' ? 7 : 8, 'composition_group' => $group,
+                'medicine' => $diluent->denominacion_generica, 'quantity' => $volume, 'unit' => 'mL',
+                'weight_factor_applied' => false, 'total_amount' => $volume,
+                'catalog_multiplier' => 1.0, 'catalog_divisor' => 1.0, 'volume_ml' => $volume,
+            ];
+        })->values()->all();
     }
 
     private function quotedNutrition(array $base, array $data): array
@@ -132,7 +212,8 @@ class ClinicalPayload
                 if ((float) $input->mult <= 0 || (float) $input->div <= 0) {
                     throw ValidationException::withMessages([$field => 'Falta el factor de conversion del catalogo.']);
                 }
-                $components[] = ['field' => $field, 'medicine' => $input->description, 'quantity' => (float) $ml,
+                $components[] = ['field' => $field, 'input_id' => $input->id, 'category_id' => (int) $input->category_id,
+                    'medicine' => $input->description, 'quantity' => (float) $ml,
                     'unit' => 'mL', 'presentation' => $item['presentation'], 'total_amount' => (float) $ml * $input->div / $input->mult,
                     'amount_unit' => preg_replace('~/Kg~i', '', $input->unidad), 'volume_ml' => (float) $ml];
                 $base['fields'][] = $field;

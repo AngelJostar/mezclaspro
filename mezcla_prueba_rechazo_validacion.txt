@@ -1,0 +1,51 @@
+CASO DE PRUEBA — MEZCLA NUTRICIONAL QUE DEBE SER RECHAZADA
+
+IMPORTANTE:
+Este caso es exclusivamente para probar el sistema. No debe utilizarse como prescripción ni preparación clínica real.
+
+OBJETIVO DE LA PRUEBA
+Crear una nutrición parenteral incompleta, sin aminoácidos y sin dextrosa, para comprobar que la validación clínica la clasifique como rechazo y no permita enviarla.
+
+DATOS DEL PACIENTE
+Nombre: PRUEBA
+Apellidos: RECHAZO AGENTE
+Servicio: NUTRICIÓN
+Cama: PRUEBA-01
+Piso: 1
+Registro: TEST-RECHAZO-001
+Diagnóstico: PRUEBA DE VALIDACIÓN DE FÓRMULA INCOMPLETA
+Peso: 70 kg
+Sexo: Masculino
+Fecha de nacimiento: 01/01/1990
+Vía de administración: Central
+Tiempo de infusión: 24 horas
+Velocidad de infusión: 41.67 mL/h
+Volumen total: 1000 mL
+Tipo de NPT: ADULTO
+
+COMPONENTES
+Aminoácidos: 0
+Dextrosa: 0
+Lípidos: seleccionar un producto disponible y capturar 20 g/día
+
+Electrolitos y demás componentes: 0
+Vitaminas: 0
+Elementos traza: 0
+Agua inyectable o diluyente: dejar en “No utilizar” y volumen 0 mL
+Cloruro de sodio 0.9% como diluyente: dejar en “No utilizar” y volumen 0 mL
+Sobrellenado: 0 mL
+
+DATOS DE ENTREGA
+Fecha y hora de entrega: seleccionar una fecha y hora futuras.
+Nombre del médico: MÉDICO DE PRUEBA
+Cédula profesional: 1234567
+
+OBSERVACIONES
+CASO DE PRUEBA. FÓRMULA INTENCIONALMENTE INCOMPLETA PARA VALIDAR EL RECHAZO DEL AGENTE.
+
+RESULTADO ESPERADO
+Al pulsar “Validar y Continuar”, el sistema debe mostrar “SOLICITUD RECHAZADA” o un bloqueo equivalente.
+
+La explicación debe indicar que la mezcla no contiene los componentes base indispensables de una nutrición parenteral, especialmente aminoácidos y dextrosa. El sistema no debe habilitar el envío de la solicitud.
+
+Si el formulario no permite dejar todos los aminoácidos y la dextrosa en cero, no selecciones ninguna presentación para esos grupos. La condición importante de esta prueba es que únicamente existan lípidos y que falten las fuentes de aminoácidos y carbohidratos.

@@ -90,6 +90,25 @@ class NutritionRequestDeliveryValidationTest extends TestCase
         }
     }
 
+    public function test_customer_request_ignores_lot_and_expiry_metadata(): void
+    {
+        Carbon::setTestNow('2026-10-08 12:00:00');
+        $request = $this->request(array_merge($this->validPayload(), [
+            'fecha_hora_entrega' => '2026-10-09T10:00',
+            'i_33_mg' => 0,
+            'l_33' => 'LOTE-VENCIDO',
+            'c_33' => '2026-09-30',
+        ]));
+
+        $response = app(SolicitudController::class)->store($request);
+
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertArrayNotHasKey('c_33', session('errors')?->getMessages() ?? []);
+        $partial = file_get_contents(resource_path('views/admin/nutricionales/solicitudes/partials/input-row-create.blade.php'));
+        $this->assertStringNotContainsString('name="l_', $partial);
+        $this->assertStringNotContainsString('name="c_', $partial);
+    }
+
     private function validPayload(): array
     {
         return [

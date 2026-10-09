@@ -123,6 +123,32 @@ class ClinicalManualLibraryTest extends TestCase
         $this->assertCount(0, $evidence->sources('nutricionales', ''));
     }
 
+    public function test_current_manual_can_be_approved_and_revoked_from_the_view_dialog(): void
+    {
+        $this->saveManual('npt_adulto', '1');
+        $component = Livewire::test(ClinicalManualLibrary::class)->call('viewManual', 1)
+            ->assertSee('Revisión sanitaria')->set('clinicalReviewer', 'QFB Responsable')
+            ->set('reviewConfirmed', true)->call('approveManual', 1)->assertHasNoErrors()->assertSee('Manual revisado y aprobado');
+        $manual = ClinicalSource::findOrFail(1);
+        $this->assertTrue($manual->isReviewed());
+        $this->assertNull($manual->valid_until);
+        $this->assertSame(auth()->id(), $manual->approved_by);
+        $this->assertCount(1, app(ClinicalEvidence::class)->sources('nutricionales', 'ADULT'));
+        $component->call('revokeManualApproval', 1)->assertHasNoErrors();
+        $this->assertFalse($manual->fresh()->isReviewed());
+        $this->assertCount(0, app(ClinicalEvidence::class)->sources('nutricionales', 'ADULT'));
+    }
+
+    public function test_historical_manual_cannot_be_approved(): void
+    {
+        $this->saveManual('npt_adulto', '1');
+        $this->saveManual('npt_adulto', '2');
+        Livewire::test(ClinicalManualLibrary::class)->call('viewManual', 1)
+            ->set('clinicalReviewer', 'QFB Responsable')->set('reviewConfirmed', true)
+            ->call('approveManual', 1)->assertHasErrors('manualReview');
+        $this->assertFalse(ClinicalSource::findOrFail(1)->isReviewed());
+    }
+
     public function test_updating_the_legacy_nutritional_manual_preserves_it_in_history(): void
     {
         $legacy = ClinicalSource::create(['title' => 'Manual anterior', 'category' => 'nutricionales', 'reference' => 'Revisión 3',

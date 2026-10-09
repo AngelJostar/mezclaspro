@@ -24,6 +24,6 @@ class ClinicalSource extends Model
     public function isReviewed(): bool
     {
         return !$this->superseded_at && $this->approved_by && $this->approved_at && $this->clinical_reviewer
-            && $this->valid_until && $this->valid_until->endOfDay()->isFuture();
+            && ($this->is_manual || ($this->valid_until && $this->valid_until->endOfDay()->isFuture()));
     }
 }

@@ -5,6 +5,8 @@ namespace App\Services\Clinical;
 use App\Models\AiAgent;
 use App\Models\ClinicalSource;
 use App\Services\OpenAiProviderConfiguration;
+use App\Models\ValidationRule;
+use Illuminate\Support\Facades\Schema;
 
 class ClinicalEvidence
 {
@@ -91,7 +93,11 @@ PROMPT;
         $provider = \App\Models\AiAgentProviderSetting::find(1);
         $effective = OpenAiProviderConfiguration::resolve($provider);
         $configuration = [$effective['model'], $effective['source'], $provider?->updated_at?->toIso8601String(), (bool) $effective['key']];
-        return hash('sha256', json_encode(['review-policy-v9-npt-selection', $sources ?? $this->sources($kind), ($agent ?? $this->agent())?->only(['instructions', 'is_active']), $configuration], JSON_THROW_ON_ERROR));
+        $rules = $kind === 'nutricionales' && Schema::hasTable('validation_rules')
+            ? ValidationRule::query()->where('status', 'active')->where('is_enforced', true)
+                ->orderBy('id')->get(['id', 'code', 'version', 'population', 'severity', 'configuration', 'updated_at'])->toArray()
+            : [];
+        return hash('sha256', json_encode(['review-policy-v10-deterministic-rules', $sources ?? $this->sources($kind), ($agent ?? $this->agent())?->only(['instructions', 'is_active']), $configuration, $rules], JSON_THROW_ON_ERROR));
     }
 
     public function limitations(string $kind, array $sources, ?string $nutritionMode = null): array

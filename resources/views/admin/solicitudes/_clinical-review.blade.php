@@ -3,8 +3,8 @@
     @if (isset($preparationQuotation))<input type="hidden" name="clinical_quotation_id" value="{{ $preparationQuotation->id }}">@endif
     <input type="hidden" name="clinical_review_token" value="">
     <details class="clinical-context" data-clinical-context>
-        <summary>Datos para la revision clinica</summary>
-        <p class="clinical-notice">Estos campos se envian a OpenAI para revisar la mezcla. No incluyas nombres, expedientes ni identificadores. Indica los datos conocidos; si algo no aplica, explica el motivo. No afirmes ausencia de riesgo sin verificar.</p>
+        <summary>Datos para la revision clinica (opcionales)</summary>
+        <p class="clinical-notice">Estos campos son opcionales y se envian a OpenAI cuando se capturan. Pueden mejorar la revision, pero dejarlos vacios no bloquea la solicitud. No incluyas nombres, expedientes ni identificadores, ni afirmes ausencia de riesgo sin verificar.</p>
         <div class="clinical-context-fields">
             @foreach (\App\Services\Clinical\ClinicalPayload::CONTEXT_FIELDS as $key => $label)
                 <label for="clinical-context-{{ $key }}">{{ $label }}

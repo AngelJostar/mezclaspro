@@ -191,6 +191,7 @@
         </div>
 
         <form id="solicitudForm" action="{{ route('admin.nutricionales.solicitudes.update', $solicitud) }}" method="POST"
+            data-rule-validation-url="{{ route('admin.solicitudes.rules.validate', ['kind' => 'nutricionales']) }}"
             class="bg-white rounded-lg p-6 shadow-lg w-full">
 
             @csrf
@@ -293,7 +294,7 @@
                     <x-label class="mb-2 font-bold">Tiempo de infusión (h):</x-label>
                     <x-input-solicitud type="number"
                         value="{{ $hasVelocidad ? '' : old('tiempo_infusion_min', $solicitud->solicitud_detail->tiempo_infusion_min) }}"
-                        min="0.001" max="1000" name="tiempo_infusion_min" class="w-full" />
+                        step="0.001" min="0.001" max="1000" name="tiempo_infusion_min" class="w-full" />
                 </div>
 
                 <div>
@@ -476,6 +477,14 @@
 
             <input type="hidden" name="accion" id="accion_input" value="actualizar">
 
+            @if ($isApprovalMode && $isPendingApproval)
+                <section id="rule-validation-result" class="mt-6 rounded border border-slate-200 bg-slate-50 p-4" hidden>
+                    <h3 class="font-bold text-slate-800">Validación por reglas clínicas y de composición</h3>
+                    <p class="mt-1 text-sm text-slate-600">Esta revisión utiliza únicamente las reglas activas aprobadas; no consulta inteligencia artificial.</p>
+                    <div class="mt-3" data-rule-validation-content></div>
+                </section>
+            @endif
+
             @if (! $isApprovalMode)
                 <div class="flex justify-end gap-5 mt-6 mb-3">
                     <x-button>ACTUALIZAR</x-button>
@@ -618,13 +627,81 @@
                 }
             }
 
-            function updateAccion(value) {
+            async function runDeterministicValidation() {
+                const form = document.getElementById('solicitudForm');
+                const panel = document.getElementById('rule-validation-result');
+                const content = panel?.querySelector('[data-rule-validation-content]');
+                if (!form?.dataset.ruleValidationUrl || !panel || !content) return { status: 'passed', blocking_count: 0, findings: [] };
+
+                const validationData = new FormData(form);
+                validationData.delete('_method');
+                const response = await fetch(form.dataset.ruleValidationUrl, {
+                    method: 'POST',
+                    body: validationData,
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'No fue posible ejecutar la validación por reglas.');
+
+                panel.hidden = false;
+                content.replaceChildren();
+                const findings = data.findings || [];
+                if (findings.length === 0) {
+                    const message = document.createElement('p');
+                    message.className = 'font-semibold text-green-700';
+                    message.textContent = 'La fórmula cumple las reglas activas configuradas.';
+                    content.append(message);
+                } else {
+                    const list = document.createElement('ul');
+                    list.className = 'space-y-3';
+                    findings.forEach((finding) => {
+                        const item = document.createElement('li');
+                        item.className = finding.severity === 'blocking'
+                            ? 'rounded border-l-4 border-red-500 bg-red-50 p-3 text-red-800'
+                            : 'rounded border-l-4 border-amber-500 bg-amber-50 p-3 text-amber-800';
+                        const title = document.createElement('strong');
+                        title.textContent = finding.severity === 'blocking' ? 'Rechazo: ' : 'Advertencia: ';
+                        item.append(title, document.createTextNode(finding.message || 'Regla incumplida.'));
+                        if (finding.calculation) {
+                            const calculation = document.createElement('p');
+                            calculation.className = 'mt-1 text-sm';
+                            calculation.textContent = finding.calculation;
+                            item.append(calculation);
+                        }
+                        list.append(item);
+                    });
+                    content.append(list);
+                }
+                panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return data;
+            }
+
+            async function updateAccion(value) {
                 const form = document.getElementById('solicitudForm');
                 const accionInput = document.getElementById('accion_input');
                 const isRejectAction = value === 'rechazar';
                 if (value === 'ajustar') {
                     document.querySelector('[data-adjustment-proposal-open]')?.click();
                     return;
+                }
+
+                if (value === 'aprobar') {
+                    try {
+                        const validation = await runDeterministicValidation();
+                        if ((validation.blocking_count || 0) > 0) {
+                            await Swal.fire({
+                                title: 'La mezcla no puede aprobarse',
+                                text: 'Corrige los rechazos mostrados por las reglas activas antes de aprobar.',
+                                icon: 'error',
+                                confirmButtonText: 'Revisar fórmula',
+                            });
+                            return;
+                        }
+                    } catch (error) {
+                        await Swal.fire('No se pudo validar', error.message, 'error');
+                        return;
+                    }
                 }
 
                 Swal.fire({
@@ -658,6 +735,47 @@
                     }
                 });
             }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.getElementById('solicitudForm');
+                const action = document.getElementById('accion_input');
+                if (!form?.dataset.ruleValidationUrl) return;
+
+                form.addEventListener('submit', async function(event) {
+                    if (action?.value !== 'actualizar' || form.dataset.ruleValidationComplete === '1') return;
+                    event.preventDefault();
+                    if (!form.checkValidity()) {
+                        form.reportValidity();
+                        return;
+                    }
+
+                    try {
+                        const validation = await runDeterministicValidation();
+                        const findings = validation.findings || [];
+                        if (findings.length > 0) {
+                            const result = await Swal.fire({
+                                title: (validation.blocking_count || 0) > 0
+                                    ? 'Se encontraron rechazos en el borrador'
+                                    : 'Se encontraron advertencias',
+                                text: 'Puedes guardar los cambios para continuar corrigiendo la fórmula. La mezcla no podrá aprobarse mientras existan rechazos.',
+                                icon: (validation.blocking_count || 0) > 0 ? 'warning' : 'info',
+                                showCancelButton: true,
+                                confirmButtonText: 'Guardar borrador',
+                                cancelButtonText: 'Seguir revisando',
+                            });
+                            if (!result.isConfirmed) return;
+                        }
+
+                        form.dataset.ruleValidationComplete = '1';
+                        form.submit();
+                    } catch (error) {
+                        await Swal.fire('No se pudo validar', error.message, 'error');
+                    }
+                });
+
+                form.addEventListener('input', () => delete form.dataset.ruleValidationComplete);
+                form.addEventListener('change', () => delete form.dataset.ruleValidationComplete);
+            });
 
             document.addEventListener("DOMContentLoaded", function() {
                 const inputTiempo = document.querySelector('input[name="tiempo_infusion_min"]');

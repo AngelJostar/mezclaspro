@@ -196,10 +196,10 @@ class ClinicalSupportTest extends TestCase
         $this->assertSame($finding['suggestion'], app(ClinicalReviewService::class)->response($review, $this->user)['result']['findings'][0]['suggestion']);
         $this->assertStringNotContainsString($finding['suggestion'], DB::table('clinical_reviews')->value('result'));
 
-        // Correcting this arithmetic mismatch does not clear other clinical limitations.
+        // Correcting this arithmetic mismatch clears the request even when optional context is absent.
         $data['volumen_total'] = '1200'; unset($data['clinical_context']);
         $this->assertEmpty(app(ClinicalPayload::class)->normalize('nutricionales', $data)['local_blockers']);
-        $this->assertFalse($this->review($data)->can_submit);
+        $this->assertTrue($this->review($data)->can_submit);
     }
 
     public function test_response_schema_constrains_source_ids_and_fields_to_the_supplied_case(): void
@@ -434,17 +434,68 @@ class ClinicalSupportTest extends TestCase
         $this->assertStringContainsString('No se obtuvo una revision completa', json_encode($review->result));
     }
 
-    public function test_real_form_missing_clinical_context_cannot_be_overridden_by_model(): void
+    public function test_real_form_missing_clinical_context_is_optional_when_mixture_review_is_complete(): void
     {
-        $this->fake();
+        $answer = $this->answer('needs_review');
+        foreach ($answer['coverage'] as &$coverage) {
+            if (in_array($coverage['domain'], ['completeness', 'clinical_risks'], true)) $coverage['state'] = 'missing';
+        }
+        unset($coverage);
+        $this->fake($answer);
         $data = $this->data(); unset($data['clinical_context']);
         $case = (new ClinicalPayload)->normalize('nutricionales', $data);
         $review = app(ClinicalReviewService::class)->evaluate($this->request($data), 'nutricionales', $case, 'submission');
-        $this->assertFalse($review->can_submit);
-        $this->assertSame('needs_review', $review->result['status']);
+        $this->assertNotEmpty($case['missing_context']);
+        $this->assertTrue($review->can_submit);
+        $this->assertSame('no_blockers', $review->result['status']);
+        $this->assertNotContains('missing', array_column($review->result['coverage'], 'state'));
+        $this->assertContains('missing', array_column($review->result['audit_coverage'], 'state'));
         $this->assertEmpty($review->result['limitations']);
         $this->assertEmpty($review->result['findings']);
-        $this->assertStringNotContainsString('Requiere aclaracion profesional', json_encode(app(ClinicalReviewService::class)->response($review, $this->user)));
+        $this->assertStringContainsString('no detecto bloqueos', $review->result['summary']);
+    }
+
+    public function test_missing_optional_context_finding_is_audited_without_blocking_submission(): void
+    {
+        $answer = $this->answer('needs_review');
+        $answer['findings'] = [[
+            'field' => 'observaciones',
+            'severity' => 'review',
+            'category' => 'missing_clinical_context',
+            'message' => 'Contexto clinico opcional no capturado.',
+            'calculation' => '',
+            'suggestion' => '',
+            'source_ids' => ['S2'],
+        ]];
+        $this->fake($answer);
+        $data = $this->data(); unset($data['clinical_context']);
+        $review = $this->review($data);
+
+        $this->assertTrue($review->can_submit);
+        $this->assertSame('no_blockers', $review->result['status']);
+        $this->assertEmpty($review->result['findings']);
+        $this->assertCount(1, $review->result['audit_findings']);
+    }
+
+    public function test_missing_optional_compatibility_context_is_a_visible_confirmable_advisory(): void
+    {
+        $answer = $this->answer('needs_review');
+        foreach ($answer['coverage'] as &$coverage) {
+            if ($coverage['domain'] === 'compatibility_stability') $coverage['state'] = 'missing';
+        }
+        unset($coverage);
+        $this->fake($answer);
+        $data = $this->data(); unset($data['clinical_context']);
+        $review = $this->review($data);
+
+        $this->assertTrue($review->can_submit);
+        $this->assertSame('advisory', $review->result['status']);
+        $this->assertTrue($review->result['requires_risk_acknowledgement']);
+        $this->assertSame('compatibility_limitation', $review->result['findings'][0]['category']);
+        $this->assertSame('advertencia informativa', $review->result['findings'][0]['observation_type']);
+        $this->assertStringContainsString('no constituye un rechazo', $review->result['findings'][0]['message']);
+        $this->assertSame('reviewed', collect($review->result['coverage'])->firstWhere('domain', 'compatibility_stability')['state']);
+        $this->assertSame('missing', collect($review->result['audit_coverage'])->firstWhere('domain', 'compatibility_stability')['state']);
     }
 
     public function test_oncology_and_antibiotic_payloads_use_catalog_names_and_calculate_concentration(): void
@@ -812,7 +863,8 @@ class ClinicalSupportTest extends TestCase
                 'message' => 'OTRA_MEZCLA_NO_CAPTURADA', 'calculation' => '', 'suggestion' => 'AJUSTE_AJENO', 'source_ids' => ['S2']]];
             $this->fake($answer); $review = $this->review();
             $response = app(ClinicalReviewService::class)->response($review, $this->user);
-            $this->assertEmpty($response['result']['findings']);
+            $this->assertCount(1, $response['result']['findings']);
+            $this->assertSame('review_limitation', $response['result']['findings'][0]['category']);
             $this->assertSame('needs_review', $response['result']['status']);
             $this->assertFalse($response['can_submit']);
             $this->assertNull($review->result['model']);
@@ -830,11 +882,16 @@ class ClinicalSupportTest extends TestCase
                 'message' => 'Nota interna de prueba.', 'calculation' => '', 'suggestion' => '', 'source_ids' => ['S2']]];
             $this->fake($answer); $review = $this->review();
             $response = $service->response($review, $this->user);
-            $this->assertEmpty($response['result']['findings']);
+            if ($status === 'needs_review') {
+                $this->assertCount(1, $response['result']['findings']);
+                $this->assertSame('review_limitation', $response['result']['findings'][0]['category']);
+            } else {
+                $this->assertEmpty($response['result']['findings']);
+            }
             $this->assertSame($status, $response['result']['status']);
             $this->assertSame($severity === 'information', $response['can_submit']);
             $this->assertFalse($response['requires_medical_authorization']);
-            $this->assertCount(1, $review->result['audit_findings']);
+            $this->assertCount($status === 'needs_review' ? 2 : 1, $review->result['audit_findings']);
         }
     }
 
@@ -1085,8 +1142,8 @@ class ClinicalSupportTest extends TestCase
         $eligible = $this->review();
         $this->assertTrue($eligible->result['requires_medical_authorization'], json_encode($eligible->result));
         $this->assertFalse($this->review(array_replace($this->data(), ['volumen_total' => '1']))->result['requires_medical_authorization']);
-        $incomplete = $this->data(); unset($incomplete['clinical_context']);
-        $this->assertFalse($this->review($incomplete)->result['requires_medical_authorization']);
+        $withoutOptionalContext = $this->data(); unset($withoutOptionalContext['clinical_context']);
+        $this->assertTrue($this->review($withoutOptionalContext)->result['requires_medical_authorization']);
         foreach (['category' => 'safety', 'field' => 'volumen_total', 'source_ids' => ['S1']] as $key => $value) {
             $answer = $this->exceptionAnswer(); $answer['findings'][0][$key] = $value;
             $this->fake($answer);

@@ -709,6 +709,9 @@ class SolicitudController extends Controller
                 $query->where('laboratory_id', $hospital->laboratory_id)
                     ->where('is_active', 1)
                     ->where('stock_ml_actual', '>', 0)
+                    ->where(function ($query) {
+                        $query->whereNull('caducidad')->orWhereDate('caducidad', '>=', today());
+                    })
                     ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
                     ->orderBy('caducidad')
                     ->orderBy('id');
@@ -799,8 +802,6 @@ class SolicitudController extends Controller
             }
 
             $dynamicRules[$key] = ['nullable', 'numeric', 'min:0', 'max:1000000'];
-            $dynamicRules['l_'.$inputId] = ['nullable', 'string', 'max:255'];
-            $dynamicRules['c_'.$inputId] = ['nullable', 'date', 'after_or_equal:today'];
             $inputQuantities[$inputId] = $value;
         }
 
@@ -993,8 +994,8 @@ class SolicitudController extends Controller
                     'input_id' => $numero,
                     'nutrition_medicine_presentation_id' => $presentation?->id,
                     'precio_ml' => $precioMlUnitario,
-                    'lote' => $request->input('l_'.$numero),
-                    'caducidad' => $request->input('c_'.$numero),
+                    'lote' => null,
+                    'caducidad' => null,
                 ]);
             }
 
@@ -1088,8 +1089,8 @@ class SolicitudController extends Controller
                     $solicitud_inputs['input_id'] = 37;
                     $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentationAgua?->id;
                     $solicitud_inputs['valor_sobrellenado'] = $agua_valor_sobrellenado;
-                    $solicitud_inputs['lote'] = $request->input('l_37');
-                    $solicitud_inputs['caducidad'] = $request->input('c_37');
+                    $solicitud_inputs['lote'] = null;
+                    $solicitud_inputs['caducidad'] = null;
 
                     if ($presentationAgua) {
                         $precioMlAgua = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentationAgua);
@@ -1112,8 +1113,8 @@ class SolicitudController extends Controller
                     $solicitud_inputs['valor_ml'] = $agua_inyectable_ml;
                     $solicitud_inputs['input_id'] = 37;
                     $solicitud_inputs['nutrition_medicine_presentation_id'] = $presentationAgua?->id;
-                    $solicitud_inputs['lote'] = $request->input('l_37');
-                    $solicitud_inputs['caducidad'] = $request->input('c_37');
+                    $solicitud_inputs['lote'] = null;
+                    $solicitud_inputs['caducidad'] = null;
 
                     if ($presentationAgua) {
                         $precioMlAgua = $this->obtenerPrecioMlHospitalPorPresentacion($hospital, $presentationAgua);
@@ -1247,6 +1248,9 @@ class SolicitudController extends Controller
                 $query->where('laboratory_id', $hospital->laboratory_id)
                     ->where('is_active', 1)
                     ->where('stock_ml_actual', '>', 0)
+                    ->where(function ($query) {
+                        $query->whereNull('caducidad')->orWhereDate('caducidad', '>=', today());
+                    })
                     ->orderByRaw('CASE WHEN caducidad IS NULL THEN 1 ELSE 0 END')
                     ->orderBy('caducidad')
                     ->orderBy('id');
@@ -1417,6 +1421,22 @@ class SolicitudController extends Controller
         if (in_array($request->input('accion'), ['aprobar', 'rechazar', 'ajustar'], true)) {
             $adjustments->assertCentral($request->user(), $solicitud);
         }
+        if ($request->input('accion') === 'aprobar') {
+            $clinicalPayload = app(\App\Services\Clinical\ClinicalPayload::class);
+            $clinicalData = $clinicalPayload->withNutritionUnits($request->all());
+            $clinicalPayload->validatePatient('nutricionales', $clinicalData);
+            $ruleResult = app(\App\Services\ValidationRules\ClinicalRuleEvaluator::class)
+                ->evaluate($clinicalPayload->normalize('nutricionales', $clinicalData));
+            $blockingFindings = collect($ruleResult['findings'])->where('severity', 'blocking')->values();
+            if ($blockingFindings->isNotEmpty()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'validation_rules' => $blockingFindings->map(fn (array $finding) =>
+                        ($finding['message'] ?? 'La mezcla incumple una regla de validación.')
+                        .(!empty($finding['calculation']) ? ' '.$finding['calculation'] : '')
+                    )->all(),
+                ]);
+            }
+        }
         DB::beginTransaction();
         $calculationPreview = null;
 
@@ -1473,7 +1493,30 @@ class SolicitudController extends Controller
             $fecha_nacimiento = $request->input('fecha_nacimiento');
             $edad = $this->calcularEdad($fecha_nacimiento);
 
-            $request->validate([
+            $inventoryRules = [];
+            $inventoryAttributes = [];
+            if ($accion === 'aprobar') {
+                $requestedInputIds = collect($request->all())
+                    ->filter(fn ($value, $key) => preg_match('/^i_(\d+)$/', (string) $key) && (float) $value > 0)
+                    ->keys()
+                    ->map(fn ($key) => (int) substr((string) $key, 2));
+                $bagInputId = (int) $request->input('bolsa_eva');
+                if ($bagInputId > 0) $requestedInputIds->push($bagInputId);
+                $requestedInputIds = $requestedInputIds->unique()->values();
+                $inputNames = Input::whereIn('id', $requestedInputIds)->pluck('description', 'id');
+
+                foreach ($requestedInputIds as $inputId) {
+                    $name = (string) ($inputNames[$inputId] ?? 'componente nutricional');
+                    $inventoryRules['p_'.$inputId] = ['required', 'integer'];
+                    $inventoryRules['l_'.$inputId] = ['required', 'string', 'max:255'];
+                    $inventoryRules['c_'.$inputId] = ['required', 'date', 'after_or_equal:today'];
+                    $inventoryAttributes['p_'.$inputId] = 'presentación de '.$name;
+                    $inventoryAttributes['l_'.$inputId] = 'lote de '.$name;
+                    $inventoryAttributes['c_'.$inputId] = 'caducidad de '.$name;
+                }
+            }
+
+            $request->validate(array_merge([
                 'nombre_paciente' => 'required|string|max:255',
                 'apellidos_paciente' => 'required|string|max:255',
                 'servicio' => 'required|string|max:100',
@@ -1496,7 +1539,7 @@ class SolicitudController extends Controller
                 'bolsa_eva' => 'required',
                 'velocidad_infusion' => 'nullable|numeric|gt:0|max:100000',
                 'hospital_destino' => 'nullable|string|max:255',
-            ]);
+            ], $inventoryRules), [], $inventoryAttributes);
 
             $solicitud->loadMissing('hospital');
             $hospital = $solicitud->preparationHospital();
@@ -1910,6 +1953,9 @@ class SolicitudController extends Controller
             DB::commit();
 
             return $this->redirectAfterSolicitudAction($solicitud, $request);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -2026,6 +2072,7 @@ class SolicitudController extends Controller
         $stockBaseQuery = MedicineLaboratoryStock::where('nutrition_medicine_presentation_id', $presentation->id)
             ->where('laboratory_id', $hospital->laboratory_id)
             ->where('is_active', 1)
+            ->when(trim((string) $loteSolicitado) !== '', fn ($query) => $query->where('lote', trim((string) $loteSolicitado)))
             ->where(function ($q) {
                 $q->whereNull('caducidad')
                     ->orWhereDate('caducidad', '>=', now()->toDateString());
@@ -2107,7 +2154,8 @@ class SolicitudController extends Controller
             'Solicitud',
             $solicitudId,
             null,
-            auth()->id()
+            auth()->id(),
+            $loteSolicitado
         );
 
         $cantidadPendiente = (float) $remainderResult['remaining_ml'];
@@ -2134,6 +2182,7 @@ class SolicitudController extends Controller
             ->where('nutrition_medicine_presentation_id', $presentation->id)
             ->where('laboratory_id', $hospital->laboratory_id)
             ->where('is_active', 1)
+            ->when(trim((string) $loteSolicitado) !== '', fn ($query) => $query->where('lote', trim((string) $loteSolicitado)))
             ->where('frascos_actuales', '>=', $frascosAbrir)
             ->where(function ($query) {
                 $query->whereNull('caducidad')
@@ -2151,6 +2200,7 @@ class SolicitudController extends Controller
                 ->where('nutrition_medicine_presentation_id', $presentation->id)
                 ->where('laboratory_id', $hospital->laboratory_id)
                 ->where('is_active', 1)
+                ->when(trim((string) $loteSolicitado) !== '', fn ($query) => $query->where('lote', trim((string) $loteSolicitado)))
                 ->where(function ($query) {
                     $query->whereNull('caducidad')
                         ->orWhereDate('caducidad', '>=', now()->toDateString());

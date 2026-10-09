@@ -33,6 +33,8 @@ class ClinicalManualLibrary extends Component
     public string $modal = '';
     #[Locked]
     public ?int $viewingId = null;
+    public string $clinicalReviewer = '';
+    public bool $reviewConfirmed = false;
 
     public function openForm(string $type): void
     {
@@ -47,8 +49,10 @@ class ClinicalManualLibrary extends Component
     public function viewManual(int $id): void
     {
         $this->authorizeAccess();
-        ClinicalSource::where('is_manual', true)->findOrFail($id);
+        $source = ClinicalSource::where('is_manual', true)->findOrFail($id);
         $this->viewingId = $id;
+        $this->clinicalReviewer = (string) $source->clinical_reviewer;
+        $this->reviewConfirmed = false;
         $this->modal = 'view';
         $this->resetValidation();
     }
@@ -65,7 +69,50 @@ class ClinicalManualLibrary extends Component
     public function closeModal(): void
     {
         $this->authorizeAccess();
-        $this->reset('modal', 'viewingId', 'file', 'version', 'reference', 'content');
+        $this->reset('modal', 'viewingId', 'file', 'version', 'reference', 'content',
+            'clinicalReviewer', 'reviewConfirmed');
+        $this->resetValidation();
+    }
+
+    public function approveManual(int $id): void
+    {
+        $this->authorizeAccess();
+        abort_unless($this->viewingId === $id, 403);
+        $source = ClinicalSource::where('is_manual', true)->findOrFail($id);
+        if ($source->superseded_at) {
+            $this->addError('manualReview', 'No se puede aprobar una versión histórica. Abre la versión actual.');
+            return;
+        }
+        $data = $this->validate([
+            'clinicalReviewer' => 'required|string|min:3|max:255',
+            'reviewConfirmed' => 'accepted',
+        ], [
+            'reviewConfirmed.accepted' => 'Confirma que el responsable sanitario revisó esta versión del manual.',
+        ]);
+        $source->update([
+            'clinical_reviewer' => $data['clinicalReviewer'],
+            'valid_until' => null,
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+        $this->reviewConfirmed = false;
+        $this->notice = 'Manual aprobado para la validación clínica. Las solicitudes deben validarse nuevamente.';
+        $this->resetValidation();
+    }
+
+    public function revokeManualApproval(int $id): void
+    {
+        $this->authorizeAccess();
+        abort_unless($this->viewingId === $id, 403);
+        $source = ClinicalSource::where('is_manual', true)->findOrFail($id);
+        $source->update([
+            'clinical_reviewer' => null,
+            'valid_until' => null,
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+        $this->reset('clinicalReviewer', 'reviewConfirmed');
+        $this->notice = 'Aprobación retirada. El manual dejó de formar parte de la evidencia vigente.';
         $this->resetValidation();
     }
 

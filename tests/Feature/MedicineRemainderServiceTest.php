@@ -112,6 +112,29 @@ class MedicineRemainderServiceTest extends TestCase
         $this->assertSame('Estabilidad vencida', $expired->discard_reason);
     }
 
+    public function test_it_consumes_only_the_lot_selected_during_approval(): void
+    {
+        $other = $this->openRemainder(10, 2, 12, 121, null, 'LOTE-OTRO');
+        $selected = $this->openRemainder(10, 4, 24, 122, null, 'LOTE-SELECCIONADO');
+
+        $result = $this->service->consumeAvailable(
+            'oncologico',
+            $this->presentationId,
+            $this->laboratoryId,
+            3,
+            'mezcla',
+            301,
+            null,
+            null,
+            'LOTE-SELECCIONADO'
+        );
+
+        $this->assertSame(3.0, $result['consumed_ml']);
+        $this->assertSame($selected->id, $result['allocations'][0]['remainder_id']);
+        $this->assertSame('8.0000', $other->fresh()->current_ml);
+        $this->assertSame('3.0000', $selected->fresh()->current_ml);
+    }
+
     public function test_rollback_restores_consumed_remainder_only_once(): void
     {
         $remainder = $this->openRemainder(10, 2, 24, 130);
@@ -142,13 +165,14 @@ class MedicineRemainderServiceTest extends TestCase
         float $usedMl,
         int $stabilityHours,
         int $referenceId,
-        $openedAt = null
+        $openedAt = null,
+        string $lot = 'LOTE-PRUEBA'
     ): ?MedicineRemainder {
         return $this->service->openContainer([
             'domain' => 'oncologico',
             'laboratory_id' => $this->laboratoryId,
             'medicine_presentation_id' => $this->presentationId,
-            'lote' => 'LOTE-PRUEBA',
+            'lote' => $lot,
             'caducidad' => now()->addYear()->toDateString(),
             'opened_at' => $openedAt ?? now(),
             'stability_hours' => $stabilityHours,

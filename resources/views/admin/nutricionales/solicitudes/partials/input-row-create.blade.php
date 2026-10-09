@@ -13,18 +13,6 @@
         $presentation = $presentations->first();
     }
 
-    $remainder = $presentation?->remanente_proximo;
-    $stock = $presentation && $presentation->stocks->count() > 0
-        ? $presentation->stocks->first()
-        : $remainder?->nutritionStock;
-
-    $loteValue = old('l_' . $input->input_id, $stock->lote ?? '');
-
-    $caducidadValue = old(
-        'c_' . $input->input_id,
-        $stock && $stock->caducidad ? \Carbon\Carbon::parse($stock->caducidad)->format('Y-m-d') : '',
-    );
-
     // Los nombres extensos necesitan toda la tarjeta para no reducir el campo de cantidad.
     $stackQuantity = mb_strlen(trim((string) $input->description)) > 48;
 @endphp
@@ -72,42 +60,12 @@
         </div>
 
         @hasanyrole('Admin|Super Admin')
-            <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">
-                        Presentación activa
-                    </label>
-                    <input type="text" class="w-full rounded border-gray-300 bg-gray-100"
-                        value="{{ $presentation?->denominacion_comercial ?? 'Sin presentación activa' }}" readonly>
-                    @if (($presentation?->remanente_disponible_ml ?? 0) > 0)
-                        <p class="mt-1 text-xs font-semibold text-emerald-700">
-                            Usar primero remanente: {{ number_format((float) $presentation->remanente_disponible_ml, 2) }} mL
-                            @if ($remainder?->usable_until)
-                                (vigente hasta {{ $remainder->usable_until->format('d/m/Y H:i') }})
-                            @endif
-                        </p>
-                    @endif
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">
-                        Lote
-                    </label>
-                    <input type="text" name="l_{{ $input->input_id }}" class="w-full rounded border-gray-300"
-                        value="{{ $loteValue }}">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">
-                        Caducidad
-                    </label>
-                    <input type="date" name="c_{{ $input->input_id }}" class="w-full rounded border-gray-300"
-                        value="{{ $caducidadValue }}">
-                </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Presentación de referencia</label>
+                <input type="text" class="w-full rounded border-gray-300 bg-gray-100"
+                    value="{{ $presentation?->denominacion_comercial ?? 'Sin presentación activa' }}" readonly>
+                <p class="mt-1 text-xs text-gray-500">El lote y la caducidad se asignan al aprobar la mezcla.</p>
             </div>
-        @else
-            <input type="hidden" name="l_{{ $input->input_id }}" value="{{ $loteValue }}">
-            <input type="hidden" name="c_{{ $input->input_id }}" value="{{ $caducidadValue }}">
         @endhasanyrole
     </div>
 </div>

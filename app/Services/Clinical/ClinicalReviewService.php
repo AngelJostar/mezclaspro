@@ -10,10 +10,16 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
+use App\Services\ValidationRules\ClinicalRuleEvaluator;
 
 class ClinicalReviewService
 {
-    public function __construct(private ClinicalPayload $payload, private ClinicalEvidence $evidence, private OpenAiClinicalAnalysis $openai) {}
+    public function __construct(
+        private ClinicalPayload $payload,
+        private ClinicalEvidence $evidence,
+        private OpenAiClinicalAnalysis $openai,
+        private ClinicalRuleEvaluator $rules,
+    ) {}
 
     public function installed(): bool
     {
@@ -39,21 +45,89 @@ class ClinicalReviewService
         // Track the full category to invalidate receipts if either population's library changes.
         $sourcesFingerprint = $this->evidence->fingerprint($kind, null, $agent);
         $issues = $this->evidence->limitations($kind, $sources, $mode);
+        $ruleEvaluation = $kind === 'nutricionales'
+            ? $this->rules->evaluate($case)
+            : ['findings' => [], 'evaluations' => []];
+        $analysisCase = $case;
+        $analysisCase['deterministic_validation'] = $ruleEvaluation['evaluations'];
         $result = ['status' => 'needs_review', 'summary' => 'Revision pendiente del profesional responsable.', 'findings' => [], 'coverage' => [], 'model' => null];
         if (!$agent?->is_active) $issues[] = 'El agente de soporte clinico esta inactivo. Solicita su configuracion al superadministrador.';
         elseif (count($sources) > 20 || strlen(json_encode($sources)) > 250000) $issues[] = 'Las fuentes exceden el limite de revision. Reduce su alcance antes de continuar.';
         else {
-            try { $result = $this->openai->analyze($case, $sources, $agent->instructions ?? ''); }
+            try { $result = $this->openai->analyze($analysisCase, $sources, $agent->instructions ?? ''); }
             catch (\RuntimeException $e) { $issues[] = $e->getMessage(); }
         }
         if (!hash_equals($sourcesFingerprint, $this->evidence->fingerprint($kind))) {
             $issues[] = 'Las fuentes o la configuracion cambiaron durante la revision. Vuelve a validar.';
         }
+        $aiFindings = array_map(
+            fn (array $finding) => $this->replaceInternalIdentifiers($finding, $case),
+            $result['findings'] ?? []
+        );
+        $ruleEvaluation['findings'] = $this->enrichDeterministicFindings(
+            $ruleEvaluation['findings'],
+            $aiFindings
+        );
+        $result['findings'] = $this->withoutDeterministicDuplicates(
+            $aiFindings,
+            $ruleEvaluation['findings']
+        );
         foreach ($case['local_blockers'] ?? [] as $item) $result['findings'][] = $item + ['severity' => 'blocking', 'source_ids' => ['SYSTEM']];
-        // Missing evidence, incomplete responses and local checks cannot be overridden by the model.
-        $complete = !$issues && empty($case['missing_context']) && count($result['coverage']) === 4
+        foreach ($ruleEvaluation['findings'] as $item) $result['findings'][] = $item;
+        $result['findings'] = array_map(
+            fn (array $finding) => $this->replaceInternalIdentifiers($finding, $case),
+            $result['findings']
+        );
+        $result['deterministic_validation'] = $ruleEvaluation['evaluations'];
+        $result['audit_coverage'] = $result['coverage'];
+        $hasSubstantiveFinding = collect($result['findings'])->contains(
+            fn ($finding) => !in_array($finding['category'] ?? '', ['missing_clinical_context', 'information', 'internal_comment'], true)
+        );
+        $reviewedSourceIds = collect($sources)->filter(fn ($source) => $source['reviewed'] ?? false)->pluck('id');
+        $optionalCompatibilityMissing = false;
+        $optionalCompatibilitySourceIds = [];
+        // The provider may interpret blank optional context as incomplete coverage. Structured required
+        // fields are validated locally, so only context-dependent domains with reviewed citations can
+        // be normalized, and never when a substantive finding or technical issue exists.
+        if (!$issues && !empty($case['missing_context']) && !$hasSubstantiveFinding) {
+            foreach ($result['coverage'] as &$coverage) {
+                if (in_array($coverage['domain'] ?? '', ['completeness', 'compatibility_stability', 'clinical_risks'], true)
+                    && ($coverage['state'] ?? '') === 'missing'
+                    && !empty($coverage['source_ids'])
+                    && collect($coverage['source_ids'])->every(fn ($id) => $reviewedSourceIds->contains($id))) {
+                    if (($coverage['domain'] ?? '') === 'compatibility_stability') {
+                        $optionalCompatibilityMissing = true;
+                        $optionalCompatibilitySourceIds = $coverage['source_ids'];
+                    }
+                    $coverage['state'] = 'reviewed';
+                }
+            }
+            unset($coverage);
+        }
+        if ($optionalCompatibilityMissing) {
+            $result['findings'][] = [
+                'field' => 'clinical_context[preparation_storage]',
+                'severity' => 'advisory',
+                'category' => 'compatibility_limitation',
+                'message' => 'La compatibilidad y estabilidad no pudieron evaluarse completamente porque no se capturaron las condiciones opcionales de preparación, almacenamiento, diluyente o tiempo hasta la administración. Esto no constituye un rechazo de la formulación.',
+                'calculation' => '',
+                'suggestion' => 'Captura las condiciones de preparación y almacenamiento si deseas complementar la evaluación cualitativa; también puedes continuar después de confirmar la revisión profesional.',
+                'source_ids' => $optionalCompatibilitySourceIds,
+            ];
+        }
+        // Optional clinical context does not block a structurally complete mixture review.
+        // Missing evidence, incomplete model responses and local checks still cannot be overridden.
+        $complete = !$issues && count($result['coverage']) === 4
             && !collect($result['coverage'])->contains(fn ($c) => $c['state'] !== 'reviewed')
-            && !collect($result['findings'])->contains(fn ($f) => !in_array($f['severity'], ['information', 'authorization', 'advisory'], true));
+            && !collect($result['findings'])->contains(fn ($f) => ($f['category'] ?? '') !== 'missing_clinical_context'
+                && !in_array($f['severity'], ['information', 'authorization', 'advisory'], true));
+        $onlyOptionalContextIsMissing = !empty($case['missing_context'])
+            && !collect($result['findings'])->contains(fn ($f) => !in_array($f['category'] ?? '', [
+                'missing_clinical_context', 'compatibility_limitation', 'information', 'internal_comment',
+            ], true));
+        if ($complete && $onlyOptionalContextIsMissing && $result['status'] === 'needs_review') {
+            $result['status'] = 'no_blockers';
+        }
         $hasException = collect($result['findings'])->contains(fn ($f) => $f['severity'] === 'authorization');
         $hasAdvisory = collect($result['findings'])->contains(fn ($f) => $f['severity'] === 'advisory');
         $requiresAuthorization = $complete && $hasException && $result['status'] !== 'blocked';
@@ -65,22 +139,52 @@ class ClinicalReviewService
         foreach ($result['findings'] as &$finding) {
             if ($finding['severity'] === 'blocking') $finding['observation_type'] = 'rechazo';
             elseif ($finding['severity'] === 'authorization') $finding['observation_type'] = 'advertencia';
+            elseif (($finding['category'] ?? '') === 'compatibility_limitation') $finding['observation_type'] = 'advertencia informativa';
             elseif ($finding['severity'] === 'advisory') $finding['observation_type'] = 'sugerencia';
         }
         unset($finding);
+        if ($result['status'] === 'needs_review'
+            && !collect($result['findings'])->contains(fn ($finding) => $this->isParameterFinding($finding))) {
+            $missingDomains = collect($result['coverage'])
+                ->where('state', '!=', 'reviewed')
+                ->pluck('domain')
+                ->map(fn ($domain) => [
+                    'completeness' => 'integridad de los datos',
+                    'calculations' => 'cálculos',
+                    'compatibility_stability' => 'compatibilidad y estabilidad',
+                    'clinical_risks' => 'riesgos clínicos',
+                ][$domain] ?? $domain)
+                ->implode(', ');
+            $reason = $issues[0] ?? ($missingDomains
+                ? 'La revisión no cubrió completamente: '.$missingDomains.'.'
+                : 'La respuesta de revisión no fue suficiente para emitir un resultado completo.');
+            $result['findings'][] = [
+                'field' => 'observaciones',
+                'severity' => 'review',
+                'category' => 'review_limitation',
+                'message' => $reason,
+                'calculation' => '',
+                'suggestion' => 'Verifica la configuración y las fuentes indicadas, y vuelve a validar la solicitud.',
+                'source_ids' => ['SYSTEM'],
+                'observation_type' => 'advertencia',
+            ];
+        }
         // Decide submission before filtering comments; hidden notes cannot clear a clinical block.
         $result['audit_findings'] = $result['findings'];
         $result['audit_summary'] = $result['summary'];
         $result['findings'] = array_values(array_filter($result['findings'], function ($finding) use ($case) {
             if (!$this->isParameterFinding($finding)) return false;
-            if (preg_match('/^clinical_context\[(allergies|concomitant_medication|organ_function_labs|patient_factors)\]$/', $finding['field'], $match)
+            if (($finding['category'] ?? '') === 'missing_clinical_context'
+                && preg_match('/^clinical_context\[(allergies|concomitant_medication|organ_function_labs|patient_factors|preparation_storage)\]$/', $finding['field'], $match)
                 && empty($case['clinical_context'][$match[1]])) return false;
             return true;
         }));
         $result['summary'] = match ($result['status']) {
             'blocked' => 'Corrige los parametros senalados y vuelve a validar. No se permite enviar esta formulacion.',
             'authorization_required' => 'La mezcla requiere autorizacion del area medica para enviarse con parametros fuera de los limites clinicos o quimicos recomendados. Registra los datos del medico y la autorizacion antes del envio.',
-            'advisory' => 'La revision encontro sugerencias no bloqueantes. Puedes corregirlas y volver a validar o continuar bajo responsabilidad profesional despues de confirmar que las revisaste.',
+            'advisory' => $optionalCompatibilityMissing
+                ? 'La formulacion no presenta rechazos deterministas. La compatibilidad y estabilidad quedaron parcialmente evaluadas por falta de datos opcionales; puedes completar la informacion o continuar despues de confirmar la revision profesional.'
+                : 'La revision encontro sugerencias no bloqueantes. Puedes corregirlas y volver a validar o continuar bajo responsabilidad profesional despues de confirmar que las revisaste.',
             'no_blockers' => 'La revision no detecto bloqueos. Confirma la revision antes de enviar; la preparacion requiere su aprobacion habitual.',
             default => 'La revision no esta completa. No se habilito el envio ni se considera validada la seguridad de la mezcla.',
         };
@@ -98,6 +202,96 @@ class ClinicalReviewService
             'sources_hash' => $sourcesFingerprint, 'session_hash' => $this->sessionHash($request),
             'clinical_context' => $case['clinical_context'] ?? [],
             'can_submit' => $canSubmit && $purpose === 'submission', 'result' => $result, 'expires_at' => now()->addMinutes(15)]);
+    }
+
+    private function withoutDeterministicDuplicates(array $findings, array $deterministicFindings): array
+    {
+        return array_values(array_filter($findings, function (array $finding) use ($deterministicFindings): bool {
+            foreach ($deterministicFindings as $deterministic) {
+                if ($this->duplicatesDeterministicFinding($finding, $deterministic)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
+    }
+
+    private function enrichDeterministicFindings(array $deterministicFindings, array $aiFindings): array
+    {
+        foreach ($deterministicFindings as &$deterministic) {
+            if (trim((string) ($deterministic['suggestion'] ?? '')) !== '') continue;
+
+            foreach ($aiFindings as $finding) {
+                if (!$this->duplicatesDeterministicFinding($finding, $deterministic)) continue;
+
+                $suggestion = trim((string) ($finding['suggestion'] ?? ''));
+                if ($suggestion !== '') {
+                    $deterministic['suggestion'] = $suggestion;
+                    break;
+                }
+            }
+        }
+        unset($deterministic);
+
+        return $deterministicFindings;
+    }
+
+    private function duplicatesDeterministicFinding(array $finding, array $deterministic): bool
+    {
+        $field = (string) ($finding['field'] ?? '');
+        $text = Str::lower(implode(' ', array_filter([
+            $finding['message'] ?? null,
+            $finding['calculation'] ?? null,
+        ])));
+        $ruleCode = Str::lower((string) ($deterministic['rule_code'] ?? ''));
+        $ruleName = Str::lower(Str::before((string) ($deterministic['message'] ?? ''), ':'));
+        $sameField = $field !== '' && $field === (string) ($deterministic['field'] ?? '');
+        $plainText = Str::lower(Str::ascii($text));
+        $duplicatesCompositionCatalog = str_contains($ruleCode, '.comp.')
+            && str_contains($plainText, 'catalog')
+            && (str_contains($plainText, 'composicion') || str_contains($plainText, 'combinacion'));
+
+        return ($ruleCode !== '' && str_contains($text, $ruleCode))
+            || ($sameField && $ruleName !== '' && str_contains($text, $ruleName))
+            || $duplicatesCompositionCatalog;
+    }
+
+    private function replaceInternalIdentifiers(array $finding, array $case): array
+    {
+        $aliases = [];
+        foreach ($case['mixtures'] ?? [] as $mixture) {
+            foreach ($mixture['components'] ?? [] as $component) {
+                $field = trim((string) ($component['field'] ?? ''));
+                if ($field === '') continue;
+
+                $group = (string) ($component['composition_group'] ?? '');
+                $label = [
+                    'amino_acids' => 'aminoácidos',
+                    'dextrose' => 'dextrosa',
+                    'lipids' => 'lípidos',
+                    'electrolytes' => 'electrolitos',
+                    'trace_elements' => 'elementos traza',
+                    'vitamins' => 'vitaminas',
+                    'water' => 'agua inyectable',
+                    'saline' => 'solución salina',
+                    'medications' => 'medicamento',
+                    'additives' => 'aditivo',
+                ][$group] ?? trim((string) ($component['medicine'] ?? 'componente'));
+                $aliases[$field.'/Kg'] = $label;
+                $aliases[$field.'/kg'] = $label;
+                $aliases[$field] = $label;
+            }
+        }
+
+        uksort($aliases, fn (string $left, string $right) => strlen($right) <=> strlen($left));
+        foreach (['message', 'calculation', 'suggestion'] as $key) {
+            if (!isset($finding[$key]) || !is_string($finding[$key])) continue;
+            $finding[$key] = str_ireplace(array_keys($aliases), array_values($aliases), $finding[$key]);
+            $finding[$key] = preg_replace('/\b(?:i|c)_\d+(?:_[A-Za-z]+)?(?:\/Kg)?\b/i', 'componente correspondiente', $finding[$key]);
+        }
+
+        return $finding;
     }
 
     public function response(ClinicalReview $review, User $viewer): array
@@ -119,7 +313,7 @@ class ClinicalReviewService
     public function resultForDisplay(ClinicalReview $review): array
     {
         $result = $review->result;
-        unset($result['audit_findings'], $result['audit_summary']);
+        unset($result['audit_findings'], $result['audit_summary'], $result['audit_coverage']);
         $result['findings'] = array_values(array_filter($result['findings'], fn ($finding) => $this->isParameterFinding($finding)));
         $sources = collect($result['sources'] ?? [])->keyBy('id');
         // Hide old generic fallbacks without rewriting the encrypted review history or its decision.

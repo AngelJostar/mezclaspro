@@ -50,7 +50,8 @@ class MedicineRemainderService
         string $domain,
         int $presentationId,
         int $laboratoryId,
-        ?int $warehouseId = null
+        ?int $warehouseId = null,
+        ?string $lot = null
     ): Collection {
         $this->expireDueRemainders();
 
@@ -63,6 +64,7 @@ class MedicineRemainderService
             ->where($presentationColumn, $presentationId)
             ->where('laboratory_id', $laboratoryId)
             ->when($warehouseId, fn($query) => $query->where('warehouse_id', $warehouseId))
+            ->when(trim((string) $lot) !== '', fn($query) => $query->where('lote', trim((string) $lot)))
             ->where('is_active', true)
             ->where('current_ml', '>', self::EPSILON)
             ->where(function ($query) {
@@ -83,13 +85,14 @@ class MedicineRemainderService
         string $referenceType,
         int $referenceId,
         ?int $warehouseId = null,
-        ?int $userId = null
+        ?int $userId = null,
+        ?string $lot = null
     ): array {
         $remaining = max(0, $requiredMl);
         $consumed = 0.0;
         $allocations = [];
 
-        foreach ($this->available($domain, $presentationId, $laboratoryId, $warehouseId) as $remainder) {
+        foreach ($this->available($domain, $presentationId, $laboratoryId, $warehouseId, $lot) as $remainder) {
             if ($remaining <= self::EPSILON) {
                 break;
             }

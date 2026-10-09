@@ -358,10 +358,23 @@
                 <li class="rounded-lg border border-rose-200 bg-rose-50 p-1 dark:border-rose-700 dark:bg-rose-900/20">
                     <a href="{{ route('admin.superadministrator.index') }}" aria-label="Superadministrador"
                         x-on:click="open = false"
-                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-rose-100 dark:text-white dark:hover:bg-rose-800/50 {{ request()->routeIs('admin.superadministrator.*') ? 'bg-rose-100 dark:bg-rose-800/50' : '' }}">
+                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-rose-100 dark:text-white dark:hover:bg-rose-800/50 {{ request()->routeIs('admin.superadministrator.index') ? 'bg-rose-100 dark:bg-rose-800/50' : '' }}">
                         <span class="min-w-0 text-left text-xs font-bold leading-4">
                             <span class="block">Super</span>
                             <span class="block">administrador</span>
+                        </span>
+                    </a>
+                </li>
+            @endhasanyrole
+
+            @hasanyrole('Auxiliar de responsable sanitario')
+                <li class="rounded-lg border border-indigo-200 bg-indigo-50 p-1 dark:border-indigo-700 dark:bg-indigo-900/20">
+                    <a href="{{ route('admin.validation-rules.index') }}" aria-label="Motor de validaciones"
+                        x-on:click="open = false"
+                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-indigo-100 dark:text-white dark:hover:bg-indigo-800/50 {{ request()->routeIs('admin.validation-rules.*') ? 'bg-indigo-100 dark:bg-indigo-800/50' : '' }}">
+                        <span class="min-w-0 text-left text-xs font-bold leading-4">
+                            <span class="block">Motor de</span>
+                            <span class="block">validaciones</span>
                         </span>
                     </a>
                 </li>

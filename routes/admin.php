@@ -25,6 +25,7 @@ use App\Http\Controllers\Admin\ProductionSupplyRequestController;
 use App\Http\Controllers\Admin\ConsumableInventoryController;
 use App\Http\Controllers\Admin\ConsumableCatalogController;
 use App\Http\Controllers\Admin\SuperAdministratorController;
+use App\Http\Controllers\Admin\ValidationRuleController;
 use App\Models\Solicitud;
 use Illuminate\Support\Facades\Route; //Importamos para generar nuestras rutas.
 use App\Exports\SolicitudesExport;
@@ -106,6 +107,8 @@ Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::cla
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
 Route::post('solicitudes/validacion-clinica/{kind}', [\App\Http\Controllers\Admin\ClinicalReviewController::class, 'validateRequest'])
     ->where('kind', 'nutricionales|oncologicos|antibioticos')->middleware('throttle:10,1')->name('solicitudes.clinical.validate');
+Route::post('solicitudes/validacion-reglas/{kind}', [\App\Http\Controllers\Admin\ClinicalReviewController::class, 'validateRules'])
+    ->where('kind', 'nutricionales')->middleware('throttle:30,1')->name('solicitudes.rules.validate');
 Route::prefix('solicitudes/mensajes/{kind}/{target}')
     ->where(['kind' => 'nutricionales|oncologicos|antibioticos', 'target' => '[0-9]+'])
     ->group(function () {
@@ -211,6 +214,24 @@ Route::prefix('superadministrador')
             ->name('waste-requests.approve');
         Route::patch('/solicitudes-merma/{wasteRequest}/rechazar', [SuperAdministratorController::class, 'rejectWasteRequest'])
             ->name('waste-requests.reject');
+        Route::patch('/motores-validacion/reglas/{validationRule}/aprobar', [ValidationRuleController::class, 'approve'])
+            ->name('validation-rules.approve');
+        Route::patch('/motores-validacion/reglas/{validationRule}/desactivar', [ValidationRuleController::class, 'deactivate'])
+            ->name('validation-rules.deactivate');
+        Route::resource('/motores-validacion/reglas', ValidationRuleController::class)
+            ->except(['show'])
+            ->parameters(['reglas' => 'validationRule'])
+            ->names('validation-rules');
+    });
+
+Route::prefix('motores-validacion')
+    ->name('validation-rules.')
+    ->middleware(['role:Super Admin|Auxiliar de responsable sanitario'])
+    ->group(function () {
+        Route::get('/reglas', [ValidationRuleController::class, 'index'])
+            ->name('index');
+        Route::patch('/reglas/{validationRule}/aprobar', [ValidationRuleController::class, 'approve'])
+            ->name('approve');
     });
 
 Route::resource('/roles', RoleController::class)
