@@ -12,4 +12,18 @@ export default defineConfig({
             refresh: true,
         }),
     ],
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (!id.includes('node_modules')) return;
+                    if (id.includes('lucide')) return 'icons';
+                    if (id.includes('leaflet')) return 'maps';
+                    if (id.includes('laravel-echo') || id.includes('pusher-js')) return 'realtime';
+                    if (id.includes('axios')) return 'http';
+                    return 'vendor';
+                },
+            },
+        },
+    },
 });
