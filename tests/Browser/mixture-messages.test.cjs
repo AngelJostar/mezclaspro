@@ -91,15 +91,15 @@ test('mixture chat preserves history, unread badges, drafts and safe retry on de
                 const input = dialog.getByRole('textbox', { name: 'Mensaje', exact: true });
                 await page.waitForFunction(() => !document.querySelector('#mixture-chat-body').disabled);
                 const send = dialog.getByRole('button', { name: 'Enviar mensaje', exact: true });
-                await dialog.getByText('Verificar parametros con el profesional responsable.', { exact: true }).waitFor();
                 const clinicalResult = dialog.locator('[data-chat-clinical-result]');
                 assert.equal(await clinicalResult.getByText('Volumen total inconsistente.', { exact: true }).isVisible(), true);
-                assert.equal(await clinicalResult.locator('.clinical-suggestion').isVisible(), true);
+                assert.equal(await clinicalResult.getByText('Error:', { exact: true }).isVisible(), true);
+                assert.equal(await clinicalResult.locator('.clinical-suggestion').count(), 0);
                 for (const label of ['Calculos y supuestos', 'Estado de la evidencia y del servicio', 'Fuentes utilizadas', 'La IA no autoriza la preparacion.']) {
-                    assert.equal(await clinicalResult.getByText(label, { exact: true }).count(), side === 'central' ? 1 : 0);
+                    assert.equal(await clinicalResult.getByText(label, { exact: true }).count(), 0);
                 }
-                assert.equal(await clinicalResult.locator('details').count(), side === 'central' ? 3 : 0);
-                assert.equal(await clinicalResult.locator('.clinical-notice').count(), side === 'central' ? 2 : 0);
+                assert.equal(await clinicalResult.locator('details').count(), 0);
+                assert.equal(await clinicalResult.locator('.clinical-notice').count(), 0);
                 assert.equal(await send.isDisabled(), true);
                 if (side === 'central') await cell.locator('.mixture-message-unread').waitFor({ state: 'hidden' });
                 await input.fill('Borrador de la mezcla');

@@ -70,7 +70,19 @@ class NutritionRemissionTemplateTest extends TestCase
         $this->assertStringContainsString('Dirección de prueba', $html);
     }
 
-    private function renderRemission(string $unit, ?object $distributor = null): string
+    public function test_it_adds_the_accepted_medical_warning_to_remission_observations(): void
+    {
+        $warning = 'Límite clínico de Cloro en adulto: Exceso de Cloro; requiere valoración médica. Resultado: 240 mEq/día; criterio: menor o igual que 150 mEq/día.';
+
+        $html = $this->renderRemission('mL', null, $warning);
+
+        $this->assertStringContainsString('Observaciones:', $html);
+        $this->assertStringContainsString($warning, $html);
+        $this->assertStringNotContainsString('Médico autorizante:', $html);
+        $this->assertStringNotContainsString('Cédula profesional:', $html);
+    }
+
+    private function renderRemission(string $unit, ?object $distributor = null, ?string $medicalAuthorizationObservation = null): string
     {
         $catalog = (object) ['denominacion_generica' => 'Aminoácidos', 'presentations' => collect()];
         $presentation = (object) [
@@ -100,6 +112,7 @@ class NutritionRemissionTemplateTest extends TestCase
             'pricingSummary' => ['lines' => collect([['unit_label' => $unit, 'quantity' => $unit === 'frasco' ? 1 : 250, 'unit_price' => $unit === 'frasco' ? 120 : .48, 'subtotal' => 120]]), 'supply_lines' => collect(), 'additional_charge_lines' => collect(), 'service_total' => 440, 'total_iva_included' => 560],
             'almacenesPorSolicitudInput' => collect([10 => 'Almacén principal']),
             'theoreticalWeight' => ['value' => 262.5, 'missing' => []],
+            'medicalAuthorizationObservation' => $medicalAuthorizationObservation,
         ])->render();
     }
 }

@@ -8,6 +8,7 @@
             @foreach ($nutritionDiluents as $diluent)
                 @php
                     $saved = isset($selectedNutritionDiluents) ? $selectedNutritionDiluents->get($diluent->id) : null;
+                    $canAssignPresentation = $canAssignNutritionDiluentLots ?? false;
                     $presentationField = "nutrition_diluents.{$diluent->id}.presentation_id";
                     $volumeField = "nutrition_diluents.{$diluent->id}.volume_ml";
                     $selectedPresentation = old($presentationField, $saved?->diluent_presentation_id);
@@ -15,7 +16,8 @@
                 @endphp
                 <div class="rounded-md border border-cyan-200 bg-cyan-50 p-4">
                     <h3 class="mb-3 font-bold text-slate-800">{{ $diluent->denominacion_generica }}</h3>
-                    <div class="grid gap-3 md:grid-cols-2">
+                    <div class="grid gap-3 {{ $canAssignPresentation ? 'md:grid-cols-2' : '' }}">
+                        @if ($canAssignPresentation)
                         <label class="text-sm font-medium text-gray-700">
                             Presentación y lote
                             <select name="nutrition_diluents[{{ $diluent->id }}][presentation_id]"
@@ -32,6 +34,7 @@
                             </select>
                             @error($presentationField)<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
                         </label>
+                        @endif
 
                         <label class="text-sm font-medium text-gray-700">
                             Volumen solicitado (mL)

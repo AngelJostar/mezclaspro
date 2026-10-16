@@ -477,7 +477,7 @@ class ClinicalSupportTest extends TestCase
         $this->assertCount(1, $review->result['audit_findings']);
     }
 
-    public function test_missing_optional_compatibility_context_is_a_visible_confirmable_advisory(): void
+    public function test_missing_optional_compatibility_context_is_visible_information_without_confirmation(): void
     {
         $answer = $this->answer('needs_review');
         foreach ($answer['coverage'] as &$coverage) {
@@ -489,13 +489,21 @@ class ClinicalSupportTest extends TestCase
         $review = $this->review($data);
 
         $this->assertTrue($review->can_submit);
-        $this->assertSame('advisory', $review->result['status']);
-        $this->assertTrue($review->result['requires_risk_acknowledgement']);
+        $this->assertSame('no_blockers', $review->result['status']);
+        $this->assertFalse($review->result['requires_risk_acknowledgement']);
+        $this->assertFalse($review->result['requires_acknowledgement']);
         $this->assertSame('compatibility_limitation', $review->result['findings'][0]['category']);
         $this->assertSame('advertencia informativa', $review->result['findings'][0]['observation_type']);
         $this->assertStringContainsString('no constituye un rechazo', $review->result['findings'][0]['message']);
         $this->assertSame('reviewed', collect($review->result['coverage'])->firstWhere('domain', 'compatibility_stability')['state']);
         $this->assertSame('missing', collect($review->result['audit_coverage'])->firstWhere('domain', 'compatibility_stability')['state']);
+
+        $response = app(ClinicalReviewService::class)->response($review, $this->user);
+        $this->assertFalse($response['requires_acknowledgement']);
+
+        $submission = $this->request($data + ['clinical_review_token' => $review->id]);
+        app(ClinicalReviewService::class)->requireSubmission($submission, 'nutricionales');
+        $this->assertSame($review->id, $submission->attributes->get('clinicalReview')->id);
     }
 
     public function test_oncology_and_antibiotic_payloads_use_catalog_names_and_calculate_concentration(): void
@@ -1081,7 +1089,7 @@ class ClinicalSupportTest extends TestCase
 
     private function medicalAuthorization(): array
     {
-        return ['doctor_name' => 'MEDICO FICTICIO PRIVADO', 'doctor_license' => 'CEDULA-PRUEBA'];
+        return ['doctor_name' => 'MEDICO FICTICIO PRIVADO', 'doctor_license' => 'CEDULA-PRUEBA', 'risk_accepted' => '1'];
     }
 
     public function test_suggestion_policy_migration_preserves_custom_profile_activation_and_sources(): void
@@ -1163,7 +1171,8 @@ class ClinicalSupportTest extends TestCase
         $data = $this->data() + ['clinical_review_token' => $review->id, 'clinical_acknowledged' => '1'];
         foreach ([[], ['doctor_name' => 'Medico de prueba'], ['doctor_license' => 'CEDULA-PRUEBA'],
             array_replace($this->medicalAuthorization(), ['doctor_name' => 'AB']),
-            array_replace($this->medicalAuthorization(), ['doctor_license' => ''])] as $authorization) {
+            array_replace($this->medicalAuthorization(), ['doctor_license' => '']),
+            array_replace($this->medicalAuthorization(), ['risk_accepted' => '0'])] as $authorization) {
             try { $service->requireSubmission($this->request($data + ['medical_authorization' => $authorization]), 'nutricionales'); $this->fail('Incomplete authorization accepted'); }
             catch (ValidationException $e) { $this->assertNotEmpty($e->errors()); }
         }
@@ -1173,7 +1182,8 @@ class ClinicalSupportTest extends TestCase
         $this->assertNull($review->fresh()->medical_authorization);
         DB::transaction(fn () => $service->consume($request, 'solicituds', 456));
         $this->assertSame($this->user->id, $review->fresh()->medical_authorization['recorded_by']);
-        $this->assertSame(2, $review->fresh()->medical_authorization['capture_version']);
+        $this->assertSame(3, $review->fresh()->medical_authorization['capture_version']);
+        $this->assertSame('1', $review->fresh()->medical_authorization['risk_accepted']);
         foreach (['reference', 'reason', 'authorized_at', 'confirmed'] as $removed) {
             $this->assertArrayNotHasKey($removed, $review->fresh()->medical_authorization);
         }
@@ -1206,7 +1216,8 @@ class ClinicalSupportTest extends TestCase
         $stored = $review->fresh()->medical_authorization;
         $this->assertSame($this->user->id, $stored['recorded_by']);
         $this->assertSame($review->id, $stored['review_id']);
-        $this->assertSame(2, $stored['capture_version']);
+        $this->assertSame(3, $stored['capture_version']);
+        $this->assertSame('1', $stored['risk_accepted']);
         $this->assertNotSame('2000-01-01', $stored['recorded_at']);
         foreach (['reference', 'reason', 'authorized_at', 'confirmed'] as $removed) $this->assertArrayNotHasKey($removed, $stored);
 

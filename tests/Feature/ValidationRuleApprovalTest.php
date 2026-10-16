@@ -87,6 +87,50 @@ class ValidationRuleApprovalTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_active_rule_can_be_viewed_without_deactivating_it(): void
+    {
+        $admin = $this->superadministrator();
+        $rule = $this->rule([
+            'status' => 'active',
+            'is_enforced' => true,
+            'engine' => 'mathematical',
+            'configuration' => [
+                'source_variable' => 'groups.magnesium.total_meq',
+                'formula_template' => 'direct_value',
+                'operator' => '<=',
+                'threshold_value' => 30,
+                'unit' => 'mEq/día',
+                'failure_message' => 'Exceso de Magnesio: requiere valoración médica.',
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.validation-rules.show', $rule))
+            ->assertOk()
+            ->assertSee('Consulta de regla')
+            ->assertSee('Magnesio total')
+            ->assertSee('Expresión legible de la regla')
+            ->assertSee('Magnesio total ≤ 30 mEq/día')
+            ->assertSee('menor o igual que')
+            ->assertSee('30')
+            ->assertSee('mEq/día');
+
+        $rule->refresh();
+        $this->assertTrue($rule->is_enforced);
+        $this->assertSame('active', $rule->status);
+
+        $editable = $this->rule([
+            'engine' => 'mathematical',
+            'configuration' => $rule->configuration,
+        ]);
+        $this->actingAs($admin)
+            ->get(route('admin.superadministrator.validation-rules.edit', $editable))
+            ->assertOk()
+            ->assertSee('Vista previa de la regla')
+            ->assertSee('x-model="source"', false)
+            ->assertSee('x-model="operator"', false);
+    }
+
     private function superadministrator(): User
     {
         $user = User::factory()->create(['hospital_id' => null]);

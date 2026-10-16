@@ -58,7 +58,7 @@ test('clinical review gates submission, preserves notes and rejects stale respon
             const setContextOpen = async open => {
                 const context = page.locator('[data-clinical-context]');
                 if (await context.evaluate(element => element.open) !== open) {
-                    await page.getByText('Datos para la revision clinica', { exact: true }).click();
+                    await page.getByText('Datos para la revision clinica (opcionales)', { exact: true }).click();
                 }
             };
             await setContextOpen(true);
@@ -67,16 +67,17 @@ test('clinical review gates submission, preserves notes and rejects stale respon
             for (const field of await contextFields.all()) await field.fill('Contexto sintetico para prueba de interfaz.');
             const button = page.locator('[data-clinical-submit]');
             await button.click();
-            await page.getByText('SOLICITUD RECHAZADA', { exact: true }).waitFor();
-            assert.equal(await page.getByText('Rechazo:', { exact: true }).isVisible(), true);
+            await page.getByText('Error:', { exact: true }).waitFor();
             assert.equal(await page.locator('[data-medical-authorization]').isVisible(), false);
             assert.equal(await page.locator('[name=clinical_review_token]').inputValue(), '');
             assert.equal(await button.innerText(), 'Validar y Continuar');
             assert.equal(await page.locator('#volume').getAttribute('aria-invalid'), 'true');
             assert.equal(await page.locator('#notes').inputValue(), 'Nota del usuario');
             assert.equal(await page.locator('#volume').inputValue(), '1000');
-            assert.equal(await page.locator('.clinical-suggestion').innerText(), 'Sugerencia: ' + result(false).result.findings[0].suggestion);
-            assert.equal(await page.locator('.clinical-suggestion').isVisible(), true);
+            assert.equal(await page.locator('.clinical-suggestion').count(), 0);
+            assert.equal(await page.getByText(result(false).result.summary, { exact: true }).count(), 0);
+            assert.equal(await page.locator('[data-clinical-result] details').count(), 0);
+            assert.equal(await page.locator('[data-clinical-result] .clinical-notice').count(), 0);
             assert.equal(await page.locator('img').count(), 0);
             assert.equal(await page.evaluate(() => window.clinicalXss), undefined);
             assert.equal(await page.evaluate(() => window.suggestionXss), undefined);
@@ -85,7 +86,7 @@ test('clinical review gates submission, preserves notes and rejects stale respon
             if (process.env.CLINICAL_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.CLINICAL_SCREENSHOTS, `clinical-blocked-${width}.png`), fullPage: true });
 
             mode = 'without-suggestion'; await button.click();
-            await page.getByText('Revision incompleta', { exact: true }).waitFor();
+            await page.getByText('Error:', { exact: true }).waitFor();
             assert.equal(await page.locator('.clinical-suggestion').count(), 0);
             assert.equal(await page.locator('[data-clinical-result] li').count(), 1);
             assert.equal(await page.locator('[data-clinical-result] details').count(), 0);
@@ -110,24 +111,27 @@ test('clinical review gates submission, preserves notes and rejects stale respon
                 return route.fulfill({ contentType: 'application/json', body: JSON.stringify(authorizationResult) });
             });
             await button.click();
-            await page.getByText('Advertencia: requiere autorizacion medica', { exact: true }).waitFor();
+            await page.getByText('Advertencia:', { exact: true }).waitFor();
             assert.equal(await page.getByText('Advertencia:', { exact: true }).isVisible(), true);
             assert.equal(await page.locator('.clinical-suggestion').count(), 0);
-            assert.equal(await page.locator('[data-medical-authorization]').isVisible(), true);
+            assert.equal(await page.locator('[data-medical-authorization]').isVisible(), false);
             await button.click();
+            assert.equal(await page.locator('[data-medical-authorization]').isVisible(), true);
             assert.equal(saves, 0);
-            assert.equal(await page.locator('[name="medical_authorization[doctor_name]"]').getAttribute('aria-invalid'), 'true');
-            assert.equal(await page.locator('[data-medical-authorization] input').count(), 2);
+            assert.equal(await page.locator('[name="medical_authorization[doctor_name]"]').evaluate(field => field.checkValidity()), false);
+            assert.equal(await page.locator('[data-medical-authorization] input').count(), 3);
             for (const key of ['reference', 'authorized_at', 'reason', 'confirmed']) {
                 assert.equal(await page.locator(`[name="medical_authorization[${key}]"]`).count(), 0);
             }
             for (const [key, value] of Object.entries({doctor_name:'Medico de prueba', doctor_license:'PRUEBA123'})) {
                 await page.locator(`[name="medical_authorization[${key}]"]`).fill(value);
             }
+            await page.locator('[name="medical_authorization[risk_accepted]"]').check();
             assert.equal(await page.locator('[data-medical-authorization] :invalid').count(), 0);
             assert.equal(await page.locator('[name=clinical_review_token]').inputValue(), 'synthetic-receipt');
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
             if (process.env.CLINICAL_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.CLINICAL_SCREENSHOTS, `clinical-authorization-${width}.png`), fullPage: true });
+            await page.locator('[data-medical-authorization-cancel]').last().click();
             await page.locator('#volume').fill('1300');
             assert.equal(await page.locator('[data-medical-authorization]').isVisible(), false);
             assert.equal(await page.locator('[name="medical_authorization[doctor_name]"]').inputValue(), '');
@@ -135,7 +139,7 @@ test('clinical review gates submission, preserves notes and rejects stale respon
 
             // An authorization from a previous warning cannot survive a rejected revalidation.
             mode = 'blocked'; await button.click();
-            await page.getByText('SOLICITUD RECHAZADA', { exact: true }).waitFor();
+            await page.getByText('Error:', { exact: true }).waitFor();
             assert.equal(await page.locator('[data-medical-authorization]').isVisible(), false);
             assert.equal(await page.locator('[name=clinical_review_token]').inputValue(), '');
             assert.equal(await button.innerText(), 'Validar y Continuar');

@@ -721,13 +721,6 @@
                                         <strong>Inspeccionó</strong>
                                     </td>
                                 </tr>
-                                <tr>
-                                    <td class="text-center border-0" style="margin: 0; padding: 0">Sello o nombre y
-                                        rúbrica</td>
-                                </tr>
-                                <tr>
-                                    <td class="border-0" style="margin: 0; padding: 0">.</td>
-                                </tr>
                             </table>
                         </td>
                         <td class="border-0" style="width: 20%"></td>
@@ -747,10 +740,6 @@
                                 <tr>
                                     <td class="text-center border-0" style="margin: 0; padding: 0">Unidad de Calidad
                                     </td>
-                                </tr>
-                                <tr>
-                                    <td class="text-center border-0" style="margin: 0; padding: 0">Nombre o sello y
-                                        firma</td>
                                 </tr>
                             </table>
                         </td>

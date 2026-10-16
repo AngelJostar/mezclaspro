@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin\Nutricionales;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClinicalReview;
 use App\Models\Hospital;
 use App\Models\MixtureAdjustment;
 use App\Models\Warehouse;
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Spatie\LaravelIgnition\Recorders\DumpRecorder\Dump;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Http\Response;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Notification;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\SolicitudesExport;
@@ -771,13 +773,16 @@ class SolicitudController extends Controller
         });
 
 
-        $nutritionDiluents = app(NutritionDiluentService::class)->optionsForHospital($hospital);
+        $canAssignNutritionDiluentLots = $user->hasAnyRole(['Admin', 'Super Admin']);
+        $nutritionDiluents = app(NutritionDiluentService::class)
+            ->optionsForHospital($hospital, null, $canAssignNutritionDiluentLots);
 
         return view('admin.nutricionales.solicitudes.create', compact(
             'inputs',
             'presentationsByInput',
             'activeSelections',
-            'nutritionDiluents'
+            'nutritionDiluents',
+            'canAssignNutritionDiluentLots'
         ));
     }
 
@@ -932,7 +937,12 @@ class SolicitudController extends Controller
             }
             $registro = SolicitudDetail::find($solicitud_detalles_resp->id);
             $explicitDiluentVolume = app(NutritionDiluentService::class)
-                ->syncFromRequest($request, $solicitud_nueva, $hospital);
+                ->syncFromRequest(
+                    $request,
+                    $solicitud_nueva,
+                    $hospital,
+                    $request->user()->hasAnyRole(['Admin', 'Super Admin'])
+                );
             $hasExplicitNutritionDiluents = $explicitDiluentVolume > 0;
             $suma_volumen_ml = $explicitDiluentVolume;
 
@@ -1398,7 +1408,9 @@ class SolicitudController extends Controller
             ];
         });
 
-        $nutritionDiluents = app(NutritionDiluentService::class)->optionsForHospital($hospital, $solicitud);
+        $canAssignNutritionDiluentLots = $user->hasAnyRole(['Admin', 'Super Admin']);
+        $nutritionDiluents = app(NutritionDiluentService::class)
+            ->optionsForHospital($hospital, $solicitud, $canAssignNutritionDiluentLots);
         $selectedNutritionDiluents = $solicitud->diluents()->get()->keyBy('diluent_id');
 
         return view('admin.nutricionales.solicitudes.edit', compact(
@@ -1409,7 +1421,8 @@ class SolicitudController extends Controller
             'activeSelections',
             'inventarioPorInput',
             'nutritionDiluents',
-            'selectedNutritionDiluents'
+            'selectedNutritionDiluents',
+            'canAssignNutritionDiluentLots'
         ));
     }
 
@@ -1635,7 +1648,12 @@ class SolicitudController extends Controller
 
             $registro = SolicitudDetail::findOrFail($solicitud->solicitud_detail_id);
             $explicitDiluentVolume = app(NutritionDiluentService::class)
-                ->syncFromRequest($request, $solicitud, $hospital);
+                ->syncFromRequest(
+                    $request,
+                    $solicitud,
+                    $hospital,
+                    $request->user()->hasAnyRole(['Admin', 'Super Admin'])
+                );
             $hasExplicitNutritionDiluents = $explicitDiluentVolume > 0;
             $suma_volumen_ml = $explicitDiluentVolume;
 
@@ -2705,6 +2723,43 @@ class SolicitudController extends Controller
                 ->filter()
         );
 
+        $medicalAuthorizationObservation = null;
+        $clinicalReview = ClinicalReview::query()
+            ->where('record_type', 'solicituds')
+            ->where('record_id', $solicitud->id)
+            ->whereNotNull('used_at')
+            ->whereNotNull('medical_authorization')
+            ->latest('used_at')
+            ->first();
+
+        if ($clinicalReview) {
+            try {
+                $authorization = $clinicalReview->medical_authorization;
+                $acceptedWarnings = collect($authorization['findings'] ?? [])
+                    ->filter(fn ($finding) => is_array($finding) && ($finding['severity'] ?? null) === 'authorization')
+                    ->map(function ($finding) {
+                        $message = preg_replace(
+                            '/[;,.]?\s*(?:se\s+)?requiere\s+(?:valoraci[oó]n|evaluaci[oó]n|autorizaci[oó]n)\s+m[eé]dica(?:\s+[^.]+)?\.?/iu',
+                            '.',
+                            (string) ($finding['message'] ?? '')
+                        );
+
+                        return collect([$message, $finding['calculation'] ?? null])
+                            ->map(fn ($text) => trim(preg_replace('/\s+/u', ' ', (string) $text)))
+                            ->filter()
+                            ->implode(' ');
+                    })
+                    ->filter()
+                    ->values();
+
+                if ($acceptedWarnings->isNotEmpty()) {
+                    $medicalAuthorizationObservation = $acceptedWarnings->implode(' | ');
+                }
+            } catch (DecryptException) {
+                report(new \RuntimeException('No fue posible descifrar la autorización médica de la solicitud '.$solicitud->id.'.'));
+            }
+        }
+
         $pdf = Pdf::loadView('pdfs.nutricionales.remision', compact(
             'solicitud_detalles',
             'inputs_solicitud',
@@ -2715,7 +2770,8 @@ class SolicitudController extends Controller
             'priceList',
             'pricingSummary',
             'theoreticalWeight',
-            'almacenesPorSolicitudInput'
+            'almacenesPorSolicitudInput',
+            'medicalAuthorizationObservation'
         ))->setPaper('letter', 'portrait');
 
         return $pdf->stream();

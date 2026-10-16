@@ -59,6 +59,7 @@
                                     @endif
                                 </td>
                                 <td class="px-4 py-4"><div class="flex justify-end gap-2">
+                                    <a href="{{ route('admin.validation-rules.show', $rule) }}" class="rounded-md border border-indigo-200 px-3 py-1.5 font-medium text-indigo-700 hover:bg-indigo-50">Ver</a>
                                     @if ($canManage && !$rule->is_enforced)
                                         <a href="{{ route('admin.superadministrator.validation-rules.edit', $rule) }}" class="rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">Editar</a>
                                     @endif

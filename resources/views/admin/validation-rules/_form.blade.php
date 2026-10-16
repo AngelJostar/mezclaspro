@@ -95,17 +95,41 @@
             </fieldset>
         </section>
     @else
-        <section class="space-y-5 border-t border-slate-200 pt-6">
+        <section class="space-y-5 border-t border-slate-200 pt-6"
+            x-data="{
+                source: @js((string) $value('source_variable', '')),
+                formula: @js((string) $value('formula_template', 'direct_value')),
+                operator: @js((string) $value('operator', '<=')),
+                threshold: @js((string) $value('threshold_value', '')),
+                minimum: @js((string) $value('threshold_min', '')),
+                maximum: @js((string) $value('threshold_max', '')),
+                unit: @js((string) $value('unit', '')),
+                variableLabels: @js($variables),
+                formulaLabels: @js($formulas),
+                expression() {
+                    let label = this.variableLabels[this.source] || 'Dato evaluado';
+                    label = label.replace(/\s*\([^)]*\)\s*$/, '');
+                    if (this.formula !== 'direct_value') label += ' · ' + (this.formulaLabels[this.formula] || this.formula);
+                    if (this.operator === 'between') return `${label} entre ${this.minimum || '—'} y ${this.maximum || '—'} ${this.unit}`.trim();
+                    const symbols = { '<': '<', '<=': '≤', '>': '>', '>=': '≥', '==': '=' };
+                    return `${label} ${symbols[this.operator] || this.operator} ${this.threshold || '—'} ${this.unit}`.trim();
+                }
+            }">
             <div><h2 class="text-lg font-semibold text-teal-900">Cálculo controlado</h2><p class="text-sm text-slate-600">Selecciona una plantilla segura; el sistema no ejecuta fórmulas escritas libremente.</p></div>
+            <div class="rounded-xl border border-teal-200 bg-teal-50 px-5 py-4" aria-live="polite">
+                <p class="text-xs font-semibold uppercase tracking-wide text-teal-700">Vista previa de la regla</p>
+                <p class="mt-2 text-xl font-bold text-teal-950" x-text="expression()"></p>
+                <p class="mt-1 text-xs text-teal-700">Esta expresión se actualiza mientras modificas la configuración.</p>
+            </div>
             <div class="grid gap-5 md:grid-cols-2">
-                <label><span class="text-sm font-semibold text-slate-700">Plantilla</span><select name="formula_template" class="mt-1 w-full rounded-lg border-slate-300">@foreach($formulas as $key => $label)<option value="{{ $key }}" @selected($value('formula_template', 'direct_value') === $key)>{{ $label }}</option>@endforeach</select></label>
-                <label><span class="text-sm font-semibold text-slate-700">Dato de origen</span><select name="source_variable" class="mt-1 w-full rounded-lg border-slate-300">@foreach($variables as $key => $label)<option value="{{ $key }}" @selected($value('source_variable') === $key)>{{ $label }}</option>@endforeach</select></label>
+                <label><span class="text-sm font-semibold text-slate-700">Plantilla</span><select name="formula_template" x-model="formula" class="mt-1 w-full rounded-lg border-slate-300">@foreach($formulas as $key => $label)<option value="{{ $key }}" @selected($value('formula_template', 'direct_value') === $key)>{{ $label }}</option>@endforeach</select></label>
+                <label><span class="text-sm font-semibold text-slate-700">Dato de origen</span><select name="source_variable" x-model="source" class="mt-1 w-full rounded-lg border-slate-300">@foreach($variables as $key => $label)<option value="{{ $key }}" @selected($value('source_variable') === $key)>{{ $label }}</option>@endforeach</select></label>
                 <label><span class="text-sm font-semibold text-slate-700">Grupo objetivo (si aplica)</span><select name="target_group" class="mt-1 w-full rounded-lg border-slate-300"><option value="">No aplica</option>@foreach($groups as $key => $label)<option value="{{ $key }}" @selected($value('target_group') === $key)>{{ $label }}</option>@endforeach</select></label>
                 <label><span class="text-sm font-semibold text-slate-700">Componente objetivo (si aplica)</span><select name="target_component_id" class="mt-1 w-full rounded-lg border-slate-300"><option value="">No aplica</option>@foreach($components as $component)<option value="{{ $component->id }}" @selected((int)$value('target_component_id') === $component->id)>{{ $component->description }}</option>@endforeach</select></label>
-                <label><span class="text-sm font-semibold text-slate-700">Comparación</span><select name="operator" class="mt-1 w-full rounded-lg border-slate-300">@foreach(['<' => 'Menor que', '<=' => 'Menor o igual', '>' => 'Mayor que', '>=' => 'Mayor o igual', '==' => 'Igual a', 'between' => 'Dentro del intervalo'] as $key => $label)<option value="{{ $key }}" @selected($value('operator', '<=') === $key)>{{ $label }}</option>@endforeach</select></label>
-                <label><span class="text-sm font-semibold text-slate-700">Unidad del resultado</span><input name="unit" value="{{ $value('unit') }}" required placeholder="g/kg/día" class="mt-1 w-full rounded-lg border-slate-300"></label>
-                <label><span class="text-sm font-semibold text-slate-700">Valor de comparación</span><input type="number" step="any" name="threshold_value" value="{{ $value('threshold_value') }}" class="mt-1 w-full rounded-lg border-slate-300"><span class="text-xs text-slate-500">Úsalo salvo que la comparación sea un intervalo.</span></label>
-                <div class="grid grid-cols-2 gap-3"><label><span class="text-sm font-semibold text-slate-700">Mínimo</span><input type="number" step="any" name="threshold_min" value="{{ $value('threshold_min') }}" class="mt-1 w-full rounded-lg border-slate-300"></label><label><span class="text-sm font-semibold text-slate-700">Máximo</span><input type="number" step="any" name="threshold_max" value="{{ $value('threshold_max') }}" class="mt-1 w-full rounded-lg border-slate-300"></label></div>
+                <label><span class="text-sm font-semibold text-slate-700">Comparación</span><select name="operator" x-model="operator" class="mt-1 w-full rounded-lg border-slate-300">@foreach(['<' => 'Menor que', '<=' => 'Menor o igual', '>' => 'Mayor que', '>=' => 'Mayor o igual', '==' => 'Igual a', 'between' => 'Dentro del intervalo'] as $key => $label)<option value="{{ $key }}" @selected($value('operator', '<=') === $key)>{{ $label }}</option>@endforeach</select></label>
+                <label><span class="text-sm font-semibold text-slate-700">Unidad del resultado</span><input name="unit" x-model="unit" value="{{ $value('unit') }}" required placeholder="g/kg/día" class="mt-1 w-full rounded-lg border-slate-300"></label>
+                <label><span class="text-sm font-semibold text-slate-700">Valor de comparación</span><input type="number" step="any" name="threshold_value" x-model="threshold" value="{{ $value('threshold_value') }}" class="mt-1 w-full rounded-lg border-slate-300"><span class="text-xs text-slate-500">Úsalo salvo que la comparación sea un intervalo.</span></label>
+                <div class="grid grid-cols-2 gap-3"><label><span class="text-sm font-semibold text-slate-700">Mínimo</span><input type="number" step="any" name="threshold_min" x-model="minimum" value="{{ $value('threshold_min') }}" class="mt-1 w-full rounded-lg border-slate-300"></label><label><span class="text-sm font-semibold text-slate-700">Máximo</span><input type="number" step="any" name="threshold_max" x-model="maximum" value="{{ $value('threshold_max') }}" class="mt-1 w-full rounded-lg border-slate-300"></label></div>
             </div>
             <div class="space-y-4"><h3 class="text-sm font-semibold text-slate-700">Aplicar únicamente cuando</h3>
                 <div class="grid gap-4 md:grid-cols-4"><label class="text-xs">Edad mínima (días)<input type="number" min="0" name="age_min_days" value="{{ $value('age_min_days') }}" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label><label class="text-xs">Edad máxima (días)<input type="number" min="0" name="age_max_days" value="{{ $value('age_max_days') }}" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label><label class="text-xs">Peso mínimo (kg)<input type="number" min="0" step="any" name="weight_min_kg" value="{{ $value('weight_min_kg') }}" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label><label class="text-xs">Peso máximo (kg)<input type="number" min="0" step="any" name="weight_max_kg" value="{{ $value('weight_max_kg') }}" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label></div>

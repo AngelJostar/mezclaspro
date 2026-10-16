@@ -13,13 +13,18 @@ use Illuminate\Validation\ValidationException;
 
 class NutritionDiluentService
 {
-    public function optionsForHospital(Hospital $hospital, ?Solicitud $solicitud = null): Collection
+    public function optionsForHospital(
+        Hospital $hospital,
+        ?Solicitud $solicitud = null,
+        bool $includePresentations = true
+    ): Collection
     {
         $selectedIds = $solicitud?->diluents()->pluck('diluent_presentation_id')->all() ?? [];
 
-        return Diluent::query()
-            ->where('available_for_nutrition', true)
-            ->with(['presentations' => function ($query) use ($hospital, $selectedIds) {
+        $query = Diluent::query()->where('available_for_nutrition', true);
+
+        if ($includePresentations) {
+            $query->with(['presentations' => function ($query) use ($hospital, $selectedIds) {
                 $query->with(['catalogPresentation', 'warehouse'])
                     ->where('laboratory_id', $hospital->laboratory_id)
                     ->where(function ($availability) use ($selectedIds) {
@@ -37,14 +42,20 @@ class NutritionDiluentService
                     ->orderByRaw('caducidad IS NULL ASC')
                     ->orderBy('caducidad')
                     ->orderBy('id');
-            }])
-            ->orderBy('denominacion_generica')
-            ->get()
-            ->filter(fn (Diluent $diluent) => $diluent->presentations->isNotEmpty())
-            ->values();
+            }]);
+        }
+
+        $diluents = $query->orderBy('denominacion_generica')->get();
+
+        return $diluents;
     }
 
-    public function syncFromRequest(Request $request, Solicitud $solicitud, Hospital $hospital): float
+    public function syncFromRequest(
+        Request $request,
+        Solicitud $solicitud,
+        Hospital $hospital,
+        bool $assignPresentations = true
+    ): float
     {
         $payload = $request->input('nutrition_diluents', []);
         if (! is_array($payload)) {
@@ -58,11 +69,27 @@ class NutritionDiluentService
         ]);
         $validator->validate();
 
-        $lines = collect($payload)->map(function ($row, $diluentId) use ($hospital) {
+        $lines = collect($payload)->map(function ($row, $diluentId) use ($hospital, $assignPresentations) {
             $presentationId = (int) ($row['presentation_id'] ?? 0);
             $volume = (float) ($row['volume_ml'] ?? 0);
 
-            if ($presentationId === 0 && $volume <= 0) return null;
+            if ($volume <= 0 && (! $assignPresentations || $presentationId === 0)) return null;
+
+            $diluent = Diluent::query()
+                ->whereKey((int) $diluentId)
+                ->where('available_for_nutrition', true)
+                ->first();
+
+            if (! $diluent) {
+                throw ValidationException::withMessages([
+                    "nutrition_diluents.$diluentId.volume_ml" => 'El diluyente seleccionado no está autorizado para solicitudes nutricionales.',
+                ]);
+            }
+
+            if (! $assignPresentations) {
+                return compact('diluent', 'volume') + ['presentation' => null];
+            }
+
             if ($presentationId === 0 || $volume <= 0) {
                 throw ValidationException::withMessages([
                     "nutrition_diluents.$diluentId.volume_ml" => 'Selecciona una presentación y captura un volumen mayor a cero.',
@@ -93,22 +120,28 @@ class NutritionDiluentService
                 ]);
             }
 
-            return compact('presentation', 'volume');
+            return compact('diluent', 'presentation', 'volume');
         })->filter()->values();
 
         $solicitud->diluents()->delete();
         foreach ($lines as $line) {
-            /** @var DiluentPresentation $presentation */
+            /** @var DiluentPresentation|null $presentation */
             $presentation = $line['presentation'];
+            /** @var Diluent $diluent */
+            $diluent = $line['diluent'];
             $solicitud->diluents()->create([
-                'diluent_id' => $presentation->diluent_id,
-                'diluent_presentation_id' => $presentation->id,
+                'diluent_id' => $diluent->id,
+                'diluent_presentation_id' => $presentation?->id,
                 'volume_ml' => $line['volume'],
-                'generic_name' => $presentation->diluent->denominacion_generica,
-                'commercial_name' => $presentation->denominacion_comercial ?: $presentation->catalogPresentation?->commercial_name,
-                'presentation_name' => $presentation->presentacion ?: $presentation->catalogPresentation?->presentation,
-                'lot' => $presentation->lote,
-                'expires_at' => $presentation->caducidad,
+                'generic_name' => $diluent->denominacion_generica,
+                'commercial_name' => $presentation
+                    ? ($presentation->denominacion_comercial ?: $presentation->catalogPresentation?->commercial_name)
+                    : null,
+                'presentation_name' => $presentation
+                    ? ($presentation->presentacion ?: $presentation->catalogPresentation?->presentation)
+                    : null,
+                'lot' => $presentation?->lote,
+                'expires_at' => $presentation?->caducidad,
             ]);
         }
 

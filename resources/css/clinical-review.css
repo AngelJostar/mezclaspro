@@ -21,9 +21,21 @@
 [data-clinical-status=authorization_required] .clinical-status { color: #8b580d; }
 [data-clinical-status=advisory] .clinical-status { color: #8b580d; }
 .clinical-review [data-severity=authorization] { color: #8b580d; }
-.clinical-authorization { min-width: 0; margin-block: 18px; padding: 16px; border: 1px solid #c4d9e6; border-left: 4px solid #169056; border-radius: 4px; background: #f5fafc; }
-.clinical-authorization legend { font-weight: 600; color: #153962; padding-inline: 6px; }
-.clinical-authorization input:not([type=checkbox]) { width: 100%; min-width: 0; margin-top: 6px; padding: 8px; border: 1px solid #c8d8e8; border-radius: 4px; color: #153962; background: white; }
+.clinical-authorization-modal { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 0; border-radius: 12px; color: #153962; background: white; box-shadow: 0 24px 70px rgb(15 39 72 / 35%); }
+.clinical-authorization-modal::backdrop { background: rgb(7 29 60 / 68%); }
+.clinical-authorization-modal__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid #d6e0e8; }
+.clinical-authorization-modal__header h3 { margin: 0; color: #9b2c2c; font-size: 19px; }
+.clinical-authorization-modal__header button { border: 0; background: transparent; color: #526678; font-size: 28px; line-height: 1; cursor: pointer; }
+.clinical-authorization-modal__body { padding: 20px 22px; overflow-y: auto; }
+.clinical-authorization-findings { margin: 14px 0 20px; padding: 12px 16px 12px 34px; border-left: 4px solid #d97706; background: #fff8eb; color: #7c3f00; }
+.clinical-authorization-findings li { margin-block: 8px; }
+.clinical-authorization-findings p { margin: 4px 0 0; }
+.clinical-authorization-modal input:not([type=checkbox]) { width: 100%; min-width: 0; margin-top: 6px; padding: 9px; border: 1px solid #c8d8e8; border-radius: 4px; color: #153962; background: white; }
+.clinical-authorization-confirmation { display: flex; gap: 10px; align-items: flex-start; padding: 13px; border: 1px solid #e3b65f; border-radius: 6px; background: #fffaf0; font-weight: 600; }
+.clinical-authorization-confirmation input { flex: 0 0 auto; margin-top: 3px; }
+.clinical-authorization-modal__actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 22px; border-top: 1px solid #d6e0e8; }
+.clinical-authorization-modal__actions button { padding: 10px 16px; border: 1px solid #23417c; border-radius: 6px; background: white; color: #19366d; font-weight: 600; cursor: pointer; }
+.clinical-authorization-modal__actions [data-medical-authorization-submit] { background: #173578; color: white; }
 .clinical-chat { padding: 14px 20px; margin: 0; }
 .clinical-chat > summary { font-size: 14px; }
 .clinical-chat button { border: 1px solid #147664; color: #147664; border-radius: 4px; padding: 6px 12px; }

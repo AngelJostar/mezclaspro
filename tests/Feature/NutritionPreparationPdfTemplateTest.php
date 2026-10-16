@@ -12,6 +12,8 @@ class NutritionPreparationPdfTemplateTest extends TestCase
 
         $this->assertStringNotContainsString('FTO-NPT-025-005', $template);
         $this->assertStringNotContainsString('Nombre y firma', $template);
+        $this->assertStringNotContainsString('Sello o nombre y', $template);
+        $this->assertStringNotContainsString('Nombre o sello y', $template);
 
         foreach (['Captura:', 'Validación:', 'Preparación:', 'Inspección:', 'Aprobación:'] as $label) {
             $this->assertStringContainsString($label, $template);

@@ -61,7 +61,17 @@
             </td>
         </tr>
         <tr><td><strong>Lote de la mezcla:</strong> {{ $solicitud_detalles->lote ?: '—' }}</td></tr>
-        <tr><td><strong>Observaciones:</strong> {{ $detail?->observaciones ?: '—' }}</td></tr>
+        <tr><td>
+            <strong>Observaciones:</strong>
+            @if ($detail?->observaciones)
+                {{ $detail->observaciones }}
+            @elseif (empty($medicalAuthorizationObservation))
+                —
+            @endif
+            @if (!empty($medicalAuthorizationObservation))
+                <div style="margin-top:2px;font-weight:bold;color:#8b1e1e">{{ $medicalAuthorizationObservation }}</div>
+            @endif
+        </td></tr>
     </table>
     <div class="receipt"><strong>Recepción Institución</strong><br>Fecha: ____________________________________ &nbsp; Hora: __________________<br>Temperatura: _______________________________<br>Nombre completo, firma y sello: __________________________________________</div>
     <div class="important"><strong>NOTA IMPORTANTE:</strong> La institución reconoce que la mezcla estéril entregada debe mantenerse bajo condiciones adecuadas de almacenamiento, asegurando la conservación de la red fría en todo momento.</div>

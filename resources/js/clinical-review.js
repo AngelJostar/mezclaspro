@@ -1,46 +1,39 @@
 import '../css/clinical-review.css';
 
+const conciseClinicalMessage = finding => {
+    if (finding.category === 'compatibility_limitation') {
+        return 'Compatibilidad y estabilidad no evaluadas: faltan condiciones opcionales de preparación o almacenamiento.';
+    }
+    return String(finding.message || '')
+        .replace(/[;,.]?\s*(?:se\s+)?requiere\s+(?:valoraci[oó]n|evaluaci[oó]n|autorizaci[oó]n)\s+m[eé]dica(?:\s+[^.]+)?\.?/giu, '.')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
 export function renderClinicalResult(container, data) {
     container.replaceChildren();
     const result = data.result;
-    const canViewInternal = data.can_view_internal === true;
     container.dataset.clinicalStatus = result.status;
     const paragraph = (text, className) => {
         const element = document.createElement('p'); element.textContent = text;
         if (className) element.className = className;
         return element;
     };
-    const titles = { blocked: 'SOLICITUD RECHAZADA', needs_review: 'Revision incompleta', no_blockers: 'Sin bloqueos detectados en la revision', authorization_required: 'Advertencia: requiere autorizacion medica', advisory: 'Sugerencias no bloqueantes' };
-    const compatibilityWarning = (result.findings || []).some(finding => finding.category === 'compatibility_limitation');
-    const title = result.status === 'advisory' && compatibilityWarning
-        ? 'Advertencia informativa: revisión parcial de compatibilidad'
-        : (titles[result.status] || 'Revision pendiente');
-    container.append(paragraph(title, 'clinical-status'), paragraph(result.summary));
+    const findings = result.findings || [];
+    if (!findings.length) {
+        if (result.status === 'no_blockers') container.append(paragraph('Sin errores ni advertencias.', 'clinical-status'));
+        return;
+    }
     const list = document.createElement('ul');
-    for (const finding of result.findings || []) {
+    for (const finding of findings) {
         const item = document.createElement('li'); item.dataset.severity = finding.severity;
-        const observation = finding.observation_type || ({ blocking: 'rechazo', warning: 'advertencia', authorization: 'advertencia', advisory: 'sugerencia' })[finding.severity];
-        if (observation) item.append(paragraph(observation === 'rechazo' ? 'Rechazo:' : (observation === 'sugerencia' ? 'Sugerencia no bloqueante:' : (observation === 'advertencia informativa' ? 'Advertencia informativa:' : 'Advertencia:')), 'clinical-status'));
-        item.append(paragraph(finding.message));
+        const isError = ['blocking', 'review'].includes(finding.severity);
+        item.append(paragraph(isError ? 'Error:' : 'Advertencia:', 'clinical-status'));
+        item.append(paragraph(conciseClinicalMessage(finding)));
         if (finding.calculation) item.append(paragraph(finding.calculation));
-        if (finding.suggestion) item.append(paragraph(`Sugerencia: ${finding.suggestion}`, 'clinical-suggestion'));
-        if (canViewInternal && finding.source_ids?.length) item.append(paragraph(`Fuente: ${finding.source_ids.map(id => id === 'SYSTEM' ? 'Control documental y aritmetico de PROMESA' : id).join(', ')}`, 'clinical-notice'));
         list.append(item);
     }
     container.append(list);
-    if (!canViewInternal) return;
-    for (const [label, values] of [
-        ['Calculos y supuestos', (result.calculations || []).map(c => `${c.formula} = ${c.result} ${c.unit}. ${c.assumptions}`)],
-        ['Estado de la evidencia y del servicio', result.technical_issues || []],
-        ['Fuentes utilizadas', (result.sources || []).map(s => `${s.id}: ${s.title}. ${s.reference}. ${s.reviewed ? 'Revisada' : 'Pendiente de revision'}. SHA-256: ${s.sha256}`)],
-    ]) {
-        if (!values.length) continue;
-        const details = document.createElement('details'), summary = document.createElement('summary');
-        summary.textContent = label; details.append(summary);
-        values.forEach(value => details.append(paragraph(value)));
-        container.append(details);
-    }
-    container.append(paragraph(result.notice || 'Requiere revision profesional.', 'clinical-notice'));
 }
 
 const states = new WeakMap();
@@ -68,16 +61,36 @@ function bind(form) {
     if (!panel || !button) return null;
     const state = { panel, button, busy: false, snapshot: '', expires: 0, token: form.elements.clinical_review_token,
         ack: form.elements.clinical_acknowledged, ackText: panel.querySelector('[data-clinical-ack-text]'), error: panel.querySelector('[data-clinical-error]'), result: panel.querySelector('[data-clinical-result]'),
-        authorization: panel.querySelector('[data-medical-authorization]'), requiresAuthorization: false, fieldError: false };
+        authorization: panel.querySelector('[data-medical-authorization]'), authorizationFindings: panel.querySelector('[data-medical-authorization-findings]'),
+        authorizationError: panel.querySelector('[data-medical-authorization-error]'), authorizationSubmit: panel.querySelector('[data-medical-authorization-submit]'),
+        requiresAuthorization: false,
+        requiresAcknowledgement: true, fieldError: false };
+    const closeAuthorization = () => {
+        if (!state.authorization) return;
+        if (typeof state.authorization.close === 'function' && state.authorization.open) state.authorization.close();
+        else state.authorization.removeAttribute('open');
+        state.authorization.querySelectorAll('input, textarea').forEach(field => { field.disabled = true; });
+    };
+    const openAuthorization = () => {
+        if (!state.authorization) return;
+        state.authorizationError.hidden = true;
+        state.authorization.querySelectorAll('input, textarea').forEach(field => { field.disabled = false; });
+        if (typeof state.authorization.showModal === 'function') state.authorization.showModal();
+        else state.authorization.setAttribute('open', '');
+        state.authorization.querySelector('input')?.focus();
+    };
     const reset = () => {
         state.token.value = ''; state.snapshot = ''; state.ack.checked = false;
-        if (state.ackText) state.ackText.textContent = 'He revisado las observaciones de la IA y confirmo los cambios que capture. Enviar la solicitud no autoriza su preparacion.';
+        if (state.ackText) state.ackText.textContent = 'Confirmo que revisé las advertencias.';
         panel.querySelector('[data-clinical-ack]').hidden = true;
         state.requiresAuthorization = false;
+        state.requiresAcknowledgement = true;
         if (state.authorization) {
-            state.authorization.hidden = true; state.authorization.disabled = true;
+            closeAuthorization(); state.authorization.disabled = true;
+            state.authorizationFindings?.replaceChildren();
             state.authorization.querySelectorAll('input, textarea').forEach(field => {
                 if (field.type === 'checkbox') field.checked = false; else field.value = '';
+                field.disabled = true;
                 field.classList.remove('clinical-field-required-error'); field.removeAttribute('aria-invalid');
             });
         }
@@ -103,22 +116,46 @@ function bind(form) {
         state.error.textContent = 'Completa o corrige los campos marcados en rojo antes de continuar.';
         state.error.hidden = false;
     }, true);
+    state.authorization?.querySelectorAll('[data-medical-authorization-cancel]').forEach(cancel => cancel.addEventListener('click', closeAuthorization));
+    state.authorization?.addEventListener('cancel', event => { event.preventDefault(); closeAuthorization(); });
+    state.authorizationSubmit?.addEventListener('click', () => {
+        const fields = [...state.authorization.querySelectorAll('input[required]')];
+        const invalid = fields.find(field => !field.checkValidity());
+        if (invalid) {
+            invalid.reportValidity(); invalid.focus();
+            state.authorizationError.textContent = invalid.type === 'checkbox'
+                ? 'Debes confirmar que el medico conoce las advertencias y acepta continuar.'
+                : 'Captura el nombre y la cedula profesional del medico que autoriza.';
+            state.authorizationError.hidden = false;
+            return;
+        }
+        state.ack.checked = true;
+        state.busy = true; state.button.disabled = true; state.button.textContent = 'Enviando solicitud...';
+        HTMLFormElement.prototype.submit.call(form);
+    });
+    state.openAuthorization = openAuthorization;
     state.reset = reset; states.set(form, state);
     return state;
 }
 
 window.validateClinicalRequest = async form => {
     const state = bind(form);
-    if (!state || state.busy || !form.reportValidity()) return;
+    if (!state || state.busy) return;
     const snapshot = fingerprint(form);
     if (state.token.value && state.snapshot === snapshot && state.expires > Date.now()) {
-        if (!state.ack.checked) {
+        if (state.requiresAuthorization) {
+            state.openAuthorization();
+            return;
+        }
+        if (!form.reportValidity()) return;
+        if (state.requiresAcknowledgement && !state.ack.checked) {
             state.error.textContent = 'Confirma que revisaste los hallazgos antes de enviar.'; state.error.hidden = false; state.ack.focus(); return;
         }
         state.busy = true; state.button.disabled = true; state.button.textContent = 'Enviando solicitud...';
         HTMLFormElement.prototype.submit.call(form);
         return;
     }
+    if (!form.reportValidity()) return;
     state.reset(); state.busy = true; state.button.disabled = true; state.button.textContent = 'Validando...';
     state.error.hidden = true; state.result.textContent = 'Revisando parametros y evidencia disponible...';
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 75000);
@@ -144,20 +181,28 @@ window.validateClinicalRequest = async form => {
             markField(form, finding.field, false, finding.severity === 'advisory');
         }
         state.requiresAuthorization = Boolean(data.requires_medical_authorization);
-        if (state.ackText && data.result.status === 'advisory') {
-            const compatibilityWarning = (data.result.findings || []).some(finding => finding.category === 'compatibility_limitation');
-            state.ackText.textContent = compatibilityWarning
-                ? 'Confirmo que revise la advertencia informativa de compatibilidad y acepto continuar bajo responsabilidad profesional con los datos capturados. Enviar la solicitud no autoriza su preparacion.'
-                : 'He revisado las sugerencias no bloqueantes y acepto continuar bajo responsabilidad profesional con los valores capturados. Enviar la solicitud no autoriza su preparacion.';
-        }
+        state.requiresAcknowledgement = data.requires_acknowledgement !== false;
+        if (state.ackText && data.result.status === 'advisory') state.ackText.textContent = 'Confirmo que revisé las advertencias.';
         if (state.requiresAuthorization && state.authorization) {
-            state.authorization.disabled = false; state.authorization.hidden = false;
+            state.authorization.disabled = false;
+            state.authorizationFindings.replaceChildren();
+            for (const finding of (data.result.findings || []).filter(finding => finding.severity === 'authorization')) {
+                const item = document.createElement('li');
+                const message = document.createElement('strong'); message.textContent = conciseClinicalMessage(finding);
+                item.append(message);
+                if (finding.calculation) {
+                    const calculation = document.createElement('p'); calculation.textContent = finding.calculation;
+                    item.append(calculation);
+                }
+                state.authorizationFindings.append(item);
+            }
         }
         if (data.can_submit || (state.requiresAuthorization && state.authorization)) {
             state.token.value = data.review_id; state.snapshot = snapshot; state.expires = Date.parse(data.expires_at);
-            state.panel.querySelector('[data-clinical-ack]').hidden = false;
+            state.ack.checked = !state.requiresAcknowledgement;
+            state.panel.querySelector('[data-clinical-ack]').hidden = !state.requiresAcknowledgement || state.requiresAuthorization;
         }
-        (state.requiresAuthorization ? state.authorization : state.result).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        state.result.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     } catch (failure) {
         state.result.replaceChildren(); state.error.hidden = false;
         state.error.textContent = failure.name === 'AbortError' ? 'La validacion tardo demasiado. No se habilito el envio; intenta nuevamente.' : failure.message;

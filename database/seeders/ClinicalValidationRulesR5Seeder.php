@@ -38,7 +38,7 @@ class ClinicalValidationRulesR5Seeder extends Seeder
         $name = str_replace([' R5 ', ' R5'], [' R6 ', ' R6'], $name);
         $description = str_replace(['Manual Maestro R5', 'Manual Maestro de Validación V4'], 'Manual Maestro R6', $description);
 
-        ValidationRule::query()->updateOrCreate(['code' => $code], [
+        ValidationRule::query()->firstOrCreate(['code' => $code], [
             'name' => $name,
             'engine' => $engine,
             'population' => $population,

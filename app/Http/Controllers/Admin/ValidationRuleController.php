@@ -103,6 +103,27 @@ class ValidationRuleController extends Controller
         return view('admin.validation-rules.create', $this->formData(compact('engine')));
     }
 
+    public function show(ValidationRule $validationRule)
+    {
+        $validationRule->load(['creator:id,name,lastname', 'updater:id,name,lastname', 'approver:id,name,lastname']);
+        $componentIds = collect([
+            ...data_get($validationRule->configuration, 'required_components', []),
+            ...data_get($validationRule->configuration, 'forbidden_components', []),
+            data_get($validationRule->configuration, 'target_component_id'),
+        ])->filter()->map(fn ($id) => (int) $id)->unique();
+        $componentLabels = Input::query()->whereIn('id', $componentIds)->get()
+            ->mapWithKeys(fn ($component) => [$component->id => $component->description.' ('.$component->unidad.')']);
+
+        return view('admin.validation-rules.show', [
+            'rule' => $validationRule,
+            'groups' => self::GROUPS,
+            'componentTerms' => self::COMPONENT_TERMS,
+            'variables' => self::VARIABLES,
+            'formulas' => self::FORMULAS,
+            'componentLabels' => $componentLabels,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $data = $this->validated($request);

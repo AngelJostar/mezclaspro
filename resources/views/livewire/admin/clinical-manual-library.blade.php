@@ -101,7 +101,14 @@
                         @isset($viewing->manual_analysis['words'])<p>{{ $viewing->manual_analysis['words'] }} palabras · {{ $viewing->manual_analysis['characters'] }} caracteres</p>@endisset
                         @if (!empty($viewing->manual_analysis['previous_version']))<p>Comparación con versión {{ $viewing->manual_analysis['previous_version'] }}: {{ $viewing->manual_analysis['content_changed'] ? 'El contenido cambió.' : 'El contenido es idéntico.' }}</p>@endif
                         @foreach ($viewing->manual_analysis['sections'] ?? [] as $heading)<p>{{ $heading }}</p>@endforeach
-                        @isset($viewing->manual_analysis['agent_result'])<h4>Análisis del agente</h4><pre>{{ $viewing->manual_analysis['agent_result']['answer'] }}</pre>@foreach ($viewing->manual_analysis['agent_result']['citations'] as $citation)<p>{{ $citation['source_id'] }} · {{ $citation['section'] }}</p>@endforeach@endisset<p class="ml-muted">Este análisis no constituye aprobación clínica.</p>
+                        @isset($viewing->manual_analysis['agent_result'])
+                            <h4>Análisis del agente</h4>
+                            <pre>{{ $viewing->manual_analysis['agent_result']['answer'] }}</pre>
+                            @foreach ($viewing->manual_analysis['agent_result']['citations'] as $citation)
+                                <p>{{ $citation['source_id'] }} · {{ $citation['section'] }}</p>
+                            @endforeach
+                        @endisset
+                        <p class="ml-muted">Este análisis no constituye aprobación clínica.</p>
                     </div>@endif
                 </div><footer>@if ($viewing->file_path)<button class="ml-button" type="button" wire:click="download({{ $viewing->id }})">↓ Descargar archivo</button>@endif<button class="ml-button dark" type="button" wire:click="closeModal">Cerrar</button></footer>
             @endif

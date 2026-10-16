@@ -230,6 +230,8 @@ Route::prefix('motores-validacion')
     ->group(function () {
         Route::get('/reglas', [ValidationRuleController::class, 'index'])
             ->name('index');
+        Route::get('/reglas/{validationRule}', [ValidationRuleController::class, 'show'])
+            ->name('show');
         Route::patch('/reglas/{validationRule}/aprobar', [ValidationRuleController::class, 'approve'])
             ->name('approve');
     });

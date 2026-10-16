@@ -4,7 +4,7 @@
     <input type="hidden" name="clinical_review_token" value="">
     <details class="clinical-context" data-clinical-context>
         <summary>Datos para la revision clinica (opcionales)</summary>
-        <p class="clinical-notice">Estos campos son opcionales y se envian a OpenAI cuando se capturan. Pueden mejorar la revision, pero dejarlos vacios no bloquea la solicitud. No incluyas nombres, expedientes ni identificadores, ni afirmes ausencia de riesgo sin verificar.</p>
+        <p class="clinical-notice">Puedes dejarlos vacíos si no cuentas con esta información.</p>
         <div class="clinical-context-fields">
             @foreach (\App\Services\Clinical\ClinicalPayload::CONTEXT_FIELDS as $key => $label)
                 <label for="clinical-context-{{ $key }}">{{ $label }}
@@ -13,19 +13,35 @@
             @endforeach
         </div>
     </details>
-    <h3>Observaciones de validacion clinica</h3>
-    <p class="clinical-notice">Soporte de IA sujeto a revision profesional. No autoriza la preparacion. Se consultan parametros de la mezcla y los datos de revision clinica; las notas generales y mensajes permanecen en PROMESA.</p>
     <div data-clinical-result aria-live="polite"></div>
     <p data-clinical-error role="alert" hidden></p>
-    <fieldset class="clinical-authorization" data-medical-authorization hidden disabled>
-        <legend>Autorizacion medica para envio con excepcion</legend>
-        <p>Advertencia: la mezcla requiere autorizacion del area medica para enviarse con parametros fuera de los limites clinicos o quimicos recomendados. Registra la autorizacion recibida; no sustituye la aprobacion de preparacion ni permite omitir un rechazo.</p>
-        <div class="clinical-context-fields">
-            <label>Nombre del medico*<input name="medical_authorization[doctor_name]" type="text" required minlength="3" maxlength="255" autocomplete="off"></label>
-            <label>Cedula profesional*<input name="medical_authorization[doctor_license]" type="text" required minlength="3" maxlength="50" autocomplete="off"></label>
+    <dialog class="clinical-authorization-modal" data-medical-authorization disabled aria-labelledby="clinical-authorization-title">
+        <div class="clinical-authorization-modal__header">
+            <h3 id="clinical-authorization-title">Advertencia: envio bajo autorizacion medica</h3>
+            <button type="button" data-medical-authorization-cancel aria-label="Cerrar">&times;</button>
         </div>
-        <p class="clinical-notice">Los datos de autorizacion quedan en PROMESA. No se envian a OpenAI. Esta captura no verifica automaticamente la identidad ni la cedula del medico.</p>
-    </fieldset>
-    <label data-clinical-ack hidden><input type="checkbox" name="clinical_acknowledged" value="1"> <span data-clinical-ack-text>He revisado las observaciones de la IA y confirmo los cambios que capture. Enviar la solicitud no autoriza su preparacion.</span></label>
+        <div class="clinical-authorization-modal__body">
+            <p>Advertencias detectadas:</p>
+            <ul class="clinical-authorization-findings" data-medical-authorization-findings></ul>
+            <div class="clinical-context-fields">
+                <label>Nombre completo del medico que autoriza*
+                    <input name="medical_authorization[doctor_name]" type="text" required minlength="3" maxlength="255" autocomplete="off" disabled>
+                </label>
+                <label>Cedula profesional*
+                    <input name="medical_authorization[doctor_license]" type="text" required minlength="3" maxlength="50" autocomplete="off" disabled>
+                </label>
+            </div>
+            <label class="clinical-authorization-confirmation">
+                <input name="medical_authorization[risk_accepted]" type="checkbox" value="1" required disabled>
+                <span>Confirmo que el médico conoce estas advertencias y autoriza el envío.</span>
+            </label>
+            <p class="clinical-error" data-medical-authorization-error role="alert" hidden></p>
+        </div>
+        <div class="clinical-authorization-modal__actions">
+            <button type="button" data-medical-authorization-cancel>Cancelar</button>
+            <button type="button" data-medical-authorization-submit>Confirmar autorizacion y enviar</button>
+        </div>
+    </dialog>
+    <label data-clinical-ack hidden><input type="checkbox" name="clinical_acknowledged" value="1"> <span data-clinical-ack-text>Confirmo que revisé las advertencias.</span></label>
     @error('clinical_review')<p class="clinical-error" role="alert">{{ $message }}</p>@enderror
 </section>

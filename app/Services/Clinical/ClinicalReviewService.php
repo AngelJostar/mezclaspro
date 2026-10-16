@@ -80,8 +80,9 @@ class ClinicalReviewService
         );
         $result['deterministic_validation'] = $ruleEvaluation['evaluations'];
         $result['audit_coverage'] = $result['coverage'];
-        $hasSubstantiveFinding = collect($result['findings'])->contains(
+        $hasUnresolvedFinding = collect($result['findings'])->contains(
             fn ($finding) => !in_array($finding['category'] ?? '', ['missing_clinical_context', 'information', 'internal_comment'], true)
+                && !in_array($finding['severity'] ?? '', ['information', 'authorization', 'advisory'], true)
         );
         $reviewedSourceIds = collect($sources)->filter(fn ($source) => $source['reviewed'] ?? false)->pluck('id');
         $optionalCompatibilityMissing = false;
@@ -89,7 +90,7 @@ class ClinicalReviewService
         // The provider may interpret blank optional context as incomplete coverage. Structured required
         // fields are validated locally, so only context-dependent domains with reviewed citations can
         // be normalized, and never when a substantive finding or technical issue exists.
-        if (!$issues && !empty($case['missing_context']) && !$hasSubstantiveFinding) {
+        if (!$issues && !empty($case['missing_context']) && !$hasUnresolvedFinding) {
             foreach ($result['coverage'] as &$coverage) {
                 if (in_array($coverage['domain'] ?? '', ['completeness', 'compatibility_stability', 'clinical_risks'], true)
                     && ($coverage['state'] ?? '') === 'missing'
@@ -107,11 +108,11 @@ class ClinicalReviewService
         if ($optionalCompatibilityMissing) {
             $result['findings'][] = [
                 'field' => 'clinical_context[preparation_storage]',
-                'severity' => 'advisory',
+                'severity' => 'information',
                 'category' => 'compatibility_limitation',
                 'message' => 'La compatibilidad y estabilidad no pudieron evaluarse completamente porque no se capturaron las condiciones opcionales de preparación, almacenamiento, diluyente o tiempo hasta la administración. Esto no constituye un rechazo de la formulación.',
                 'calculation' => '',
-                'suggestion' => 'Captura las condiciones de preparación y almacenamiento si deseas complementar la evaluación cualitativa; también puedes continuar después de confirmar la revisión profesional.',
+                'suggestion' => 'Puedes capturar las condiciones de preparación y almacenamiento si deseas complementar la evaluación cualitativa.',
                 'source_ids' => $optionalCompatibilitySourceIds,
             ];
         }
@@ -185,12 +186,16 @@ class ClinicalReviewService
             'advisory' => $optionalCompatibilityMissing
                 ? 'La formulacion no presenta rechazos deterministas. La compatibilidad y estabilidad quedaron parcialmente evaluadas por falta de datos opcionales; puedes completar la informacion o continuar despues de confirmar la revision profesional.'
                 : 'La revision encontro sugerencias no bloqueantes. Puedes corregirlas y volver a validar o continuar bajo responsabilidad profesional despues de confirmar que las revisaste.',
-            'no_blockers' => 'La revision no detecto bloqueos. Confirma la revision antes de enviar; la preparacion requiere su aprobacion habitual.',
+            'no_blockers' => $onlyOptionalContextIsMissing
+                ? 'La revision no detecto bloqueos. Los datos clinicos no capturados son opcionales y puedes enviar la solicitud sin completarlos.'
+                : 'La revision no detecto bloqueos. Confirma la revision antes de enviar; la preparacion requiere su aprobacion habitual.',
             default => 'La revision no esta completa. No se habilito el envio ni se considera validada la seguridad de la mezcla.',
         };
         $result['technical_issues'] = $issues;
         $result['requires_medical_authorization'] = $requiresAuthorization && $purpose === 'submission';
         $result['requires_risk_acknowledgement'] = $canSubmit && $hasAdvisory && $purpose === 'submission';
+        $result['optional_context_only'] = $onlyOptionalContextIsMissing;
+        $result['requires_acknowledgement'] = $purpose === 'submission' && ! $onlyOptionalContextIsMissing;
         $result['sources'] = array_map(fn ($s) => array_diff_key($s, array_flip(['content'])), $sources);
         if ($kind === 'nutricionales') $result['manual_selection'] = NutritionManual::selection($mode);
         $result['calculations'] = $case['calculations'];
@@ -300,14 +305,16 @@ class ClinicalReviewService
         $canViewInternal = !$viewer->hasAnyRole(['Cliente', 'Institucion']);
         if (!$canViewInternal) {
             // Only actionable review data leaves the server for hospital users, including cached reviews.
-            $result = Arr::only($result, ['status', 'summary', 'findings', 'requires_medical_authorization', 'requires_risk_acknowledgement']);
+            $result = Arr::only($result, ['status', 'summary', 'findings', 'requires_medical_authorization',
+                'requires_risk_acknowledgement', 'requires_acknowledgement']);
             $result['findings'] = array_map(fn ($finding) => Arr::only($finding,
                 ['field', 'severity', 'observation_type', 'message', 'calculation', 'suggestion']), $result['findings']);
         }
         return ['review_id' => $review->id, 'can_submit' => $review->can_submit, 'expires_at' => $review->expires_at->toIso8601String(),
             'can_view_internal' => $canViewInternal,
             'requires_medical_authorization' => (bool) ($result['requires_medical_authorization'] ?? false),
-            'requires_risk_acknowledgement' => (bool) ($result['requires_risk_acknowledgement'] ?? false), 'result' => $result];
+            'requires_risk_acknowledgement' => (bool) ($result['requires_risk_acknowledgement'] ?? false),
+            'requires_acknowledgement' => (bool) ($result['requires_acknowledgement'] ?? true), 'result' => $result];
     }
 
     public function resultForDisplay(ClinicalReview $review): array
@@ -342,8 +349,10 @@ class ClinicalReviewService
         }
         $review = ClinicalReview::whereKey((string) $request->input('clinical_review_token'))->where('user_id', $request->user()->id)->first();
         $requiresAuthorization = (bool) ($review?->result['requires_medical_authorization'] ?? false);
+        $requiresAcknowledgement = (bool) ($review?->result['requires_acknowledgement'] ?? true);
         if (!$review || $review->purpose !== 'submission' || (!$review->can_submit && !$requiresAuthorization) || $review->kind !== $kind
-            || $review->used_at || $review->expires_at->isPast() || !$request->boolean('clinical_acknowledged')
+            || $review->used_at || $review->expires_at->isPast()
+            || ($requiresAcknowledgement && !$request->boolean('clinical_acknowledged'))
             || !hash_equals($review->session_hash, $this->sessionHash($request))
             || !hash_equals($review->payload_hash, $this->fingerprint($request->all()))
             || !hash_equals($review->sources_hash, $this->evidence->fingerprint($kind))
@@ -354,11 +363,16 @@ class ClinicalReviewService
             $data = Validator::make($request->all(), [
                 'medical_authorization.doctor_name' => 'required|string|min:3|max:255',
                 'medical_authorization.doctor_license' => 'required|string|min:3|max:50',
-            ], ['required' => 'Captura :attribute para registrar la autorizacion medica.'], [
+                'medical_authorization.risk_accepted' => 'accepted',
+            ], [
+                'required' => 'Captura :attribute para registrar la autorizacion medica.',
+                'accepted' => 'Confirma que el medico conoce las advertencias y acepta continuar bajo responsabilidad profesional.',
+            ], [
                 'medical_authorization.doctor_name' => 'nombre del medico', 'medical_authorization.doctor_license' => 'cedula profesional',
+                'medical_authorization.risk_accepted' => 'la aceptacion del riesgo',
             ])->validate()['medical_authorization'];
             $request->attributes->set('medicalAuthorization', $data + ['recorded_by' => $request->user()->id,
-                'recorded_at' => now()->toIso8601String(), 'review_id' => $review->id, 'capture_version' => 2,
+                'recorded_at' => now()->toIso8601String(), 'review_id' => $review->id, 'capture_version' => 3,
                 'findings' => array_values(array_filter($review->result['findings'], fn ($f) => $f['severity'] === 'authorization'))]);
         }
         $request->attributes->set('clinicalReview', $review);
