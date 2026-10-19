@@ -94,7 +94,8 @@ test('mixture chat preserves history, unread badges, drafts and safe retry on de
                 const clinicalResult = dialog.locator('[data-chat-clinical-result]');
                 assert.equal(await clinicalResult.getByText('Volumen total inconsistente.', { exact: true }).isVisible(), true);
                 assert.equal(await clinicalResult.getByText('Error:', { exact: true }).isVisible(), true);
-                assert.equal(await clinicalResult.locator('.clinical-suggestion').count(), 0);
+                assert.equal(await clinicalResult.locator('.clinical-suggestion').count(), 1);
+                assert.match(await clinicalResult.locator('.clinical-suggestion').innerText(), /^Sugerencia:/);
                 for (const label of ['Calculos y supuestos', 'Estado de la evidencia y del servicio', 'Fuentes utilizadas', 'La IA no autoriza la preparacion.']) {
                     assert.equal(await clinicalResult.getByText(label, { exact: true }).count(), 0);
                 }

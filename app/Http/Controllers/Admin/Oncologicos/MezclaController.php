@@ -12,6 +12,7 @@ use App\Models\Oncologicos\Mezcla;
 use App\Models\Oncologicos\MezclaMedicamento;
 use App\Models\Oncologicos\SolicitudOnco;
 use App\Services\MedicineRemainderService;
+use App\Services\LabelPrintingService;
 use App\Services\OncologicMedicationInventoryService;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -2154,7 +2155,40 @@ class MezclaController extends Controller
     }
 
 
-    public function etiqueta(Mezcla $mezcla)
+    public function etiqueta(Mezcla $mezcla, LabelPrintingService $labelPrinting)
+    {
+        if (auth()->user()?->hasAnyRole(['Cliente', 'cliente', 'Institucion'])) {
+            abort(403, 'No autorizado');
+        }
+
+        $summary = $labelPrinting->summary(LabelPrintingService::ONCOLOGY, (int) $mezcla->id);
+
+        return view('admin.labels.print', [
+            'documentLabel' => "Mezcla oncologica #{$mezcla->id}",
+            'summary' => $summary,
+            'canReprint' => auth()->user()?->hasRole('Super Admin') ?? false,
+            'printRoute' => route('admin.oncologicos.mezclas.etiqueta.imprimir', $mezcla),
+        ]);
+    }
+
+    public function imprimirEtiqueta(Request $request, Mezcla $mezcla, LabelPrintingService $labelPrinting)
+    {
+        if ($request->user()?->hasAnyRole(['Cliente', 'cliente', 'Institucion'])) {
+            abort(403, 'No autorizado');
+        }
+
+        $print = $labelPrinting->authorizeAndRecord(
+            $mezcla,
+            LabelPrintingService::ONCOLOGY,
+            $request->user(),
+            $request->input('password'),
+            $request->ip()
+        );
+
+        return $this->etiquetaPdf($mezcla, $print->copies);
+    }
+
+    private function etiquetaPdf(Mezcla $mezcla, int $copies)
     {
         // ✅ Bloquear clientes (maneja Cliente/cliente)
         if (auth()->user()?->hasAnyRole(['Cliente', 'cliente', 'Institucion'])) {
@@ -2352,6 +2386,7 @@ class MezclaController extends Controller
             'tempMaxEtiqueta'   => $chosenTempMax,
             'stabilityEtiqueta' => $chosenStabilityHours,
             'showLabelLotExpiry' => $showLabelLotExpiry,
+            'copies' => $copies,
         ])->setPaper($customPaper, 'portrait'); // ✅ importante
 
         return $pdf->stream();

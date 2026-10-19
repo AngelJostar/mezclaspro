@@ -74,7 +74,8 @@ test('clinical review gates submission, preserves notes and rejects stale respon
             assert.equal(await page.locator('#volume').getAttribute('aria-invalid'), 'true');
             assert.equal(await page.locator('#notes').inputValue(), 'Nota del usuario');
             assert.equal(await page.locator('#volume').inputValue(), '1000');
-            assert.equal(await page.locator('.clinical-suggestion').count(), 0);
+            assert.equal(await page.locator('.clinical-suggestion').count(), 1);
+            assert.match(await page.locator('.clinical-suggestion').innerText(), /^Sugerencia: Volumen total: 1000 mL\./);
             assert.equal(await page.getByText(result(false).result.summary, { exact: true }).count(), 0);
             assert.equal(await page.locator('[data-clinical-result] details').count(), 0);
             assert.equal(await page.locator('[data-clinical-result] .clinical-notice').count(), 0);

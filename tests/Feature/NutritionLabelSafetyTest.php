@@ -44,9 +44,11 @@ class NutritionLabelSafetyTest extends TestCase
             'solicitud_detalles' => $solicitud,
             'inputs_solicitud' => collect(),
             'qrImage' => null,
+            'copies' => 3,
         ])->render();
 
         $this->assertStringContainsString('No especificado', $html);
         $this->assertStringContainsString('No especificada', $html);
+        $this->assertSame(3, substr_count($html, 'CENTRO DE MEZCLAS'));
     }
 }

@@ -28,9 +28,7 @@
         }
 
         .label {
-            position: absolute;
-            top: 0;
-            left: 0;
+            position: relative;
             width: 7.5cm;
             height: 4.98cm;
             margin: 0;
@@ -275,7 +273,8 @@
 @endphp
 
 <body>
-    <div class="label">
+    @for ($labelCopy = 0; $labelCopy < ($copies ?? 1); $labelCopy++)
+    <div class="label" @if ($labelCopy + 1 < ($copies ?? 1)) style="page-break-after: always;" @endif>
         <table class="header-table">
             <tr>
                 <td class="title title-cell">MEZCLAS ESTÉRILES ONCOLÓGICAS</td>
@@ -326,6 +325,7 @@
             </tr>
         </table>
     </div>
+    @endfor
 </body>
 
 </html>

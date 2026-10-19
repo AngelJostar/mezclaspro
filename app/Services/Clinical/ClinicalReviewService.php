@@ -42,22 +42,36 @@ class ClinicalReviewService
         $agent = $this->evidence->agent();
         $mode = $kind === 'nutricionales' ? ($case['mixtures'][0]['mode'] ?? '') : null;
         $sources = $this->evidence->sources($kind, $mode);
+        $hasOptionalClinicalContext = collect($case['clinical_context'] ?? [])
+            ->contains(fn ($value) => trim((string) $value) !== '');
         // Track the full category to invalidate receipts if either population's library changes.
         $sourcesFingerprint = $this->evidence->fingerprint($kind, null, $agent);
-        $issues = $this->evidence->limitations($kind, $sources, $mode);
+        $issues = $hasOptionalClinicalContext
+            ? $this->evidence->limitations($kind, $sources, $mode)
+            : [];
         $ruleEvaluation = $kind === 'nutricionales'
             ? $this->rules->evaluate($case)
             : ['findings' => [], 'evaluations' => []];
         $analysisCase = $case;
         $analysisCase['deterministic_validation'] = $ruleEvaluation['evaluations'];
-        $result = ['status' => 'needs_review', 'summary' => 'Revision pendiente del profesional responsable.', 'findings' => [], 'coverage' => [], 'model' => null];
-        if (!$agent?->is_active) $issues[] = 'El agente de soporte clinico esta inactivo. Solicita su configuracion al superadministrador.';
-        elseif (count($sources) > 20 || strlen(json_encode($sources)) > 250000) $issues[] = 'Las fuentes exceden el limite de revision. Reduce su alcance antes de continuar.';
-        else {
-            try { $result = $this->openai->analyze($analysisCase, $sources, $agent->instructions ?? ''); }
-            catch (\RuntimeException $e) { $issues[] = $e->getMessage(); }
+        $result = [
+            'status' => $hasOptionalClinicalContext ? 'needs_review' : 'no_blockers',
+            'summary' => $hasOptionalClinicalContext
+                ? 'Revision pendiente del profesional responsable.'
+                : 'Validacion realizada con las reglas activas.',
+            'findings' => [],
+            'coverage' => [],
+            'model' => null,
+        ];
+        if ($hasOptionalClinicalContext) {
+            if (!$agent?->is_active) $issues[] = 'El agente de soporte clinico esta inactivo. Solicita su configuracion al superadministrador.';
+            elseif (count($sources) > 20 || strlen(json_encode($sources)) > 250000) $issues[] = 'Las fuentes exceden el limite de revision. Reduce su alcance antes de continuar.';
+            else {
+                try { $result = $this->openai->analyze($analysisCase, $sources, $agent->instructions ?? ''); }
+                catch (\RuntimeException $e) { $issues[] = $e->getMessage(); }
+            }
         }
-        if (!hash_equals($sourcesFingerprint, $this->evidence->fingerprint($kind))) {
+        if ($hasOptionalClinicalContext && !hash_equals($sourcesFingerprint, $this->evidence->fingerprint($kind))) {
             $issues[] = 'Las fuentes o la configuracion cambiaron durante la revision. Vuelve a validar.';
         }
         $aiFindings = array_map(
@@ -118,8 +132,9 @@ class ClinicalReviewService
         }
         // Optional clinical context does not block a structurally complete mixture review.
         // Missing evidence, incomplete model responses and local checks still cannot be overridden.
-        $complete = !$issues && count($result['coverage']) === 4
-            && !collect($result['coverage'])->contains(fn ($c) => $c['state'] !== 'reviewed')
+        $complete = !$issues
+            && (!$hasOptionalClinicalContext || (count($result['coverage']) === 4
+                && !collect($result['coverage'])->contains(fn ($c) => $c['state'] !== 'reviewed')))
             && !collect($result['findings'])->contains(fn ($f) => ($f['category'] ?? '') !== 'missing_clinical_context'
                 && !in_array($f['severity'], ['information', 'authorization', 'advisory'], true));
         $onlyOptionalContextIsMissing = !empty($case['missing_context'])

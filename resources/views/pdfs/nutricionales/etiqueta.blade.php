@@ -118,7 +118,8 @@
 </head>
 
 <body>
-    <div class="contenedor">
+    @for ($labelCopy = 0; $labelCopy < ($copies ?? 1); $labelCopy++)
+    <div class="contenedor" @if ($labelCopy + 1 < ($copies ?? 1)) style="page-break-after: always;" @endif>
         <div>
             <table>
                 <tr>
@@ -451,6 +452,7 @@
             </table>
         </div>
     </div>
+    @endfor
 </body>
 
 </html>

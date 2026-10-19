@@ -38,6 +38,7 @@ use App\Models\Nutricionales\MedicineStockMovement;
 use App\Models\Nutricionales\InspeccionNutricional;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Services\InstitutionBillingPricingService;
+use App\Services\LabelPrintingService;
 use App\Services\MedicineRemainderService;
 use App\Services\NutritionTheoreticalWeightService;
 use App\Services\NutritionDiluentService;
@@ -2894,7 +2895,32 @@ class SolicitudController extends Controller
     }
 
 
-    public function etiqueta(Solicitud $solicitud)
+    public function etiqueta(Solicitud $solicitud, LabelPrintingService $labelPrinting)
+    {
+        $summary = $labelPrinting->summary(LabelPrintingService::NUTRITION, (int) $solicitud->id);
+
+        return view('admin.labels.print', [
+            'documentLabel' => "Solicitud nutricional #{$solicitud->id}",
+            'summary' => $summary,
+            'canReprint' => auth()->user()?->hasRole('Super Admin') ?? false,
+            'printRoute' => route('admin.nutricionales.solicitudes.etiqueta.imprimir', $solicitud),
+        ]);
+    }
+
+    public function imprimirEtiqueta(Request $request, Solicitud $solicitud, LabelPrintingService $labelPrinting)
+    {
+        $print = $labelPrinting->authorizeAndRecord(
+            $solicitud,
+            LabelPrintingService::NUTRITION,
+            $request->user(),
+            $request->input('password'),
+            $request->ip()
+        );
+
+        return $this->etiquetaPdf($solicitud, $print->copies);
+    }
+
+    private function etiquetaPdf(Solicitud $solicitud, int $copies)
     {
         $inputs_solicitud = SolicitudInput::where('solicitud_id', $solicitud->id)
             ->whereNotIn('input_id', function ($query) {
@@ -2928,6 +2954,7 @@ class SolicitudController extends Controller
             'qrUrl' => $qrUrl,
             'qrSvg' => $qrSvg,
             'qrImage' => $qrImage,
+            'copies' => $copies,
         ])->setPaper($customPaper, 'landscape');
 
         return $pdf->stream();

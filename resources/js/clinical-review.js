@@ -31,6 +31,9 @@ export function renderClinicalResult(container, data) {
         item.append(paragraph(isError ? 'Error:' : 'Advertencia:', 'clinical-status'));
         item.append(paragraph(conciseClinicalMessage(finding)));
         if (finding.calculation) item.append(paragraph(finding.calculation));
+        if (finding.severity === 'blocking' && String(finding.suggestion || '').trim()) {
+            item.append(paragraph(`Sugerencia: ${String(finding.suggestion).trim()}`, 'clinical-suggestion'));
+        }
         list.append(item);
     }
     container.append(list);

@@ -368,6 +368,8 @@ Route::get('nutricionales/solicitudes/envio/{solicitud}', [SolicitudController::
 
 Route::get('nutricionales/solicitudes/etiqueta/{solicitud}', [SolicitudController::class, 'etiqueta'])->name('nutricionales.solicitudes.etiqueta')
     ->middleware(['can:nutricionales_solicitudes_index']);
+Route::post('nutricionales/solicitudes/etiqueta/{solicitud}/imprimir', [SolicitudController::class, 'imprimirEtiqueta'])->name('nutricionales.solicitudes.etiqueta.imprimir')
+    ->middleware(['can:nutricionales_solicitudes_index']);
 
 Route::get('nutricionales/solicitudes/inspeccion/{solicitud}', [SolicitudController::class, 'inspeccion'])->name('nutricionales.solicitudes.inspeccion')
     ->middleware(['can:nutricionales_solicitudes_index']);
@@ -487,6 +489,8 @@ Route::get('oncologicos/mezclas/inspeccion/{mezcla}', [MezclaController::class, 
     ->middleware(['can:oncologicos_mezclas_index']);
 
 Route::get('oncologicos/mezclas/etiqueta/{mezcla}', [MezclaController::class, 'etiqueta'])->name('oncologicos.mezclas.etiqueta')
+    ->middleware(['can:oncologicos_mezclas_index']);
+Route::post('oncologicos/mezclas/etiqueta/{mezcla}/imprimir', [MezclaController::class, 'imprimirEtiqueta'])->name('oncologicos.mezclas.etiqueta.imprimir')
     ->middleware(['can:oncologicos_mezclas_index']);
 
 Route::get('oncologicos/mezclas/solicitud-completa/{solicitud}', [OncologicosSolicitudController::class, 'solicitud'])->name('oncologicos.mezclas.solicitudCompleta')
