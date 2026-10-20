@@ -107,6 +107,13 @@ Route::get('herramientas/conciliaciones/{submission}/solicitar-cambios', [\App\H
 Route::post('herramientas/conciliaciones/{submission}/solicitar-cambios', [\App\Http\Controllers\Admin\ClientToolsController::class, 'requestChanges'])
     ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.request-changes');
 
+Route::get('herramientas/conciliacion/exportar', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'exportConciliation'])
+    ->middleware('role:Cliente|Institucion')->name('hospital.conciliacion.exportar');
+Route::get('herramientas/conciliacion/resumen', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'previewConciliation'])
+    ->middleware('role:Cliente|Institucion')->name('hospital.conciliacion.resumen');
+Route::post('herramientas/conciliacion/enviar', [\App\Http\Controllers\Admin\HospitalToolsController::class, 'sendConciliation'])
+    ->middleware(['role:Cliente|Institucion', 'throttle:10,1'])->name('hospital.conciliacion.enviar');
+
 Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
 Route::post('solicitudes/validacion-clinica/{kind}', [\App\Http\Controllers\Admin\ClinicalReviewController::class, 'validateRequest'])
