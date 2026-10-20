@@ -13,15 +13,35 @@
                 <label><input type="radio" name="channel" value="email" checked><span><i data-quotation-icon="mail" aria-hidden="true"></i>Correo</span></label>
                 <label><input type="radio" name="channel" value="whatsapp"><span><i data-quotation-icon="message-circle" aria-hidden="true"></i>WhatsApp</span></label>
             </fieldset>
-            <label class="quotation-field" data-send-email-field>Correo del destinatario *
-                <input type="email" name="email" maxlength="254" autocomplete="email" required>
-            </label>
-            <label class="quotation-field" data-send-phone-field hidden>Telefono con codigo de pais *
-                <input type="tel" name="phone" maxlength="30" autocomplete="tel" placeholder="+52 5512345678" disabled>
-            </label>
-            <label class="quotation-field">Mensaje (opcional)
-                <textarea name="note" rows="3" maxlength="2000"></textarea>
-            </label>
+            <p class="quotation-whatsapp-help" data-send-whatsapp-help hidden>
+                <strong>WhatsApp Web no adjunta el PDF automáticamente.</strong>
+                Descarga la cotización y, dentro del chat, selecciona + → Documento para adjuntarla.
+            </p>
+            <div class="quotation-send-fields" data-send-fields>
+                <label class="quotation-field" data-send-email-field>Correo del destinatario *
+                    <input type="email" name="email" maxlength="254" autocomplete="email" required>
+                </label>
+                <label class="quotation-field" data-send-phone-field hidden>Telefono con codigo de pais *
+                    <input type="tel" name="phone" maxlength="30" autocomplete="tel" placeholder="+52 5512345678" disabled>
+                </label>
+                <label class="quotation-field">Mensaje (opcional)
+                    <textarea name="note" rows="3" maxlength="2000"></textarea>
+                </label>
+            </div>
+            <div class="quotation-whatsapp-review" data-send-whatsapp-review hidden
+                tabindex="-1" aria-labelledby="quotation-whatsapp-title">
+                <h3 id="quotation-whatsapp-title">Continúa en WhatsApp</h3>
+                <p>Destinatario: <strong data-send-whatsapp-recipient></strong></p>
+                <p class="quotation-whatsapp-message-label">Mensaje preparado</p>
+                <p class="quotation-whatsapp-message" data-send-whatsapp-message></p>
+                <ol>
+                    <li>La descarga del PDF se inició. Puedes descargarlo de nuevo abajo.</li>
+                    <li>Pulsa <strong>Abrir WhatsApp</strong> y continúa al chat del destinatario.
+                        El enlace coloca únicamente el mensaje; el PDF todavía no está adjunto.</li>
+                    <li>En el chat, elige <strong>Adjuntar → Documento</strong>, selecciona
+                        <strong data-send-whatsapp-filename></strong> y pulsa <strong>Enviar</strong>.</li>
+                </ol>
+            </div>
             <div class="quotation-send-attachment">
                 <i data-quotation-icon="file-text" aria-hidden="true"></i>
                 <div><strong data-send-filename></strong><span data-send-file-status>Documento PDF</span></div>
@@ -33,10 +53,15 @@
         </div>
         <footer class="quotation-modal-footer">
             <div>
-                <button type="button" class="quotation-button quotation-outline" data-send-close>Cancelar</button>
+                <button type="button" class="quotation-button quotation-outline" data-send-close data-send-cancel-label>Cancelar</button>
+                <button type="button" class="quotation-button quotation-outline" data-send-whatsapp-edit hidden>Cambiar datos</button>
                 <button type="submit" class="quotation-button quotation-primary" data-send-submit>
                     <i data-quotation-icon="send" aria-hidden="true"></i><span data-send-submit-label>Enviar correo</span>
                 </button>
+                <a class="quotation-button quotation-primary" data-send-whatsapp-open hidden
+                    target="_blank" rel="noopener noreferrer">
+                    <i data-quotation-icon="message-circle" aria-hidden="true"></i><span>Abrir WhatsApp</span>
+                </a>
             </div>
         </footer>
     </form>

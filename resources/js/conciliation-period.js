@@ -9,6 +9,12 @@ function initializeConciliationPeriod() {
     const error = root.querySelector('[data-period-error]');
     const accept = root.querySelector('[data-period-accept]');
     const loading = root.querySelector('[data-period-loading]');
+    const observationsDialog = root.querySelector('[data-period-observations-dialog]');
+    const observationsDetail = root.querySelector('[data-period-observations-detail]');
+    const observationsLoading = root.querySelector('[data-period-observations-loading]');
+    const observationsError = root.querySelector('[data-period-observations-error]');
+    const authorize = root.querySelector('[data-period-authorize]');
+    let observedGroup = null, observationsRequest = 0, authorizing = false;
     const money = cents => cents === null ? 'Sin registrar' : new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cents / 100) + ' MXN';
     const scope = group => ({ institucion_id: group.institution_id, hospital_id: group.hospital_id, desde: group.from, hasta: group.to,
         ...(group.period_id ? { period_id: group.period_id } : {}) });
@@ -58,6 +64,15 @@ function initializeConciliationPeriod() {
         row.querySelector('[data-period-total]').textContent = money(group.total_cents);
         row.querySelector('[data-period-new]').textContent = money(group.new_cents);
         row.querySelector('[data-period-new-cell]').dataset.filterValue = money(group.new_cents);
+        const status = row.querySelector('[data-period-status]');
+        status.textContent = status.dataset.periodStatus = group.conciliation_status;
+        const observationsDisabled = group.conciliation_status === 'Pendiente' || (group.conciliation_status === 'Aceptada' && !group.changes_count);
+        row.querySelectorAll('[data-period-observations]').forEach(button => { button.disabled = observationsDisabled; });
+        row.querySelector('[data-period-status-cell]').dataset.filterValue = group.conciliation_status;
+        row.querySelector('[data-period-authorization-cell]').dataset.filterValue = group.authorization ? 'Autorizados' : (group.changes_count ? 'Por autorizar' : 'Sin cambios');
+        const authorizeOpen = row.querySelector('[data-period-authorize-open]');
+        authorizeOpen.disabled = !group.can_authorize;
+        authorizeOpen.textContent = group.authorization ? 'Autorizados' : 'Autorizar cambios';
         row.querySelector('[data-period-send-cell]').dataset.filterValue = group.sent_folio ? 'Enviada' : 'Pendiente de envío';
         row.querySelector('[data-period-folio]').textContent = group.sent_folio || (group.missing_prices ? 'Revisar precios faltantes' : '');
         const send = row.querySelector('[data-period-send]');
@@ -81,7 +96,63 @@ function initializeConciliationPeriod() {
     };
     dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
     dialog.addEventListener('close', () => { requestNumber++; active = null; choices = {}; });
+    observationsDialog.addEventListener('cancel', event => { if (authorizing) event.preventDefault(); });
+    observationsDialog.addEventListener('close', () => { observationsRequest++; observedGroup = null; });
+    observationsDialog.querySelectorAll('[data-period-observations-close]').forEach(button => button.addEventListener('click', () => {
+        if (!authorizing) observationsDialog.close();
+    }));
+    const showObservations = result => {
+        observedGroup = result.group;
+        observationsDetail.innerHTML = result.observations_html;
+        authorize.hidden = !observedGroup.changes_count;
+        authorize.disabled = !observedGroup.can_authorize;
+        authorize.textContent = observedGroup.authorization ? 'Cambios autorizados' : 'Autorizar cambios';
+        updateRow(observedGroup);
+    };
+    authorize.addEventListener('click', async () => {
+        if (!observedGroup?.can_authorize || authorizing) return;
+        authorizing = true;
+        observationsDialog.setAttribute('aria-busy', 'true');
+        observationsDialog.querySelectorAll('button').forEach(button => { button.disabled = true; });
+        authorize.textContent = 'Autorizando…';
+        observationsError.hidden = true;
+        try {
+            showObservations(await api(root.dataset.authorizeUrl, { ...scope(observedGroup), version: observedGroup.review_version }));
+            announce('Cambios autorizados. Se guardó el registro de la autorización.');
+        } catch (failure) {
+            observationsError.textContent = failure.message;
+            observationsError.hidden = false;
+            authorize.disabled = false;
+            authorize.textContent = 'Autorizar cambios';
+        } finally {
+            authorizing = false;
+            observationsDialog.setAttribute('aria-busy', 'false');
+            observationsDialog.querySelectorAll('[data-period-observations-close]').forEach(button => { button.disabled = false; });
+        }
+    });
     root.addEventListener('click', async event => {
+        const observations = event.target.closest('[data-period-observations], [data-period-authorize-open]');
+        if (observations && !observations.disabled) {
+            const group = groups.get(observations.closest('[data-period-row]').dataset.periodRow);
+            const sequence = ++observationsRequest;
+            observedGroup = null;
+            observationsDetail.replaceChildren();
+            observationsError.hidden = true;
+            observationsLoading.hidden = false;
+            authorize.hidden = true;
+            observationsDialog.showModal();
+            observationsDialog.querySelector('h2').focus();
+            try {
+                const result = await api(root.dataset.detailUrl + '?' + new URLSearchParams(scope(group)));
+                if (sequence === observationsRequest && observationsDialog.open) showObservations(result);
+            } catch (failure) {
+                if (sequence === observationsRequest) {
+                    observationsError.textContent = failure.message;
+                    observationsError.hidden = false;
+                }
+            } finally { if (sequence === observationsRequest) observationsLoading.hidden = true; }
+            return;
+        }
         const close = event.target.closest('[data-period-close]');
         if (close && !saving) { dialog.close(); return; }
         const choice = event.target.closest('[data-period-choice]');
@@ -157,7 +228,7 @@ function initializeConciliationPeriod() {
     };
     institution.addEventListener('change', () => { hospital.value = ''; syncHospitals(); });
     syncHospitals();
-    document.addEventListener('livewire:navigating', () => { columnFilters?.destroy(); dialog.close(); }, { once: true });
+    document.addEventListener('livewire:navigating', () => { columnFilters?.destroy(); dialog.close(); observationsDialog.close(); }, { once: true });
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeConciliationPeriod);

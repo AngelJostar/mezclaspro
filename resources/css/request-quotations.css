@@ -23,6 +23,15 @@
 .quotation-send-dialog::backdrop { background:rgb(15 30 48 / .55); }
 .quotation-send-dialog form { display:flex; flex-direction:column; max-height:94dvh; }
 .quotation-send-dialog .quotation-send-body { display:flex; flex-direction:column; gap:16px; padding-top:18px; padding-bottom:18px; }
+.quotation-send-fields { display:flex; flex-direction:column; gap:16px; }
+.quotation-whatsapp-help { padding:10px 12px; border-radius:4px; background:#edfcf8; color:#006f60; font-size:13px; line-height:1.5; }
+.quotation-whatsapp-review { min-width:0; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.quotation-whatsapp-review h3 { margin:0 0 8px; color:#006f60; font-size:16px; font-weight:700; }
+.quotation-whatsapp-message-label { margin-top:12px; font-size:12px; font-weight:600; }
+.quotation-whatsapp-message { margin:4px 0 12px; padding:10px 12px; border:1px solid #dce3ed; border-radius:4px; background:#f6f8fb; white-space:pre-wrap; }
+.quotation-whatsapp-review ol { margin:0; padding-left:20px; list-style:decimal; }
+.quotation-whatsapp-review li + li { margin-top:6px; }
+.quotation-send-dialog [data-send-whatsapp-open] { text-decoration:none; }
 .quotation-send-dialog [hidden] { display:none!important; }
 .quotation-send-dialog input:not([type=radio]):not([type=hidden]), .quotation-send-dialog textarea { width:100%; min-width:0; padding:10px; border:1px solid #ccd7e5; border-radius:4px; font-size:13px; font-weight:400; color:#203858; }
 .quotation-send-dialog textarea { resize:vertical; }

@@ -4,26 +4,29 @@
     <header><h2 id="cp-create-title" tabindex="-1">Crear periodo</h2><button type="button" class="cp-close" data-create-close aria-label="Cerrar Crear periodo">×</button></header>
     <p class="cp-subtitle">Filtra y selecciona las remisiones que deseas integrar.</p>
     <form data-create-filters class="cp-create-filters">
-        <label>Institución<select name="institution"><option value="">Todas las instituciones</option></select></label>
+        <label><span>Institución <span class="cp-required" aria-hidden="true">*</span></span><select name="institution" required aria-required="true"><option value="">Selecciona una institución</option></select></label>
         <label>Hospital<select name="hospital"><option value="">Todos los hospitales</option></select></label>
-        <label>Desde<input type="date" name="from"></label>
-        <label>Hasta<input type="date" name="to"></label>
-        <label class="cp-create-search">Buscar por remisión o paciente<input type="search" name="search" placeholder="Buscar por remisión o paciente"></label>
-        <label>Estado<select name="status"><option value="">Todas</option></select></label>
-        <div class="cp-create-filter-actions"><button type="submit" class="cp-primary">Aplicar filtros</button><button type="button" class="cp-create-clear" data-create-clear>Limpiar</button></div>
+        <label><span>Desde <span class="cp-required" aria-hidden="true">*</span></span><input type="date" name="from" required aria-required="true"></label>
+        <label><span>Hasta <span class="cp-required" aria-hidden="true">*</span></span><input type="date" name="to" required aria-required="true"></label>
+        <button type="button" class="cp-secondary" data-create-clear>Limpiar filtros</button>
     </form>
     <div class="cp-create-results"><h3>Remisiones existentes</h3><span data-create-count role="status">Cargando remisiones…</span></div>
     <div class="cp-create-scroll" tabindex="0" aria-label="Remisiones existentes">
-        <table class="ht-table cp-create-table" data-disable-column-filters>
-            <thead><tr><th>No. de remisión</th><th>Institución</th><th>Hospital</th><th>Paciente</th><th>Fecha de remisión</th><th>Descripción</th><th>Monto total<br>(IVA incluido)</th><th>Seleccionar</th></tr></thead>
+        <table class="ht-table cp-create-table" id="conciliation-period-create-table" data-disable-column-filters>
+            <thead><tr>
+                @foreach (['No. de remisión', 'Institución', 'Hospital', 'Paciente', 'Fecha de remisión', 'Descripción', 'Monto total (IVA incluido)'] as $label)
+                    <th><div class="conciliation-column"><span>{{ $label }}</span><button type="button" class="cp-create-filter conciliation-column-filter" data-table-column-trigger data-column="{{ $loop->index }}" aria-label="Filtrar {{ $label }}" title="Filtrar {{ $label }}" aria-expanded="false" disabled><span aria-hidden="true">&#9660;</span></button></div></th>
+                @endforeach
+                <th scope="col"><input type="checkbox" class="cp-create-bulk" data-create-toggle-all aria-controls="conciliation-period-create-table" aria-label="Seleccionar todas las remisiones filtradas disponibles" title="Seleccionar todas las remisiones filtradas disponibles" disabled></th>
+            </tr></thead>
             <tbody data-create-rows></tbody>
         </table>
     </div>
-    <div class="cp-create-selection"><label><input type="checkbox" data-create-all disabled> Seleccionar todas las filtradas disponibles</label><button type="button" class="cp-create-clear" data-create-reset>Quitar selección</button></div>
-    <p class="cp-note">Cada periodo corresponde a una institución y un hospital. Las fechas del periodo abarcan las remisiones seleccionadas.</p>
+    <p class="cp-note">Puedes seleccionar varios hospitales de la misma institución. Se creará un periodo por cada hospital con remisiones seleccionadas.</p>
     <div class="cp-create-summary" aria-live="polite">
-        <div><span>Periodo</span><strong data-create-range>Sin seleccionar</strong></div>
+        <div><span>Periodo</span><strong data-create-range>Sin definir</strong></div>
         <div><strong data-create-selected>0 remisiones seleccionadas</strong></div>
+        <div><strong data-create-period-count>0 periodos</strong></div>
         <div><span>Total con IVA</span><strong data-create-total>$0.00 MXN</strong></div>
     </div>
     <p data-create-error role="alert" class="cp-error" hidden></p>

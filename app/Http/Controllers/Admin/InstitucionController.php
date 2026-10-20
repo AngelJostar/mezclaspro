@@ -30,14 +30,30 @@ use ZipArchive;
 
 class InstitucionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $canViewCredentials = $request->user()?->can('usuarios') ?? false;
+        $userColumns = ['id', 'hospital_id', 'username'];
+        if ($canViewCredentials) {
+            $userColumns[] = 'credential_password';
+        }
+
         $instituciones = Institucion::query()
             ->withCount('hospitals')
+            ->with([
+                'hospitals' => fn ($query) => $query
+                    ->select('hospitals.id', 'hospitals.name')
+                    ->orderBy('hospitals.name'),
+                'hospitals.users' => fn ($query) => $query
+                    ->select($userColumns)
+                    ->whereHas('roles', fn ($roles) => $roles->whereIn('name', ['Cliente', 'Institucion']))
+                    ->orderBy('username')
+                    ->orderBy('id'),
+            ])
             ->orderBy('id', 'desc')
             ->paginate(10);
 
-        return view('admin.instituciones.index', compact('instituciones'));
+        return view('admin.instituciones.index', compact('instituciones', 'canViewCredentials'));
     }
 
     public function reportes(Request $request, InstitutionReportTemplateService $templates)

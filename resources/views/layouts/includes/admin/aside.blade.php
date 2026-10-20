@@ -143,6 +143,16 @@
                             </a>
                         </li>
                         @endif
+                        @if (isset($purchaseLinks['all']))
+                        <li>
+                            <a href="{{ $purchaseLinks['all']['url'] }}"
+                                x-on:click="open = false"
+                                @if ($purchaseListRoute && in_array($purchaseSection, ['all', 'paid', 'pending', 'rejected'], true)) aria-current="page" @endif
+                                class="flex items-center rounded-lg p-2 text-gray-900 hover:bg-white dark:text-white dark:hover:bg-gray-700 {{ $purchaseListRoute && in_array($purchaseSection, ['all', 'paid', 'pending', 'rejected'], true) ? 'bg-white shadow-sm' : '' }}">
+                                <span class="min-w-0 whitespace-normal leading-4">Historial de OC</span>
+                            </a>
+                        </li>
+                        @endif
                         @if ($canAccessPurchases)
                         <li>
                             <a href="{{ route('admin.purchases.minimum-stock', array_filter(['laboratory_id' => $purchaseLaboratoryId])) }}"

@@ -61,8 +61,10 @@
                 }
             </style>
         @endpush
-        <section class="hospital-tools client-conciliation-panel mt-6" aria-labelledby="client-conciliation-title">
+        <section class="hospital-tools client-conciliation-panel mt-6" aria-labelledby="client-conciliation-title" data-client-conciliation>
             <div class="ht-log-heading"><h2 id="client-conciliation-title">Solicitudes de conciliación</h2></div>
+            <p class="mb-4 text-sm">Puedes solicitar cambios en los periodos recibidos. Su autorización corresponde exclusivamente al personal de PROMESA Prodifem.</p>
+            <p data-client-conciliation-feedback role="status" hidden></p>
             <div class="ht-table-scroll" data-sticky-x-position="viewport" tabindex="0" aria-label="Solicitudes de conciliación">
                 <table class="ht-table">
                     <thead><tr><th>Folio</th><th>Fecha de envío</th><th>Institución</th><th>Hospital</th><th>Enviado por</th><th>Periodo</th><th>Mezclas</th><th>Conciliables Sí</th><th>Conciliables No</th><th>Estatus</th><th>Acciones</th></tr></thead>
@@ -80,7 +82,9 @@
                                 <td>{{ $submission->conciliable_count }}</td>
                                 <td data-column-filter-value="{{ $noCount }}">@if ($noCount > 0)<span class="ht-no-count" title="{{ $noCount }} mezclas no conciliables">{{ $noCount }}</span>@else 0 @endif</td>
                                 <td>{{ $submission->direction === 'sent' ? 'Recibida' : 'Enviada' }}</td>
-                                <td><a class="ht-secondary" href="{{ route('admin.herramientas.conciliaciones.download', $submission) }}">Descargar reporte</a></td>
+                                <td><a class="ht-secondary" href="{{ route('admin.herramientas.conciliaciones.download', $submission) }}">Descargar reporte</a>
+                                    @if ($submission->direction === 'sent')<button type="button" class="ht-secondary" data-client-request-open data-url="{{ route('admin.herramientas.conciliaciones.change-request', $submission) }}">Solicitar cambios</button>@endif
+                                </td>
                             </tr>
                         @empty
                             <tr><td colspan="11" class="ht-empty">No hay solicitudes de conciliación.</td></tr>
@@ -89,6 +93,21 @@
                 </table>
             </div>
             <div class="client-conciliation-pagination">{{ $submissions->links() }}</div>
+            <dialog class="ht-send-dialog client-change-dialog" data-client-request-dialog aria-labelledby="client-change-title">
+                <header class="ht-send-heading"><h2 id="client-change-title" tabindex="-1">Solicitar cambios</h2><button type="button" class="ht-icon" data-client-request-close aria-label="Cerrar">×</button></header>
+                <p data-client-request-loading role="status" hidden>Cargando remisiones...</p>
+                <p data-client-request-error class="ht-error" role="alert" hidden></p>
+                <div data-client-request-content></div>
+            </dialog>
         </section>
+        @push('css')
+            <style>
+                .client-change-dialog { width: min(1100px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+                .client-change-table { min-width: 800px; }
+                .client-change-table textarea { width: 100%; min-width: 230px; min-height: 64px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px; }
+                .client-change-table select { border: 1px solid #cbd5e1; border-radius: 4px; max-width: 170px; }
+                .client-change-dialog footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
+            </style>
+        @endpush
     @endif
 </x-admin-layout>

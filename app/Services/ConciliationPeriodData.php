@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Http\Controllers\Admin\InstitucionBillingController;
 use App\Models\ConciliationPeriod;
+use App\Models\ConciliationPeriodDecision;
 use App\Models\ConciliationPeriodItem;
 use App\Models\HospitalConciliationSubmission;
+use App\Models\InstitutionBillingMovement;
 use App\Support\ConciliationInboxTable;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -21,6 +23,9 @@ class ConciliationPeriodData
         $hospitalIds = $requests['nutrition']->pluck('hospital_id')->merge($requests['onco']->pluck('solicitud.hospital_id'))->unique();
         $submissions = HospitalConciliationSubmission::whereIn('hospital_id', $hospitalIds)->latest('id')->get();
         $latest = ConciliationInboxData::indexSubmissions($submissions);
+        $received = ConciliationInboxData::indexSubmissions($submissions->where('direction', 'received'));
+        $billingIds = $requests['nutrition']->pluck('billing.id')->merge($requests['onco']->pluck('billing.id'))->filter()->unique();
+        $movements = InstitutionBillingMovement::whereIn('institution_billing_id', $billingIds)->latest('id')->get()->groupBy('institution_billing_id');
         $rows = collect();
         foreach (['nutrition', 'onco'] as $type) {
             foreach ($requests[$type] as $record) {
@@ -53,6 +58,25 @@ class ConciliationPeriodData
                 $patient = $nutrition ? trim(($record->solicitud_patient?->nombre_paciente ?? '').' '.($record->solicitud_patient?->apellidos_paciente ?? '')) : $record->solicitud?->nombre_paciente;
                 $previous = $billing?->conciliable;
                 $yes = blank($previous) || in_array(Str::lower(Str::ascii(trim($previous))), ['si', 'yes', 'true', '1', 'conciliado', 'conciliable'], true);
+                $submission = $received[$hospital->id.':'.$kind.':'.$record->id] ?? null;
+                $submitted = collect($submission?->snapshot ?? [])->first(fn ($row) => $row['kind'] === $kind && (int) $row['id'] === (int) $record->id);
+                $changes = $yes ? [] : ['Remisión marcada como no conciliable.'];
+                $clientRequest = null;
+                if ($submitted && ($submitted['change_requested'] ?? (($submitted['conciliable'] ?? true) === false || !empty($submitted['reason'])))) {
+                    $requested = $submitted['requested_conciliable'] ?? null;
+                    $changes[] = is_bool($requested)
+                        ? 'Solicitud del cliente: marcar como conciliable '.($requested ? 'Sí.' : 'No.')
+                        : 'Solicitud de cambios del cliente para revisión por PROMESA Prodifem.';
+                    $clientRequest = ['submission_id' => $submission->id, 'folio' => $submission->folio(),
+                        'by' => $submission->sender_name, 'at' => $submission->created_at->format('d/m/Y H:i'),
+                        'conciliable' => $requested];
+                }
+                $priceChange = ($movements->get($billing?->id) ?? collect())->first(fn ($movement) => ($movement->details['field'] ?? null) === 'precio_total');
+                $baselineAmount = $submitted['amount_cents'] ?? ($priceChange ? self::cents($priceChange->details['before'] ?? null) : null);
+                if ($baselineAmount !== null && $amount !== $baselineAmount) {
+                    $changes[] = 'Importe: '.HospitalConciliationSummary::money($baselineAmount).' → '.HospitalConciliationSummary::money($amount).'.';
+                }
+                if ($yes && $submitted && ($submitted['conciliable'] ?? true) === false && !is_bool($submitted['requested_conciliable'] ?? null)) $changes[] = 'Conciliable: No → Sí.';
                 $from = max($filters['desde'] ?? '0000-01-01', $date->copy()->startOfMonth()->toDateString());
                 $to = min($filters['hasta'] ?? '9999-12-31', $date->copy()->endOfMonth()->toDateString());
                 $rows->push([
@@ -64,6 +88,11 @@ class ConciliationPeriodData
                     'previous_price' => $billing?->precio_total,
                     'status' => ConciliationInboxTable::status($previous, $latest[$hospital->id.':'.$kind.':'.$record->id] ?? null),
                     'request_id' => $nutrition ? $record->id : $record->solicitud_id, 'lot' => $record->lote ?: '—',
+                    'observations' => trim((string) $billing?->observaciones),
+                    'reason' => trim((string) ($submitted['reason'] ?? '')),
+                    'reason_folio' => !empty($submitted['reason']) ? $submission->folio() : null,
+                    'client_request' => $clientRequest,
+                    'changes' => $changes,
                 ]);
             }
         }
@@ -81,7 +110,7 @@ class ConciliationPeriodData
 
     public static function candidateVersion(array $row): string
     {
-        return HospitalConciliationSummary::signature(array_diff_key($row, array_flip(['status', 'from', 'to'])));
+        return HospitalConciliationSummary::signature(array_diff_key($row, array_flip(['status', 'from', 'to', 'observations', 'reason', 'reason_folio', 'changes', 'client_request'])));
     }
 
     public function groups(array $filters): Collection
@@ -115,12 +144,20 @@ class ConciliationPeriodData
                 if (!$row || $row['institution_id'] != $period->institution_id || $row['hospital_id'] != $period->hospital_id) {
                     $row = array_replace($item->snapshot, ['amount_cents' => null, 'unavailable' => true]);
                 }
+                $changes = $row['changes'] ?? [];
+                if ($row['amount_cents'] !== ($item->snapshot['amount_cents'] ?? null)) {
+                    $changes[] = 'Importe al crear el periodo: '.HospitalConciliationSummary::money($item->snapshot['amount_cents'] ?? null)
+                        .'; actual: '.HospitalConciliationSummary::money($row['amount_cents']).'.';
+                }
+                if ($row['conciliable'] && !($item->snapshot['conciliable'] ?? true)) $changes[] = 'Conciliable: No → Sí.';
+                $row['changes'] = array_values(array_unique($changes));
                 return array_replace($row, ['from' => $period->period_from->toDateString(), 'to' => $period->period_to->toDateString()]);
             })->sortBy('key', SORT_NATURAL)->values();
             $group = array_intersect_key($items->first(), array_flip(['institution_id', 'institution', 'hospital_id', 'hospital', 'from', 'to']));
             $groups->push($group + ['key' => 'period-'.$period->id, 'period_id' => $period->id, 'rows' => $items->all()]);
         }
-        return $groups->map(function ($group) use ($submissions, $latest) {
+        $decisions = ConciliationPeriodDecision::whereIn('group_key', $groups->pluck('key'))->latest('id')->get()->groupBy('group_key');
+        return $groups->map(function ($group) use ($submissions, $latest, $decisions) {
             $group += self::totals($group['rows']);
             $group['version'] = self::version($group);
             $sent = $submissions->first(fn ($submission) => $submission->direction === 'sent'
@@ -129,6 +166,17 @@ class ConciliationPeriodData
             $directions = collect($group['rows'])->map(fn ($row) => ($latest[$row['hospital_id'].':'.$row['kind'].':'.$row['id']] ?? null)?->direction);
             $group['bucket'] = $directions->contains(null) ? 'pendientes' : ($directions->contains(fn ($direction) => $direction !== 'sent') ? 'recibidas' : 'enviadas');
             $group['submission_key'] = (string) Str::uuid();
+            $group['review_version'] = HospitalConciliationSummary::signature([$group['version'], array_map(fn ($row) => [
+                'key' => $row['key'], 'observations' => $row['observations'] ?? '', 'reason' => $row['reason'] ?? '',
+                'reason_folio' => $row['reason_folio'] ?? null, 'changes' => $row['changes'] ?? [],
+            ] + (!empty($row['client_request']) ? ['client_request' => $row['client_request']] : []), $group['rows'])]);
+            $currentDecisions = ($decisions->get($group['key']) ?? collect())->where('version', $group['review_version']);
+            $authorization = $currentDecisions->firstWhere('action', 'authorize');
+            $group['changes_count'] = collect($group['rows'])->filter(fn ($row) => !empty($row['changes']))->count();
+            $group['authorization'] = $authorization ? ['by' => $authorization->user_name, 'at' => $authorization->created_at->format('d/m/Y H:i')] : null;
+            $group['can_authorize'] = $group['changes_count'] > 0 && !$authorization && !$group['missing_prices'];
+            $reviewed = $currentDecisions->contains('action', 'review') || collect($group['rows'])->every(fn ($row) => $row['status'] === 'Conciliado');
+            $group['conciliation_status'] = $authorization ? 'Aceptada' : ($group['changes_count'] ? 'Con cambios' : ($reviewed ? 'Aceptada' : 'Pendiente'));
             return $group;
         })->sortBy(fn ($group) => $group['from'].' '.$group['institution'].' '.$group['hospital'])->values();
     }
@@ -152,7 +200,8 @@ class ConciliationPeriodData
     {
         return HospitalConciliationSummary::signature([
             $group['institution_id'], $group['hospital_id'], $group['from'], $group['to'],
-            array_map(fn ($row) => array_diff_key($row, ['status' => true]), $group['rows']),
+            // Keep the delivery content hash stable when only review metadata is added.
+            array_map(fn ($row) => array_diff_key($row, array_flip(['status', 'observations', 'reason', 'reason_folio', 'changes', 'client_request'])), $group['rows']),
         ]);
     }
 
@@ -160,7 +209,7 @@ class ConciliationPeriodData
     {
         return array_map(fn ($row) => [
             'kind' => $row['kind'], 'id' => $row['id'], 'amount_cents' => $row['amount_cents'], 'conciliable' => $row['conciliable'],
-            'remision' => $row['remision'], 'lines' => $row['lines'], 'reason' => null,
+            'remision' => $row['remision'], 'lines' => $row['lines'], 'reason' => $row['reason'] ?? null,
             'cells' => ['type' => match ($row['kind']) { 'nutricionales' => 'Nutricional', 'antibioticos' => 'Antibiótico', default => 'Oncológica' },
                 'id' => (string) $row['id'], 'request_id' => (string) $row['request_id'], 'institution' => $row['institution'], 'hospital' => $row['hospital'],
                 'patient' => $row['patient'], 'date' => $row['date'], 'delivery_date' => $row['date'], 'lot' => $row['lot'],
