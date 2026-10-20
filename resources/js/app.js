@@ -28,6 +28,7 @@ import './conciliation-agent';
 import './conciliation-inbox';
 import './conciliation-period';
 import './conciliation-period-create';
+import './client-conciliation';
 import './diluent-modal';
 import './consumable-modal';
 import './institution-report-template-editor';

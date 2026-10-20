@@ -14,26 +14,46 @@ function initQuotationSend() {
     const status = find('[data-send-status]');
     const submit = find('[data-send-submit]');
     const label = find('[data-send-submit-label]');
+    const whatsappReview = find('[data-send-whatsapp-review]');
+    const whatsappOpen = find('[data-send-whatsapp-open]');
+    const whatsappEdit = find('[data-send-whatsapp-edit]');
     let quotation;
     let opener;
     let sending = false;
     let sentEmail = '';
     let pdfUrl = null;
     let pdfRequest = null;
+    let whatsappReady = false;
     const isEmail = () => form.elements.namedItem('channel').value === 'email';
     const clearMessages = () => { error.hidden = true; status.hidden = true; };
     const showError = message => { error.textContent = message; error.hidden = false; error.focus(); };
 
     function updateChannel() {
         const mail = isEmail();
+        const review = !mail && whatsappReady;
         email.disabled = !mail || sending;
         email.required = mail;
-        phone.disabled = mail || sending;
-        phone.required = !mail;
+        phone.disabled = mail || sending || review;
+        phone.required = !mail && !review;
+        note.disabled = sending || review;
         find('[data-send-email-field]').hidden = !mail;
         find('[data-send-phone-field]').hidden = mail;
-        label.textContent = sending ? 'Enviando...' : mail ? 'Enviar correo' : 'Descargar PDF y abrir WhatsApp';
+        find('[data-send-fields]').hidden = review;
+        find('[data-send-whatsapp-help]').hidden = mail || review;
+        find('[data-send-cancel-label]').textContent = review ? 'Cerrar' : 'Cancelar';
+        whatsappReview.hidden = !review;
+        whatsappOpen.hidden = !review;
+        whatsappEdit.hidden = !review;
+        submit.hidden = review;
+        label.textContent = sending ? 'Enviando...' : mail ? 'Enviar correo' : 'Descargar PDF y continuar';
         submit.disabled = sending || (!mail && !pdfUrl) || (mail && sentEmail !== '' && sentEmail === email.value.trim());
+    }
+    function resetWhatsApp() {
+        whatsappReady = false;
+        whatsappOpen.removeAttribute('href');
+        find('[data-send-whatsapp-recipient]').textContent = '';
+        find('[data-send-whatsapp-message]').textContent = '';
+        find('[data-send-whatsapp-filename]').textContent = '';
     }
     function releasePdf() {
         pdfRequest?.abort();
@@ -81,12 +101,24 @@ function initQuotationSend() {
     }
     dialog.querySelectorAll('[data-send-close]').forEach(button => button.addEventListener('click', () => dialog.close()));
     dialog.addEventListener('cancel', event => { if (sending) event.preventDefault(); });
-    dialog.addEventListener('close', () => { releasePdf(); opener?.focus(); });
+    dialog.addEventListener('close', () => { releasePdf(); resetWhatsApp(); opener?.focus(); });
     form.querySelectorAll('[name=channel]').forEach(radio => radio.addEventListener('change', () => {
         clearMessages();
+        resetWhatsApp();
         updateChannel();
-        if (!isEmail()) preparePdf();
+        if (!isEmail()) { preparePdf(); phone.focus(); }
+        else email.focus();
     }));
+    whatsappEdit.addEventListener('click', () => {
+        resetWhatsApp();
+        clearMessages();
+        updateChannel();
+        phone.focus();
+    });
+    whatsappOpen.addEventListener('click', () => {
+        status.textContent = `En WhatsApp, adjunta ${quotation.filename} y confirma el envío en el chat.`;
+        status.hidden = false;
+    });
     email.addEventListener('input', () => { clearMessages(); updateChannel(); });
     phone.addEventListener('input', () => phone.setCustomValidity(''));
 
@@ -97,6 +129,7 @@ function initQuotationSend() {
         form.reset();
         clearMessages();
         sentEmail = '';
+        resetWhatsApp();
         phone.setCustomValidity('');
         releasePdf();
         retry.hidden = true;
@@ -115,7 +148,7 @@ function initQuotationSend() {
         if (sending || !quotation) return;
         clearMessages();
         if (!isEmail()) {
-            if (!pdfUrl) return;
+            if (!pdfUrl || whatsappReady) return;
             const rawPhone = phone.value.trim();
             const number = rawPhone.replace(/[\s()+.-]/g, '');
             if (!/^\+?[\d\s().-]+$/.test(rawPhone) || !/^[1-9]\d{7,14}$/.test(number)) {
@@ -123,11 +156,17 @@ function initQuotationSend() {
                 phone.reportValidity();
                 return;
             }
+            const message = note.value.trim()
+                ? `${note.value.trim()}\n\nCotización ${quotation.folio}`
+                : `Hola, te comparto la cotización ${quotation.folio} en PDF.`;
+            whatsappOpen.href = `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+            find('[data-send-whatsapp-recipient]').textContent = `+${number}`;
+            find('[data-send-whatsapp-message]').textContent = message;
+            find('[data-send-whatsapp-filename]').textContent = quotation.filename;
+            whatsappReady = true;
             download.click();
-            const message = [note.value.trim(), `Cotizacion ${quotation.folio}`].filter(Boolean).join('\n\n');
-            window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
-            status.textContent = `Descarga iniciada. Adjunta ${quotation.filename} en el chat de WhatsApp y confirma el envio alli.`;
-            status.hidden = false;
+            updateChannel();
+            whatsappReview.focus();
             return;
         }
         const recipient = email.value.trim();

@@ -792,17 +792,22 @@ test('commercial drafts restore bottle counts including older concentration draf
 
 test('quotation sends a named PDF by email and downloads it for WhatsApp without changing status', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
-    const html = screen();
     try {
         for (const width of [1440, 390]) {
+            const html = screen('', false, width === 390 ? 'Institucion' : '');
             const page = await browser.newPage({ viewport: { width, height: 900 } });
             const errors = [];
             const posts = [];
+            const openedChats = [];
             let pdfAttempts = 0;
             page.on('pageerror', error => errors.push(error.message));
-            await page.addInitScript(() => {
-                window.openedMessages = [];
-                window.open = (...args) => { window.openedMessages.push(args); return null; };
+            await page.context().route('**/*', route => {
+                const url = new URL(route.request().url());
+                if (url.origin === 'https://wa.me') {
+                    openedChats.push(url.href);
+                    return route.fulfill({ contentType: 'text/html', body: 'Chat de prueba, sin envio real.' });
+                }
+                return route.abort();
             });
             await page.route('**/*', route => {
                 const request = route.request();
@@ -825,7 +830,7 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
             await page.goto('http://localhost/admin/solicitudes/cotizacion');
             assert.equal(await page.locator('[data-quotation-dialog]').count(), 0, 'Sending works without the capture form');
             const row = page.locator('[data-quotation-row]').filter({ hasText: 'COT-000001' });
-            const originalStatus = await row.locator('td').nth(11).textContent();
+            const originalStatus = await row.textContent();
             const opener = page.getByRole('button', { name: 'Compartir COT-000001', exact: true });
             await opener.click();
             const dialog = page.getByRole('dialog', { name: 'Enviar COT-000001', exact: true });
@@ -854,41 +859,73 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
             assert.equal(posts.length, 2, 'Double click must not send twice');
             assert.deepEqual(posts[1], { email: 'destino@example.test', note: 'Buenos dias: revisi\u00f3n & precios + IVA.' });
             assert.equal(await submit.isDisabled(), true);
-            assert.equal(await row.locator('td').nth(11).textContent(), originalStatus);
+            assert.equal(await row.textContent(), originalStatus);
 
             await dialog.getByText('WhatsApp', { exact: true }).click();
             const phone = dialog.getByLabel('Telefono con codigo de pais *', { exact: true });
             assert.equal(await email.isVisible(), false);
-            const whatsapp = dialog.getByRole('button', { name: 'Descargar PDF y abrir WhatsApp', exact: true });
+            const whatsapp = dialog.getByRole('button', { name: 'Descargar PDF y continuar', exact: true });
+            const openChat = dialog.locator('[data-send-whatsapp-open]');
             await dialog.getByText('PDF no disponible', { exact: true }).waitFor();
             assert.equal(await whatsapp.isDisabled(), true);
-            assert.equal(await page.evaluate(() => window.openedMessages.length), 0);
+            assert.equal(openedChats.length, 0);
+            assert.equal(await openChat.isVisible(), false);
             await dialog.getByRole('button', { name: 'Reintentar PDF', exact: true }).click();
             await dialog.getByText('Documento PDF', { exact: true }).waitFor();
             assert.equal(await whatsapp.isEnabled(), true);
             await phone.fill('0001');
             await whatsapp.click();
-            assert.equal(await page.evaluate(() => window.openedMessages.length), 0);
+            assert.equal(openedChats.length, 0);
+            assert.equal(await openChat.getAttribute('href'), null);
             await phone.fill('+52 (55) 1234-5678');
             const downloaded = page.waitForEvent('download');
             await whatsapp.click();
             assert.equal((await downloaded).suggestedFilename(), 'COT-000001.pdf');
-            const opened = await page.evaluate(() => window.openedMessages);
-            assert.equal(opened.length, 1);
-            const url = new URL(opened[0][0]);
+            assert.equal(openedChats.length, 0, 'Preparing a PDF must not open WhatsApp before the next explicit click');
+            await dialog.getByRole('heading', { name: 'Continúa en WhatsApp' }).waitFor();
+            const url = new URL(await openChat.getAttribute('href'));
             assert.equal(url.origin, 'https://wa.me');
             assert.equal(url.pathname, '/525512345678');
-            assert.equal(url.searchParams.get('text'), 'Buenos dias: revisi\u00f3n & precios + IVA.\n\nCotizacion COT-000001');
-            assert.match(await dialog.locator('[data-send-status]').textContent(), /Adjunta COT-000001.pdf/);
-            assert.deepEqual(opened[0].slice(1), ['_blank', 'noopener,noreferrer']);
+            assert.equal(url.searchParams.get('text'), 'Buenos dias: revisión & precios + IVA.\n\nCotización COT-000001');
+            assert.equal(await dialog.locator('[data-send-whatsapp-message]').textContent(), url.searchParams.get('text'));
+            assert.equal(await dialog.locator('[data-send-whatsapp-recipient]').textContent(), '+525512345678');
+            assert.equal(await openChat.getAttribute('target'), '_blank');
+            assert.equal(await openChat.getAttribute('rel'), 'noopener noreferrer');
+            const popupOpened = page.waitForEvent('popup');
+            await openChat.click();
+            const popup = await popupOpened;
+            await popup.waitForLoadState();
+            assert.equal(openedChats[0], url.href);
+            assert.equal(await popup.evaluate(() => window.opener), null);
+            await popup.close();
+            assert.match(await dialog.locator('[data-send-status]').textContent(), /adjunta COT-000001.pdf/);
             assert.equal(posts.length, 2, 'WhatsApp must not call the email endpoint');
-            assert.equal(await row.locator('td').nth(11).textContent(), originalStatus);
+            assert.equal(await row.textContent(), originalStatus);
             const bounds = await dialog.boundingBox();
             assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width);
             assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= 900);
             assert.equal(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
             assert.equal(await dialog.locator('svg[data-quotation-icon]').count() > 0, true);
             if (process.env.QUOTATION_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.QUOTATION_SCREENSHOTS, `quotation-send-${width}.png`) });
+            await dialog.getByRole('button', { name: 'Cambiar datos', exact: true }).click();
+            assert.equal(await openChat.getAttribute('href'), null);
+            assert.equal(await phone.inputValue(), '+52 (55) 1234-5678');
+            assert.equal(await note.inputValue(), 'Buenos dias: revisión & precios + IVA.');
+            assert.equal(await phone.evaluate(el => document.activeElement === el), true);
+            await phone.fill('+52 5587654321');
+            await note.fill('Mensaje actualizado <prueba>');
+            const editedDownload = page.waitForEvent('download');
+            await whatsapp.click();
+            await editedDownload;
+            const editedUrl = new URL(await openChat.getAttribute('href'));
+            assert.equal(editedUrl.pathname, '/525587654321');
+            assert.equal(editedUrl.searchParams.get('text'), 'Mensaje actualizado <prueba>\n\nCotización COT-000001');
+            assert.equal(await dialog.locator('[data-send-whatsapp-message] prueba').count(), 0);
+            assert.equal(pdfAttempts, 2, 'Changing the recipient must reuse the already prepared PDF');
+            await dialog.getByText('Correo', { exact: true }).click();
+            assert.equal(await openChat.getAttribute('href'), null);
+            assert.equal(await openChat.isVisible(), false);
+            assert.equal(await email.isVisible(), true);
             await page.keyboard.press('Escape');
             await dialog.waitFor({ state: 'hidden' });
             assert.equal(await opener.evaluate(el => document.activeElement === el), true);
@@ -898,13 +935,15 @@ test('quotation sends a named PDF by email and downloads it for WhatsApp without
             assert.equal(await other.getByLabel('Mensaje (opcional)', { exact: true }).inputValue(), '');
             assert.equal(await other.locator('[data-send-filename]').textContent(), 'COT-000003.pdf');
             assert.match(await other.locator('[data-send-download]').getAttribute('href'), /\/cotizacion\/3\/pdf$/);
+            assert.equal(await other.locator('[data-send-whatsapp-open]').getAttribute('href'), null);
             await other.getByText('WhatsApp', { exact: true }).click();
             await other.getByText('Documento PDF', { exact: true }).waitFor();
             await other.getByLabel('Telefono con codigo de pais *', { exact: true }).fill('+52 5512345678');
             const nextDownload = page.waitForEvent('download');
-            await other.getByRole('button', { name: 'Descargar PDF y abrir WhatsApp' }).click();
+            await other.getByRole('button', { name: 'Descargar PDF y continuar' }).click();
             assert.equal((await nextDownload).suggestedFilename(), 'COT-000003.pdf');
-            await other.getByRole('button', { name: 'Cancelar', exact: true }).click();
+            assert.equal(await other.locator('[data-send-whatsapp-message]').textContent(), 'Hola, te comparto la cotización COT-000003 en PDF.');
+            await other.getByRole('button', { name: 'Cerrar', exact: true }).click();
             await other.waitFor({ state: 'hidden' });
             assert.deepEqual(errors, []);
             await page.close();

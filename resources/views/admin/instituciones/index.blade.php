@@ -21,6 +21,9 @@
                         scope="col">Nombre</x-filterable-table-header>
                     <x-filterable-table-header column="2" trigger-class="js-institution-column-filter"
                         scope="col">Razon social</x-filterable-table-header>
+                    <x-filterable-table-header column="3" trigger-class="js-institution-column-filter"
+                        scope="col">Usuario</x-filterable-table-header>
+                    <th scope="col" class="px-4 py-3">Contraseña</th>
                     <th scope="col" class="px-4 py-3 text-center">Editar</th>
                     <th scope="col" class="px-4 py-3 text-center">Hospitales</th>
                     <th scope="col" class="px-4 py-3 text-center">Bloqueo</th>
@@ -31,6 +34,13 @@
 
             <tbody>
                 @forelse ($instituciones as $institucion)
+                    @php
+                        $institutionAccesses = $institucion->hospitals->flatMap(
+                            fn ($hospital) => $hospital->users->map(
+                                fn ($user) => ['user' => $user, 'hospital' => $hospital->name]
+                            )
+                        );
+                    @endphp
                     <tr class="js-institution-filter-row bg-white border-b dark:bg-gray-800 dark:border-gray-700">
                         <th scope="row"
                             class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
@@ -43,6 +53,31 @@
 
                         <td class="px-6 py-4">
                             {{ $institucion->razon_social }}
+                        </td>
+
+                        <td class="px-4 py-4 align-top">
+                            @forelse ($institutionAccesses as $access)
+                                <div class="h-12 py-1 whitespace-nowrap">
+                                    <span class="block font-medium text-gray-900 dark:text-white">{{ $access['user']->username }}</span>
+                                    <span class="block truncate text-xs" style="max-width:16rem" title="{{ $access['hospital'] }}">{{ $access['hospital'] }}</span>
+                                </div>
+                            @empty
+                                <span class="whitespace-nowrap">Sin usuario registrado</span>
+                            @endforelse
+                        </td>
+
+                        <td class="px-4 py-4 align-top">
+                            @forelse ($institutionAccesses as $access)
+                                <div class="h-12 py-1 whitespace-nowrap">
+                                    @if ($canViewCredentials)
+                                        <span class="font-mono text-gray-900 dark:text-white">{{ $access['user']->credential_password ?? 'Sin contraseña registrada' }}</span>
+                                    @else
+                                        <span aria-label="Contraseña protegida">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+                                    @endif
+                                </div>
+                            @empty
+                                <span class="whitespace-nowrap">Sin contraseña registrada</span>
+                            @endforelse
                         </td>
 
                         <td class="px-4 py-4 text-center whitespace-nowrap">
@@ -111,7 +146,7 @@
                     </tr>
                 @empty
                     <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
-                        <td colspan="8" class="px-6 py-6 text-center text-gray-500">
+                        <td colspan="10" class="px-6 py-6 text-center text-gray-500">
                             No hay instituciones registradas.
                         </td>
                     </tr>

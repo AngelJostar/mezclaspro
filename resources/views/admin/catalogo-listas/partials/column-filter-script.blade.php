@@ -87,7 +87,9 @@ if (typeof window.createExcelColumnFilters !== 'function') {
                 <button type="button" data-filter-cancel class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100">Cancelar</button>
             </div>
         `;
-        document.body.appendChild(panel);
+        // Modal dialogs make body-level overlays inert; keep their filters in the same top layer.
+        const panelParent = config.panelParent || document.body;
+        panelParent.appendChild(panel);
 
         const searchInput = panel.querySelector('[data-filter-search]');
         const allCheckbox = panel.querySelector('[data-filter-all]');
@@ -253,8 +255,14 @@ if (typeof window.createExcelColumnFilters !== 'function') {
             }
         }, listenerOptions);
         window.addEventListener('resize', closePanel, listenerOptions);
+        if (panelParent !== document.body) {
+            panelParent.addEventListener('scroll', (event) => {
+                if (!panel.contains(event.target)) closePanel();
+            }, { ...listenerOptions, capture: true });
+        }
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && activeTrigger) {
+                if (panelParent.closest('dialog')) event.preventDefault();
                 const trigger = activeTrigger;
                 closePanel();
                 trigger.focus({ preventScroll: true });

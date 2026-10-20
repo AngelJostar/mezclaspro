@@ -24,22 +24,22 @@
     .conciliation-context [data-conciliation-count] { font-variant-numeric: tabular-nums; }
     .conciliation-view .conciliation-filters {
         display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr) auto;
-        align-items: end; gap: 16px; padding: 20px; margin: 0 0 16px; background: #f7f9fb; border-radius: 6px;
+        align-items: end; gap: 16px; padding: 10px 20px; margin: 0 0 16px; background: #f7f9fb; border-radius: 6px;
     }
-    .conciliation-filters .conciliation-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: none; }
+    .conciliation-filters .conciliation-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: none; }
     .conciliation-filters label { display: block; font-size: 12px; line-height: 18px; margin: 0; }
     .conciliation-filters .conciliation-field :is(input, select) {
-        box-sizing: border-box; width: 100%; min-width: 0; height: 42px; min-height: 42px;
+        box-sizing: border-box; width: 100%; min-width: 0; height: 36px; min-height: 36px;
         border: 1px solid #d9e0eb; border-radius: 6px; background-color: white; font-size: 13px; line-height: 20px;
-        padding: 9px 12px;
+        padding: 7px 12px;
     }
     .conciliation-filters .conciliation-field select { padding-right: 32px; }
     .conciliation-filter-detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
     .conciliation-filter-detail--dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .conciliation-filter-actions { display: flex; align-items: center; gap: 16px; min-height: 42px; }
-    .conciliation-filter-actions .ht-primary { min-height: 42px; height: 42px; padding: 8px 16px; white-space: nowrap; background: #3d377b; border-color: #3d377b; }
+    .conciliation-filter-actions { display: flex; align-items: center; gap: 16px; min-height: 36px; }
+    .conciliation-filter-actions .ht-primary { min-height: 36px; height: 36px; padding: 6px 16px; white-space: nowrap; background: #3d377b; border-color: #3d377b; }
     .conciliation-filter-actions .ht-primary:hover { background: #302b64; }
-    .conciliation-filter-actions .ht-clear { display: inline-flex; align-items: center; min-height: 42px; padding: 0; }
+    .conciliation-filter-actions .ht-clear { display: inline-flex; align-items: center; min-height: 36px; padding: 0; }
     .conciliation-view .conciliation-help { font-size: 13px; line-height: 20px; color: #7081a0; min-height: 20px; margin: 0 0 12px; }
     .conciliation-view .conciliation-table { min-width: 1050px; }
     .conciliation-view .conciliation-table th { height: 54px; padding: 10px; white-space: normal; vertical-align: middle; background: #f7f9fb; font-size: 12px; line-height: 16px; }
@@ -50,7 +50,8 @@
     .conciliation-view .conciliation-column-filter { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 24px; height: 24px; border: 1px solid #cbd5e1; border-radius: 3px; background: white; color: #475569; }
     .conciliation-view .conciliation-column-filter:hover { background: #e2e8f0; }
     .conciliation-view .conciliation-column-filter.bg-blue-100 { background: #dbeafe; border-color: #60a5fa; color: #1d4ed8; }
-    .conciliation-view .conciliation-table :is([data-inbox-price], .cp-amount) { display: block; box-sizing: border-box; width: 100%; min-width: 120px; min-height: 36px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 7px 8px; background: white; font: inherit; line-height: 20px; }
+    .conciliation-view .conciliation-table [data-inbox-price] { display: block; box-sizing: border-box; width: 100%; min-width: 120px; min-height: 36px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 7px 8px; background: white; font: inherit; line-height: 20px; }
+    .conciliation-view .conciliation-table .cp-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .conciliation-view .conciliation-table .ht-view { min-width: 68px; min-height: 34px; padding: 6px 15px; font-size: 13px; line-height: 20px; }
     .conciliation-view .conciliation-table .cp-primary { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 6px 15px; font-size: 13px; line-height: 20px; }
     .conciliation-view .conciliation-table [data-period-folio] { line-height: 14px; margin-top: 2px; }

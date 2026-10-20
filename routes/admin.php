@@ -102,6 +102,10 @@ Route::get('herramientas', [\App\Http\Controllers\Admin\ClientToolsController::c
 
 Route::get('herramientas/conciliaciones/{submission}/descargar', [\App\Http\Controllers\Admin\ClientToolsController::class, 'download'])
     ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.download');
+Route::get('herramientas/conciliaciones/{submission}/solicitar-cambios', [\App\Http\Controllers\Admin\ClientToolsController::class, 'changeRequest'])
+    ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.change-request');
+Route::post('herramientas/conciliaciones/{submission}/solicitar-cambios', [\App\Http\Controllers\Admin\ClientToolsController::class, 'requestChanges'])
+    ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.request-changes');
 
 Route::get('solicitudes/ajustes/{adjustment}', [MixtureAdjustmentController::class, 'show'])->name('solicitudes.ajustes.show');
 Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'summary'])->name('solicitudes.mensajes.summary');
@@ -628,6 +632,8 @@ Route::post('instituciones-reportes/conciliacion-periodos', [\App\Http\Controlle
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.store');
 Route::post('instituciones-reportes/conciliacion-periodos/aceptar', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'accept'])
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.accept');
+Route::post('instituciones-reportes/conciliacion-periodos/autorizar-cambios', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'authorizeChanges'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.authorize-changes');
 Route::post('instituciones-reportes/conciliacion-periodos/enviar', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'send'])
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.send');
 Route::get('instituciones-reportes/agente-conciliacion', [\App\Http\Controllers\Admin\ConciliationAgentController::class, 'show'])

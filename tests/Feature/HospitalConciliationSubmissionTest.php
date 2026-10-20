@@ -28,6 +28,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         DB::purge('sqlite');
         $this->hospital = UnifiedRequestExportData::seed();
         HospitalToolsData::addBilling();
+        (require database_path('migrations/2026_08_19_000001_add_compensation_fields_to_institution_billings_table.php'))->up();
         foreach (['users' => 'is_active', 'hospitals' => 'access_is_active', 'clientes' => 'is_active'] as $table => $column) {
             Schema::table($table, fn (Blueprint $schema) => $schema->boolean($column)->default(true));
         }
@@ -36,6 +37,9 @@ class HospitalConciliationSubmissionTest extends TestCase
         (require database_path('migrations/2026_09_15_150000_add_confirmation_to_hospital_conciliation_submissions.php'))->up();
         (require database_path('migrations/2026_10_06_180000_add_direction_to_hospital_conciliation_submissions.php'))->up();
         (require database_path('migrations/2026_10_06_190000_create_conciliation_periods.php'))->up();
+        (require database_path('migrations/2026_10_07_120000_add_creation_batch_to_conciliation_periods.php'))->up();
+        (require database_path('migrations/2026_10_07_150000_create_conciliation_period_decisions.php'))->up();
+        (require database_path('migrations/2026_10_07_160100_add_request_version_to_period_decisions.php'))->up();
         $this->mock(\App\Services\InstitutionBillingPricingService::class, function ($mock) {
             $mock->shouldReceive('priceOncoMix')->andReturn(['total_iva_included' => 200.25]);
             $mock->shouldReceive('priceNutritionRequest')->andReturn(['total_iva_included' => 300.50]);
@@ -61,8 +65,34 @@ class HospitalConciliationSubmissionTest extends TestCase
     {
         $rows = collect($this->getJson(route('admin.instituciones.conciliacion-periodos.candidates'))->assertOk()->json('rows'))->keyBy('key');
         $first = $rows[$keys[0]];
+        $dates = collect($keys)->map(fn ($key) => substr($rows[$key]['date'], 0, 10));
         return ['creation_key' => (string) Str::uuid(), 'hospital_id' => $first['hospital_id'], 'institucion_id' => $first['institution_id'],
+            'desde' => $dates->min(), 'hasta' => $dates->max(),
             'selection' => collect($keys)->mapWithKeys(fn ($key) => [$key => $rows[$key]['version']])->all()];
+    }
+
+    public function test_period_creation_requires_institution_and_both_dates_and_uses_the_entered_range(): void
+    {
+        $this->periodScope();
+        $payload = $this->createPeriodPayload(['oncologicos-1']);
+        $url = route('admin.instituciones.conciliacion-periodos.store');
+        foreach (['institucion_id', 'desde', 'hasta'] as $field) {
+            $this->postJson($url, array_diff_key($payload, [$field => true]))->assertUnprocessable()->assertJsonValidationErrors($field);
+            $this->postJson($url, array_replace($payload, [$field => '']))->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $this->postJson($url, array_replace($payload, ['desde' => '2026-09-10', 'hasta' => '2026-09-01']))->assertUnprocessable()->assertJsonValidationErrors('hasta');
+        $this->postJson($url, array_replace($payload, ['desde' => '2026-09-31']))->assertUnprocessable()->assertJsonValidationErrors('desde');
+        $this->postJson($url, array_replace($payload, ['desde' => '2026-10-01', 'hasta' => '2026-10-31']))->assertConflict();
+        $this->assertDatabaseCount('conciliation_periods', 0);
+        $this->assertDatabaseCount('conciliation_period_items', 0);
+        $payload = array_replace($payload, ['desde' => '2026-09-01', 'hasta' => '2026-09-30']);
+        $id = $this->postJson($url, $payload)->assertCreated()->json('period_id');
+        $period = \App\Models\ConciliationPeriod::findOrFail($id);
+        $this->assertSame('2026-09-01', $period->period_from->toDateString());
+        $this->assertSame('2026-09-30', $period->period_to->toDateString());
+        $this->postJson($url, $payload)->assertOk()->assertJsonPath('period_id', $id);
+        $this->postJson($url, array_replace($payload, ['desde' => '2026-09-02']))->assertConflict();
+        $this->assertDatabaseCount('conciliation_periods', 1);
     }
 
     public function test_period_creation_persists_only_selected_remittances_and_reuses_existing_review_and_send(): void
@@ -101,7 +131,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         $this->getJson(route('admin.instituciones.conciliacion-periodos.detail', array_diff_key($periodScope, ['period_id' => true])))->assertNotFound();
     }
 
-    public function test_period_creation_rejects_duplicates_stale_prices_and_mixed_hospitals_atomically(): void
+    public function test_period_creation_rejects_duplicates_stale_prices_and_hospitals_outside_explicit_filter_atomically(): void
     {
         $this->periodScope();
         DB::table('cliente_hospital')->insertOrIgnore(['cliente_id' => 1, 'hospital_id' => 2]);
@@ -122,6 +152,94 @@ class HospitalConciliationSubmissionTest extends TestCase
         $candidates = collect($this->getJson(route('admin.instituciones.conciliacion-periodos.candidates'))->assertOk()->json('rows'));
         $this->assertSame($created->json('period_id'), $candidates->firstWhere('key', 'oncologicos-1')['period_id']);
         $this->postJson($url, array_replace($payload, ['selection' => []]))->assertUnprocessable();
+    }
+
+    public function test_period_creation_with_all_hospitals_splits_selection_and_displays_each_hospital(): void
+    {
+        $this->periodScope();
+        DB::table('cliente_hospital')->insertOrIgnore(['cliente_id' => 1, 'hospital_id' => 2]);
+        DB::table('hospitals')->insert(['id' => 3, 'name' => 'Hospital sin remisiones seleccionadas']);
+        DB::table('cliente_hospital')->insert(['cliente_id' => 1, 'hospital_id' => 3]);
+        DB::table('mezclas')->where('id', 3)->update(['fecha_entrega' => '2026-10-06 18:00:00']);
+        $payload = array_replace($this->createPeriodPayload(['oncologicos-1', 'nutricionales-11', 'oncologicos-3']), ['hospital_id' => null]);
+        $url = route('admin.instituciones.conciliacion-periodos.store');
+        $response = $this->postJson($url, $payload)->assertCreated()->assertJsonPath('period_count', 2);
+        $ids = $response->json('period_ids');
+        $this->assertCount(2, $ids);
+        $this->assertDatabaseCount('conciliation_periods', 2);
+        $this->assertDatabaseCount('conciliation_period_items', 3);
+        $this->assertDatabaseCount('hospital_conciliation_submissions', 0);
+        $periods = \App\Models\ConciliationPeriod::with('items')->orderBy('hospital_id')->get();
+        $this->assertSame([1, 2], $periods->pluck('hospital_id')->all());
+        $this->assertSame([2, 1], $periods->map(fn ($period) => $period->items->count())->all());
+        foreach ($periods as $period) {
+            $this->assertSame(1, $period->institution_id);
+            $this->assertSame($payload['creation_key'], $period->creation_batch_key);
+            $this->assertSame('2026-09-09', $period->period_from->toDateString());
+            $this->assertSame('2026-10-06', $period->period_to->toDateString());
+        }
+        parse_str(parse_url($response->json('redirect'), PHP_URL_QUERY), $query);
+        $this->assertArrayNotHasKey('hospital_id', $query);
+        $this->get($response->json('redirect'))->assertOk()->assertSee('2 periodos creados, uno por hospital.')
+            ->assertViewHas('filters', fn ($filters) => $filters['hospital_id'] === null && $filters['institucion_id'] === 1)
+            ->assertViewHas('groups', function ($groups) use ($ids) {
+                $created = $groups->whereIn('period_id', $ids)->sortBy('hospital_id')->values();
+                $this->assertCount(2, $created);
+                $this->assertSame([100000, 50000], $created->pluck('total_cents')->all());
+                $this->assertSame([1, 2], $created->pluck('hospital_id')->all());
+                $keys = $groups->flatMap(fn ($group) => array_column($group['rows'], 'key'));
+                $this->assertCount($keys->count(), $keys->unique());
+                return true;
+            });
+        $this->postJson($url, $payload)->assertOk()->assertJsonPath('period_ids', $ids);
+        $this->assertDatabaseCount('conciliation_periods', 2);
+        $this->postJson($url, array_replace($payload, ['creation_key' => (string) Str::uuid()]))->assertConflict();
+        $this->assertDatabaseCount('conciliation_periods', 2);
+        foreach ($periods as $period) {
+            $scope = ['institucion_id' => 1, 'hospital_id' => $period->hospital_id, 'period_id' => $period->id, 'desde' => '2026-09-09', 'hasta' => '2026-10-06'];
+            $group = $this->periodDetail($scope);
+            $this->assertSame([$period->hospital_id], collect($group['rows'])->pluck('hospital_id')->unique()->values()->all());
+            $this->postJson(route('admin.instituciones.conciliacion-periodos.send'), $scope + ['version' => $group['version'], 'submission_key' => $group['submission_key']])->assertOk();
+        }
+        $sent = HospitalConciliationSubmission::orderBy('hospital_id')->get();
+        $this->assertSame([1, 2], $sent->pluck('hospital_id')->all());
+        $this->assertSame([2, 1], $sent->pluck('mixture_count')->all());
+    }
+
+    public function test_period_batch_validates_all_hospitals_before_writing_and_rejects_mixed_institutions(): void
+    {
+        $this->periodScope();
+        DB::table('cliente_hospital')->insertOrIgnore(['cliente_id' => 1, 'hospital_id' => 2]);
+        $url = route('admin.instituciones.conciliacion-periodos.store');
+        $payload = array_replace($this->createPeriodPayload(['oncologicos-1', 'oncologicos-3']), ['hospital_id' => null]);
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 3)->update(['precio_total' => '999.99']);
+        $this->postJson($url, $payload)->assertConflict();
+        $this->assertDatabaseCount('conciliation_periods', 0);
+        $this->assertDatabaseCount('conciliation_period_items', 0);
+        $duplicate = $this->createPeriodPayload(['oncologicos-3']);
+        $this->postJson($url, $duplicate)->assertCreated();
+        $payload = array_replace($this->createPeriodPayload(['oncologicos-1', 'oncologicos-3']), ['hospital_id' => null]);
+        $this->postJson($url, $payload)->assertConflict();
+        $this->assertDatabaseCount('conciliation_periods', 1);
+        $this->assertDatabaseCount('conciliation_period_items', 1);
+        DB::table('clientes')->insert(['id' => 2, 'nombre' => 'Institución ajena']);
+        DB::table('cliente_hospital')->where('hospital_id', 2)->update(['cliente_id' => 2]);
+        DB::table('institution_billings')->where('hospital_id', 2)->update(['institucion_id' => 2]);
+        $mixed = array_replace($this->createPeriodPayload(['oncologicos-1', 'oncologicos-3']), ['hospital_id' => null]);
+        $this->postJson($url, $mixed)->assertConflict();
+        $this->assertDatabaseCount('conciliation_periods', 1);
+    }
+
+    public function test_period_batch_with_omitted_hospital_and_one_hospital_remains_a_single_period(): void
+    {
+        $this->periodScope();
+        $payload = $this->createPeriodPayload(['oncologicos-1']);
+        unset($payload['hospital_id']);
+        $response = $this->postJson(route('admin.instituciones.conciliacion-periodos.store'), $payload)->assertCreated()->assertJsonPath('period_count', 1);
+        $this->assertDatabaseCount('conciliation_periods', 1);
+        $this->assertDatabaseCount('conciliation_period_items', 1);
+        parse_str(parse_url($response->json('redirect'), PHP_URL_QUERY), $query);
+        $this->assertSame('1', $query['hospital_id']);
     }
 
     public function test_period_candidates_include_old_remittances_and_require_internal_access(): void
@@ -154,7 +272,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         DB::table('mezclas')->where('id', 2)->update(['fecha_entrega' => '2026-10-06 23:59:59']);
         DB::table('mezclas')->where('id', 4)->update(['remision' => null]);
         $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'periodo', 'desde' => '2026-09-09', 'hasta' => '2026-10-06']);
-        $this->get($url)->assertOk()->assertSee('Por periodo')->assertSee('Por remisión')->assertSee('Nuevo monto de conciliación')
+        $this->get($url)->assertOk()->assertSee('Por periodo')->assertSee('Por remisión')->assertSee('Monto de Conciliación')
             ->assertViewHas('groups', function ($groups) {
                 $this->assertCount(2, $groups);
                 $this->assertSame('2026-09-09', $groups[0]['from']);
@@ -188,6 +306,220 @@ class HospitalConciliationSubmissionTest extends TestCase
         $this->assertSame(0, HospitalConciliationSubmission::count());
         $this->postJson(route('admin.instituciones.conciliacion-periodos.accept'), $scope + ['version' => $response->json('group.version'), 'choices' => $choices])->assertOk();
         $this->assertSame(2, DB::table('institution_billing_movements')->count());
+    }
+
+    public function test_period_status_observations_and_authorization_follow_the_current_remittances(): void
+    {
+        $scope = $this->periodScope();
+        $group = $this->periodDetail($scope);
+        $url = route('admin.instituciones.conciliacion-periodos.authorize-changes');
+        $this->assertSame('Pendiente', $group['conciliation_status']);
+        $this->assertFalse($group['can_authorize']);
+        $this->postJson($url, $scope + ['version' => $group['review_version']])->assertUnprocessable();
+        $choices = array_fill_keys(array_column($group['rows'], 'key'), true);
+        $this->postJson(route('admin.instituciones.conciliacion-periodos.accept'), $scope + ['version' => $group['version'], 'choices' => $choices])
+            ->assertOk()->assertJsonPath('group.conciliation_status', 'Aceptada');
+        $this->assertDatabaseCount('conciliation_period_decisions', 1);
+
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)
+            ->update(['conciliable' => 'No', 'observaciones' => 'Revisar la cantidad entregada <script>alert(1)</script>']);
+        HospitalConciliationSubmission::create([
+            'submission_key' => (string) Str::uuid(), 'hospital_id' => 1, 'submitted_by' => $this->hospital->id,
+            'hospital_name' => 'Hospital de prueba', 'sender_name' => 'Hospital', 'direction' => 'received',
+            'period_from' => $scope['desde'], 'period_to' => $scope['hasta'], 'filters' => [],
+            'mixture_count' => 1, 'conciliable_count' => 0,
+            'snapshot' => [['kind' => 'oncologicos', 'id' => 1, 'conciliable' => false, 'amount_cents' => 50000, 'reason' => 'Cantidad por aclarar']],
+        ]);
+        $response = $this->getJson(route('admin.instituciones.conciliacion-periodos.detail', $scope))->assertOk()
+            ->assertJsonPath('group.conciliation_status', 'Con cambios')->assertJsonPath('group.changes_count', 1)->assertJsonPath('group.can_authorize', true);
+        $this->assertStringContainsString('Cantidad por aclarar', $response->json('observations_html'));
+        $this->assertStringContainsString('&lt;script&gt;', $response->json('observations_html'));
+        $this->assertStringNotContainsString('<script>alert', $response->json('observations_html'));
+        $group = $response->json('group');
+        $this->postJson($url, $scope + ['version' => str_repeat('a', 64)])->assertConflict();
+        $authorized = $this->postJson($url, $scope + ['version' => $group['review_version']])->assertOk()
+            ->assertJsonPath('group.conciliation_status', 'Aceptada')->assertJsonPath('group.can_authorize', false)->assertJsonPath('group.changes_count', 1);
+        $this->assertNotEmpty($authorized->json('group.authorization.by'));
+        $this->postJson($url, $scope + ['version' => $group['review_version']])->assertOk();
+        $this->assertDatabaseCount('conciliation_period_decisions', 2);
+        $this->assertDatabaseHas('conciliation_period_decisions', ['group_key' => $group['key'], 'version' => $group['review_version'], 'action' => 'authorize']);
+        $this->assertDatabaseHas('institution_billings', ['origen_id' => 1, 'origen_tipo' => 'oncologica_mezcla', 'conciliable' => 'No', 'precio_total' => '500.00']);
+
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['observaciones' => 'Nueva observación por revisar']);
+        $noted = $this->periodDetail($scope);
+        $this->assertSame($group['version'], $noted['version']);
+        $this->assertNotSame($group['review_version'], $noted['review_version']);
+        $this->assertSame('Con cambios', $noted['conciliation_status']);
+        $this->postJson($url, $scope + ['version' => $group['review_version']])->assertConflict();
+
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['precio_total' => '550.00']);
+        $changed = $this->periodDetail($scope);
+        $this->assertSame('Con cambios', $changed['conciliation_status']);
+        $this->assertTrue($changed['can_authorize']);
+        $this->assertNull($changed['authorization']);
+        $this->postJson($url, $scope + ['version' => $group['review_version']])->assertConflict();
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['precio_total' => 'invalid']);
+        $missing = $this->periodDetail($scope);
+        $this->assertFalse($missing['can_authorize']);
+        $this->postJson($url, $scope + ['version' => $missing['review_version']])->assertUnprocessable();
+        $this->actingAs($this->hospital);
+        $this->postJson($url, $scope + ['version' => $changed['review_version']])->assertForbidden();
+    }
+
+    public function test_saved_period_detects_price_changes_against_its_remittance_snapshot(): void
+    {
+        $this->periodScope();
+        $created = $this->postJson(route('admin.instituciones.conciliacion-periodos.store'), $this->createPeriodPayload(['oncologicos-1']))->assertCreated();
+        $scope = ['institucion_id' => 1, 'hospital_id' => 1, 'desde' => '2026-09-09', 'hasta' => '2026-09-09', 'period_id' => $created->json('period_id')];
+        $this->assertSame('Pendiente', $this->periodDetail($scope)['conciliation_status']);
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['precio_total' => '600.00']);
+        $group = $this->periodDetail($scope);
+        $this->assertSame('Con cambios', $group['conciliation_status']);
+        $this->assertSame(1, $group['changes_count']);
+        $this->assertTrue($group['can_authorize']);
+        $this->assertStringContainsString('$500.00 MXN', implode(' ', $group['rows'][0]['changes']));
+        $this->assertSame(60000, $group['new_cents']);
+    }
+
+    public function test_period_client_changes_remain_requests_until_authorized_by_promesa_staff(): void
+    {
+        $scope = $this->periodScope();
+        $staff = auth()->user();
+        $original = $this->periodDetail($scope);
+        $this->postJson(route('admin.instituciones.conciliacion-periodos.send'), $scope + ['version' => $original['version'], 'submission_key' => (string) Str::uuid()])->assertOk();
+        $source = HospitalConciliationSubmission::sole();
+        $requestUrl = route('admin.herramientas.conciliaciones.request-changes', $source);
+        $authorizeUrl = route('admin.instituciones.conciliacion-periodos.authorize-changes');
+        $this->actingAs($this->hospital);
+        $this->get(route('admin.herramientas.index', ['seccion' => 'conciliacion']))->assertOk()->assertSee('Solicitar cambios')->assertDontSee('Autorizar cambios');
+        $form = $this->getJson(route('admin.herramientas.conciliaciones.change-request', $source))->assertOk();
+        $this->assertStringContainsString('Observaciones y motivo', $form->json('html'));
+        $reason = 'Solicito excluir la remisión por diferencia en la entrega.';
+        $payload = ['submission_key' => (string) Str::uuid(), 'requests' => ['oncologicos-1' => ['conciliable' => false, 'reason' => $reason]]];
+        $invalid = $payload;
+        $invalid['requests']['oncologicos-1']['reason'] = ' ';
+        $this->postJson($requestUrl, $invalid)->assertUnprocessable();
+        $foreign = $payload;
+        $foreign['requests'] = ['oncologicos-3' => ['conciliable' => false, 'reason' => 'Ajena']];
+        $this->postJson($requestUrl, $foreign)->assertUnprocessable();
+        $billingBefore = DB::table('institution_billings')->orderBy('id')->get()->toJson();
+        $this->postJson($requestUrl, $payload + ['direction' => 'sent', 'action' => 'authorize', 'precio_total' => 0])->assertCreated();
+        $this->postJson($requestUrl, $payload)->assertOk();
+        $this->assertDatabaseCount('hospital_conciliation_submissions', 2);
+        $this->assertSame('received', HospitalConciliationSubmission::latest('id')->first()->direction);
+        $this->assertSame($billingBefore, DB::table('institution_billings')->orderBy('id')->get()->toJson());
+        $this->assertDatabaseCount('conciliation_period_decisions', 0);
+        $this->actingAs($staff);
+        $response = $this->getJson(route('admin.instituciones.conciliacion-periodos.detail', $scope))->assertOk()
+            ->assertJsonPath('group.conciliation_status', 'Con cambios')->assertJsonPath('group.can_authorize', true);
+        $pending = $response->json('group');
+        $this->assertSame($original['new_cents'], $pending['new_cents']);
+        $this->assertSame($original['version'], $pending['version']);
+        $this->assertStringContainsString($reason, $response->json('observations_html'));
+        $this->assertStringContainsString('Solicitado por '.$this->hospital->name, $response->json('observations_html'));
+
+        // Even a client with report permissions or an additional internal role cannot authorize.
+        foreach (['Cliente', 'Institucion'] as $role) {
+            Role::findOrCreate($role, 'web');
+            $this->hospital->syncRoles([$role, 'Super Admin']);
+            $this->actingAs($this->hospital->fresh());
+            $this->postJson($authorizeUrl, $scope + ['version' => $pending['review_version']])->assertForbidden();
+        }
+        $this->assertDatabaseCount('conciliation_period_decisions', 0);
+        $this->assertDatabaseHas('institution_billings', ['origen_tipo' => 'oncologica_mezcla', 'origen_id' => 1, 'conciliable' => 'Si']);
+        $this->hospital->syncRoles(['Cliente']);
+        $this->actingAs($staff);
+        $authorized = $this->postJson($authorizeUrl, $scope + ['version' => $pending['review_version']])->assertOk()
+            ->assertJsonPath('group.conciliation_status', 'Aceptada')->assertJsonPath('group.can_authorize', false);
+        $this->assertSame($original['new_cents'] - 50000, $authorized->json('group.new_cents'));
+        $this->assertDatabaseHas('institution_billings', ['origen_tipo' => 'oncologica_mezcla', 'origen_id' => 1,
+            'conciliable' => 'No', 'precio_total' => '500.00']);
+        $this->assertDatabaseHas('conciliation_period_decisions', ['action' => 'authorize', 'user_id' => $staff->id]);
+        $movement = \App\Models\InstitutionBillingMovement::latest('id')->first();
+        $this->assertSame('administration_conciliation_authorization', $movement->details['source']);
+        $this->assertSame($staff->id, $movement->user_id);
+        $this->postJson($authorizeUrl, $scope + ['version' => $pending['review_version']])->assertOk();
+        $this->assertDatabaseCount('conciliation_period_decisions', 1);
+        $this->assertDatabaseCount('institution_billing_movements', 1);
+
+        // A new request, even with the same values, requires a fresh internal authorization.
+        $this->actingAs($this->hospital);
+        $payload['submission_key'] = (string) Str::uuid();
+        $payload['requests']['oncologicos-1']['reason'] = 'Nueva aclaración de la entrega.';
+        $this->postJson($requestUrl, $payload)->assertCreated();
+        $this->actingAs($staff);
+        $this->assertSame('Con cambios', $this->periodDetail($scope)['conciliation_status']);
+        $this->postJson($authorizeUrl, $scope + ['version' => $pending['review_version']])->assertConflict();
+    }
+
+    public function test_period_client_requests_include_notes_without_changing_amounts_and_preserve_other_pending_requests(): void
+    {
+        $scope = $this->periodScope();
+        $staff = auth()->user();
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['conciliable' => 'No']);
+        $original = $this->periodDetail($scope);
+        $this->postJson(route('admin.instituciones.conciliacion-periodos.send'), $scope + ['version' => $original['version'], 'submission_key' => (string) Str::uuid()])->assertOk();
+        $source = HospitalConciliationSubmission::sole();
+        $url = route('admin.herramientas.conciliaciones.request-changes', $source);
+        $this->actingAs($this->hospital);
+        $this->postJson($url, ['submission_key' => (string) Str::uuid(), 'requests' => ['oncologicos-1' => ['conciliable' => true, 'reason' => 'La entrega fue aclarada, solicito incluirla.']]])->assertCreated();
+        $this->assertDatabaseHas('institution_billings', ['origen_tipo' => 'oncologica_mezcla', 'origen_id' => 1, 'conciliable' => 'No']);
+        $this->postJson($url, ['submission_key' => (string) Str::uuid(), 'requests' => ['nutricionales-11' => ['conciliable' => null, 'reason' => 'Favor de revisar el importe <script>alert(1)</script>']]])->assertCreated();
+        $this->actingAs($staff);
+        $group = $this->periodDetail($scope);
+        $this->assertSame('Con cambios', $group['conciliation_status']);
+        $this->assertSame(2, $group['changes_count']);
+        $this->assertSame($original['new_cents'], $group['new_cents']);
+        $observations = $this->getJson(route('admin.instituciones.conciliacion-periodos.detail', $scope))->json('observations_html');
+        $this->assertStringContainsString('La entrega fue aclarada', $observations);
+        $this->assertStringContainsString('&lt;script&gt;', $observations);
+        $this->postJson(route('admin.instituciones.conciliacion-periodos.authorize-changes'), $scope + ['version' => $group['review_version']])
+            ->assertOk()->assertJsonPath('group.conciliation_status', 'Aceptada');
+        $this->assertDatabaseHas('institution_billings', ['origen_tipo' => 'oncologica_mezcla', 'origen_id' => 1,
+            'conciliable' => 'Si', 'precio_total' => '500.00']);
+        $this->assertDatabaseHas('institution_billings', ['origen_tipo' => 'nutricional_solicitud', 'origen_id' => 11, 'precio_total' => '500.00']);
+    }
+
+    public function test_period_observations_do_not_reopen_an_existing_delivery(): void
+    {
+        $scope = $this->periodScope();
+        $group = $this->periodDetail($scope);
+        $sent = $this->postJson(route('admin.instituciones.conciliacion-periodos.send'), $scope + ['version' => $group['version'], 'submission_key' => $group['submission_key']])->assertOk();
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['observaciones' => 'Nota de seguimiento']);
+        $updated = $this->periodDetail($scope);
+        $this->assertSame($sent->json('folio'), $updated['sent_folio']);
+        $this->assertSame($group['version'], $updated['version']);
+        $this->assertNotSame($group['review_version'], $updated['review_version']);
+    }
+
+    public function test_period_change_requests_are_scoped_to_the_clients_received_period_and_are_idempotent(): void
+    {
+        $scope = $this->periodScope();
+        $group = $this->periodDetail($scope);
+        $this->postJson(route('admin.instituciones.conciliacion-periodos.send'), $scope + ['version' => $group['version'], 'submission_key' => (string) Str::uuid()])->assertOk();
+        $source = HospitalConciliationSubmission::sole();
+        $url = route('admin.herramientas.conciliaciones.request-changes', $source);
+        $payload = ['submission_key' => (string) Str::uuid(), 'requests' => ['oncologicos-1' => ['conciliable' => null, 'reason' => 'Solicito revisar el importe.']]];
+        $this->postJson($url, $payload)->assertForbidden();
+        $this->actingAs($this->hospital);
+        $source->update(['hospital_id' => 2]);
+        $this->postJson($url, $payload)->assertNotFound();
+        $this->getJson(route('admin.herramientas.conciliaciones.change-request', $source))->assertNotFound();
+        $source->update(['hospital_id' => 1, 'direction' => 'received']);
+        $this->postJson($url, $payload)->assertNotFound();
+        $source->update(['direction' => 'sent']);
+        $this->postJson($url, $payload)->assertCreated();
+        $this->postJson($url, $payload)->assertOk();
+        $payload['requests']['oncologicos-1']['reason'] = 'Un motivo diferente';
+        $this->postJson($url, $payload)->assertConflict();
+        $this->assertDatabaseCount('hospital_conciliation_submissions', 2);
+        $this->assertDatabaseCount('institution_billing_movements', 0);
+        $this->assertDatabaseCount('conciliation_period_decisions', 0);
+        $this->actingAs($this->internalUser());
+        $updated = $this->periodDetail($scope);
+        $this->assertSame('Con cambios', $updated['conciliation_status']);
+        $this->assertSame(1, $updated['changes_count']);
+        $this->assertSame($group['new_cents'], $updated['new_cents']);
     }
 
     public function test_period_status_tabs_filter_whole_groups_and_preserve_date_and_hospital_filters(): void

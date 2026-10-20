@@ -9,12 +9,13 @@
     <section class="hospital-tools cp-panel conciliation-view" data-conciliation-view data-conciliation-period data-active-tab="{{ $activeTab }}" aria-label="Conciliación por periodo"
         data-detail-url="{{ route('admin.instituciones.conciliacion-periodos.detail') }}"
         data-accept-url="{{ route('admin.instituciones.conciliacion-periodos.accept') }}"
+        data-authorize-url="{{ route('admin.instituciones.conciliacion-periodos.authorize-changes') }}"
         data-send-url="{{ route('admin.instituciones.conciliacion-periodos.send') }}">
         <div class="cp-list-actions">
             @include('admin.instituciones.conciliacion._status-tabs')
             <button type="button" class="cp-primary cp-create-launch" data-period-create-open aria-haspopup="dialog">Crear periodo</button>
         </div>
-        @if (request()->query('creado') && $groups->contains('period_id', (int) request()->query('creado')))<p role="status" class="cp-created">Periodo creado. Abre Ver para revisar las remisiones antes de enviarlo.</p>@endif
+        @if ($createdCount)<p role="status" class="cp-created">{{ $createdCount === 1 ? 'Periodo creado.' : $createdCount.' periodos creados, uno por hospital.' }} Abre Ver en cada renglón para revisar las remisiones antes de enviar.</p>@endif
         @if ($errors->any())<p role="alert" class="cp-error">{{ $errors->first() }}</p>@endif
         <form class="conciliation-filters" method="GET" action="{{ route('admin.instituciones.reportes') }}">
             <input type="hidden" name="seccion" value="conciliacion"><input type="hidden" name="modalidad" value="periodo">
@@ -36,16 +37,17 @@
                 <a class="ht-clear" href="{{ route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'periodo']) }}">Limpiar</a>
             </div>
         </form>
-        <p class="conciliation-help">Monto total: suma de las remisiones con IVA incluido. Nuevo monto: remisiones marcadas Sí.</p>
         <p data-period-feedback role="status" hidden></p>
         <div class="ht-table-scroll" data-sticky-x-position="viewport" data-sticky-x-native data-sticky-x-always-visible tabindex="0" aria-label="Conciliaciones por periodo">
             <table class="ht-table cp-table conciliation-table" id="conciliation-period-table" data-disable-column-filters>
                 <thead><tr>
-                    @foreach (['Institución', 'Hospital', 'Periodo de la conciliación', 'Monto total de la conciliación (IVA incluido)', 'Detalle', 'Nuevo monto de conciliación', 'Enviar'] as $label)
+                    @foreach (['Institución', 'Hospital', 'Periodo de la conciliación', 'Monto total de la conciliación (IVA incluido)', 'Detalle', 'Monto de Conciliación', 'Estatus de Conciliación', 'Observaciones', 'Autorización de cambios', 'Enviar'] as $label)
                         @php($headerLines = match ($loop->index) {
                             2 => ['Periodo de la', 'conciliación'],
                             3 => ['Monto total de la', 'conciliación (IVA incluido)'],
-                            5 => ['Nuevo monto de', 'conciliación'],
+                            5 => ['Monto de', 'Conciliación'],
+                            6 => ['Estatus de', 'Conciliación'],
+                            8 => ['Autorización de', 'cambios'],
                             default => [$label],
                         })
                         <th><div class="conciliation-column"><span>@foreach ($headerLines as $line)<span>{{ $line }} </span>@endforeach</span><button type="button" class="cp-filter conciliation-column-filter" data-table-column-trigger data-column="{{ $loop->index }}" aria-label="Filtrar {{ $label }}" title="Filtrar {{ $label }}" aria-expanded="false"><span aria-hidden="true">&#9660;</span></button></div></th>
@@ -53,21 +55,25 @@
                 </tr></thead>
                 <tbody>
                     @forelse ($groups as $group)
+                        @php($observationsDisabled = $group['conciliation_status'] === 'Pendiente' || ($group['conciliation_status'] === 'Aceptada' && !$group['changes_count']))
                         <tr data-period-row="{{ $group['key'] }}">
                             <td>{{ $group['institution'] }}</td><td>{{ $group['hospital'] }}</td>
                             <td>{{ \Carbon\Carbon::parse($group['from'])->format('d/m/Y') }} –<br>{{ \Carbon\Carbon::parse($group['to'])->format('d/m/Y') }}</td>
                             <td data-period-total>{{ \App\Services\HospitalConciliationSummary::money($group['total_cents']) }}</td>
                             <td data-filter-value="Ver"><button type="button" class="ht-view" data-period-open aria-label="Ver {{ $group['hospital'] }} del {{ $group['from'] }} al {{ $group['to'] }}">Ver</button></td>
-                            <td data-filter-value="{{ \App\Services\HospitalConciliationSummary::money($group['new_cents']) }}" data-period-new-cell><output class="cp-amount" data-period-new>{{ \App\Services\HospitalConciliationSummary::money($group['new_cents']) }}</output></td>
+                            <td data-filter-value="{{ \App\Services\HospitalConciliationSummary::money($group['new_cents']) }}" data-period-new-cell><output class="cp-amount" data-period-new title="Suma automática de las remisiones conciliables del periodo, con IVA incluido">{{ \App\Services\HospitalConciliationSummary::money($group['new_cents']) }}</output></td>
+                            <td data-period-status-cell data-filter-value="{{ $group['conciliation_status'] }}"><button type="button" class="cp-reconciliation-status" data-period-observations data-period-status="{{ $group['conciliation_status'] }}" @disabled($observationsDisabled) aria-haspopup="dialog">{{ $group['conciliation_status'] }}</button></td>
+                            <td data-filter-value="Ver"><button type="button" class="ht-view" data-period-observations @disabled($observationsDisabled) aria-label="Ver observaciones de {{ $group['hospital'] }} del {{ $group['from'] }} al {{ $group['to'] }}" aria-haspopup="dialog">Ver</button></td>
+                            <td data-period-authorization-cell data-filter-value="{{ $group['authorization'] ? 'Autorizados' : ($group['changes_count'] ? 'Por autorizar' : 'Sin cambios') }}"><button type="button" class="cp-secondary cp-authorize" data-period-authorize-open @disabled(!$group['can_authorize']) aria-haspopup="dialog">{{ $group['authorization'] ? 'Autorizados' : 'Autorizar cambios' }}</button></td>
                             <td data-filter-value="{{ $group['sent_folio'] ? 'Enviada' : 'Pendiente de envío' }}" data-period-send-cell>
                                 <button type="button" class="cp-primary" data-period-send @disabled($group['sent_folio'] || $group['missing_prices'])>{{ $group['sent_folio'] ? 'Enviada' : 'Enviar' }}</button>
                                 <small data-period-folio>{{ $group['sent_folio'] ?: ($group['missing_prices'] ? 'Revisar precios faltantes' : '') }}</small>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="ht-empty">No hay remisiones de entrega que coincidan con los filtros seleccionados.</td></tr>
+                        <tr><td colspan="10" class="ht-empty">No hay remisiones de entrega que coincidan con los filtros seleccionados.</td></tr>
                     @endforelse
-                    @if ($groups->isNotEmpty())<tr data-period-filter-empty hidden><td colspan="7" class="ht-empty">No hay periodos que coincidan con los filtros seleccionados.</td></tr>@endif
+                    @if ($groups->isNotEmpty())<tr data-period-filter-empty hidden><td colspan="10" class="ht-empty">No hay periodos que coincidan con los filtros seleccionados.</td></tr>@endif
                 </tbody>
             </table>
         </div>
@@ -79,6 +85,13 @@
             <div data-period-detail></div>
             <p data-period-error role="alert" class="cp-error" hidden></p>
             <footer><button type="button" class="cp-secondary" data-period-close>Cancelar</button><button type="button" class="cp-primary" data-period-accept disabled>Aceptar y continuar</button></footer>
+        </dialog>
+        <dialog class="cp-dialog" aria-labelledby="cp-observations-title" data-period-observations-dialog>
+            <header><h2 id="cp-observations-title" tabindex="-1">Observaciones y cambios</h2><button type="button" class="cp-close" data-period-observations-close aria-label="Cerrar observaciones">×</button></header>
+            <p data-period-observations-loading role="status" hidden>Cargando observaciones…</p>
+            <div data-period-observations-detail></div>
+            <p data-period-observations-error role="alert" class="cp-error" hidden></p>
+            <footer><button type="button" class="cp-secondary" data-period-observations-close>Cerrar</button><button type="button" class="cp-primary" data-period-authorize hidden>Autorizar cambios</button></footer>
         </dialog>
         @include('admin.instituciones.conciliacion._period-create')
     </section>
