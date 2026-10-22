@@ -6,10 +6,10 @@
         <div><dt>Fecha de envío</dt><dd>{{ $submission->created_at->format('d/m/Y H:i') }}</dd></div>
         <div><dt>Periodo</dt><dd>{{ $submission->periodLabel() }}</dd></div>
     </dl>
-    <div class="ht-review-metrics">
-        <div class="ht-review-total"><i data-review-icon="flask-conical" aria-hidden="true"></i><dl><dt>Total de mezclas</dt><dd>{{ $summary['total']['count'] }}</dd></dl></div>
-        <div class="ht-review-yes"><i data-review-icon="circle-check" aria-hidden="true"></i><dl><dt>Conciliables · Sí</dt><dd>{{ $summary['yes']['count'] }}</dd></dl></div>
-        <div class="ht-review-no"><i data-review-icon="circle-x" aria-hidden="true"></i><dl><dt>No conciliables · No</dt><dd>{{ $summary['no']['count'] }}</dd></dl></div>
+    <div class="ht-review-metrics" data-conciliation-differences="{{ $summary['no']['count'] > 0 ? 'true' : 'false' }}">
+        <div class="ht-review-total"><i data-review-icon="flask-conical" aria-hidden="true"></i><dl><dt>Total de mezclas</dt><dd class="ht-conciliation-count ht-conciliation-count--total">{{ $summary['total']['count'] }}</dd></dl></div>
+        <div class="ht-review-yes"><i data-review-icon="circle-check" aria-hidden="true"></i><dl><dt>Conciliables · Sí</dt><dd class="ht-conciliation-count ht-conciliation-count--yes">{{ $summary['yes']['count'] }}</dd></dl></div>
+        <div class="ht-review-no"><i data-review-icon="circle-x" aria-hidden="true"></i><dl><dt>No conciliables · No</dt><dd class="ht-conciliation-count ht-conciliation-count--no">{{ $summary['no']['count'] }}</dd></dl></div>
         <div class="ht-review-amount"><i data-review-icon="receipt" aria-hidden="true"></i><dl><dt>Monto conciliable</dt><dd>{{ \App\Services\HospitalConciliationSummary::money($summary['yes']['amount_cents']) }}@if($summary['yes']['missing_amounts'])<small>{{ $summary['yes']['missing_amounts'] }} mezclas sin importe registrado</small>@endif</dd></dl></div>
     </div>
     <h3>Listado de solicitudes del hospital</h3>

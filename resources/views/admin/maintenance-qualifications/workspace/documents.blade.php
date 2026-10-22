@@ -1,0 +1,3 @@
+<div class="mw-scroll"><table class="mw-table"><thead><tr><th>Archivo</th><th>Descripción</th><th>Fecha de carga</th><th>Acciones</th></tr></thead><tbody>
+@forelse($documents as $document)<tr><td>{{ $document->name }}</td><td>{{ $document->description ?: '—' }}</td><td>{{ $document->created_at->format('d/m/Y') }}</td><td class="mw-nowrap"><a target="_blank" rel="noopener" href="{{ route($routePrefix.'documents.show', $document) }}">Ver</a> · <a href="{{ route($routePrefix.'documents.show', ['maintenanceDocument'=>$document, 'download'=>1]) }}">Descargar</a></td></tr>@empty<tr><td colspan="4" class="mw-empty">Sin archivos adjuntos.</td></tr>@endforelse
+</tbody></table></div>

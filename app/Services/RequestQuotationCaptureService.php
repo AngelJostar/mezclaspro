@@ -17,6 +17,7 @@ class RequestQuotationCaptureService
 
     public function catalog(User $user, string $category, int $hospitalId, bool $noCommercial = false, ?string $billingMode = null, bool $requestOnly = false): array
     {
+        abort_unless($user->canUseQuotationRequests(), 403, 'El servicio Solicitud de cotización está inhabilitado para tu hospital.');
         abort_unless(RequestQuotation::canCreate($user, $category) || ($requestOnly && $user->hasAnyRole(['Cliente', 'Institucion']) && $user->is_active), 403);
         if ($user->hasAnyRole(['Cliente', 'Institucion'])) {
             abort_unless($user->hospital_id && (int) $user->hospital_id === $hospitalId, 403);

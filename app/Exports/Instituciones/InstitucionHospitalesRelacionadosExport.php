@@ -180,9 +180,9 @@ class InstitucionHospitalesRelacionadosExport implements FromArray, WithHeadings
     private function services(Hospital $hospital): string
     {
         return collect([
-            $hospital->service_oncology || $hospital->onco_medicine_list_id ? 'Oncologicos' : null,
-            $hospital->service_antibiotics ? 'Antibioticos' : null,
-            $hospital->service_nutrition || $hospital->nutri_medicine_list_id ? 'Nutricionales' : null,
+            $hospital->offersService('oncology') ? 'Oncologicos' : null,
+            $hospital->offersService('antibiotics') ? 'Antibioticos' : null,
+            $hospital->offersService('nutrition') ? 'Nutricionales' : null,
         ])->filter()->implode(', ');
     }
 

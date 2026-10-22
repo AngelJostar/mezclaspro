@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Nutricionales\NutriMedicineList;
 use App\Models\Oncologicos\Laboratory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -50,6 +51,8 @@ class Hospital extends Model
         'service_oncology',
         'service_antibiotics',
         'service_nutrition',
+        'service_lines_configured',
+        'enabled_services',
         'laboratory_id',
         'is_active',
         'access_is_active',
@@ -65,12 +68,45 @@ class Hospital extends Model
         'service_oncology' => 'boolean',
         'service_antibiotics' => 'boolean',
         'service_nutrition' => 'boolean',
+        'service_lines_configured' => 'boolean',
+        'enabled_services' => 'array',
         'latitude' => 'float',
         'longitude' => 'float',
         'utm_zone' => 'integer',
         'utm_easting' => 'float',
         'utm_northing' => 'float',
     ];
+
+    public function offersService(string $service): bool
+    {
+        $legacyList = match ($service) {
+            'oncology' => $this->onco_medicine_list_id,
+            'nutrition' => $this->nutri_medicine_list_id,
+            default => null,
+        };
+
+        // Preserve legacy defaults until the hospital's service selection is explicitly saved.
+        return (bool) $this->getAttribute('service_'.$service)
+            || (! $this->service_lines_configured && (bool) $legacyList);
+    }
+
+    public function scopeOfferingService(Builder $query, string $service): Builder
+    {
+        $legacyColumn = match ($service) {
+            'oncology' => 'onco_medicine_list_id',
+            'nutrition' => 'nutri_medicine_list_id',
+            default => null,
+        };
+
+        return $query->where(function (Builder $query) use ($service, $legacyColumn) {
+            $query->where('hospitals.service_'.$service, true);
+            if ($legacyColumn) {
+                $query->orWhere(fn (Builder $legacy) => $legacy
+                    ->where('hospitals.service_lines_configured', false)
+                    ->whereNotNull('hospitals.'.$legacyColumn));
+            }
+        });
+    }
 
     public function users()
     {

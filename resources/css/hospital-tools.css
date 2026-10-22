@@ -152,6 +152,14 @@
 .ht-submission-table { min-width: 1800px; }
 .ht-submission-table th, .ht-submission-table td { min-width: 100px; }
 .ht-no-count { display: inline-grid; place-items: center; min-width: 32px; aspect-ratio: 1; padding: 4px; border: 2px solid #dc2626; border-radius: 50%; background: #fff1f2; color: #b91c1c; font-weight: 700; line-height: 1; }
+.ht-conciliation-count { font-variant-numeric: tabular-nums; }
+[data-conciliation-differences="true"] .ht-conciliation-count { font-weight: 700; }
+[data-conciliation-differences="true"] .ht-conciliation-count--total { color: #6b7280; }
+[data-conciliation-differences="true"] .ht-conciliation-count--yes { color: #ca8a04; }
+[data-conciliation-differences="true"] .ht-conciliation-count--no { color: #dc2626; }
+.client-conciliation-panel .ht-conciliation-action { border-radius: 999px; }
+.ht-client-status { white-space: nowrap; }
+.ht-client-status[data-status="Con cambios"] { display: inline-flex; align-items: center; justify-content: center; padding: 5px 12px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 12px; font-weight: 600; line-height: 20px; }
 .ht-review-dialog { width: min(1680px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid #d9e0eb; border-radius: 8px; background: white; color: #172b4d; }
 .ht-review-dialog[open] { display: flex; flex-direction: column; }
 .ht-review-dialog::backdrop { background: #14233e80; }

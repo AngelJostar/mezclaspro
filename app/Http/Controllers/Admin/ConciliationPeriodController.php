@@ -175,6 +175,13 @@ class ConciliationPeriodController extends Controller
         return $this->responseFor($this->group($this->filters($request, true)));
     }
 
+    public function status(Request $request)
+    {
+        return response()->json(['groups' => $this->periods->groups($this->filters($request))
+            ->map(fn ($group) => \Illuminate\Support\Arr::except($group, ['rows']))->values()])
+            ->header('Cache-Control', 'no-store');
+    }
+
     // Use the same source-row locks as individual billing edits, then read a fresh version.
     private function lockGroup(array $filters): void
     {

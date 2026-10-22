@@ -29,6 +29,9 @@ class InstitutionCredentialsListTest extends TestCase
             '2024_05_21_124030_create_notifications_table.php',
             '2026_08_19_000007_add_credential_password_to_users_table.php',
             '2026_08_19_000008_add_training_credentials_to_users_table.php',
+            '2026_08_10_000001_add_profile_fields_to_hospitals_table.php',
+            '2026_10_21_000001_add_service_lines_configured_to_hospitals.php',
+            '2026_10_21_000002_add_enabled_services_to_institutions_and_hospitals.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -39,6 +42,10 @@ class InstitutionCredentialsListTest extends TestCase
             $table->text('two_factor_recovery_codes')->nullable();
         });
         Schema::table('clientes', fn (Blueprint $table) => $table->boolean('is_active')->default(true));
+        Schema::table('hospitals', function (Blueprint $table) {
+            $table->unsignedBigInteger('onco_medicine_list_id')->nullable();
+            $table->unsignedBigInteger('nutri_medicine_list_id')->nullable();
+        });
     }
 
     public function test_list_shows_existing_institution_credentials_under_their_linked_hospitals(): void

@@ -41,12 +41,12 @@ $app->instance('request', $request);
 Illuminate\Support\Facades\URL::forceRootUrl('https://conciliation.test');
 Illuminate\Support\Facades\URL::forceScheme('https');
 $controller = app(App\Http\Controllers\Admin\ConciliationPeriodController::class);
-if (in_array($action, ['clientPage', 'clientForm'])) {
+if (in_array($action, ['clientPage', 'clientForm', 'clientDetail', 'clientAccept', 'clientReviewedDetail'])) {
     $group = app(App\Services\ConciliationPeriodData::class)->groups(['institucion_id' => 1, 'hospital_id' => 1, 'desde' => '2026-09-01', 'hasta' => '2026-09-30'])->first();
     $submission = App\Models\HospitalConciliationSubmission::create([
         'submission_key' => (string) Illuminate\Support\Str::uuid(), 'direction' => 'sent',
         'hospital_id' => 1, 'hospital_name' => $group['hospital'], 'submitted_by' => $user->id, 'sender_name' => $user->name,
-        'period_from' => $group['from'], 'period_to' => $group['to'], 'filters' => ['institucion_id' => 1],
+        'period_from' => $group['from'], 'period_to' => $group['to'], 'filters' => ['institucion_id' => 1, 'period_content_hash' => $group['version']],
         'mixture_count' => count($group['rows']), 'conciliable_count' => count($group['rows']), 'snapshot' => App\Services\ConciliationPeriodData::snapshot($group),
     ]);
     $client = App\Models\User::findOrFail(1);
@@ -54,7 +54,14 @@ if (in_array($action, ['clientPage', 'clientForm'])) {
     $request->setUserResolver(fn () => $client);
     $request->merge(['seccion' => 'conciliacion']);
     $clientController = app(App\Http\Controllers\Admin\ClientToolsController::class);
+    if (in_array($action, ['clientAccept', 'clientReviewedDetail'])) {
+        $request->setMethod('POST');
+        $response = $clientController->accept($request, $submission);
+        echo $action === 'clientAccept' ? $response->getContent() : $clientController->detail($request, $submission)->getContent();
+        exit;
+    }
     if ($action === 'clientForm') { echo $clientController->changeRequest($request, $submission)->getContent(); exit; }
+    if ($action === 'clientDetail') { echo $clientController->detail($request, $submission)->getContent(); exit; }
     $view = $clientController->index($request);
     $source = str_replace(['<x-admin-layout>', '</x-admin-layout>'], '', file_get_contents(resource_path('views/admin/herramientas/index.blade.php')));
     echo Illuminate\Support\Facades\Blade::render($source."\n@stack('css')", $view->getData() + ['errors' => new Illuminate\Support\ViewErrorBag]);

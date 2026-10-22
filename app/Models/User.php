@@ -106,6 +106,19 @@ class User extends Authenticatable
             ->whereDoesntHave('roles', fn ($roles) => $roles->whereIn('name', ['Cliente', 'Institucion']));
     }
 
+    public function canUseQuotationRequests(): bool
+    {
+        if (! $this->hasAnyRole(['Cliente', 'Institucion'])) {
+            return true;
+        }
+
+        // Fetch current settings even when the hospital relation was loaded with a limited column set.
+        $hospital = $this->hospital()->with('instituciones')->first();
+
+        // Unassigned accounts retain the existing empty-list behavior and normal scope checks.
+        return ! $hospital || \App\Support\EnabledServices::hospital($hospital);
+    }
+
     public function isBlockedByInstitution(): bool
     {
         if (! $this->hospital_id || ! $this->hasAnyRole(['Cliente', 'Institucion'])) {

@@ -386,6 +386,11 @@ final class AdminMenuAccess
             return 'menu.warehouses';
         }
 
+        if (str_starts_with($routeName, 'admin.instituciones.hospitals.services.')
+            && $request->user()?->can('menu.instituciones.list')) {
+            return 'menu.instituciones.list';
+        }
+
         if (str_starts_with($routeName, 'admin.hospitals.')
             || str_starts_with($routeName, 'admin.sales.hospitals.')
             || str_starts_with($routeName, 'admin.instituciones.hospitals')) {

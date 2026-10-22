@@ -64,6 +64,7 @@
                             </a>
                         </li>
                         @endunless
+                        @if ($sidebarUser->canUseQuotationRequests())
                         <li>
                             <a href="{{ route('admin.solicitudes.cotizacion.index') }}" @click="open = false"
                                 @if ($isQuotationSection) aria-current="page" @endif
@@ -71,6 +72,7 @@
                                 Cotizacion
                             </a>
                         </li>
+                        @endif
                     </ul>
                 </li>
             @endif

@@ -44,7 +44,8 @@ Route::prefix('mobile')->middleware('throttle:api')->group(function (): void {
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/me', [MobileAuthController::class, 'me']);
-        Route::get('/quotations/{quotation}/workflow', [\App\Http\Controllers\Api\Mobile\MobileQuotationWorkflowController::class, 'show'])->whereNumber('quotation');
+        Route::get('/quotations/{quotation}/workflow', [\App\Http\Controllers\Api\Mobile\MobileQuotationWorkflowController::class, 'show'])
+            ->middleware(\App\Http\Middleware\EnsureQuotationServiceEnabled::class)->whereNumber('quotation');
         Route::post('/quotations/{quotation}/authorize', [\App\Http\Controllers\Admin\RequestQuotationController::class, 'authorizeQuotation'])->whereNumber('quotation');
         Route::get('/sales/clients', [\App\Http\Controllers\Api\Mobile\MobileSalesController::class, 'clients']);
         Route::get('/sales/quotations', [\App\Http\Controllers\Api\Mobile\MobileSalesController::class, 'quotations']);
@@ -70,6 +71,7 @@ Route::prefix('mobile')->middleware('throttle:api')->group(function (): void {
         Route::get('/hospital/deliveries', [\App\Http\Controllers\Api\Mobile\MobileDeliveryTrackingController::class, 'index']);
         Route::get('/hospital/deliveries/{schedule}', [\App\Http\Controllers\Api\Mobile\MobileDeliveryTrackingController::class, 'show'])->whereNumber('schedule');
         Route::get('/hospital/catalog', [MobileHospitalController::class, 'catalog']);
+        Route::middleware(\App\Http\Middleware\EnsureQuotationServiceEnabled::class)->group(function () {
         Route::get('/hospital/quotation-wizard/catalog', [MobileHospitalController::class, 'wizardCatalog']);
         Route::post('/hospital/quotation-wizard/preview', [MobileHospitalController::class, 'wizardPreview']);
         Route::post('/hospital/quotation-wizard/requests', [MobileHospitalController::class, 'wizardStore']);
@@ -78,6 +80,7 @@ Route::prefix('mobile')->middleware('throttle:api')->group(function (): void {
         Route::post('/hospital/quotation-requests', [MobileHospitalController::class, 'storeQuotationRequest']);
         Route::get('/hospital/quotations', [MobileHospitalController::class, 'quotations']);
         Route::get('/hospital/quotations/{quotation}', [MobileHospitalController::class, 'quotation'])->whereNumber('quotation');
+        });
         Route::get('/hospital/orders', [MobileHospitalController::class, 'orders']);
         Route::get('/hospital/orders/{type}/{id}', [MobileHospitalController::class, 'order'])->whereIn('type', ['oncologicos', 'antibioticos', 'nutricionales'])->whereNumber('id');
         Route::get('/notifications', [MobileNotificationController::class, 'index']);

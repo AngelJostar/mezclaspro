@@ -42,8 +42,12 @@ class InstitucionController extends Controller
             ->withCount('hospitals')
             ->with([
                 'hospitals' => fn ($query) => $query
-                    ->select('hospitals.id', 'hospitals.name')
+                    ->select('hospitals.id', 'hospitals.name', 'hospitals.service_oncology',
+                        'hospitals.service_antibiotics', 'hospitals.service_nutrition',
+                        'hospitals.service_lines_configured', 'hospitals.onco_medicine_list_id', 'hospitals.nutri_medicine_list_id',
+                        'hospitals.enabled_services')
                     ->orderBy('hospitals.name'),
+                'hospitals.instituciones:id,enabled_services',
                 'hospitals.users' => fn ($query) => $query
                     ->select($userColumns)
                     ->whereHas('roles', fn ($roles) => $roles->whereIn('name', ['Cliente', 'Institucion']))
@@ -390,6 +394,7 @@ class InstitucionController extends Controller
 
         $hospitals = $institucion->hospitals()
             ->with([
+                'instituciones',
                 'distributionRoutes' => fn ($query) => $query->orderBy('name'),
                 'salespeople' => fn ($query) => $query->orderBy('name'),
                 'users' => fn ($query) => $query
@@ -413,19 +418,8 @@ class InstitucionController extends Controller
             ->when($status === 'active', fn ($query) => $query->where('hospitals.is_active', true))
             ->when($status === 'inactive', fn ($query) => $query->where('hospitals.is_active', false))
             ->when($unitType !== 'all', fn ($query) => $query->where('hospitals.unit_type', $unitType))
-            ->when($service === 'oncology', function ($query) {
-                $query->where(function ($subquery) {
-                    $subquery->where('hospitals.service_oncology', true)
-                        ->orWhereNotNull('hospitals.onco_medicine_list_id');
-                });
-            })
-            ->when($service === 'antibiotics', fn ($query) => $query->where('hospitals.service_antibiotics', true))
-            ->when($service === 'nutrition', function ($query) {
-                $query->where(function ($subquery) {
-                    $subquery->where('hospitals.service_nutrition', true)
-                        ->orWhereNotNull('hospitals.nutri_medicine_list_id');
-                });
-            })
+            ->when(in_array($service, ['oncology', 'antibiotics', 'nutrition'], true),
+                fn ($query) => $query->offeringService($service))
             ->orderBy('hospitals.name')
             ->paginate(25)
             ->withQueryString();

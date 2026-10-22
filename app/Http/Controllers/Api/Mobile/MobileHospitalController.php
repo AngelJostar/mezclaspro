@@ -246,6 +246,7 @@ class MobileHospitalController extends Controller
             ->count();
 
         return response()->json([
+            'enabled_services' => ['quotation_requests' => $user->canUseQuotationRequests()],
             'hospital' => [
                 'id' => $user->hospital->id,
                 'name' => $user->hospital->name,

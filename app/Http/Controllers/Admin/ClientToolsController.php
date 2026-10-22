@@ -6,11 +6,92 @@ use App\Http\Controllers\Controller;
 use App\Models\Hospital;
 use App\Models\HospitalConciliationSubmission;
 use App\Services\HospitalConciliationSummary;
+use App\Services\ClientConciliationReview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ClientToolsController extends Controller
 {
+    public function detail(Request $request, HospitalConciliationSubmission $submission)
+    {
+        abort_unless($request->user()->hospital_id, 403);
+        abort_unless($submission->hospital_id === (int) $request->user()->hospital_id, 404);
+
+        $detail = app(ClientConciliationReview::class)->presentation($submission);
+        return response()->json($detail + ['html' => view('admin.herramientas._conciliation-detail', $detail)->render(),
+            'accept_url' => route('admin.herramientas.conciliaciones.accept', $submission),
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    public function accept(Request $request, HospitalConciliationSubmission $submission)
+    {
+        $this->authorizeChangeRequest($request, $submission);
+        $data = $request->validate([
+            'submission_key' => ['required', 'uuid'], 'version' => ['required', 'string', 'size:64'],
+            'choices' => ['required', 'array', 'min:1', 'max:10000'], 'choices.*' => ['required', 'boolean'],
+            'reasons' => ['present', 'array', 'max:10000'], 'reasons.*' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $data['choices'] = array_map(fn ($value) => (bool) $value, $data['choices']);
+        $data['reasons'] = array_map(fn ($value) => trim($value ?? ''), $data['reasons']);
+        return DB::transaction(function () use ($request, $submission, $data) {
+            Hospital::whereKey($submission->hospital_id)->lockForUpdate()->firstOrFail();
+            $hash = HospitalConciliationSummary::signature(['client_review', $request->user()->id, $submission->id, $data['version'], $data['choices'], $data['reasons']]);
+            $existing = HospitalConciliationSubmission::where('submission_key', $data['submission_key'])->first();
+            if ($existing) {
+                abort_unless(hash_equals($existing->request_hash ?? '', $hash), 409, 'Esta respuesta ya se guardó con otros datos. Vuelve a abrir el detalle.');
+                return $this->acceptedResponse($existing);
+            }
+            $submission->refresh();
+            $this->authorizeChangeRequest($request, $submission);
+            abort_unless(hash_equals(ClientConciliationReview::version($submission), $data['version']), 409, 'La conciliación cambió. Vuelve a abrir el detalle.');
+            abort_if(ClientConciliationReview::response($submission), 409, 'Este periodo ya tiene una respuesta del hospital. Vuelve a abrir el detalle.');
+            \App\Models\Nutricionales\Solicitud::where('hospital_id', $submission->hospital_id)->orderBy('id')->lockForUpdate()->get(['id']);
+            \App\Models\Oncologicos\Mezcla::whereHas('solicitud', fn ($q) => $q->where('hospital_id', $submission->hospital_id))->orderBy('id')->lockForUpdate()->get(['id']);
+            \App\Models\InstitutionBilling::where('hospital_id', $submission->hospital_id)->orderBy('id')->lockForUpdate()->get(['id']);
+            $current = app(ClientConciliationReview::class)->currentGroup($submission);
+            abort_unless($current && !$current['missing_prices'], 409, 'El periodo fue actualizado por PROMESA Prodifem. Solicita el envío de la conciliación actualizada.');
+            $keys = collect($submission->snapshot)->map(fn ($row) => $row['kind'].'-'.$row['id'])->all();
+            abort_unless(count($data['choices']) === count($keys) && !array_diff(array_keys($data['choices']), $keys)
+                && !array_diff(array_keys($data['reasons']), $keys), 422, 'La selección debe contener únicamente todas las remisiones de este periodo.');
+            $hasChanges = false;
+            $snapshot = collect($submission->snapshot)->map(function ($row) use ($data, &$hasChanges) {
+                $key = $row['kind'].'-'.$row['id'];
+                $yes = $row['conciliable'] ?? (($row['cells']['conciliable'] ?? 'Sí') !== 'No');
+                $changed = $data['choices'][$key] !== $yes;
+                $reason = $data['reasons'][$key] ?? '';
+                abort_if($changed && $reason === '', 422, 'Indica el motivo de cada cambio solicitado.');
+                $requested = $changed || $reason !== '';
+                $hasChanges = $hasChanges || $requested;
+                $row['conciliable'] = $data['choices'][$key];
+                $row['cells']['conciliable'] = $row['conciliable'] ? 'Sí' : 'No';
+                $row['change_requested'] = $requested;
+                $row['requested_conciliable'] = $changed ? $row['conciliable'] : null;
+                $row['reason'] = $reason ?: null;
+                return $row;
+            })->all();
+            $response = HospitalConciliationSubmission::create([
+                'submission_key' => $data['submission_key'], 'request_hash' => $hash, 'direction' => 'received',
+                'hospital_id' => $submission->hospital_id, 'hospital_name' => $submission->hospital_name,
+                'submitted_by' => $request->user()->id, 'sender_name' => $request->user()->name,
+                'period_from' => $submission->period_from, 'period_to' => $submission->period_to,
+                'filters' => array_intersect_key($submission->filters, array_flip(['institucion_id', 'period_id', 'period_content_hash', 'modalidad']))
+                    + ['source_submission_id' => $submission->id, 'response_type' => $hasChanges ? 'changes_requested' : 'accepted'],
+                'mixture_count' => count($snapshot), 'conciliable_count' => collect($snapshot)->where('conciliable', true)->count(), 'snapshot' => $snapshot,
+            ]);
+            return $this->acceptedResponse($response, 201);
+        });
+    }
+
+    private function acceptedResponse(HospitalConciliationSubmission $response, int $status = 200)
+    {
+        $accepted = ($response->filters['response_type'] ?? null) === 'accepted';
+        return response()->json(['folio' => $response->folio(), 'status' => $accepted ? 'Aceptada' : 'Con cambios',
+            'summary' => $response->summary(), 'source_id' => $response->filters['source_submission_id'],
+            'message' => $accepted ? 'Conciliación aceptada. La aceptación quedó registrada para PROMESA Prodifem.'
+                : 'Respuesta enviada con cambios. PROMESA Prodifem revisará y autorizará la solicitud.',
+        ], $status);
+    }
+
     private function authorizeChangeRequest(Request $request, HospitalConciliationSubmission $submission): void
     {
         abort_unless($request->user()->hasAnyRole(['Cliente', 'Institucion']) && $request->user()->hospital_id, 403);
@@ -98,6 +179,11 @@ class ClientToolsController extends Controller
             $institutionName = $hospital->instituciones->pluck('nombre')->filter()->unique()->sort()->implode(', ');
             $submissions = HospitalConciliationSubmission::where('hospital_id', $hospital->id)
                 ->orderByDesc('id')->paginate(15)->withQueryString();
+            $responses = HospitalConciliationSubmission::where('hospital_id', $hospital->id)->where('direction', 'received')
+                ->whereIn('filters->source_submission_id', $submissions->pluck('id'))
+                ->whereIn('filters->response_type', ['accepted', 'changes_requested'])->latest('id')->get()
+                ->unique(fn ($row) => $row->filters['source_submission_id'])->keyBy(fn ($row) => $row->filters['source_submission_id']);
+            foreach ($submissions as $submission) $submission->setRelation('clientReview', $responses->get($submission->id));
         }
 
         return view('admin.herramientas.index', compact('submissions', 'institutionName', 'billingRecords'));

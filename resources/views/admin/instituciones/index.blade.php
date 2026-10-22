@@ -10,7 +10,8 @@
         </a>
     </div>
 
-    <div class="relative overflow-x-auto">
+    <div class="relative overflow-x-auto" data-sticky-x-position="viewport" data-sticky-x-always-visible
+        role="region" tabindex="0" aria-label="Lista de instituciones">
         <table id="institutions-table"
             class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
             <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
@@ -19,12 +20,22 @@
                         scope="col">Id</x-filterable-table-header>
                     <x-filterable-table-header column="1" trigger-class="js-institution-column-filter"
                         scope="col">Nombre</x-filterable-table-header>
-                    <x-filterable-table-header column="2" trigger-class="js-institution-column-filter"
-                        scope="col">Razon social</x-filterable-table-header>
+                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar nombre</span></th>
                     <x-filterable-table-header column="3" trigger-class="js-institution-column-filter"
+                        scope="col">Razon social</x-filterable-table-header>
+                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar razón social</span></th>
+                    <x-filterable-table-header column="5" trigger-class="js-institution-column-filter"
                         scope="col">Usuario</x-filterable-table-header>
+                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar usuario</span></th>
                     <th scope="col" class="px-4 py-3">Contraseña</th>
+                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar contraseña</span></th>
                     <th scope="col" class="px-4 py-3 text-center">Editar</th>
+                    <x-filterable-table-header column="10" trigger-class="js-institution-column-filter"
+                        scope="col">Mezclas habilitadas</x-filterable-table-header>
+                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar mezclas habilitadas</span></th>
+                    <x-filterable-table-header column="12" trigger-class="js-institution-column-filter"
+                        scope="col">Servicios habilitados</x-filterable-table-header>
+                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar servicios habilitados</span></th>
                     <th scope="col" class="px-4 py-3 text-center">Hospitales</th>
                     <th scope="col" class="px-4 py-3 text-center">Bloqueo</th>
                     <th scope="col" class="px-4 py-3 text-center">Eliminar</th>
@@ -50,9 +61,19 @@
                         <td class="px-6 py-4">
                             {{ $institucion->nombre }}
                         </td>
+                        <td class="px-2 py-4 text-center">
+                            <x-column-edit-button :label="'Editar nombre de '.$institucion->nombre" data-institution-field-edit
+                                data-field="nombre" data-label="Nombre" data-load="true" :data-context="$institucion->nombre"
+                                :data-url="route('admin.instituciones.fields.edit', [$institucion, 'nombre'])" />
+                        </td>
 
                         <td class="px-6 py-4">
                             {{ $institucion->razon_social }}
+                        </td>
+                        <td class="px-2 py-4 text-center">
+                            <x-column-edit-button :label="'Editar razón social de '.$institucion->nombre" data-institution-field-edit
+                                data-field="razon_social" data-label="Razón social" data-load="true" :data-context="$institucion->nombre"
+                                :data-url="route('admin.instituciones.fields.edit', [$institucion, 'razon_social'])" />
                         </td>
 
                         <td class="px-4 py-4 align-top">
@@ -63,6 +84,18 @@
                                 </div>
                             @empty
                                 <span class="whitespace-nowrap">Sin usuario registrado</span>
+                            @endforelse
+                        </td>
+                        <td class="px-2 py-4 align-top text-center">
+                            @forelse ($institutionAccesses as $access)
+                                <div class="flex h-12 items-center justify-center py-1">
+                                    <x-column-edit-button :label="'Editar usuario de '.$access['hospital'].' · '.$access['user']->username"
+                                        :disabled="!$canViewCredentials" data-institution-field-edit data-field="username" data-label="Usuario"
+                                        :data-context="$access['hospital'].' · '.$access['user']->username" :data-value="$access['user']->username"
+                                        :data-url="route('admin.instituciones.credentials.update', [$institucion, $access['user'], 'username'])" />
+                                </div>
+                            @empty
+                                <x-column-edit-button label="Sin usuarios registrados para editar" disabled />
                             @endforelse
                         </td>
 
@@ -79,6 +112,18 @@
                                 <span class="whitespace-nowrap">Sin contraseña registrada</span>
                             @endforelse
                         </td>
+                        <td class="px-2 py-4 align-top text-center">
+                            @forelse ($institutionAccesses as $access)
+                                <div class="flex h-12 items-center justify-center py-1">
+                                    <x-column-edit-button :label="'Editar contraseña de '.$access['hospital'].' · '.$access['user']->username"
+                                        :disabled="!$canViewCredentials" data-institution-field-edit data-field="password" data-label="Contraseña"
+                                        :data-context="$access['hospital'].' · '.$access['user']->username"
+                                        :data-url="route('admin.instituciones.credentials.update', [$institucion, $access['user'], 'password'])" />
+                                </div>
+                            @empty
+                                <x-column-edit-button label="Sin usuarios registrados para editar contraseña" disabled />
+                            @endforelse
+                        </td>
 
                         <td class="px-4 py-4 text-center whitespace-nowrap">
                             <a href="{{ route('admin.instituciones.edit', $institucion) }}"
@@ -87,6 +132,56 @@
                             </a>
                         </td>
 
+                        <td class="px-4 py-4">
+                            @php
+                                $mixtureTypes = collect([
+                                    ['key' => 'oncology', 'label' => 'Oncológicos', 'color' => 'border-emerald-300 bg-emerald-50 text-emerald-700'],
+                                    ['key' => 'antibiotics', 'label' => 'Antibióticos', 'color' => 'border-red-300 bg-red-50 text-red-700'],
+                                    ['key' => 'nutrition', 'label' => 'Nutricionales', 'color' => 'border-blue-300 bg-blue-50 text-blue-700'],
+                                ])->map(fn ($type) => $type + ['count' => $institucion->hospitals
+                                    ->filter(fn ($hospital) => $hospital->offersService($type['key']))->count()])
+                                    ->filter(fn ($type) => $type['count'] > 0);
+                            @endphp
+                            <div class="flex w-max items-center gap-2">
+                                @forelse ($mixtureTypes as $type)
+                                    <span class="rounded border px-2 py-1 text-xs font-medium {{ $type['color'] }}"
+                                        title="{{ $type['count'] }} de {{ $institucion->hospitals_count }} hospitales con mezclas {{ mb_strtolower($type['label']) }} habilitadas">
+                                        {{ $type['label'] }} ({{ $type['count'] }}/{{ $institucion->hospitals_count }})
+                                    </span>
+                                @empty
+                                    <span class="whitespace-nowrap text-gray-400">{{ $institucion->hospitals_count ? 'Sin mezclas habilitadas' : 'Sin hospitales' }}</span>
+                                @endforelse
+                            </div>
+                        </td>
+                        <td class="px-2 py-4 text-center">
+                            <x-column-edit-button :label="'Editar mezclas habilitadas de '.$institucion->nombre"
+                                data-enabled-services-open data-title="Mezclas habilitadas"
+                                :data-url="route('admin.instituciones.mixtures.edit', $institucion)" />
+                        </td>
+                        <td class="px-4 py-4" data-institution-enabled-services>
+                            @php
+                                $enabledServices = collect(\App\Support\EnabledServices::LABELS)
+                                    ->map(fn ($label, $key) => [
+                                        'label' => $label,
+                                        'count' => $institucion->hospitals->filter(fn ($hospital) => \App\Support\EnabledServices::hospital($hospital, $key))->count(),
+                                    ])->filter(fn ($service) => $service['count'] > 0);
+                            @endphp
+                            <div class="flex w-max items-center gap-2">
+                                @forelse ($enabledServices as $service)
+                                    <span class="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700"
+                                        title="{{ $service['count'] }} de {{ $institucion->hospitals_count }} hospitales con {{ mb_strtolower($service['label']) }} habilitada">
+                                        {{ $service['label'] }} ({{ $service['count'] }}/{{ $institucion->hospitals_count }})
+                                    </span>
+                                @empty
+                                    <span class="whitespace-nowrap text-gray-400">{{ $institucion->hospitals_count ? 'Sin servicios habilitados' : 'Sin hospitales' }}</span>
+                                @endforelse
+                            </div>
+                        </td>
+                        <td class="px-2 py-4 text-center">
+                            <x-column-edit-button :label="'Editar servicios habilitados de '.$institucion->nombre"
+                                data-enabled-services-open
+                                :data-url="route('admin.instituciones.hospitals.services.institution.edit', $institucion)" />
+                        </td>
                         <td class="px-4 py-4 text-center whitespace-nowrap">
                             <span class="inline-flex items-center gap-2">
                                 <a href="{{ route('admin.instituciones.hospitals', $institucion) }}"
@@ -146,18 +241,19 @@
                     </tr>
                 @empty
                     <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
-                        <td colspan="10" class="px-6 py-6 text-center text-gray-500">
+                        <td colspan="18" class="px-6 py-6 text-center text-gray-500">
                             No hay instituciones registradas.
                         </td>
                     </tr>
                 @endforelse
             </tbody>
         </table>
-
-        <div class="mt-4">
-            {{ $instituciones->links() }}
-        </div>
     </div>
+    <div class="mt-4">
+        {{ $instituciones->links() }}
+    </div>
+    @include('admin.instituciones.partials.enabled-services-dialog')
+    @include('admin.instituciones.partials.field-dialog')
 
     @push('js')
         <script>

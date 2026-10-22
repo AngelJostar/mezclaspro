@@ -1,0 +1,1 @@
+<select name="estado" aria-label="Estado"><option value="active" @selected(($filters['estado'] ?? 'active') === 'active')>Estado: Activos</option><option value="inactive" @selected(($filters['estado'] ?? '') === 'inactive')>Estado: Inactivos</option><option value="all" @selected(($filters['estado'] ?? '') === 'all')>Estado: Todos</option></select>

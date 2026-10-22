@@ -173,10 +173,24 @@ class ConciliationPeriodData
             $currentDecisions = ($decisions->get($group['key']) ?? collect())->where('version', $group['review_version']);
             $authorization = $currentDecisions->firstWhere('action', 'authorize');
             $group['changes_count'] = collect($group['rows'])->filter(fn ($row) => !empty($row['changes']))->count();
+            // The counters show the hospital's requested selection while changes await staff authorization.
+            $group['mixture_count'] = count($group['rows']);
+            $group['conciliable_count'] = collect($group['rows'])->filter(fn ($row) => $row['client_request']['conciliable'] ?? $row['conciliable'])->count();
+            $group['non_conciliable_count'] = $group['mixture_count'] - $group['conciliable_count'];
+            $group['has_differences'] = $group['non_conciliable_count'] > 0 || $group['changes_count'] > 0;
             $group['authorization'] = $authorization ? ['by' => $authorization->user_name, 'at' => $authorization->created_at->format('d/m/Y H:i')] : null;
             $group['can_authorize'] = $group['changes_count'] > 0 && !$authorization && !$group['missing_prices'];
+            $clientAcceptance = $submissions->first(fn ($submission) => $submission->direction === 'received'
+                && ($submission->filters['response_type'] ?? null) === 'accepted'
+                && ($submission->filters['period_content_hash'] ?? null) === $group['version']
+                && collect($group['rows'])->every(fn ($row) => ($latest[$row['hospital_id'].':'.$row['kind'].':'.$row['id']] ?? null)?->id === $submission->id));
+            $group['client_acceptance'] = $clientAcceptance ? ['by' => $clientAcceptance->sender_name,
+                'at' => $clientAcceptance->created_at->format('d/m/Y H:i'), 'folio' => $clientAcceptance->folio()] : null;
+            if ($clientAcceptance && !$group['changes_count']) {
+                $group['rows'] = array_map(fn ($row) => array_replace($row, ['status' => 'Conciliado']), $group['rows']);
+            }
             $reviewed = $currentDecisions->contains('action', 'review') || collect($group['rows'])->every(fn ($row) => $row['status'] === 'Conciliado');
-            $group['conciliation_status'] = $authorization ? 'Aceptada' : ($group['changes_count'] ? 'Con cambios' : ($reviewed ? 'Aceptada' : 'Pendiente'));
+            $group['conciliation_status'] = $authorization ? 'Aceptada' : ($group['changes_count'] ? 'Con cambios' : (($reviewed || $clientAcceptance) ? 'Aceptada' : 'Pendiente'));
             return $group;
         })->sortBy(fn ($group) => $group['from'].' '.$group['institution'].' '.$group['hospital'])->values();
     }

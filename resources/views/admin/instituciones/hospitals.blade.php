@@ -31,11 +31,19 @@
                 </div>
             </div>
 
+            <div class="flex flex-wrap items-center gap-2">
+            <button type="button" data-enabled-services-open
+                data-url="{{ route('admin.instituciones.hospitals.services.institution.edit', $institucion) }}"
+                aria-haspopup="dialog"
+                class="inline-flex min-h-10 items-center justify-center rounded-full border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-50">
+                Servicios de la institución
+            </button>
             <a href="{{ route('admin.instituciones.hospitals.create', $institucion) }}"
                 class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-azul-prodifem px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-200">
                 <span class="text-base leading-none" aria-hidden="true">+</span>
                 Crear hospital
             </a>
+            </div>
         </div>
 
         <div class="mt-4 overflow-hidden rounded-lg border border-gray-200">
@@ -108,7 +116,7 @@
                 </form>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto" data-hospital-field-table-scroll>
                 <table class="w-full min-w-[1280px] text-left text-xs text-gray-600">
                     <thead class="bg-gray-50 text-[11px] uppercase text-gray-700">
                         <tr>
@@ -118,10 +126,14 @@
                             <th class="px-4 py-3 font-semibold">Clave</th>
                             <th class="px-4 py-3 font-semibold">Tipo de unidad</th>
                             <th class="px-4 py-3 font-semibold">Municipio</th>
-                            <th class="px-4 py-3 font-semibold">L&iacute;neas de servicio</th>
+                            <th class="px-4 py-3 font-semibold">Mezclas habilitadas</th>
+                            <th class="px-2 py-3" data-command-column><span class="sr-only">Editar mezclas habilitadas</span></th>
+                            <th class="px-4 py-3 font-semibold" data-force-column-filter>Servicios habilitados</th>
                             <th class="px-4 py-3 font-semibold">Estatus</th>
                             <th class="px-4 py-3 font-semibold">Ruta asignada</th>
+                            <th class="px-2 py-3" data-command-column><span class="sr-only">Editar ruta asignada</span></th>
                             <th class="px-4 py-3 font-semibold">Vendedor asignado</th>
+                            <th class="px-2 py-3" data-command-column><span class="sr-only">Editar vendedor asignado</span></th>
                             <th class="px-4 py-3 text-center font-semibold">Bloqueo</th>
                             <th class="px-4 py-3 text-center font-semibold">Editar</th>
                         </tr>
@@ -129,8 +141,8 @@
                     <tbody class="divide-y divide-gray-200 bg-white">
                         @forelse ($hospitals as $hospital)
                             @php
-                                $hasOncology = $hospital->service_oncology || $hospital->onco_medicine_list_id;
-                                $hasNutrition = $hospital->service_nutrition || $hospital->nutri_medicine_list_id;
+                                $hasOncology = $hospital->offersService('oncology');
+                                $hasNutrition = $hospital->offersService('nutrition');
                                 $hasServices = $hasOncology || $hospital->service_antibiotics || $hasNutrition;
                             @endphp
                             <tr class="hover:bg-gray-50" data-hospital-credential-group>
@@ -192,7 +204,7 @@
                                 <td class="px-4 py-3 whitespace-nowrap">{{ $hospital->unit_type ?: '-' }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap">{{ $hospital->municipality ?: '-' }}</td>
                                 <td class="px-4 py-3">
-                                    <div class="flex flex-wrap gap-1">
+                                    <div class="flex w-max flex-nowrap items-center gap-1 whitespace-nowrap">
                                         @if ($hasOncology)
                                             <span class="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700">Oncol&oacute;gicos</span>
                                         @endif
@@ -205,6 +217,26 @@
                                         @unless ($hasServices)
                                             <span class="text-gray-400">Sin definir</span>
                                         @endunless
+                                    </div>
+                                </td>
+                                <td class="px-2 py-3 text-center">
+                                    <x-hospital-field-edit :institution="$institucion" :hospital="$hospital" field="services" label="mezclas habilitadas" />
+                                </td>
+                                @php($quotationServiceEnabled = \App\Support\EnabledServices::hospital($hospital))
+                                <td class="px-4 py-3" data-column-filter-value="Solicitud de cotización: {{ $quotationServiceEnabled ? 'Habilitado' : 'Inhabilitado' }}">
+                                    <div class="flex w-max items-center gap-3">
+                                        <div>
+                                            <span class="block whitespace-nowrap">Solicitud de cotización</span>
+                                            <span class="mt-1 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold {{ $quotationServiceEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600' }}">
+                                                {{ $quotationServiceEnabled ? 'Habilitado' : 'Inhabilitado' }}
+                                            </span>
+                                        </div>
+                                        <button type="button" data-enabled-services-open
+                                            data-url="{{ route('admin.instituciones.hospitals.services.hospital.edit', [$institucion, $hospital]) }}"
+                                            aria-label="Editar servicios habilitados de {{ $hospital->name }}" title="Editar servicios habilitados" aria-haspopup="dialog"
+                                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-indigo-200 bg-white text-indigo-800 hover:bg-indigo-50 focus:ring-2 focus:ring-indigo-500">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5M4 15 16 3a3.5 3.5 0 0 1 5 5L9 20l-6 1 1-6Z" /></svg>
+                                        </button>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
@@ -223,12 +255,18 @@
                                         <span class="text-gray-400">Sin ruta asignada</span>
                                     @endforelse
                                 </td>
+                                <td class="px-2 py-3 text-center">
+                                    <x-hospital-field-edit :institution="$institucion" :hospital="$hospital" field="routes" label="ruta asignada" />
+                                </td>
                                 <td class="min-w-[180px] px-4 py-3">
                                     @forelse ($hospital->salespeople as $salesperson)
                                         <div class="font-medium text-gray-900 {{ ! $loop->first ? 'mt-1' : '' }}">{{ $salesperson->name }}</div>
                                     @empty
                                         <span class="text-gray-400">Sin vendedor asignado</span>
                                     @endforelse
+                                </td>
+                                <td class="px-2 py-3 text-center">
+                                    <x-hospital-field-edit :institution="$institucion" :hospital="$hospital" field="sellers" label="vendedor asignado" />
                                 </td>
                                 <td class="px-4 py-3 text-center whitespace-nowrap">
                                     <form method="POST"
@@ -270,7 +308,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="12" class="px-4 py-10 text-center text-sm text-gray-500">
+                                <td colspan="16" class="px-4 py-10 text-center text-sm text-gray-500">
                                     No hay hospitales relacionados con estos filtros.
                                 </td>
                             </tr>
@@ -288,6 +326,8 @@
     </section>
 
     @include('admin.instituciones.partials.hospital-map')
+    @include('admin.instituciones.partials.hospital-field-dialog')
+    @include('admin.instituciones.partials.enabled-services-dialog')
 
     @push('js')
         <script>

@@ -64,9 +64,16 @@ function initializeConciliationPeriod() {
         row.querySelector('[data-period-total]').textContent = money(group.total_cents);
         row.querySelector('[data-period-new]').textContent = money(group.new_cents);
         row.querySelector('[data-period-new-cell]').dataset.filterValue = money(group.new_cents);
+        row.dataset.conciliationDifferences = String(group.has_differences);
+        for (const [name, count] of [['total', group.mixture_count], ['yes', group.conciliable_count], ['no', group.non_conciliable_count]]) {
+            const cell = row.querySelector(`[data-period-${name}-count]`);
+            cell.querySelector('.ht-conciliation-count').textContent = count;
+            cell.dataset.filterValue = count;
+        }
         const status = row.querySelector('[data-period-status]');
         status.textContent = status.dataset.periodStatus = group.conciliation_status;
         const observationsDisabled = group.conciliation_status === 'Pendiente' || (group.conciliation_status === 'Aceptada' && !group.changes_count);
+        row.querySelector('[data-period-client-acceptance]').textContent = group.client_acceptance ? `Aceptada por ${group.client_acceptance.by} · ${group.client_acceptance.at}` : '';
         row.querySelectorAll('[data-period-observations]').forEach(button => { button.disabled = observationsDisabled; });
         row.querySelector('[data-period-status-cell]').dataset.filterValue = group.conciliation_status;
         row.querySelector('[data-period-authorization-cell]').dataset.filterValue = group.authorization ? 'Autorizados' : (group.changes_count ? 'Por autorizar' : 'Sin cambios');
@@ -228,7 +235,22 @@ function initializeConciliationPeriod() {
     };
     institution.addEventListener('change', () => { hospital.value = ''; syncHospitals(); });
     syncHospitals();
-    document.addEventListener('livewire:navigating', () => { columnFilters?.destroy(); dialog.close(); observationsDialog.close(); }, { once: true });
+    let refreshing = false;
+    const refreshOnReturn = async () => {
+        if (!root.isConnected || document.hidden || refreshing || dialog.open || observationsDialog.open) return;
+        refreshing = true;
+        try {
+            const result = await api(root.dataset.refreshUrl);
+            result.groups.filter(group => groups.has(group.key)).forEach(updateRow);
+        } catch { /* Keep the current list available when the connection is interrupted. */ }
+        finally { refreshing = false; }
+    };
+    window.addEventListener('focus', refreshOnReturn);
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    document.addEventListener('livewire:navigating', () => {
+        window.removeEventListener('focus', refreshOnReturn); document.removeEventListener('visibilitychange', refreshOnReturn);
+        columnFilters?.destroy(); dialog.close(); observationsDialog.close();
+    }, { once: true });
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeConciliationPeriod);

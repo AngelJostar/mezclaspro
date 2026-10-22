@@ -14,10 +14,12 @@ class Institucion extends Model
         'rfc',
         'telefono',
         'is_active',
+        'enabled_services',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'enabled_services' => 'array',
     ];
 
     public function hospitals()

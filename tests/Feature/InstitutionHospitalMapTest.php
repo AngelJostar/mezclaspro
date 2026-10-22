@@ -30,6 +30,7 @@ class InstitutionHospitalMapTest extends TestCase
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->string('name')->nullable();
             $table->foreignId('hospital_id')->nullable();
             $table->string('username')->nullable();
             $table->text('credential_password')->nullable();
@@ -38,6 +39,8 @@ class InstitutionHospitalMapTest extends TestCase
         });
 
         (require database_path('migrations/2026_08_20_000010_create_distribution_routes_tables.php'))->up();
+        (require database_path('migrations/2026_10_02_000002_create_hospital_salesperson_table.php'))->up();
+        (require database_path('migrations/2026_10_21_000001_add_service_lines_configured_to_hospitals.php'))->up();
     }
 
     public function test_map_includes_all_linked_hospitals_regardless_of_filters_or_pagination(): void

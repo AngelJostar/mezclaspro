@@ -90,7 +90,7 @@
 
                 <div id="maintenance-laboratory-carousel" data-disable-sticky-x
                     class="flex min-w-0 flex-1 snap-x items-stretch gap-3 overflow-x-auto pb-2 scroll-smooth">
-                    <a href="{{ route('admin.maintenance-qualifications.index', request()->except(['page', 'laboratory_id'])) }}"
+                    <a href="{{ route('admin.maintenance-qualifications.annual', request()->except(['page', 'laboratory_id'])) }}"
                         @if ($selectedLaboratoryId === 0) data-selected-laboratory aria-current="true" @endif
                         class="block w-64 flex-none snap-start rounded border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-cyan-300 {{ $selectedLaboratoryId === 0 ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50' }}">
                         <div class="flex items-start gap-2">
@@ -119,7 +119,7 @@
                         @php
                             $isSelectedLaboratory = $selectedLaboratoryId === (int) $laboratory->id;
                         @endphp
-                        <a href="{{ route('admin.maintenance-qualifications.index', array_merge(request()->except(['page']), ['laboratory_id' => $laboratory->id])) }}"
+                        <a href="{{ route('admin.maintenance-qualifications.annual', array_merge(request()->except(['page']), ['laboratory_id' => $laboratory->id])) }}"
                             @if ($isSelectedLaboratory) data-selected-laboratory aria-current="true" @endif
                             class="block w-64 flex-none snap-start rounded border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-cyan-300 {{ $isSelectedLaboratory ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50' }}">
                             <div class="flex items-start gap-2">
@@ -224,11 +224,11 @@
                             <i class="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
                         </summary>
                         <div class="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-slate-200 bg-white p-2 text-sm shadow-xl">
-                            <a href="{{ route('admin.maintenance-qualifications.index', request()->except(['page', 'only'])) }}"
+                            <a href="{{ route('admin.maintenance-qualifications.annual', request()->except(['page', 'only'])) }}"
                                 class="block rounded px-3 py-2 font-medium {{ ($activeFilter ?? 'all') === 'all' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-700 hover:bg-slate-50' }}">
                                 Todos los servicios
                             </a>
-                            <a href="{{ route('admin.maintenance-qualifications.index', array_merge(request()->except(['page']), ['only' => 'scheduled'])) }}"
+                            <a href="{{ route('admin.maintenance-qualifications.annual', array_merge(request()->except(['page']), ['only' => 'scheduled'])) }}"
                                 class="block rounded px-3 py-2 font-medium {{ ($activeFilter ?? 'all') === 'scheduled' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-700 hover:bg-slate-50' }}">
                                 Servicios programados
                             </a>

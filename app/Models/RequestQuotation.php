@@ -36,13 +36,16 @@ class RequestQuotation extends Model
     public static function canCreate(User $user, string $category): bool
     {
         $permissionType = $category === 'antibioticos' ? 'oncologicos' : $category;
-        return in_array($category, ['oncologicos', 'nutricionales', 'antibioticos'], true)
+        return $user->canUseQuotationRequests()
+            && in_array($category, ['oncologicos', 'nutricionales', 'antibioticos'], true)
             && ($user->isSalesperson() || ($user->can($permissionType.'_solicitudes_index')
                 && $user->can($permissionType.'_solicitudes_create')));
     }
 
     public function canBeViewedBy(User $user): bool
     {
+        if (! $user->canUseQuotationRequests()) return false;
+
         $type = $this->category === 'nutricionales' ? 'nutricionales' : 'oncologicos';
         $laboratoryId = $user->hasAnyRole(['Admin', 'Super Admin', 'Cliente', 'Institucion']) || $user->isSalesperson()
             ? null : $user->personnelProfile?->laboratory_id;

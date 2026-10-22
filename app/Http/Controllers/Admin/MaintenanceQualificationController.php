@@ -154,7 +154,7 @@ class MaintenanceQualificationController extends Controller
 
     public function destroy(Request $request, MaintenanceService $maintenanceService)
     {
-        if ($maintenanceService->source_key) {
+        if ($maintenanceService->source_key || \App\Models\MaintenanceAppointment::where('service_id', $maintenanceService->id)->exists()) {
             $maintenanceService->update(['is_active' => false]);
         } else {
             $maintenanceService->delete();

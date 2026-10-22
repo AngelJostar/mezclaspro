@@ -1,0 +1,1 @@
+<a class="mw-event {{ $event->status }}" href="{{ $url(['seccion' => 'programacion', 'seleccion' => $event->id]) }}"><strong>{{ $event->starts_at->format('H:i') }} · {{ $event->folio }}</strong><span>{{ $event->service->service }} · {{ $event->asset }}</span><small>{{ $statusLabels[$event->status] }}</small></a>

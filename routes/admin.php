@@ -65,12 +65,13 @@ Route::get('/dashboard', function () {
 Route::get('solicitudes', [UnifiedSolicitudController::class, 'index'])
     ->name('solicitudes.index');
 
-Route::get('solicitudes/cotizacion', [RequestQuotationController::class, 'index'])
-    ->name('solicitudes.cotizacion.index');
 Route::get('ventas/hospitales', [\App\Http\Controllers\Admin\SalesHospitalAssignmentController::class, 'index'])
     ->middleware('role_or_permission:Super Admin|menu.instituciones.hospitals')->name('sales.hospitals.index');
 Route::put('ventas/hospitales/{hospital}', [\App\Http\Controllers\Admin\SalesHospitalAssignmentController::class, 'update'])
     ->middleware('role_or_permission:Super Admin|menu.instituciones.hospitals')->name('sales.hospitals.update');
+Route::middleware(\App\Http\Middleware\EnsureQuotationServiceEnabled::class)->group(function () {
+Route::get('solicitudes/cotizacion', [RequestQuotationController::class, 'index'])
+    ->name('solicitudes.cotizacion.index');
 Route::get('solicitudes/cotizacion/opciones', [RequestQuotationController::class, 'options'])->name('solicitudes.cotizacion.options');
 Route::get('solicitudes/cotizacion/solicitudes-clientes', [\App\Http\Controllers\Admin\HospitalQuotationRequestController::class, 'index'])->name('solicitudes.cotizacion.hospital-requests.index');
 Route::get('solicitudes/cotizacion/solicitudes-clientes/{hospitalRequest}/adjunto', [\App\Http\Controllers\Admin\HospitalQuotationRequestController::class, 'attachment'])->name('solicitudes.cotizacion.hospital-requests.attachment');
@@ -95,11 +96,16 @@ Route::get('solicitudes/cotizacion/{quotation}/preparacion', [\App\Http\Controll
     ->whereNumber('quotation')->name('solicitudes.cotizacion.preparation');
 Route::post('solicitudes/cotizacion/{quotation}/preparacion', [\App\Http\Controllers\Admin\QuotationPreparationController::class, 'store'])
     ->whereNumber('quotation')->name('solicitudes.cotizacion.prepare');
+});
 
 Route::get('herramientas', [\App\Http\Controllers\Admin\ClientToolsController::class, 'index'])
     ->middleware('role:Cliente|Institucion')
     ->name('herramientas.index');
 
+Route::get('herramientas/conciliaciones/{submission}/detalle', [\App\Http\Controllers\Admin\ClientToolsController::class, 'detail'])
+    ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.detail');
+Route::post('herramientas/conciliaciones/{submission}/aceptar', [\App\Http\Controllers\Admin\ClientToolsController::class, 'accept'])
+    ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.accept');
 Route::get('herramientas/conciliaciones/{submission}/descargar', [\App\Http\Controllers\Admin\ClientToolsController::class, 'download'])
     ->middleware('role:Cliente|Institucion')->name('herramientas.conciliaciones.download');
 Route::get('herramientas/conciliaciones/{submission}/solicitar-cambios', [\App\Http\Controllers\Admin\ClientToolsController::class, 'changeRequest'])
@@ -630,9 +636,24 @@ Route::resource('/instituciones', InstitucionController::class)
     ->parameters(['instituciones' => 'institucion'])
     ->middleware(['role_or_permission:Super Admin|menu.instituciones.list']);
 
+Route::middleware('role_or_permission:Super Admin|menu.instituciones.list')->group(function () {
+    Route::get('instituciones/{institucion}/fields/{field}', [\App\Http\Controllers\Admin\InstitutionFieldController::class, 'edit'])
+        ->whereIn('field', ['nombre', 'razon_social'])->name('instituciones.fields.edit');
+    Route::patch('instituciones/{institucion}/fields/{field}', [\App\Http\Controllers\Admin\InstitutionFieldController::class, 'update'])
+        ->whereIn('field', ['nombre', 'razon_social'])->name('instituciones.fields.update');
+    Route::patch('instituciones/{institucion}/users/{user}/{field}', [\App\Http\Controllers\Admin\InstitutionFieldController::class, 'updateCredential'])
+        ->whereIn('field', ['username', 'password'])->middleware('can:usuarios')->name('instituciones.credentials.update');
+    Route::get('instituciones/{institucion}/mixtures', [\App\Http\Controllers\Admin\InstitutionMixturesController::class, 'edit'])
+        ->name('instituciones.mixtures.edit');
+    Route::patch('instituciones/{institucion}/mixtures', [\App\Http\Controllers\Admin\InstitutionMixturesController::class, 'update'])
+        ->name('instituciones.mixtures.update');
+});
+
 $administrationReportsMiddleware = ['role_or_permission:Super Admin|Administracion y facturacion|menu.administracion.reports'];
 Route::get('instituciones-reportes/conciliacion-periodos/detalle', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'detail'])
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.detail');
+Route::get('instituciones-reportes/conciliacion-periodos/estado', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'status'])
+    ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.status');
 Route::get('instituciones-reportes/conciliacion-periodos/remisiones', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'candidates'])
     ->middleware($administrationReportsMiddleware)->name('instituciones.conciliacion-periodos.candidates');
 Route::post('instituciones-reportes/conciliacion-periodos', [\App\Http\Controllers\Admin\ConciliationPeriodController::class, 'store'])
@@ -751,9 +772,25 @@ Route::post('instituciones-facturacion/{billing}/mover', [InstitucionBillingCont
     ->name('instituciones.billing.move')
     ->middleware($billingHistoryMiddleware);
 
-Route::get('mantenimiento-calificaciones', [MaintenanceQualificationController::class, 'index'])
+Route::get('mantenimiento-calificaciones', [\App\Http\Controllers\Admin\MaintenanceWorkspaceController::class, 'index'])
     ->name('maintenance-qualifications.index')
     ->middleware(['role_or_permission:Super Admin|menu.maintenance-qualifications']);
+
+Route::prefix('mantenimiento-calificaciones')->name('maintenance-qualifications.')
+    ->middleware('role_or_permission:Super Admin|menu.maintenance-qualifications')->group(function () {
+        $controller = \App\Http\Controllers\Admin\MaintenanceWorkspaceController::class;
+        Route::get('calendario-anual', [MaintenanceQualificationController::class, 'index'])->name('annual');
+        Route::post('servicios', [$controller, 'saveService'])->name('services.store');
+        Route::patch('servicios/{maintenanceService}', [$controller, 'saveService'])->name('services.update');
+        Route::post('proveedores', [$controller, 'saveProvider'])->name('providers.store');
+        Route::patch('proveedores/{maintenanceProvider}', [$controller, 'saveProvider'])->name('providers.update');
+        Route::post('programacion', [$controller, 'saveAppointment'])->name('appointments.store');
+        Route::patch('programacion/{maintenanceAppointment}', [$controller, 'saveAppointment'])->name('appointments.update');
+        Route::post('programacion/{maintenanceAppointment}/cerrar', [$controller, 'closeReport'])->name('appointments.close');
+        Route::get('programacion-exportar', [$controller, 'export'])->name('export');
+        Route::post('documentos/{kind}/{id}', [$controller, 'upload'])->whereIn('kind', ['provider', 'appointment'])->whereNumber('id')->name('documents.store');
+        Route::get('documentos/{maintenanceDocument}', [$controller, 'document'])->name('documents.show');
+    });
 
 Route::get('mantenimiento-calificaciones/catalogo', [MaintenanceQualificationController::class, 'catalog'])
     ->name('maintenance-qualifications.catalog')
@@ -823,8 +860,29 @@ Route::get('instituciones/{institucion}/hospitals', [InstitucionController::clas
     ->name('instituciones.hospitals')
     ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
 
+Route::middleware('role_or_permission:Super Admin|menu.instituciones.list|menu.instituciones.hospitals')->group(function () {
+    Route::get('instituciones/{institucion}/services', [\App\Http\Controllers\Admin\EnabledServicesController::class, 'edit'])
+        ->name('instituciones.hospitals.services.institution.edit');
+    Route::patch('instituciones/{institucion}/services', [\App\Http\Controllers\Admin\EnabledServicesController::class, 'update'])
+        ->name('instituciones.hospitals.services.institution.update');
+    Route::get('instituciones/{institucion}/hospitals/{hospital}/services', [\App\Http\Controllers\Admin\EnabledServicesController::class, 'edit'])
+        ->name('instituciones.hospitals.services.hospital.edit');
+    Route::patch('instituciones/{institucion}/hospitals/{hospital}/services', [\App\Http\Controllers\Admin\EnabledServicesController::class, 'update'])
+        ->name('instituciones.hospitals.services.hospital.update');
+});
+
 Route::get('instituciones/{institucion}/hospitals/exportar', [InstitucionController::class, 'exportarHospitalesRelacionados'])
     ->name('instituciones.hospitals.export')
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
+
+Route::get('instituciones/{institucion}/hospitals/{hospital}/fields/{field}', [\App\Http\Controllers\Admin\InstitutionHospitalFieldController::class, 'edit'])
+    ->whereIn('field', ['services', 'routes', 'sellers'])
+    ->name('instituciones.hospitals.fields.edit')
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
+
+Route::patch('instituciones/{institucion}/hospitals/{hospital}/fields/{field}', [\App\Http\Controllers\Admin\InstitutionHospitalFieldController::class, 'update'])
+    ->whereIn('field', ['services', 'routes', 'sellers'])
+    ->name('instituciones.hospitals.fields.update')
     ->middleware(['role_or_permission:Super Admin|menu.instituciones.hospitals']);
 
 Route::get('instituciones/{institucion}/hospitals/create', [HospitalController::class, 'createForInstitution'])

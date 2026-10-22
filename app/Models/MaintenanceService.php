@@ -20,10 +20,15 @@ class MaintenanceService extends Model
         'identification',
         'providers',
         'is_active',
+        'description',
+        'applicable_assets',
+        'deliverables',
+        'report_required',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'report_required' => 'boolean',
     ];
 
     public function laboratory(): BelongsTo
@@ -36,5 +41,10 @@ class MaintenanceService extends Model
         return $this->hasMany(MaintenanceServiceQuote::class)
             ->orderBy('price')
             ->orderBy('supplier_name');
+    }
+
+    public function serviceProviders()
+    {
+        return $this->belongsToMany(MaintenanceProvider::class, 'maintenance_provider_service', 'service_id', 'provider_id');
     }
 }

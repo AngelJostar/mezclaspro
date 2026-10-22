@@ -1,0 +1,26 @@
+.hospital-field-dialog {
+    width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+    padding: 0; border: 1px solid #dbe1ee; border-radius: 16px;
+    color: #25345c; background: #fff; box-shadow: 0 20px 60px #17255440;
+}
+.hospital-field-dialog::backdrop { background: #16204780; }
+.hospital-field-dialog form { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
+.hospital-field-dialog header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 24px; border-bottom: 1px solid #dbe1ee; }
+.hospital-field-dialog h2 { font-size: 20px; font-weight: 600; }
+.hospital-field-dialog header p { font-size: 13px; margin-top: 4px; }
+.hospital-field-cross { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; font-size: 26px; line-height: 1; }
+.hospital-field-cross:hover { background: #f1f5f9; }
+.hospital-field-body { padding: 20px 24px; overflow-y: auto; min-height: 100px; }
+.hospital-field-search { display: block; font-size: 13px; margin-bottom: 14px; }
+.hospital-field-search input { display: block; width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 4px; }
+.hospital-field-dialog fieldset { display: flex; flex-direction: column; gap: 8px; }
+.hospital-field-option { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #dbe1ee; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.hospital-field-dialog .hospital-field-option input[type="checkbox"] { flex-shrink: 0; width: 16px; height: 16px; min-height: 16px; padding: 0; accent-color: #3d397d; border-radius: 3px; }
+.hospital-field-option:has(input:checked) { background: #f3f2ff; border-color: #a5a2d6; }
+.hospital-field-dialog [data-hospital-field-error] { color: #b91c1c; margin-bottom: 12px; }
+.hospital-field-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 16px 24px; border-top: 1px solid #dbe1ee; }
+.hospital-field-primary, .hospital-field-secondary { border: 1px solid #3d397d; border-radius: 999px; padding: 10px 18px; font-size: 14px; font-weight: 600; }
+.hospital-field-primary { background: #3d397d; color: #fff; }
+.hospital-field-secondary { background: #fff; color: #3d397d; }
+.hospital-field-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.hospital-field-dialog [hidden] { display: none !important; }

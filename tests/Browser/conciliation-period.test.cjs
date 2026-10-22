@@ -11,6 +11,36 @@ const styles = [manifest['resources/css/app.css'].file, ...manifest['resources/j
 const script = buildSync({ entryPoints: [path.join(root, 'resources/js/conciliation-period.js')], bundle: true, write: false, format: 'iife' }).outputFiles[0].text;
 const render = (action, data = {}, saved = {}, decisions = []) => execFileSync('php', ['tests/Browser/fixtures/conciliation-period.php', action, JSON.stringify(data), JSON.stringify(saved), JSON.stringify(decisions)], { cwd: root, encoding: 'utf8' });
 
+test('returning to Prodifem refreshes the hospital acceptance without losing the table', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    try {
+        const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+        const html = render('page');
+        let updatedGroups = [], refreshes = 0;
+        await page.route('**/*', async route => {
+            const url = new URL(route.request().url());
+            if (url.hostname !== 'conciliation.test') return route.abort();
+            if (url.pathname.endsWith('/estado')) {
+                refreshes++;
+                return route.fulfill({ json: { groups: updatedGroups } });
+            }
+            if (route.request().resourceType() === 'document') return route.fulfill({ contentType: 'text/html', body: `<meta charset="utf-8"><style>${styles}</style>${html}<script>${script}</script>` });
+            return route.abort();
+        });
+        await page.goto('https://conciliation.test/admin/instituciones-reportes?seccion=conciliacion&modalidad=periodo');
+        updatedGroups = await page.locator('[data-period-groups]').evaluate(el => JSON.parse(el.textContent));
+        updatedGroups[0] = { ...updatedGroups[0], conciliation_status: 'Aceptada', bucket: 'recibidas', sent_folio: 'CON-000001',
+            client_acceptance: { by: 'Hospital de prueba', at: '21/10/2026 12:00', folio: 'CON-000002' } };
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        const row = page.locator('[data-period-row]').first();
+        await row.getByRole('button', { name: 'Aceptada', exact: true }).waitFor();
+        assert.match(await row.locator('[data-period-client-acceptance]').innerText(), /Hospital de prueba/);
+        assert.equal(await page.locator('[data-period-row]').count(), 2);
+        assert.equal(await row.locator('[data-period-authorize-open]').isDisabled(), true);
+        assert.ok(refreshes > 0);
+    } finally { await browser.close(); }
+});
+
 test('period view filters, reviews drafts, cancels, accepts totals and sends a row', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
     try {
@@ -64,6 +94,10 @@ test('period view filters, reviews drafts, cancels, accepts totals and sends a r
         assert.equal(await page.getByRole('link', { name: 'Por periodo', exact: true }).getAttribute('aria-current'), 'page');
         const row = rows.first();
         assert.match(await row.locator('[data-period-total]').innerText(), /1,200.25/);
+        assert.equal(await row.getAttribute('data-conciliation-differences'), 'false');
+        assert.equal(await row.locator('[data-period-total-count]').innerText(), '3');
+        assert.equal(await row.locator('[data-period-yes-count]').innerText(), '3');
+        assert.equal(await row.locator('[data-period-no-count]').innerText(), '0');
         assert.equal(await row.locator('[data-period-status]').innerText(), 'Pendiente');
         assert.equal(await row.locator('[data-period-authorize-open]').isDisabled(), true);
         const observationsButton = row.locator('.ht-view[data-period-observations]');
@@ -105,6 +139,12 @@ test('period view filters, reviews drafts, cancels, accepts totals and sends a r
         assert.equal(saves, 1);
         assert.match(await row.locator('[data-period-new]').innerText(), /700.25/);
         assert.equal(await row.locator('[data-period-status]').innerText(), 'Con cambios');
+        assert.equal(await row.locator('[data-period-total-count]').innerText(), '3');
+        assert.equal(await row.locator('[data-period-yes-count]').innerText(), '2');
+        assert.equal(await row.locator('[data-period-no-count]').innerText(), '1');
+        for (const [name, color] of [['total', 'rgb(107, 114, 128)'], ['yes', 'rgb(202, 138, 4)'], ['no', 'rgb(220, 38, 38)']]) {
+            assert.equal(await row.locator(`.ht-conciliation-count--${name}`).evaluate(el => getComputedStyle(el).color), color);
+        }
         assert.equal(await observationsButton.isEnabled(), true);
         assert.equal(await row.locator('[data-period-authorize-open]').isEnabled(), true);
         await observationsButton.click();
