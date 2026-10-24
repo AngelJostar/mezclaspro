@@ -10,9 +10,9 @@ const root = path.resolve(__dirname, '../..');
 const manifest = JSON.parse(readFileSync(path.join(root, 'public/build/manifest.json')));
 const styles = [manifest['resources/css/app.css'].file, ...manifest['resources/js/app.js'].css]
     .map(file => readFileSync(path.join(root, 'public/build', file), 'utf8')).join('\n');
-const script = buildSync({ stdin: { contents: "import './resources/js/fixed-table-scrollbar'; import './resources/js/personnel-table-icons';", resolveDir: root },
+const script = buildSync({ stdin: { contents: "import './resources/js/fixed-table-scrollbar'; import './resources/js/personnel-table-icons'; import './resources/js/table-column-filters';", resolveDir: root },
     bundle: true, write: false, format: 'iife', loader: { '.css': 'empty' },
-}).outputFiles[0].text + readFileSync(path.join(root, 'resources/js/table-column-filters.js'), 'utf8');
+}).outputFiles[0].text;
 const fixture = count => execFileSync('php', ['tests/Browser/fixtures/personnel-scrollbar.php', String(count), 'filters'], { cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
 const populated = fixture(205);
 const empty = execFileSync('php', ['tests/Browser/fixtures/personnel-scrollbar.php', '0'], { cwd: root, encoding: 'utf8' });
@@ -24,6 +24,7 @@ async function mount(browser, width, html = populated) {
     await page.route('**/*', route => route.abort());
     await page.setContent(`<style>${styles}</style><main class="admin-page sm:ml-44"><div class="admin-content">${html}</div></main><script>${script}</script>`);
     await page.locator('#personnel-column-filter-panel').waitFor({ state: 'attached' });
+    assert.deepEqual(errors, [], 'Personnel scripts initialize without errors');
     return { page, errors };
 }
 

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ConsumableLot;
 use App\Models\Nutricionales\NutritionMedicinePresentation;
 use App\Models\Oncologicos\DiluentPresentation;
 use App\Models\Oncologicos\MedicinePresentation;
@@ -51,6 +52,17 @@ class PurchaseOrderCatalogService
                 ->map(fn ($product) => $this->option($destination, $product->id, [
                     $product->diluent->denominacion_generica, $product->presentacion,
                     $product->denominacion_comercial, $product->fabricante,
+                ]))
+                ->unique('description'),
+            'consumibles' => ConsumableLot::query()
+                ->with('item:id,name')
+                ->whereHas('item')
+                ->where('warehouse_id', $warehouse->id)
+                ->orderBy('id')
+                ->get()
+                ->map(fn ($product) => $this->option($destination, $product->id, [
+                    $product->item->name, $product->presentation,
+                    $product->brand, $product->manufacturer,
                 ]))
                 ->unique('description'),
             default => collect(),

@@ -29,7 +29,7 @@ async function fixture(width = 1440, onPost) {
     await page.context().route('**/*', async route => {
         const request = route.request();
         const url = new URL(request.url());
-        if (url.pathname.endsWith('/oc-template.png')) return route.fulfill({ contentType: 'image/png', body: readFileSync(path.join(root, 'public/img/purchase-orders/oc-template.png')) });
+        if (url.pathname.endsWith('/promesa-logo.png')) return route.fulfill({ contentType: 'image/png', body: readFileSync(path.join(root, 'public/img/promesa-logo.png')) });
         if (url.pathname.endsWith('/productos')) return route.fulfill({ json: { products: [{ product_key: 'oncologicos:1', description: 'Medicamento de prueba - Frasco 100 mg' }] } });
         if (request.method() === 'POST') {
             posts.push(request.postData());
@@ -76,8 +76,8 @@ test('new purchase order opens over the list with fixed actions and closes witho
             const bounds = await page.getByRole('dialog').boundingBox();
             assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= 900);
             assert.equal(await frame.locator('[data-purchase-navigation]').count(), 0);
-            const sheet = await frame.locator('.po-sheet').evaluate(el => getComputedStyle(el).backgroundImage);
-            assert.match(sheet, /oc-template\.png/);
+            assert.equal(await frame.locator('.po-section-title').count(), 6);
+            assert.equal(await frame.locator('.po-products tbody tr').count(), 10);
             await frame.locator('.po-form-body').evaluate(el => el.scrollTop = el.scrollHeight);
             const actions = await frame.locator('.po-popup-form footer').boundingBox();
             assert.ok(actions.y >= bounds.y && actions.y + actions.height <= bounds.y + bounds.height);
@@ -131,6 +131,33 @@ test('validation stays in the popup, generation prevents duplicates and download
         assert.equal(page.url(), `${origin}/list?section=all&laboratory_id=1`);
         assert.deepEqual(errors, []);
     } finally { release(); await page.close(); }
+});
+
+test('supplier dropdown stays visible below its field in the purchase popup and fills catalog data', async () => {
+    for (const width of [1440, 390]) {
+        const { page, frame, errors, posts } = await fixture(width);
+        try {
+            await frame.getByRole('button', { name: 'Mostrar proveedores registrados' }).click();
+            const menu = frame.locator('.po-supplier-menu');
+            await menu.waitFor({ state: 'visible' });
+            const position = await menu.evaluate(el => {
+                const rect = el.getBoundingClientRect(), field = document.querySelector('.po-supplier-field').getBoundingClientRect();
+                return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, fieldBottom: field.bottom, width: innerWidth, height: innerHeight };
+            });
+            assert.ok(position.left >= 0 && position.right <= position.width);
+            assert.ok(position.top >= position.fieldBottom && position.bottom <= position.height);
+            if (process.env.PO_SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.PO_SCREENSHOT_DIR, `supplier-picker-${width}.png`) });
+            await frame.locator('#po-supplier-options').getByRole('option').click();
+            assert.equal(await frame.locator('#supplier_rfc').inputValue(), 'PRU010101AAA');
+            assert.equal(await frame.locator('#supplier_bank_details').inputValue(), 'Cuenta de prueba');
+            assert.equal(await frame.locator('#supplier_address').inputValue(), 'Dirección del proveedor');
+            assert.equal(await frame.locator('#supplier_contact').inputValue(), 'Contacto de prueba');
+            assert.equal(await frame.locator('#supplier_phone').inputValue(), '5500000000');
+            assert.equal(await menu.isVisible(), false);
+            assert.equal(posts.length, 0);
+            assert.deepEqual(errors, []);
+        } finally { await page.close(); }
+    }
 });
 
 test('an unconfirmed server response keeps captured data and blocks accidental resubmission', async () => {

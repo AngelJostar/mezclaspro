@@ -28,6 +28,7 @@ class PersonnelProfile extends Model
         'hire_date',
         'employment_status',
         'force_password_change',
+        'training_access_configured',
         'cv_path',
         'cv_original_name',
         'prior_experience',
@@ -38,6 +39,7 @@ class PersonnelProfile extends Model
         'positions' => 'array',
         'hire_date' => 'date',
         'force_password_change' => 'boolean',
+        'training_access_configured' => 'boolean',
     ];
 
     public function user(): BelongsTo

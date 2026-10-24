@@ -44,7 +44,9 @@ class LaboratoryPurchaseOrderController extends Controller
             ->orderBy('name')
             ->get()
             ->map(fn (Supplier $supplier): array => [
+                'id' => $supplier->id,
                 'name' => $supplier->name,
+                'commercial_name' => $supplier->commercial_name,
                 'rfc' => $supplier->rfc,
                 'contact_name' => $supplier->contact_name,
                 'phone' => $supplier->phone,
@@ -103,7 +105,6 @@ class LaboratoryPurchaseOrderController extends Controller
             'supplier_contact' => ['nullable', 'string', 'max:255'],
             'supplier_phone' => ['nullable', 'string', 'max:40'],
             'quotation_number' => ['nullable', 'string', 'max:255'],
-            'order_type' => ['nullable', 'string', 'max:80'],
             'supplier_email' => ['nullable', 'email', 'max:255'],
             'supplier_fax' => ['nullable', 'string', 'max:40'],
             'requested_at' => ['required', 'date'],
@@ -127,6 +128,7 @@ class LaboratoryPurchaseOrderController extends Controller
         ]);
 
         $creator = $request->user();
+        $validated['order_type'] = LaboratoryPurchaseOrder::orderTypeForDestination($validated['inventory_destination']);
         $validated['prepared_by'] = trim(($creator?->name ?? '') . ' ' . ($creator?->lastname ?? ''));
 
         $deliveryLaboratory = Laboratory::findOrFail($validated['delivery_laboratory_id']);
@@ -248,12 +250,12 @@ class LaboratoryPurchaseOrderController extends Controller
             'phone' => $orderData['supplier_phone'] ?? null,
             'email' => $orderData['supplier_email'] ?? null,
             'fax' => $orderData['supplier_fax'] ?? null,
-            'category' => $orderData['order_type'] ?? null,
             'address' => $orderData['supplier_address'] ?? null,
             'bank_details' => $orderData['supplier_bank_details'] ?? null,
         ]);
 
         if (! $supplier->exists) {
+            $supplier->category = $orderData['order_type'];
             $supplier->status = Supplier::STATUS_ACTIVE;
             $supplier->created_by = auth()->id();
         }

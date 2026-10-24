@@ -33,6 +33,7 @@ class PersonnelEditingTest extends TestCase
             '2026_08_20_000006_create_personnel_profiles_table.php',
             '2026_10_02_000001_add_institutional_email_to_personnel_profiles.php',
             '2026_10_02_000002_create_hospital_salesperson_table.php',
+            '2026_10_23_000001_create_training_program_catalog.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -298,6 +299,7 @@ class PersonnelEditingTest extends TestCase
         foreach (['personnel-create-modal', 'personnel-edit-modal'] as $modal) {
             $html = view('admin.capacitaciones.partials.'.$modal, $view->getData() + [
                 'errors' => new \Illuminate\Support\ViewErrorBag,
+                'projects' => \App\Support\TrainingAccess::catalog(auth()->user()),
             ])->render();
             $this->assertStringContainsString('value="Soporte a ventas (Cotizaciones)"', $html);
         }

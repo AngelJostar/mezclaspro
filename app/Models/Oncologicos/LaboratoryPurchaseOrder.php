@@ -11,9 +11,11 @@ class LaboratoryPurchaseOrder extends Model
 {
     public const INVENTORY_DESTINATIONS = [
         'oncologicos' => 'Oncológico',
-        'nutricionales' => 'Nutricional',
         'antibioticos' => 'Antibióticos',
-        'insumos' => 'Insumos',
+        'nutricionales' => 'Nutricional',
+        // Keep the existing inventory key used by the diluent warehouse and historical orders.
+        'insumos' => 'Diluyentes',
+        'consumibles' => 'Consumibles',
     ];
 
     protected $fillable = [
@@ -95,5 +97,14 @@ class LaboratoryPurchaseOrder extends Model
     public function inventoryDestinationLabel(): string
     {
         return self::INVENTORY_DESTINATIONS[$this->inventory_destination] ?? 'Sin subalmacén asignado';
+    }
+
+    public static function orderTypeForDestination(string $destination): string
+    {
+        return match ($destination) {
+            'oncologicos', 'antibioticos', 'nutricionales' => 'Medicamentos',
+            'insumos', 'consumibles' => 'Insumos',
+            default => '',
+        };
     }
 }

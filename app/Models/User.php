@@ -86,6 +86,12 @@ class User extends Authenticatable
         return $this->hasOne(PersonnelProfile::class);
     }
 
+    public function trainingPrograms(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(TrainingProgram::class, 'training_program_access', 'user_id', 'training_program_id')
+            ->withPivot(['module_ids', 'all_modules'])->withTimestamps();
+    }
+
     public function isSalesperson(): bool
     {
         return $this->hasAnyRole([PersonnelProfile::POSITION_SELLER, 'Ventas'])

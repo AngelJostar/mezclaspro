@@ -3,7 +3,11 @@
 require 'vendor/autoload.php';
 $app = require 'bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-config(['session.driver' => 'array', 'cache.default' => 'array']);
+config(['session.driver' => 'array', 'cache.default' => 'array', 'database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+Illuminate\Support\Facades\DB::purge('sqlite');
+Illuminate\Support\Facades\Schema::create('users', fn ($table) => $table->id());
+Illuminate\Support\Facades\Schema::create('personnel_profiles', fn ($table) => $table->id());
+(require database_path('migrations/2026_10_23_000001_create_training_program_catalog.php'))->up();
 $request = Illuminate\Http\Request::create('http://localhost/admin/capacitaciones/personal');
 $request->setRouteResolver(fn () => app('router')->getRoutes()->getByName('admin.capacitaciones.personal'));
 $app->instance('request', $request);

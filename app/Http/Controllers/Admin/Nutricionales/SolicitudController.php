@@ -43,6 +43,7 @@ use App\Services\MedicineRemainderService;
 use App\Services\NutritionTheoreticalWeightService;
 use App\Services\NutritionDiluentService;
 use App\Support\SolicitudStatusFilter;
+use App\Support\RequestCreationPopup;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
@@ -660,6 +661,9 @@ class SolicitudController extends Controller
     }
     public function create(Request $request)
     {
+        if (RequestCreationPopup::completed($request)) {
+            return RequestCreationPopup::result();
+        }
         if ($request->attributes->get('preparationQuotation')) {
             return view('admin.nutricionales.solicitudes.create', [
                 'inputs' => collect(), 'presentationsByInput' => collect(), 'activeSelections' => collect(),
@@ -671,16 +675,19 @@ class SolicitudController extends Controller
         $hospital = $user->hospital;
 
         if (!$hospital) {
+            if ($request->boolean('request_popup')) return RequestCreationPopup::result('Tu usuario no tiene hospital asignado.');
             return redirect()->route('admin.nutricionales.solicitudes.index')
                 ->withErrors(['error' => 'Tu usuario no tiene hospital asignado.']);
         }
 
         if (!$hospital->nutri_medicine_list_id) {
+            if ($request->boolean('request_popup')) return RequestCreationPopup::result('Tu hospital no tiene lista nutricional asignada.');
             return redirect()->route('admin.nutricionales.solicitudes.index')
                 ->withErrors(['error' => 'Tu hospital no tiene lista nutricional asignada.']);
         }
 
         if (!$hospital->laboratory_id) {
+            if ($request->boolean('request_popup')) return RequestCreationPopup::result('Tu hospital no tiene centro de mezclas asignado.');
             return redirect()->route('admin.nutricionales.solicitudes.index')
                 ->withErrors(['error' => 'Tu hospital no tiene centro de mezclas asignado.']);
         }
@@ -1178,6 +1185,11 @@ class SolicitudController extends Controller
                     'icon' => "success"
                 ]
             );
+
+            if ($request->boolean('request_popup')) {
+                session()->forget('swal');
+                return RequestCreationPopup::saved('nutricionales');
+            }
 
             return redirect()->route('admin.nutricionales.solicitudes.index');
         } catch (\DomainException $e) {

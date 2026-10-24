@@ -1,5 +1,6 @@
 import { createElement, createIcons, ChevronLeft, ChevronRight, Download, FilePlus2, X } from 'lucide';
 import { createProductPicker } from './purchase-product-picker';
+import { createSupplierPicker } from './purchase-supplier-picker';
 import '../css/purchase-order.css';
 
 function initializePurchaseOrder() {
@@ -24,7 +25,8 @@ function initializePurchaseOrder() {
     const deliveryDestinations = config.destinations;
     const supplierCatalog = config.suppliers;
     const supplierInput = document.getElementById('supplier');
-    const slots = [0, 1].map((slot) => ({
+    const supplierPicker = createSupplierPicker(supplierInput, document.getElementById('po-supplier-toggle'), supplierCatalog, applyCatalogSupplier);
+    const slots = Array.from(document.querySelectorAll('[data-item-part]'), (element) => Number(element.dataset.itemSlot)).map((slot) => ({
         slot,
         part: document.querySelector(`[data-item-part][data-item-slot="${slot}"]`),
         description: document.querySelector(`[data-item-slot="${slot}"] [data-item-field="description"]`),
@@ -35,6 +37,7 @@ function initializePurchaseOrder() {
         toggle: document.querySelector(`[data-product-toggle="${slot}"]`),
     }));
 
+    const pageSize = slots.length;
     let items = config.items;
     let currentPage = 0;
     let products = new Map();
@@ -56,7 +59,7 @@ function initializePurchaseOrder() {
     })) : [{ description: '', quantity: 1, unit_price: 0 }];
 
     const picker = createProductPicker(slots, (slotIndex, product) => {
-        const itemIndex = currentPage * 2 + slotIndex;
+        const itemIndex = currentPage * pageSize + slotIndex;
         // The sheet's spare row becomes a real line only when a product is entered.
         if (!items[itemIndex]) {
             if (!catalogReady || !products.size || itemIndex !== items.length) return;
@@ -151,23 +154,15 @@ function initializePurchaseOrder() {
         return Number.isFinite(parsed) ? parsed : 0;
     }
 
-    function applyCatalogSupplier() {
-        const selectedName = supplierInput.value.trim().toLocaleLowerCase('es-MX');
-        const supplier = supplierCatalog.find((item) =>
-            String(item.name ?? '').trim().toLocaleLowerCase('es-MX') === selectedName
-        );
-
-        if (!supplier) return;
-
+    function applyCatalogSupplier(supplier) {
         const values = {
-            supplier_rfc: supplier.rfc,
-            supplier_contact: supplier.contact_name,
-            supplier_phone: supplier.phone,
-            supplier_email: supplier.email,
-            supplier_fax: supplier.fax || 'N/A',
-            order_type: supplier.category,
-            supplier_address: supplier.address,
-            supplier_bank_details: supplier.bank_details,
+            supplier_rfc: supplier?.rfc,
+            supplier_contact: supplier?.contact_name,
+            supplier_phone: supplier?.phone,
+            supplier_email: supplier?.email,
+            supplier_fax: supplier?.fax || 'N/A',
+            supplier_address: supplier?.address,
+            supplier_bank_details: supplier?.bank_details,
         };
 
         Object.entries(values).forEach(([id, value]) => {
@@ -176,7 +171,7 @@ function initializePurchaseOrder() {
     }
 
     function pageCount() {
-        return Math.max(1, Math.ceil(items.length / 2));
+        return Math.max(1, Math.ceil(items.length / pageSize));
     }
 
     function selectedDeliveryLaboratory() {
@@ -192,6 +187,7 @@ function initializePurchaseOrder() {
         const destination = selectedDeliveryLaboratory();
         const warehouse = selectedWarehouse();
         const inventoryLabel = inventoryDestinationSelect.selectedOptions[0]?.dataset.label ?? '';
+        document.getElementById('order_type').value = inventoryDestinationSelect.selectedOptions[0]?.dataset.orderType ?? '';
 
         deliveryAttentionInput.value = warehouse
             ? `${warehouse.name} - ${destination.name}`
@@ -246,7 +242,7 @@ function initializePurchaseOrder() {
 
     function saveVisibleItems() {
         slots.forEach(({ slot, description, quantity, unitPrice }) => {
-            const itemIndex = currentPage * 2 + slot;
+            const itemIndex = currentPage * pageSize + slot;
             if (itemIndex >= items.length) return;
 
             items[itemIndex] = {
@@ -267,7 +263,7 @@ function initializePurchaseOrder() {
         });
 
         slots.forEach(({ slot, subtotal: subtotalCell }) => {
-            const item = items[currentPage * 2 + slot];
+            const item = items[currentPage * pageSize + slot];
             subtotalCell.textContent = item
                 ? money.format(numberValue(item.quantity) * numberValue(item.unit_price))
                 : '';
@@ -286,7 +282,7 @@ function initializePurchaseOrder() {
     function renderPage() {
         picker.close();
         slots.forEach(({ slot, part, description, quantity, unitPrice, subtotal, removeButton, toggle }) => {
-            const itemIndex = currentPage * 2 + slot;
+            const itemIndex = currentPage * pageSize + slot;
             const item = items[itemIndex];
             const inputs = [description, quantity, unitPrice];
 
@@ -305,7 +301,7 @@ function initializePurchaseOrder() {
                 removeButton.title = `Eliminar partida ${itemIndex + 1}`;
                 removeButton.setAttribute('aria-label', `Eliminar partida ${itemIndex + 1}`);
             } else {
-                part.textContent = '';
+                part.textContent = itemIndex + 1;
                 description.value = '';
                 quantity.value = '';
                 unitPrice.value = '';
@@ -317,8 +313,8 @@ function initializePurchaseOrder() {
                 removeButton.hidden = true;
                 removeButton.disabled = true;
             }
-            description.disabled = !catalogReady || !products.size;
-            description.placeholder = catalogReady
+            description.disabled = !catalogReady || !products.size || itemIndex > items.length;
+            description.placeholder = itemIndex > items.length ? '' : catalogReady
                 ? (products.size ? 'Buscar producto' : 'Sin productos en este subalmacén')
                 : (catalogStatus.dataset.state === 'loading' ? 'Cargando catálogo...' : 'Selecciona central, almacén y subalmacén');
             toggle.disabled = description.disabled;
@@ -329,7 +325,7 @@ function initializePurchaseOrder() {
 
         previousPage.disabled = currentPage === 0;
         nextPage.disabled = currentPage >= pageCount() - 1;
-        document.getElementById('po-items-page').textContent = `${currentPage * 2 + 1}-${Math.min(currentPage * 2 + 2, items.length)} de ${items.length}`;
+        document.getElementById('po-items-page').textContent = `${currentPage * pageSize + 1}-${Math.min(currentPage * pageSize + pageSize, items.length)} de ${items.length}`;
         updateTotals();
     }
 
@@ -369,9 +365,9 @@ function initializePurchaseOrder() {
 
         if (invalidIndex === -1) return true;
 
-        currentPage = Math.floor(invalidIndex / 2);
+        currentPage = Math.floor(invalidIndex / pageSize);
         renderPage();
-        const slot = slots[invalidIndex % 2];
+        const slot = slots[invalidIndex % pageSize];
         const target = !products.has(items[invalidIndex].product_key)
             ? slot.description
             : (numberValue(items[invalidIndex].quantity) <= 0 ? slot.quantity : slot.unitPrice);
@@ -387,14 +383,14 @@ function initializePurchaseOrder() {
     document.getElementById('add-item').addEventListener('click', function () {
         saveVisibleItems();
         items.push({ description: '', quantity: 1, unit_price: 0 });
-        currentPage = Math.floor((items.length - 1) / 2);
+        currentPage = Math.floor((items.length - 1) / pageSize);
         renderPage();
-        slots[(items.length - 1) % 2].description.focus();
+        slots[(items.length - 1) % pageSize].description.focus();
     });
 
     slots.forEach(({ slot, removeButton }) => {
         removeButton.addEventListener('click', function () {
-            const itemIndex = currentPage * 2 + slot;
+            const itemIndex = currentPage * pageSize + slot;
             if (itemIndex === 0 || itemIndex >= items.length) return;
 
             saveVisibleItems();
@@ -405,7 +401,6 @@ function initializePurchaseOrder() {
     });
 
     discountInput.addEventListener('input', updateTotals);
-    supplierInput.addEventListener('change', applyCatalogSupplier);
     deliveryLaboratorySelect.addEventListener('change', () => { renderWarehouses(); loadProducts(true); });
     warehouseSelect.addEventListener('change', () => { updateDeliveryAddress(); loadProducts(true); });
     inventoryDestinationSelect.addEventListener('change', () => { syncDeliveryFields(); loadProducts(true); });
@@ -418,6 +413,7 @@ function initializePurchaseOrder() {
 
     const popupState = (action, extra = {}) => document.dispatchEvent(new CustomEvent('workflow-popup-state', { detail: { action, ...extra } }));
     async function submitPopup() {
+        supplierPicker.close();
         submitting = true;
         const errors = document.querySelector('[data-po-errors]');
         const submit = form.querySelector('[type="submit"]');
@@ -504,6 +500,7 @@ function initializePurchaseOrder() {
         }
     });
 
+    syncDeliveryFields();
     renderPage();
     loadProducts();
 }

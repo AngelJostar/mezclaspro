@@ -22,6 +22,16 @@ use Spatie\Permission\Models\Role;
 
 class TrainingPersonnelController extends Controller
 {
+    public function trainingPrograms(): JsonResponse
+    {
+        $programs = \App\Models\TrainingProgram::query()->select(['id', 'title', 'module_definitions'])
+            ->orderBy('created_at')->orderBy('id')->get()->map(fn ($program) => [
+                'id' => $program->id, 'title' => $program->title,
+                'modules' => array_map(fn ($module) => \Illuminate\Support\Arr::only($module, ['id', 'stage', 'title']), $program->module_definitions ?? []),
+            ])->values();
+        return response()->json(['programs' => $programs])->header('Cache-Control', 'no-store, private');
+    }
+
     public function index(Request $request): View
     {
         $laboratories = Laboratory::query()
@@ -62,6 +72,7 @@ class TrainingPersonnelController extends Controller
                 'hospital.laboratory:id,nombre',
                 'roles:id,name',
                 'permissions:id,name',
+                'trainingPrograms',
             ])
             ->orderByDesc('id')
             ->get()
@@ -81,7 +92,10 @@ class TrainingPersonnelController extends Controller
                     'initials' => $this->initials($name),
                     'name' => $name,
                     'completedPrograms' => [],
-                    'currentPrograms' => [],
+                    'currentPrograms' => $user->trainingPrograms->map(fn ($program) => [
+                        'id' => $program->id, 'name' => $program->title, 'progress' => 0,
+                        'startDate' => $program->pivot->created_at?->format('d/m/Y'),
+                    ])->all(),
                     'positions' => $positions,
                     'hireDate' => $profile?->hire_date?->format('d/m/Y') ?? 'Sin fecha',
                     'sortDate' => $profile?->hire_date?->getTimestamp() ?? 0,
@@ -336,10 +350,18 @@ class TrainingPersonnelController extends Controller
                 || $request->user()->can('menu.capacitaciones.personal'), 403);
         }
 
+        $validated += $request->validate([
+            'training_all' => ['sometimes', 'array', 'max:200'],
+            'training_all.*' => ['string', 'distinct', 'max:191'],
+            'training_modules' => ['sometimes', 'array', 'max:200'],
+            'training_modules.*' => ['array', 'max:200'],
+            'training_modules.*.*' => ['string', 'max:191'],
+        ]);
         $cvPath = $request->file('cv')?->store('personnel/cv', 'local');
 
         try {
             DB::transaction(function () use ($validated, $request, $cvPath) {
+                $trainingAccess = \App\Support\TrainingAccess::selections($validated);
                 $plainPassword = $validated['password'];
                 $lastName = trim($validated['paternal_surname'].' '.($validated['maternal_surname'] ?? ''));
                 $trainingUsername = User::suggestTrainingUsername($validated['username']);
@@ -377,11 +399,15 @@ class TrainingPersonnelController extends Controller
                     'hire_date' => $validated['hire_date'],
                     'employment_status' => $validated['employment_status'],
                     'force_password_change' => false,
+                    'training_access_configured' => true,
                     'cv_path' => $cvPath,
                     'cv_original_name' => $request->file('cv')?->getClientOriginalName(),
                     'prior_experience' => $validated['prior_experience'] ?? null,
                     'additional_information' => $validated['additional_information'] ?? null,
                 ]);
+                foreach ($trainingAccess as $access) {
+                    DB::table('training_program_access')->insert($access + ['user_id' => $user->id]);
+                }
             });
         } catch (\Throwable $exception) {
             if ($cvPath) {

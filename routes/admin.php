@@ -834,6 +834,26 @@ Route::view('capacitaciones', 'admin.capacitaciones.index')
 Route::view('capacitaciones/programas', 'admin.capacitaciones.index')
     ->name('capacitaciones.programas');
 
+Route::prefix('capacitaciones/programas/catalogo')->name('capacitaciones.programas.catalogo.')
+    ->middleware('role:Super Admin|Admin')->group(function () {
+        $controller = \App\Http\Controllers\Admin\TrainingProgramController::class;
+        Route::post('/', [$controller, 'store'])->name('store');
+        Route::post('/importar', [$controller, 'importLegacy'])->name('import');
+        Route::patch('/{program}', [$controller, 'update'])->name('update');
+        Route::delete('/{program}', [$controller, 'destroy'])->name('destroy');
+        $content = \App\Http\Controllers\Admin\TrainingContentController::class;
+        Route::post('/{program}/modulos', [$content, 'saveModule'])->name('modules.store');
+        Route::patch('/{program}/modulos/{module}', [$content, 'saveModule'])->name('modules.update');
+        Route::post('/{program}/modulos/{module}/capitulos/{chapter?}', [$content, 'saveChapter'])->name('chapters.save');
+        Route::delete('/{program}/modulos/{module}/capitulos/{chapter}', [$content, 'deleteChapter'])->name('chapters.destroy');
+        Route::post('/{program}/tareas', [$content, 'saveTask'])->name('tasks.store');
+        Route::patch('/{program}/tareas/{task}', [$content, 'saveTask'])->name('tasks.update');
+        Route::post('/{program}/examenes/importar', [$content, 'importExams'])->name('exams.import');
+        Route::put('/{program}/examenes/{exam}', [$content, 'saveExam'])->name('exams.save');
+    });
+Route::get('capacitaciones/programas/{program}/modulos/{module}/capitulos/{chapter}/video',
+    [\App\Http\Controllers\Admin\TrainingContentController::class, 'video'])->name('capacitaciones.programas.video');
+
 Route::get('capacitaciones/alumnos', [TrainingPersonnelController::class, 'students'])
     ->name('capacitaciones.alumnos');
 
@@ -842,6 +862,10 @@ Route::get('capacitaciones/personal', [TrainingPersonnelController::class, 'inde
 
 Route::post('capacitaciones/personal', [TrainingPersonnelController::class, 'store'])
     ->name('capacitaciones.personal.store');
+
+Route::get('capacitaciones/personal/programas-disponibles', [TrainingPersonnelController::class, 'trainingPrograms'])
+    ->name('capacitaciones.personal.programs')
+    ->middleware('role_or_permission:Super Admin|Admin|menu.capacitaciones.personal');
 
 Route::get('capacitaciones/personal/{personnel}/edit', [TrainingPersonnelController::class, 'edit'])
     ->name('capacitaciones.personal.edit')

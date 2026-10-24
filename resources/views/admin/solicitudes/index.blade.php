@@ -9,7 +9,7 @@
         </div>
 
         <div class="flex shrink-0 flex-wrap items-center gap-2 pb-1">
-            <div class="relative" x-data="{ open: false }">
+            <div class="relative" data-request-create-menu x-data="{ open: false }">
                 <button type="button" @click="open = !open"
                     class="inline-flex items-center gap-2 rounded-full bg-azul-prodifem px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800">
                     <i class="fa-solid fa-plus"></i>
@@ -19,13 +19,13 @@
                 <div x-cloak x-show="open" @click.outside="open = false"
                     class="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
                     @if ($canViewNutrition)
-                        <a href="{{ route('admin.nutricionales.solicitudes.create') }}"
+                        <a href="{{ route('admin.nutricionales.solicitudes.create') }}" data-request-create-popup="Solicitud de nutrición parenteral" @click="open = false"
                             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Nutricional</a>
                     @endif
                     @if ($canViewOncology)
-                        <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'oncologicos']) }}"
+                        <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'oncologicos']) }}" data-request-create-popup="Solicitud oncológica" @click="open = false"
                             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Oncologica</a>
-                        <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'antibioticos']) }}"
+                        <a href="{{ route('admin.oncologicos.solicitudes.create', ['tipo_solicitud' => 'antibioticos']) }}" data-request-create-popup="Solicitud de antibióticos" @click="open = false"
                             class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Antibiotico</a>
                     @endif
                 </div>

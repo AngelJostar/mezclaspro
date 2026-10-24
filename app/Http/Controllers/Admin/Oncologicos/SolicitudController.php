@@ -13,6 +13,7 @@ use App\Models\Oncologicos\SolicitudOnco;
 use App\Services\InstitutionBillingPricingService;
 use App\Services\OncologyMixtureDeliveryScheduleService;
 use App\Support\SolicitudStatusFilter;
+use App\Support\RequestCreationPopup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -443,11 +444,15 @@ class SolicitudController extends Controller
 
     public function create(Request $request)
     {
+        if (RequestCreationPopup::completed($request)) {
+            return RequestCreationPopup::result();
+        }
         $quotation = $request->attributes->get('preparationQuotation');
         $requestType = $quotation?->category ?? $this->requestType($request->query('tipo_solicitud'));
         $listaId = $quotation?->price_list_id ?? $this->currentMedicineListId($requestType);
 
         if (!$listaId) {
+            if ($request->boolean('request_popup')) return RequestCreationPopup::result('Tu hospital no tiene una lista de medicamentos configurada.');
             return redirect()
                 ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'Tu hospital no tiene una lista de medicamentos configurada.']);
@@ -456,6 +461,7 @@ class SolicitudController extends Controller
         // ✅ Validar que el hospital ya tenga laboratorio asignado
         $laboratoryId = $quotation?->hospital?->laboratory_id ?? $this->currentLaboratoryId();
         if (!$laboratoryId) {
+            if ($request->boolean('request_popup')) return RequestCreationPopup::result('Tu hospital no tiene laboratorio asignado. Configúralo desde Hospitales.');
             return redirect()
                 ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'Tu hospital no tiene laboratorio asignado. Configúralo desde Hospitales.']);
@@ -477,6 +483,7 @@ class SolicitudController extends Controller
                 ->pluck('catalog_id')->unique()->values();
         }
         if ($catalogIdsPermitidos->isEmpty()) {
+            if ($request->boolean('request_popup')) return RequestCreationPopup::result('La lista de medicamentos del hospital está vacía.');
             return redirect()
                 ->route($this->indexRoute($requestType))
                 ->withErrors(['error' => 'La lista de medicamentos del hospital está vacía.']);
@@ -864,6 +871,8 @@ class SolicitudController extends Controller
 
             if ($quotation) app(\App\Services\QuotationPreparationService::class)->attachOncology($quotation, $solicitud);
             DB::commit();
+
+            if (!$quotation && $request->boolean('request_popup')) return RequestCreationPopup::saved($requestType);
 
             return redirect()
                 ->route($this->indexRoute($requestType))

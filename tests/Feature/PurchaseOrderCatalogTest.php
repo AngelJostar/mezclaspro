@@ -45,6 +45,7 @@ class PurchaseOrderCatalogTest extends TestCase
             '2026_08_13_000002_add_delivery_destination_to_laboratory_purchase_orders.php',
             '2026_08_20_000001_add_inventory_destination_to_laboratory_purchase_orders.php',
             '2026_08_20_000007_create_suppliers_table.php',
+            '2026_09_04_000001_create_consumable_inventory_tables.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -133,6 +134,54 @@ class PurchaseOrderCatalogTest extends TestCase
         ] as [$data, $error]) {
             $this->getJson($this->url().'?'.http_build_query($data))->assertUnprocessable()->assertJsonValidationErrors($error);
         }
+    }
+
+    public function test_consumables_catalog_is_scoped_deduplicated_and_keeps_exhausted_presentations(): void
+    {
+        DB::table('consumable_items')->insert(['id' => 1, 'name' => 'Guantes']);
+        foreach ([1, 1, 2, 3] as $index => $warehouse) {
+            DB::table('consumable_lots')->insert(['id' => $index + 1, 'consumable_item_id' => 1, 'warehouse_id' => $warehouse,
+                'presentation' => 'Caja 100 piezas', 'brand' => 'Marca', 'stock_actual' => 0, 'is_active' => false]);
+        }
+        $this->withoutPurchaseAuthorization();
+        $this->getJson($this->url().'?'.http_build_query($this->destination(['inventory_destination' => 'consumibles'])))
+            ->assertOk()->assertJsonCount(1, 'products')->assertJsonPath('products.0.product_key', 'consumibles:1')
+            ->assertJsonPath('products.0.description', 'Guantes - Caja 100 piezas - Marca');
+        $this->getJson($this->url().'?'.http_build_query($this->destination(['warehouse_id' => 2, 'inventory_destination' => 'consumibles'])))
+            ->assertOk()->assertJsonCount(1, 'products')->assertJsonPath('products.0.product_key', 'consumibles:3');
+        foreach (['consumibles:3', 'consumibles:4', 'insumos:1', 'oncologicos:1'] as $key) {
+            $data = $this->payload(); $data['inventory_destination'] = 'consumibles'; $data['items'][0]['product_key'] = $key;
+            $this->postJson($this->url('store'), $data)->assertUnprocessable()->assertJsonValidationErrors('items.0.product_key');
+        }
+    }
+
+    public function test_order_type_is_derived_from_each_subwarehouse_and_does_not_reclassify_the_supplier(): void
+    {
+        $this->withoutPurchaseAuthorization();
+        DB::table('suppliers')->insert(['name' => 'Proveedor prueba', 'category' => 'Proveedor mixto', 'status' => 'active']);
+        DB::table('nutrition_medicines_catalog')->insert(['id' => 1, 'denominacion_generica' => 'Aminoácidos']);
+        DB::table('nutrition_medicine_presentations')->insert(['id' => 1, 'nutrition_medicine_catalog_id' => 1, 'presentacion' => 'Bolsa']);
+        DB::table('medicine_laboratory_stocks')->insert(['nutrition_medicine_presentation_id' => 1, 'laboratory_id' => 1, 'warehouse_id' => 1]);
+        DB::table('diluents')->insert(['id' => 1, 'denominacion_generica' => 'Solución']);
+        DB::table('diluent_presentations')->insert(['id' => 1, 'diluent_id' => 1, 'laboratory_id' => 1, 'warehouse_id' => 1, 'presentacion' => 'Bolsa']);
+        DB::table('consumable_items')->insert(['id' => 1, 'name' => 'Guantes']);
+        DB::table('consumable_lots')->insert(['id' => 1, 'consumable_item_id' => 1, 'warehouse_id' => 1, 'presentation' => 'Caja']);
+        foreach (['oncologicos' => ['Medicamentos', 1], 'antibioticos' => ['Medicamentos', 2], 'nutricionales' => ['Medicamentos', 1],
+            'insumos' => ['Insumos', 1], 'consumibles' => ['Insumos', 1]] as $destination => [$type, $id]) {
+            $data = $this->payload(); $data['inventory_destination'] = $destination;
+            $data['order_type'] = 'Tipo incorrecto enviado por el navegador';
+            $data['items'][0]['product_key'] = $destination.':'.$id;
+            $this->postJson($this->url('store').'?purchase_popup=1', $data)->assertCreated();
+            $order = LaboratoryPurchaseOrder::latest('id')->first();
+            $this->assertSame($type, $order->order_type);
+            $this->assertSame($destination, $order->inventory_destination);
+            $this->assertSame('Proveedor mixto', DB::table('suppliers')->value('category'));
+            $html = view('admin.oncologicos.laboratory.purchase-orders.pdf', compact('order'))->render();
+            $this->assertStringContainsString($order->inventoryDestinationLabel(), $html);
+            $this->assertStringContainsString($type, $html);
+            $this->assertStringNotContainsString('Tipo incorrecto enviado', $html);
+        }
+        $this->assertSame(['Oncológico', 'Antibióticos', 'Nutricional', 'Diluyentes', 'Consumibles'], array_values(LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS));
     }
 
     private function payload(): array

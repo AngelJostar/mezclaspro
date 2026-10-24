@@ -3,7 +3,7 @@
     <div class="flex flex-col items-center">
         <div class="mt-2 mb-4 flex w-full items-start justify-between gap-4">
             <span class="h-10 w-10 shrink-0" aria-hidden="true"></span>
-            <h1 class="flex-1 text-center text-2xl font-medium text-gray-800">SOLICITUD DE NUTRICIÓN PARENTERAL</h1>
+            <h1 data-workflow-heading class="flex-1 text-center text-2xl font-medium text-gray-800">SOLICITUD DE NUTRICIÓN PARENTERAL</h1>
             <div class="flex shrink-0 items-center gap-2">
                 @role('Super Admin')
                     <button type="button" id="toggle-macro-layout"
@@ -16,7 +16,7 @@
                         </svg>
                     </button>
                 @endrole
-                <a href="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.index') : route('admin.nutricionales.solicitudes.index') }}"
+                <a data-workflow-popup-close href="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.index') : route('admin.nutricionales.solicitudes.index') }}"
                     class="inline-flex h-10 w-10 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                     title="Cerrar formato de solicitud"
                     aria-label="Cerrar formato de solicitud">
@@ -39,6 +39,9 @@
             @if (isset($preparationQuotation)) data-quotation-preparation @endif
             class="bg-white rounded-lg p-6 shadow-lg">
             @csrf
+            @if (request()->boolean('request_popup'))
+                <input type="hidden" name="request_popup" value="1">
+            @endif
             @isset($preparationQuotation)
                 @include('admin.solicitudes.quotations.preparation-summary')
             @endisset
@@ -249,7 +252,7 @@
             <h2 class="mb-4">MACRONUTRIENTES:</h2>
             <hr>
 
-            <div id="macro-layout-grid" data-layout-grid="macronutrients" class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+            <div id="macro-layout-grid" data-layout-grid="macronutrients" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                 @foreach ([1 => 'left', 2 => 'right'] as $columnNumber => $columnName)
                     <div data-layout-column="{{ $columnName }}" class="flex min-h-24 flex-col gap-4 rounded-md">
                         @foreach ($inputs->whereIn('category_id', [1, 2, 3, 8])->where('layout_column', $columnNumber)->sortBy('orden_enum') as $input)
@@ -276,7 +279,7 @@
             <hr>
 
             <div class="mt-4">
-                <div id="electrolyte-layout-grid" data-layout-grid="electrolytes" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div id="electrolyte-layout-grid" data-layout-grid="electrolytes" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     @foreach ([1 => 'left', 2 => 'right'] as $columnNumber => $columnName)
                         <div data-layout-column="{{ $columnName }}" class="flex min-h-24 flex-col gap-4 rounded-md">
                             @foreach ($inputs->where('category_id', 4)->where('layout_column', $columnNumber)->sortBy('orden_enum') as $input)
@@ -296,7 +299,7 @@
             <hr>
 
             <div class="mt-4">
-                <div id="additive-layout-grid" data-layout-grid="additives" class="grid grid-cols-1 xl:grid-cols-2 gap-4 w-full">
+                <div id="additive-layout-grid" data-layout-grid="additives" class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                     @foreach ([1 => 'left', 2 => 'right'] as $columnNumber => $columnName)
                         <div data-layout-column="{{ $columnName }}" class="flex min-h-24 flex-col gap-4 rounded-md">
                             @foreach ($inputs->where('category_id', 5)->where('layout_column', $columnNumber)->sortBy('orden_enum') as $input)

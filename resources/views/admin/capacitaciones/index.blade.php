@@ -195,166 +195,22 @@
             ['id' => 'tasks', 'label' => 'Tareas', 'icon' => 'fa-solid fa-list-check'],
         ];
 
-        $projects = [
-            ['id' => 'induccion', 'title' => 'Induccion y seguridad operativa', 'description' => 'Programa base para ingreso, seguridad y certificacion operativa.', 'owner' => 'Operaciones', 'modules' => 4, 'students' => 9, 'status' => 'Activo', 'tone' => 'active'],
-            ['id' => 'proveedores', 'title' => 'Validacion de proveedores', 'description' => 'Capacitacion para compras, cumplimiento y aprobacion documental.', 'owner' => 'Calidad', 'modules' => 3, 'students' => 3, 'status' => 'Activo', 'tone' => 'active'],
-            ['id' => 'almacenamiento', 'title' => 'Buenas practicas de almacenamiento', 'description' => 'Ruta para almacen, trazabilidad, orden y control de evidencias.', 'owner' => 'Almacen', 'modules' => 5, 'students' => 5, 'status' => 'Borrador', 'tone' => 'draft'],
-        ];
+        $projects = \App\Support\TrainingAccess::catalog(auth()->user());
+        $canManagePrograms = auth()->user()?->hasAnyRole(['Super Admin', 'Admin']) ?? false;
+        $modules = collect($projects)->flatMap(fn ($program) => $program['module_definitions'])->values()->all();
+        $availableProgramIds = array_column($projects, 'id');
+        $learnerProfiles = array_values(array_filter($learnerProfiles, fn ($profile) => in_array($profile['programId'], $availableProgramIds, true)));
+        $defaultLearnerProfile = $learnerProfiles[0] ?? ['id' => 'default', 'name' => auth()->user()?->name ?? 'Alumno',
+            'programId' => $projects[0]['id'] ?? '', 'programName' => $projects[0]['title'] ?? 'Sin programas asignados', 'progress' => 0];
+        if (auth()->user()?->personnelProfile?->training_access_configured && ! $canManagePrograms
+            && ! auth()->user()->can('menu.capacitaciones.personal')) {
+            $defaultLearnerProfile = ['id' => 'user-'.auth()->id(), 'name' => trim(auth()->user()->name.' '.auth()->user()->lastname),
+                'programId' => $projects[0]['id'] ?? '', 'programName' => $projects[0]['title'] ?? 'Sin programas asignados', 'progress' => 0];
+            $learnerProfiles = [$defaultLearnerProfile];
+        }
 
-        $modules = [
-            ['project' => 'induccion', 'stage' => 'Modulo 1', 'title' => 'Bienvenida e induccion', 'chapters' => 2, 'duration' => '21 min', 'description' => 'Presenta el objetivo, las reglas del recorrido y los criterios para aprobar.'],
-            ['project' => 'induccion', 'stage' => 'Modulo 2', 'title' => 'Seguridad operativa', 'chapters' => 3, 'duration' => '43 min', 'description' => 'Refuerza la prevencion de riesgos y el uso correcto del equipo de proteccion.'],
-            ['project' => 'induccion', 'stage' => 'Modulo 3', 'title' => 'Procesos esenciales', 'chapters' => 2, 'duration' => '29 min', 'description' => 'Describe procedimientos, controles y evidencias necesarias para la operacion.'],
-            ['project' => 'induccion', 'stage' => 'Modulo 4', 'title' => 'Evaluacion final y certificacion', 'chapters' => 2, 'duration' => '30 min', 'description' => 'Valida el dominio del programa antes de emitir la certificacion.'],
-            ['project' => 'proveedores', 'stage' => 'Modulo 1', 'title' => 'Alta y documentacion', 'chapters' => 2, 'duration' => '25 min', 'description' => 'Integra los requisitos y documentos necesarios para registrar proveedores.'],
-            ['project' => 'proveedores', 'stage' => 'Modulo 2', 'title' => 'Revision de cumplimiento', 'chapters' => 3, 'duration' => '35 min', 'description' => 'Revisa criterios regulatorios, fiscales y de calidad documental.'],
-            ['project' => 'proveedores', 'stage' => 'Modulo 3', 'title' => 'Validacion final', 'chapters' => 2, 'duration' => '20 min', 'description' => 'Concluye la evaluacion y autorizacion del proveedor.'],
-            ['project' => 'almacenamiento', 'stage' => 'Modulo 1', 'title' => 'Recepcion de materiales', 'chapters' => 2, 'duration' => '24 min', 'description' => 'Establece controles para recibir, revisar y registrar materiales.'],
-            ['project' => 'almacenamiento', 'stage' => 'Modulo 2', 'title' => 'Orden y clasificacion', 'chapters' => 2, 'duration' => '22 min', 'description' => 'Organiza productos conforme a sus condiciones y nivel de riesgo.'],
-            ['project' => 'almacenamiento', 'stage' => 'Modulo 3', 'title' => 'Control de temperatura', 'chapters' => 3, 'duration' => '38 min', 'description' => 'Da seguimiento a temperatura, alertas y acciones correctivas.'],
-            ['project' => 'almacenamiento', 'stage' => 'Modulo 4', 'title' => 'Inventario y trazabilidad', 'chapters' => 3, 'duration' => '40 min', 'description' => 'Controla existencias, lotes, caducidades y movimientos.'],
-            ['project' => 'almacenamiento', 'stage' => 'Modulo 5', 'title' => 'Auditoria de almacen', 'chapters' => 2, 'duration' => '28 min', 'description' => 'Comprueba el cumplimiento del proceso y documenta hallazgos.'],
-        ];
-
-        $chapters = [
-            ['title' => 'Objetivo del programa', 'duration' => '12 min', 'objective' => 'Conocer la ruta, los requisitos y el minimo de aprobacion.', 'video' => 'https://www.youtube.com/watch?v=M7lc1UVf-VE'],
-            ['title' => 'Como avanzar entre modulos', 'duration' => '9 min', 'objective' => 'Entender los bloqueos, examenes y certificados.', 'video' => 'https://www.youtube.com/watch?v=M7lc1UVf-VE'],
-        ];
-
-        $exams = [
-            [
-                'id' => 'induccion-bienvenida',
-                'projectId' => 'induccion',
-                'project' => 'Induccion y seguridad operativa',
-                'module' => 'Bienvenida e induccion',
-                'questions' => 3,
-                'minimum' => 80,
-                'status' => 'Publicado',
-                'tone' => 'active',
-                'items' => [
-                    [
-                        'text' => 'Cual es el proposito principal del programa de induccion?',
-                        'options' => [
-                            'Conocer la operacion, sus reglas y los criterios de aprobacion.',
-                            'Sustituir la capacitacion practica del puesto.',
-                            'Registrar vacaciones y permisos del personal.',
-                        ],
-                        'correct' => 0,
-                    ],
-                    [
-                        'text' => 'Que debe hacerse antes de iniciar el recorrido de capacitacion?',
-                        'options' => [
-                            'Presentar directamente el examen final.',
-                            'Revisar el objetivo y las reglas del programa.',
-                            'Solicitar el certificado de terminacion.',
-                        ],
-                        'correct' => 1,
-                    ],
-                    [
-                        'text' => 'Que condicion permite avanzar al siguiente modulo?',
-                        'options' => [
-                            'Haber abierto todos los capitulos.',
-                            'Esperar a que termine el periodo de inscripcion.',
-                            'Completar las actividades y alcanzar el minimo de aprobacion.',
-                        ],
-                        'correct' => 2,
-                    ],
-                ],
-            ],
-            [
-                'id' => 'induccion-seguridad',
-                'projectId' => 'induccion',
-                'project' => 'Induccion y seguridad operativa',
-                'module' => 'Seguridad operativa',
-                'questions' => 4,
-                'minimum' => 80,
-                'status' => 'Publicado',
-                'tone' => 'active',
-                'items' => [
-                    [
-                        'text' => 'Que debe verificarse antes de entrar a un area controlada?',
-                        'options' => [
-                            'El equipo de proteccion y las condiciones de acceso.',
-                            'La disponibilidad de lugares de estacionamiento.',
-                            'El calendario de reuniones administrativas.',
-                        ],
-                        'correct' => 0,
-                    ],
-                    [
-                        'text' => 'Que accion corresponde ante una condicion insegura?',
-                        'options' => [
-                            'Continuar y reportarla al terminar el turno.',
-                            'Detener la actividad y reportarla de inmediato.',
-                            'Resolverla sin avisar al responsable del area.',
-                        ],
-                        'correct' => 1,
-                    ],
-                    [
-                        'text' => 'Cual es la funcion principal del equipo de proteccion personal?',
-                        'options' => [
-                            'Identificar el puesto del colaborador.',
-                            'Sustituir los controles del procedimiento.',
-                            'Reducir la exposicion a riesgos identificados.',
-                        ],
-                        'correct' => 2,
-                    ],
-                    [
-                        'text' => 'Cuando debe documentarse un incidente operativo?',
-                        'options' => [
-                            'Tan pronto como sea seguro hacerlo.',
-                            'Solo cuando exista una lesion.',
-                            'Al cierre anual del programa.',
-                        ],
-                        'correct' => 0,
-                    ],
-                ],
-            ],
-            [
-                'id' => 'proveedores-cumplimiento',
-                'projectId' => 'proveedores',
-                'project' => 'Validacion de proveedores',
-                'module' => 'Revision de cumplimiento',
-                'questions' => 3,
-                'minimum' => 75,
-                'status' => 'Borrador',
-                'tone' => 'draft',
-                'items' => [
-                    [
-                        'text' => 'Que documento debe revisarse para validar la identidad fiscal del proveedor?',
-                        'options' => [
-                            'Constancia de situacion fiscal vigente.',
-                            'Lista interna de asistencia.',
-                            'Programa anual de capacitacion.',
-                        ],
-                        'correct' => 0,
-                    ],
-                    [
-                        'text' => 'Que sucede cuando un requisito documental esta vencido?',
-                        'options' => [
-                            'Se aprueba de manera automatica.',
-                            'Se solicita su actualizacion antes de concluir la validacion.',
-                            'Se elimina al proveedor sin revision.',
-                        ],
-                        'correct' => 1,
-                    ],
-                    [
-                        'text' => 'Quien debe confirmar el resultado de la revision de cumplimiento?',
-                        'options' => [
-                            'Cualquier colaborador disponible.',
-                            'Unicamente el proveedor.',
-                            'El responsable autorizado del proceso.',
-                        ],
-                        'correct' => 2,
-                    ],
-                ],
-            ],
-        ];
-
-        $programTasks = [
-            ['projectId' => 'induccion', 'title' => 'Checklist de seguridad del area', 'project' => 'Induccion y seguridad operativa', 'stage' => 'Modulo 2', 'due' => '22 ago 2026', 'status' => 'Activa', 'tone' => 'active'],
-            ['projectId' => 'induccion', 'title' => 'Subir evidencia de equipo de proteccion', 'project' => 'Induccion y seguridad operativa', 'stage' => 'Modulo 2', 'due' => '25 ago 2026', 'status' => 'Activa', 'tone' => 'active'],
-            ['projectId' => 'almacenamiento', 'title' => 'Confirmar lectura del procedimiento', 'project' => 'Buenas practicas de almacenamiento', 'stage' => 'Modulo 1', 'due' => 'Sin fecha', 'status' => 'Borrador', 'tone' => 'draft'],
-        ];
+        $exams = collect($projects)->flatMap(fn ($program) => $program['exam_definitions'] ?? [])->values()->all();
+        $programTasks = collect($projects)->flatMap(fn ($program) => collect($program['task_definitions'] ?? [])->map(fn ($task) => array_replace($task, ['project' => $program['title']])))->values()->all();
 
         $learnerTabs = [
             ['id' => 'home', 'label' => 'Inicio', 'icon' => 'fa-solid fa-house', 'active' => true],
@@ -462,14 +318,24 @@
             ],
         ];
 
+        $exams = array_values(array_filter($exams, fn ($exam) => in_array($exam['projectId'], $availableProgramIds, true)));
+        $programTasks = array_values(array_filter($programTasks, fn ($task) => in_array($task['projectId'], $availableProgramIds, true)));
+        $inductionModules = collect($modules)->where('project', 'induccion')->pluck('id')->all();
+        $learnerCurriculum = array_values(array_filter($learnerCurriculum, fn ($module) => in_array('module-'.$module['number'], $inductionModules, true)));
+        $learnerTasks = array_values(array_filter($learnerTasks, fn ($task) => in_array('module-'.$task['id'], $inductionModules, true)));
         $learnerModules = [
             ['number' => 1, 'title' => 'Bienvenida e induccion', 'status' => 'approved', 'chapters' => 2, 'tasks' => 1, 'score' => 88],
             ['number' => 2, 'title' => 'Seguridad operativa', 'status' => 'current', 'progress' => 34],
             ['number' => 3, 'title' => 'Procesos esenciales', 'status' => 'locked', 'requirement' => 'Debes aprobar el modulo 2 para desbloquear este contenido.'],
             ['number' => 4, 'title' => 'Cierre y certificacion', 'status' => 'locked', 'requirement' => 'Debes aprobar el modulo 3 para desbloquear este contenido.'],
         ];
+        $learnerModules = array_values(array_filter($learnerModules, fn ($module) => in_array('module-'.$module['number'], $inductionModules, true)));
     @endphp
 
+    @unless ($isStudentsPage)
+        <div class="training-program-scroll" data-sticky-x-position="viewport" data-sticky-x-always-visible
+            role="region" tabindex="0" aria-label="Contenido de programas de capacitación">
+    @endunless
     <div class="training-screen {{ $isPersonnelPage ? 'training-personnel-screen' : '' }}" data-training-screen>
         <header class="training-page-header">
             <div class="training-page-heading">
@@ -595,6 +461,7 @@
                         </div>
 
                         <footer>
+                            <button type="button" class="training-secondary-button training-delete-program" data-delete-program hidden>Eliminar Programa</button>
                             <button type="button" class="training-secondary-button" data-close-program-modal>Cancelar</button>
                             <button type="submit" class="training-primary-button">
                                 <i class="fa-solid fa-check"></i>
@@ -604,6 +471,9 @@
                     </form>
                 </dialog>
 
+                @include('admin.capacitaciones.partials.program-delete-modal')
+                @include('admin.capacitaciones.partials.content-modals')
+
                 <div data-program-panel="modules">
                     <div class="training-section-heading">
                         <div>
@@ -611,9 +481,9 @@
                             <p data-selected-program-name>Induccion y seguridad operativa</p>
                         </div>
 
-                        <button type="button" class="training-secondary-button">
+                        <button type="button" class="training-secondary-button" data-add-module>
                             <i class="fa-solid fa-plus"></i>
-                            <span>Agregar modulo</span>
+                            <span>Agregar módulo</span>
                         </button>
                     </div>
 
@@ -621,16 +491,16 @@
                         <aside class="training-module-list" aria-label="Modulos del programa">
                             <div class="training-module-list-heading">
                                 <strong>Modulos del programa</strong>
-                                <span data-module-count>{{ count(array_filter($modules, fn ($module) => $module['project'] === $projects[0]['id'])) }} modulos</span>
+                                <span data-module-count>{{ count(array_filter($modules, fn ($module) => $module['project'] === ($projects[0]['id'] ?? ''))) }} modulos</span>
                             </div>
                             @foreach ($modules as $index => $module)
                                 <button type="button" class="training-module-item {{ $index === 0 ? 'is-active' : '' }}"
-                                    data-module-item
+                                    data-module-item data-module-id="{{ $module['id'] }}"
                                     data-program-id="{{ $module['project'] }}"
                                     data-module-label="{{ $module['stage'] }}"
                                     data-module-title="{{ $module['title'] }}"
                                     data-module-description="{{ $module['description'] }}"
-                                    @if ($module['project'] !== $projects[0]['id']) hidden @endif>
+                                    @if ($module['project'] !== ($projects[0]['id'] ?? '')) hidden @endif>
                                     <span class="training-module-symbol"><i class="fa-solid fa-book-open"></i></span>
                                     <span>
                                         <strong>{{ $module['stage'] }} - {{ $module['title'] }}</strong>
@@ -647,64 +517,33 @@
                                     <span data-module-editor-label>Modulo 1</span>
                                     <h3 data-module-editor-title>Bienvenida e induccion</h3>
                                 </div>
-                                <button type="button" class="training-secondary-button">Editar modulo</button>
+                                <button type="button" class="training-secondary-button" data-edit-module>Editar módulo</button>
                             </div>
 
                             <div class="training-module-fields">
                                 <label>
                                     <span>Etiqueta</span>
-                                    <input value="Modulo 1" data-module-label-input>
+                                    <input value="Modulo 1" readonly data-module-label-input>
                                 </label>
                                 <label>
                                     <span>Nombre del modulo</span>
-                                    <input value="Bienvenida e induccion" data-module-title-input>
+                                    <input value="Bienvenida e induccion" readonly data-module-title-input>
                                 </label>
                                 <label class="is-wide">
                                     <span>Descripcion</span>
-                                    <input value="Presenta el objetivo, las reglas del recorrido y los criterios para aprobar." data-module-description-input>
+                                    <input value="Presenta el objetivo, las reglas del recorrido y los criterios para aprobar." data-module-description-input readonly>
                                 </label>
                             </div>
 
                             <div class="training-chapter-heading">
                                 <h4>Capitulos</h4>
-                                <button type="button" class="training-secondary-button">
+                                <button type="button" class="training-secondary-button" data-add-chapter>
                                     <i class="fa-solid fa-plus"></i>
                                     <span>Agregar capitulo</span>
                                 </button>
                             </div>
 
-                            <div class="training-chapter-list">
-                                @foreach ($chapters as $index => $chapter)
-                                    <article class="training-chapter-row" data-training-chapter>
-                                        <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
-                                        <div class="training-chapter-body">
-                                            <div class="training-chapter-row-heading">
-                                                <strong>Capitulo {{ $index + 1 }}</strong>
-                                                <button type="button" class="training-icon-button" title="Quitar capitulo" aria-label="Quitar capitulo {{ $index + 1 }}">
-                                                    <i class="fa-solid fa-trash-can"></i>
-                                                </button>
-                                            </div>
-                                            <div class="training-chapter-fields">
-                                                <label><span>Titulo</span><input value="{{ $chapter['title'] }}"></label>
-                                                <label>
-                                                    <span>Duracion</span>
-                                                    <input value="{{ $chapter['duration'] }}" readonly data-chapter-duration
-                                                        data-initial-duration="{{ $chapter['duration'] }}"
-                                                        title="La duracion se calcula al seleccionar el video adjunto">
-                                                </label>
-                                                <label><span>Objetivo</span><input value="{{ $chapter['objective'] }}"></label>
-                                                <label><span>Video de capacitacion</span><input type="url" value="{{ $chapter['video'] }}"></label>
-                                                <label class="training-upload-control">
-                                                    <span>Archivo adjunto</span>
-                                                    <input type="file" accept="video/mp4,video/quicktime,video/webm" data-chapter-video>
-                                                    <strong><i class="fa-solid fa-upload"></i> Subir video</strong>
-                                                    <small data-chapter-upload-status aria-live="polite">MP4, MOV o WebM</small>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </article>
-                                @endforeach
-                            </div>
+                            <div class="training-chapter-list" data-chapter-list></div>
                         </section>
                     </div>
                 </div>
@@ -884,17 +723,23 @@
                                 <input type="hidden" name="exam_id">
 
                                 <div class="training-exam-meta-fields">
+                                    <label><span>Nombre del examen</span><input name="name" required maxlength="150"></label>
+                                    <label><span>Estatus</span><select name="status"><option>Borrador</option><option>Publicado</option></select></label>
                                     <label>
                                         <span>Modulo</span>
-                                        <input name="module" required maxlength="150">
+                                        <input name="module" required maxlength="150" readonly>
                                     </label>
                                     <label>
                                         <span>Minimo aprobatorio</span>
                                         <span class="training-percent-field">
-                                            <input type="number" name="minimum" min="0" max="100" step="1" required>
+                                            <input type="number" name="minimum" min="1" max="100" step="1" required>
                                             <strong>%</strong>
                                         </span>
                                     </label>
+                                    <label><span>Duración (minutos)</span><input name="duration" type="number" min="1" max="1440" step="1" required></label>
+                                    <label><span>Intentos permitidos</span><input name="attempts" type="number" min="1" max="100" step="1" required></label>
+                                    <label><span>Instrucciones</span><textarea name="instructions" rows="3" maxlength="5000"></textarea></label>
+                                    <label><span>Orden aleatorio de preguntas</span><input name="randomize" type="checkbox"></label>
                                 </div>
 
                                 <div class="training-exam-questions-heading">
@@ -950,7 +795,7 @@
                             <h2>Tareas</h2>
                             <p>Actividades y evidencias asociadas a cada modulo.</p>
                         </div>
-                        <button type="button" class="training-primary-button">
+                        <button type="button" class="training-primary-button" data-new-task>
                             <i class="fa-solid fa-plus"></i>
                             <span>Nueva tarea</span>
                         </button>
@@ -961,13 +806,13 @@
                             <thead><tr><th>Tarea</th><th>Programa</th><th>Modulo</th><th>Fecha limite</th><th>Estatus</th><th>Acciones</th></tr></thead>
                             <tbody>
                                 @foreach ($programTasks as $task)
-                                    <tr data-program-row="{{ $task['projectId'] }}">
+                                    <tr data-program-row="{{ $task['projectId'] }}" data-task-id="{{ $task['id'] }}">
                                         <td><strong>{{ $task['title'] }}</strong></td>
                                         <td>{{ $task['project'] }}</td>
                                         <td>{{ $task['stage'] }}</td>
                                         <td>{{ $task['due'] }}</td>
                                         <td><span class="training-program-status is-{{ $task['tone'] }}">{{ $task['status'] }}</span></td>
-                                        <td><button type="button" class="training-icon-button" title="Editar tarea" aria-label="Editar {{ $task['title'] }}"><i class="fa-solid fa-pen"></i></button></td>
+                                        <td><button type="button" class="training-icon-button" data-edit-task="{{ $task['id'] }}" title="Editar tarea" aria-label="Editar {{ $task['title'] }}"><i class="fa-solid fa-pen"></i></button></td>
                                     </tr>
                                 @endforeach
                                 <tr data-program-empty-row hidden>
@@ -2065,8 +1910,19 @@
         </section>
     </div>
 
+    @unless ($isStudentsPage)
+        </div>
+    @endunless
+
     @push('css')
         <style>
+            .training-program-scroll {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                overflow-x: auto;
+            }
+
             .training-screen {
                 --training-ink: #102a43;
                 --training-soft: #486581;
@@ -2979,6 +2835,8 @@
             }
 
             .training-exam-meta-fields input,
+            .training-exam-meta-fields select,
+            .training-exam-meta-fields textarea,
             .training-exam-question-field textarea,
             .training-exam-option-row input[type="text"] {
                 width: 100%;
@@ -6645,6 +6503,7 @@
                 const learnerSelectionStorageKey = 'mezclaspro.training.selected-learner.v1';
                 const examDefaults = @json(collect($exams)->keyBy('id')->all());
                 const moduleDefaults = @json($modules);
+                const availableProgramIds = @json($availableProgramIds);
                 const learnerCurriculum = @json($learnerCurriculum);
                 const defaultLearnerProfile = @json($defaultLearnerProfile);
                 const learnerExamFallbacks = {
@@ -6802,9 +6661,9 @@
                     try {
                         const storedAssignments = JSON.parse(window.localStorage.getItem(assignmentStorageKey) || '{}');
 
-                        return storedAssignments && typeof storedAssignments === 'object' && !Array.isArray(storedAssignments)
-                            ? storedAssignments
-                            : {};
+                        if (!storedAssignments || typeof storedAssignments !== 'object' || Array.isArray(storedAssignments)) return {};
+                        return Object.fromEntries(Object.entries(storedAssignments).map(([name, assignments]) =>
+                            [name, Array.isArray(assignments) ? assignments.filter(item => availableProgramIds.includes(item.programId)) : []]));
                     } catch (error) {
                         return {};
                     }
@@ -7231,41 +7090,8 @@
                 }
 
                 function readStoredExams() {
-                    let storedExams = {};
-
-                    try {
-                        const parsedExams = JSON.parse(window.localStorage.getItem(examStorageKey) || '{}');
-
-                        if (parsedExams && typeof parsedExams === 'object' && !Array.isArray(parsedExams)) {
-                            storedExams = parsedExams;
-                        }
-                    } catch (error) {
-                        storedExams = {};
-                    }
-
-                    const examIds = Array.from(new Set(Object.keys(examDefaults).concat(Object.keys(storedExams))));
-
-                    return examIds.reduce(function(records, examId) {
-                        const defaultExam = examDefaults[examId] || {};
-                        const savedExam = storedExams[examId];
-                        const exam = savedExam && typeof savedExam === 'object' && !Array.isArray(savedExam)
-                            ? Object.assign({}, defaultExam, savedExam, { id: examId })
-                            : Object.assign({}, defaultExam, { id: examId });
-
-                        records[examId] = normaliseExam(exam);
-
-                        return records;
-                    }, {});
+                    return Object.fromEntries(Object.entries(examDefaults).map(([id, exam]) => [id, normaliseExam(exam)]));
                 }
-
-                function persistExams() {
-                    try {
-                        window.localStorage.setItem(examStorageKey, JSON.stringify(examRecords));
-                    } catch (error) {
-                        // The current session remains updated when browser storage is unavailable.
-                    }
-                }
-
                 function createExamElement(tagName, className, textContent) {
                     const element = document.createElement(tagName);
 
@@ -7535,6 +7361,7 @@
                 }
 
                 function closeExamEditor() {
+                    if (examEditorForm?.dataset.saving === 'true') return;
                     if (examEditorModal && examEditorModal.open) {
                         examEditorModal.close();
                     }
@@ -7559,6 +7386,10 @@
                     examEditorForm.elements.exam_id.value = exam.id;
                     examEditorForm.elements.module.value = exam.module;
                     examEditorForm.elements.minimum.value = exam.minimum;
+                    for (const field of ['name', 'status', 'duration', 'attempts', 'instructions']) examEditorForm.elements[field].value = exam[field];
+                    examEditorForm.elements.randomize.checked = exam.randomize;
+                    const persistenceError = examEditorForm.querySelector('[data-exam-persistence-error]');
+                    if (persistenceError) persistenceError.hidden = true;
                     renderExamQuestionEditor();
                     examEditorModal.showModal();
                     examEditorForm.elements.module.focus();
@@ -7808,6 +7639,11 @@
                     }
 
                     const projectId = programSelector.value;
+                    if (!canManagePrograms || !projectId) return;
+                    if (!moduleDefaults.some(module => module.project === projectId)) {
+                        openContent('module', null, 'exam');
+                        return;
+                    }
                     const selectedProgram = programSelector.options[programSelector.selectedIndex];
                     const moduleName = populateNewExamModules(projectId);
 
@@ -7841,6 +7677,7 @@
                 }
 
                 function closeNewExamBuilder() {
+                    if (newExamForm?.dataset.saving === 'true') return;
                     if (examIndexView) {
                         examIndexView.hidden = false;
                     }
@@ -8012,6 +7849,8 @@
 
                     programModal.showModal();
                     programForm.elements.title.focus();
+                    deleteProgramButton.hidden = !canManagePrograms;
+                    programError.hidden = true;
                 }
 
                 function openNewProgramModal() {
@@ -8033,6 +7872,8 @@
 
                     programModal.showModal();
                     programForm.elements.title.focus();
+                    deleteProgramButton.hidden = true;
+                    programError.hidden = true;
                 }
 
                 function closeProgramModal() {
@@ -9200,6 +9041,14 @@
                 }
 
                 function renderLearnerExperience() {
+                    if (!learnerCurriculum.length) {
+                        root.querySelector('[data-next-obligation-summary]').textContent = 'Consulta tus programas y módulos disponibles en el carrusel de programas.';
+                        root.querySelector('[data-next-obligation-action]').hidden = true;
+                        root.querySelector('[data-overall-progress]').textContent = '0%';
+                        root.querySelector('[data-approved-module-count]').textContent = '0/0';
+                        root.querySelectorAll('[data-learner-tab]:not([data-learner-tab="home"])').forEach(button => { button.hidden = true; });
+                        return;
+                    }
                     synchronizeLearnerState();
                     currentLearnerObligation = getNextLearnerObligation();
 
@@ -9873,6 +9722,7 @@
                 });
 
                 function activateProgramTab(tab) {
+                    try { sessionStorage.setItem('mezclaspro.training.program-tab', tab); } catch (_) {}
                     if (tab !== 'exams' && examCreateView && !examCreateView.hidden) {
                         closeNewExamBuilder();
                     }
@@ -10028,6 +9878,8 @@
                     root.querySelector('[data-module-label-input]').value = item.dataset.moduleLabel;
                     root.querySelector('[data-module-title-input]').value = item.dataset.moduleTitle;
                     root.querySelector('[data-module-description-input]').value = item.dataset.moduleDescription;
+                    renderModuleChapters(item);
+                    try { localStorage.setItem('mezclaspro.training.module.' + item.dataset.programId, item.dataset.moduleId); } catch (_) {}
                 }
 
                 function filterProgramRows(panelName, programId) {
@@ -10058,6 +9910,13 @@
 
                 function selectProgram(programId, persistSelection) {
                     if (!programSelector || !programSelector.options.length) {
+                        updateSelectedProgramName('Sin programas disponibles');
+                        moduleItems.forEach(item => { item.hidden = true; });
+                        activateModuleItem(null);
+                        if (moduleCount) moduleCount.textContent = '0 módulos';
+                        filterProgramRows('exams', '');
+                        filterProgramRows('tasks', '');
+                        updateContentActions('', 0);
                         return;
                     }
 
@@ -10102,7 +9961,10 @@
                         moduleCount.textContent = visibleModules.length + (visibleModules.length === 1 ? ' modulo' : ' modulos');
                     }
 
-                    activateModuleItem(visibleModules[0] || null);
+                    let rememberedModule = '';
+                    try { rememberedModule = localStorage.getItem('mezclaspro.training.module.' + selectedOption.value) || ''; } catch (_) {}
+                    activateModuleItem(visibleModules.find(item => item.dataset.moduleId === rememberedModule) || visibleModules[0] || null);
+                    updateContentActions(selectedOption.value, visibleModules.length);
                     filterProgramRows('exams', selectedOption.value);
                     filterProgramRows('tasks', selectedOption.value);
 
@@ -10178,82 +10040,8 @@
                     });
                 });
 
-                const storedPrograms = readStoredPrograms();
-
-                Object.keys(storedPrograms).forEach(function(programId) {
-                    const savedProgram = storedPrograms[programId];
-                    let card = root.querySelector('[data-program-card][data-program-id="' + programId + '"]');
-
-                    if (!card && savedProgram.isCustom) {
-                        ensureProgramOption(programId, savedProgram.title);
-                        card = createProgramCarouselCard(programId, savedProgram);
-                    }
-
-                    if (card) {
-                        applyProgramData(card, savedProgram);
-                    }
-                });
-
-                root.querySelectorAll('[data-close-program-modal]').forEach(function(button) {
-                    button.addEventListener('click', closeProgramModal);
-                });
-
-                if (programModal) {
-                    programModal.addEventListener('click', function(event) {
-                        if (event.target === programModal) {
-                            closeProgramModal();
-                        }
-                    });
-                }
-
-                if (programForm) {
-                    programForm.addEventListener('submit', function(event) {
-                        event.preventDefault();
-
-                        if (!programForm.reportValidity()) {
-                            return;
-                        }
-
-                        let programId = programForm.elements.program_id.value;
-                        const programs = readStoredPrograms();
-                        const isNewProgram = !programId;
-
-                        if (isNewProgram) {
-                            programId = createProgramId(programForm.elements.title.value.trim());
-                        }
-
-                        const programData = Object.assign({}, programs[programId] || {}, {
-                            id: programId,
-                            title: programForm.elements.title.value.trim(),
-                            description: programForm.elements.description.value.trim(),
-                            owner: programForm.elements.owner.value.trim(),
-                            status: programForm.elements.status.value,
-                            isCustom: isNewProgram || Boolean(programs[programId]?.isCustom),
-                            modules: programs[programId]?.modules || 0,
-                            students: programs[programId]?.students || 0,
-                        });
-                        let card = root.querySelector('[data-program-card][data-program-id="' + programId + '"]');
-
-                        ensureProgramOption(programId, programData.title);
-
-                        if (!card) {
-                            card = createProgramCarouselCard(programId, programData);
-                        }
-
-                        applyProgramData(card, programData);
-                        programs[programId] = programData;
-
-                        try {
-                            window.localStorage.setItem(programStorageKey, JSON.stringify(programs));
-                        } catch (error) {
-                            // The card remains updated even when browser storage is unavailable.
-                        }
-
-                        selectProgram(programId);
-                        activateProgramTab('modules');
-                        closeProgramModal();
-                    });
-                }
+                @include('admin.capacitaciones.partials.program-persistence-script')
+                @include('admin.capacitaciones.partials.content-script')
 
                 Object.keys(examRecords).forEach(function(examId) {
                     updateExamTableRow(examRecords[examId]);
@@ -10283,6 +10071,10 @@
                 });
 
                 if (examEditorModal) {
+                    examEditorModal.addEventListener('cancel', function(event) {
+                        event.preventDefault();
+                        closeExamEditor();
+                    });
                     examEditorModal.addEventListener('click', function(event) {
                         if (event.target === examEditorModal) {
                             closeExamEditor();
@@ -10449,7 +10241,7 @@
                 }
 
                 if (examEditorForm) {
-                    examEditorForm.addEventListener('submit', function(event) {
+                    examEditorForm.addEventListener('submit', async function(event) {
                         event.preventDefault();
 
                         if (!editingExam || !examEditorForm.reportValidity()) {
@@ -10475,6 +10267,13 @@
 
                         editingExam.module = examEditorForm.elements.module.value.trim();
                         editingExam.minimum = Number.parseInt(examEditorForm.elements.minimum.value, 10);
+                        editingExam.name = examEditorForm.elements.name.value.trim();
+                        editingExam.status = examEditorForm.elements.status.value;
+                        editingExam.tone = editingExam.status === 'Publicado' ? 'active' : 'draft';
+                        editingExam.duration = Number.parseInt(examEditorForm.elements.duration.value, 10);
+                        editingExam.attempts = Number.parseInt(examEditorForm.elements.attempts.value, 10);
+                        editingExam.instructions = examEditorForm.elements.instructions.value.trim();
+                        editingExam.randomize = examEditorForm.elements.randomize.checked;
                         editingExam.items = editingExam.items.map(function(question) {
                             return {
                                 text: question.text.trim(),
@@ -10486,8 +10285,9 @@
                         });
                         editingExam.questions = editingExam.items.length;
 
+                        if (!await saveExamToServer(editingExam, examEditorForm)) return;
                         examRecords[editingExam.id] = normaliseExam(cloneExam(editingExam));
-                        persistExams();
+
                         updateExamTableRow(examRecords[editingExam.id]);
                         closeExamEditor();
                     });
@@ -10724,7 +10524,7 @@
                 }
 
                 if (newExamForm) {
-                    newExamForm.addEventListener('submit', function(event) {
+                    newExamForm.addEventListener('submit', async function(event) {
                         event.preventDefault();
 
                         if (!creatingExam) {
@@ -10758,7 +10558,7 @@
                             }
                         }
 
-                        creatingExam.id = createExamId();
+                        creatingExam.id = creatingExam.id || createExamId();
                         creatingExam.module = newExamModule.value;
                         creatingExam.name = newExamForm.elements.name.value.trim() || 'Examen sin titulo';
                         creatingExam.instructions = newExamForm.elements.instructions.value.trim();
@@ -10777,8 +10577,9 @@
 
                         const savedExam = normaliseExam(cloneExam(creatingExam));
 
+                        if (!await saveExamToServer(savedExam, newExamForm)) return;
                         examRecords[savedExam.id] = savedExam;
-                        persistExams();
+
                         const savedRow = updateExamTableRow(savedExam);
 
                         closeNewExamBuilder();
@@ -10794,8 +10595,8 @@
 
                 activateRole('admin');
 
-                if (programSelector && programSelector.options.length) {
-                    let selectedProgramId = programSelector.options[0].value;
+                if (programSelector) {
+                    let selectedProgramId = programSelector.options[0]?.value || '';
 
                     try {
                         selectedProgramId = window.localStorage.getItem(selectedProgramStorageKey) || selectedProgramId;
@@ -10807,7 +10608,9 @@
                 }
 
                 if (programButtons.length) {
-                    activateProgramTab('modules');
+                    let rememberedTab = 'modules';
+                    try { rememberedTab = sessionStorage.getItem('mezclaspro.training.program-tab') || 'modules'; } catch (_) {}
+                    activateProgramTab(['modules', 'exams', 'tasks'].includes(rememberedTab) ? rememberedTab : 'modules');
                 }
             });
         </script>

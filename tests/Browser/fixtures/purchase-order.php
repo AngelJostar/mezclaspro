@@ -28,6 +28,9 @@ $laboratories = collect([1, 2])->map(function ($id) {
 $source = str_replace(['<x-admin-layout>', '</x-admin-layout>'], '', file_get_contents(resource_path('views/admin/oncologicos/laboratory/purchase-orders/create.blade.php')));
 echo Illuminate\Support\Facades\Blade::render($source, [
     'laboratory' => $laboratories->first(), 'deliveryLaboratories' => $laboratories, 'laboratories' => $laboratories,
-    'supplierOptions' => collect(), 'inventoryDestinations' => App\Models\Oncologicos\LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS,
+    'supplierOptions' => collect(json_decode($argv[3] ?? 'null', true) ?? [['name' => 'Proveedor del catálogo', 'rfc' => 'PRU010101AAA',
+        'contact_name' => 'Contacto de prueba', 'phone' => '5500000000', 'email' => 'proveedor@example.test',
+        'fax' => '', 'category' => 'Medicamentos', 'address' => 'Dirección del proveedor', 'bank_details' => 'Cuenta de prueba']]),
+    'inventoryDestinations' => App\Models\Oncologicos\LaboratoryPurchaseOrder::INVENTORY_DESTINATIONS,
     'errors' => new Illuminate\Support\ViewErrorBag(),
 ]);

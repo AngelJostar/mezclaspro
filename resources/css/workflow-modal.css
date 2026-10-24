@@ -18,6 +18,13 @@ html.workflow-modal-open, html.workflow-modal-open body { overflow: hidden !impo
 .workflow-page .admin-content { padding: 0; border-radius: 0; box-shadow: none; }
 .workflow-embedded [data-workflow-heading], .workflow-embedded [data-workflow-popup-close] { display: none; }
 .workflow-page #formularioMezcla, .workflow-page #solicitudForm { box-shadow: none; padding: 0; }
+.workflow-modal.workflow-modal--request-creation { position: fixed; inset: auto; left: var(--request-modal-left); top: var(--request-modal-top); width: var(--request-modal-width); height: var(--request-modal-height); max-height: none; margin: 0; border-radius: 12px; }
+.workflow-modal--request-creation .workflow-modal-header h2 { font-size: 16px; }
+.request-creation-page #nutrition-request-form, .request-creation-page #formularioSolicitud { width: 100%; max-width: none; padding: 0; box-shadow: none; }
+.request-creation-result { margin: 24px auto; max-width: 640px; padding: 28px; border: 1px solid #fecaca; border-radius: 12px; background: #fef2f2; color: #991b1b; }
+.request-creation-result h1 { margin-bottom: 12px; font-size: 22px; font-weight: 600; }
+.request-creation-result--success { border-color: #a7f3d0; background: #ecfdf5; color: #065f46; }
+.request-creation-result svg { width: 40px; height: 40px; margin-bottom: 16px; }
 @media (max-width: 640px) {
     .workflow-modal { width: calc(100vw - 12px); height: calc(100dvh - 12px); border-radius: 6px; }
     .workflow-modal-header { padding: 10px 12px; gap: 8px; }
@@ -25,4 +32,6 @@ html.workflow-modal-open, html.workflow-modal-open body { overflow: hidden !impo
     .workflow-page #formularioMezcla > .flex:not(.justify-end) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .workflow-page #formularioMezcla > .flex:not(.justify-end) > div { width: auto; min-width: 0; }
     .workflow-page #formularioMezcla label { overflow-wrap: anywhere; }
+    .request-creation-page #nutrition-request-form > .flex, .request-creation-page #formularioSolicitud > .flex { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .request-creation-page #nutrition-request-form > .flex > div, .request-creation-page #formularioSolicitud > .flex > div { width: auto; min-width: 0; }
 }

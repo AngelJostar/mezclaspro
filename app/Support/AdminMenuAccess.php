@@ -407,6 +407,7 @@ final class AdminMenuAccess
                 'admin.capacitaciones.personal',
                 'admin.capacitaciones.personal.edit',
                 'admin.capacitaciones.personal.update',
+                'admin.capacitaciones.personal.programs',
                 'admin.capacitaciones.personal.hospitals',
                 'admin.capacitaciones.personal.hospitals.save',
                 'admin.capacitaciones.personal.store' => 'menu.capacitaciones.personal',

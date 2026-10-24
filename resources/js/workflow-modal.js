@@ -16,13 +16,14 @@ function initializeWorkflowModal() {
             if (isEmbedded) window.parent.postMessage({ type: messageType, action, ...extra }, window.location.origin);
         };
         notifyParent('ready', { title: document.querySelector('[data-workflow-heading]')?.textContent.replace(/\s+/g, ' ').trim() });
+        if (config.requestCreated) notifyParent('saved');
         document.addEventListener('click', (event) => {
             if (!isEmbedded || !event.target.closest('[data-workflow-popup-close], [data-purchase-popup-close]')) return;
             event.preventDefault();
-            if (!busy) notifyParent('close');
+            if (!busy && !config.requestCreation) notifyParent('close');
         });
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && !event.defaultPrevented && !busy && !window.Swal?.isVisible()) notifyParent('close');
+            if (!config.requestCreation && event.key === 'Escape' && !event.defaultPrevented && !busy && !window.Swal?.isVisible()) notifyParent('close');
         });
         document.addEventListener('workflow-popup-state', (event) => {
             if (event.detail?.action === 'busy') {
@@ -67,8 +68,21 @@ function initializeWorkflowModal() {
     let saved = false;
     let busy = false;
     let purchaseOrder = false;
+    let requestCreation = false;
     createIcons({ icons: { X }, nameAttr: 'data-workflow-icon', root: modal });
 
+    const positionCreationModal = () => {
+        if (!requestCreation) return;
+        const area = document.querySelector('.admin-content')?.getBoundingClientRect();
+        const inset = window.innerWidth <= 640 ? 6 : 12;
+        const left = area ? Math.max(inset, Math.min(area.left + 4, window.innerWidth - 260)) : inset;
+        const right = area ? Math.min(window.innerWidth - inset, area.right - 4) : window.innerWidth - inset;
+        const top = area ? Math.max(inset, Math.min(area.top + 4, window.innerHeight - 240)) : inset;
+        modal.style.setProperty('--request-modal-left', `${left}px`);
+        modal.style.setProperty('--request-modal-top', `${top}px`);
+        modal.style.setProperty('--request-modal-width', `${Math.max(240, right - left)}px`);
+        modal.style.setProperty('--request-modal-height', `${window.innerHeight - top - inset}px`);
+    };
     const stopLoading = () => {
         clearTimeout(timeout);
         loading.hidden = true;
@@ -92,7 +106,7 @@ function initializeWorkflowModal() {
     modal.querySelector('[data-workflow-retry]').addEventListener('click', loadFrame);
     closeButton.addEventListener('click', () => modal.close());
     modal.addEventListener('cancel', (event) => {
-        if (busy) event.preventDefault();
+        if (busy || requestCreation) event.preventDefault();
         try {
             if (frame.contentWindow?.Swal?.isVisible()) event.preventDefault();
         } catch {
@@ -109,22 +123,27 @@ function initializeWorkflowModal() {
 
     // Delegation also covers rows replaced by Livewire sorting and pagination.
     const openFromLink = (event) => {
-        const link = event.target.closest('[data-approval-popup], [data-dispensing-popup], [data-purchase-order-popup]');
+        const link = event.target.closest('[data-approval-popup], [data-dispensing-popup], [data-purchase-order-popup], [data-request-create-popup]');
         if (!link) return;
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         const url = new URL(link.href, window.location.href);
         if (url.origin !== window.location.origin) return;
         event.preventDefault();
         if (modal.open) return;
-        trigger = link;
+        trigger = link.closest('[data-request-create-menu]')?.querySelector('button') || link;
         purchaseOrder = link.hasAttribute('data-purchase-order-popup');
+        requestCreation = link.hasAttribute('data-request-create-popup');
         if (purchaseOrder) url.searchParams.set('purchase_popup', '1');
+        if (requestCreation) url.searchParams.set('request_popup', '1');
+        modal.classList.toggle('workflow-modal--request-creation', requestCreation);
+        modal.setAttribute('closedby', requestCreation ? 'none' : 'closerequest');
+        positionCreationModal();
         activeUrl = url.href;
         completed = false;
         saved = false;
         busy = false;
         closeButton.disabled = false;
-        title.textContent = purchaseOrder ? 'Nueva orden de compra' : link.hasAttribute('data-dispensing-popup') ? 'Dispensar mezcla' : 'Aprobaci\u00f3n de mezcla';
+        title.textContent = requestCreation ? link.dataset.requestCreatePopup : purchaseOrder ? 'Nueva orden de compra' : link.hasAttribute('data-dispensing-popup') ? 'Dispensar mezcla' : 'Aprobaci\u00f3n de mezcla';
         frame.title = title.textContent;
         modal.showModal();
         document.documentElement.classList.add('workflow-modal-open');
@@ -142,11 +161,13 @@ function initializeWorkflowModal() {
                 frame.title = event.data.title;
             }
         } else if (event.data.action === 'close') {
-            if (!busy) modal.close();
+            if (!busy && !requestCreation) modal.close();
         } else if (purchaseOrder && event.data.action === 'busy') {
             busy = Boolean(event.data.busy);
             closeButton.disabled = busy;
-        } else if (purchaseOrder && event.data.action === 'saved') {
+        } else if ((purchaseOrder || requestCreation) && event.data.action === 'saved') {
+            saved = true;
+        } else if (requestCreation && event.data.action === 'complete') {
             saved = true;
         } else if (event.data.action === 'complete' && !completed) {
             completed = true;
@@ -156,11 +177,13 @@ function initializeWorkflowModal() {
     };
     document.addEventListener('click', openFromLink);
     window.addEventListener('message', receiveMessage);
+    window.addEventListener('resize', positionCreationModal);
     document.addEventListener('livewire:navigating', () => {
         if (modal.open) modal.close();
         clearTimeout(timeout);
         document.removeEventListener('click', openFromLink);
         window.removeEventListener('message', receiveMessage);
+        window.removeEventListener('resize', positionCreationModal);
     }, { once: true });
 }
 

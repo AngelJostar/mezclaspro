@@ -9,7 +9,7 @@
     <div class="flex flex-col ">
         <div class="mt-2 mb-4 flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-medium text-gray-800">
+                <h1 data-workflow-heading class="text-2xl font-medium text-gray-800">
                     Crear Nueva Solicitud {{ $requestType === 'antibioticos' ? 'de Antibioticos' : 'Oncologica' }}
                 </h1>
 
@@ -31,7 +31,7 @@
                 @endif
             </div>
 
-            <a href="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.index') : route($closeRoute) }}"
+            <a data-workflow-popup-close href="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.index') : route($closeRoute) }}"
                 class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-red-600 text-2xl font-semibold leading-none text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                 title="Cerrar formato de solicitud"
                 aria-label="Cerrar formato de solicitud">
@@ -43,6 +43,9 @@
             @if (isset($preparationQuotation)) data-quotation-preparation @endif
             class="bg-white rounded-lg p-6 shadow-lg">
             @csrf
+            @if (request()->boolean('request_popup'))
+                <input type="hidden" name="request_popup" value="1">
+            @endif
             @isset($preparationQuotation)
                 @include('admin.solicitudes.quotations.preparation-summary')
             @endisset

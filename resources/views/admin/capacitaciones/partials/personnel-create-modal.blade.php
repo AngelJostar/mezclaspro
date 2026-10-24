@@ -18,7 +18,8 @@
         'prior_experience',
         'additional_information',
     ];
-    $openPersonnelModal = $errors->hasAny($personnelFields);
+    $openPersonnelModal = $errors->hasAny($personnelFields)
+        || collect($errors->keys())->contains(fn ($key) => str_starts_with($key, 'training_'));
 @endphp
 
 <dialog class="personnel-create-modal" data-personnel-create-modal
@@ -212,7 +213,11 @@
                 </section>
 
                 <section class="personnel-form-section">
-                    <h4><span>4</span> Perfil y documentaci&oacute;n</h4>
+                    @include('admin.capacitaciones.partials.personnel-training-access')
+                </section>
+
+                <section class="personnel-form-section">
+                    <h4><span>5</span> Perfil y documentaci&oacute;n</h4>
 
                     <div class="personnel-document-grid">
                         <label class="personnel-field">
@@ -898,6 +903,7 @@
                 if (!modal.open) {
                     modal.showModal();
                 }
+                modal.dispatchEvent(new CustomEvent('personnel-create-open'));
 
                 window.setTimeout(function() {
                     firstNameInput && firstNameInput.focus();

@@ -1,10 +1,13 @@
 @php
     $isPurchasePopup = request()->routeIs('admin.oncologicos.laboratory.purchase-orders.create') && request()->boolean('purchase_popup');
-    $isWorkflowPage = $isPurchasePopup || (request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit', 'admin.solicitudes.ajustes.show')
+    $isRequestCreationPopup = request()->routeIs('admin.nutricionales.solicitudes.create', 'admin.oncologicos.solicitudes.create') && request()->boolean('request_popup');
+    $isWorkflowPage = $isPurchasePopup || $isRequestCreationPopup || (request()->routeIs('admin.oncologicos.mezclas.edit', 'admin.nutricionales.solicitudes.edit', 'admin.solicitudes.ajustes.show')
         && (request()->boolean('approval_popup') || request()->boolean('dispensing_popup')));
-    $workflowCompleted = $isWorkflowPage && !$isPurchasePopup && (session('approval_popup_done') || session('dispensing_popup_done'));
+    $workflowCompleted = $isWorkflowPage && !$isPurchasePopup && !$isRequestCreationPopup && (session('approval_popup_done') || session('dispensing_popup_done'));
     $workflowPageConfig = [
         'embedded' => $isWorkflowPage,
+        'requestCreation' => $isRequestCreationPopup,
+        'requestCreated' => $isRequestCreationPopup && \App\Support\RequestCreationPopup::completed(request()),
         'completed' => (bool) $workflowCompleted,
         'waitForConfirmation' => (bool) ($workflowCompleted && (session('success') || session('swal'))),
         'returnTo' => session('approval_popup_return_to') ?: session('dispensing_popup_return_to'),
@@ -56,7 +59,7 @@
         @include('layouts.includes.admin.aside')
     @endunless
 
-    <main @class(['admin-page', 'sm:ml-44' => ! $isWorkflowPage, 'workflow-page' => $isWorkflowPage, 'purchase-popup-page' => $isPurchasePopup])>
+    <main @class(['admin-page', 'sm:ml-44' => ! $isWorkflowPage, 'workflow-page' => $isWorkflowPage, 'purchase-popup-page' => $isPurchasePopup, 'request-creation-page' => $isRequestCreationPopup])>
         <div class="admin-content">
             {{ $slot }}
         </div>
