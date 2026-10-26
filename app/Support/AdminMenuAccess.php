@@ -275,6 +275,11 @@ final class AdminMenuAccess
             return false;
         }
 
+        if ($user->hasRole(self::GENERAL_ROLE) && in_array($permission, ['menu.capacitaciones', 'menu.capacitaciones.programas'], true)
+            && ! $user->can($permission) && \App\Models\TrainingAssignment::where('user_id', $user->id)->exists()) {
+            return true;
+        }
+
         return $user->hasRole(self::GENERAL_ROLE)
             ? $user->can($permission)
             : $legacyAccess;
@@ -403,7 +408,7 @@ final class AdminMenuAccess
 
         if (str_starts_with($routeName, 'admin.capacitaciones.')) {
             return match ($routeName) {
-                'admin.capacitaciones.alumnos' => 'menu.capacitaciones.alumnos',
+                'admin.capacitaciones.alumnos', 'admin.capacitaciones.alumnos.conclude', 'admin.capacitaciones.alumnos.assign' => 'menu.capacitaciones.alumnos',
                 'admin.capacitaciones.personal',
                 'admin.capacitaciones.personal.edit',
                 'admin.capacitaciones.personal.update',

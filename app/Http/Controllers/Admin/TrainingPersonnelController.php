@@ -126,6 +126,7 @@ class TrainingPersonnelController extends Controller
 
     public function students(): View
     {
+        $completions = \App\Models\TrainingCompletion::query()->orderBy('completed_at')->orderBy('id')->get();
         $assignmentPersonnel = $this->personnelUsersQuery()
             ->select(['id', 'name', 'lastname'])
             ->orderBy('name')
@@ -141,6 +142,79 @@ class TrainingPersonnelController extends Controller
 
         return view('admin.capacitaciones.index', [
             'assignmentPersonnel' => $assignmentPersonnel,
+            'studentPersonnel' => \App\Support\TrainingStudentCompletions::apply(array_merge(
+                \App\Support\TrainingStudentDefaults::records(), \App\Support\TrainingAssignedStudents::records()
+            ), $completions),
+            'trainingCompletions' => \App\Support\TrainingStudentCompletions::browserRecords($completions),
+        ]);
+    }
+
+    public function concludeTraining(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->hasAnyRole(['Super Admin', 'Admin']), 403);
+        $data = $request->validate([
+            'student_key' => ['required', 'string', 'max:100'],
+            'program_id' => ['required', 'string', 'max:191'],
+            'start_date' => ['required', 'date_format:Y-m-d'],
+            'browser_assignments' => ['sometimes', 'array', 'max:100'],
+            'browser_assignments.*.programId' => ['required', 'string', 'exists:training_programs,id'],
+            'browser_assignments.*.startDate' => ['required', 'date_format:Y-m-d'],
+            'browser_assignments.*.progress' => ['sometimes', 'integer', 'between:0,100'],
+        ]);
+        $student = collect(\App\Support\TrainingStudentDefaults::records())->firstWhere('studentKey', $data['student_key']);
+        $user = null;
+        if (! $student && preg_match('/^user-([1-9][0-9]*)$/', $data['student_key'], $matches)) {
+            $user = $this->personnelUsersQuery()->with('personnelProfile')->findOrFail((int) $matches[1]);
+            $assigned = \App\Models\TrainingAssignment::with(['user.personnelProfile', 'program'])->where('user_id', $user->id)->get();
+            $student = \App\Support\TrainingAssignedStudents::records($assigned)[0] ?? \App\Support\TrainingAssignedStudents::person($user);
+        }
+        abort_unless($student, 404, 'El alumno ya no está disponible.');
+        // Retain pending legacy browser assignments so closing one course cannot hide the student's other courses.
+        $assignedPrograms = \App\Models\TrainingProgram::whereIn('id', array_column($data['browser_assignments'] ?? [], 'programId'))->get()->keyBy('id');
+        foreach ($data['browser_assignments'] ?? [] as $assignment) {
+            $student['currentPrograms'][] = [
+                'id' => $assignment['programId'], 'name' => $assignedPrograms[$assignment['programId']]->title,
+                'startDate' => \Illuminate\Support\Carbon::parse($assignment['startDate'])->format('d/m/Y'),
+                'progress' => $assignment['progress'] ?? 0,
+            ];
+        }
+        $student['currentPrograms'] = collect($student['currentPrograms'])
+            ->unique(fn ($course) => $course['id'].'|'.($course['startDate'] ?? ''))->values()->all();
+        $program = \App\Models\TrainingProgram::find($data['program_id']);
+        $legacyProgram = collect($student['currentPrograms'])->first(fn ($course) => $course['id'] === $data['program_id']
+            && ($course['startDate'] ?? '') === \Illuminate\Support\Carbon::parse($data['start_date'])->format('d/m/Y'));
+        // A course retained by a previous closure is also an existing assignment.
+        if (! $legacyProgram) {
+            $previous = \App\Models\TrainingCompletion::where('student_key', $data['student_key'])->get();
+            $savedStudent = \App\Support\TrainingStudentCompletions::apply([$student], $previous)[0];
+            $legacyProgram = collect($savedStudent['currentPrograms'])->first(fn ($course) => $course['id'] === $data['program_id']
+                && ($course['startDate'] ?? '') === \Illuminate\Support\Carbon::parse($data['start_date'])->format('d/m/Y'));
+            $alreadyCompleted = $previous->first(fn ($entry) => $entry->program_id === $data['program_id'] && $entry->start_date->format('Y-m-d') === $data['start_date']);
+            abort_unless($legacyProgram || $alreadyCompleted, 422, 'La capacitación no corresponde a un curso asignado al alumno.');
+            if ($alreadyCompleted) {
+                return response()->json(['message' => 'La capacitación ya está concluida.', 'redirect' => route('admin.capacitaciones.alumnos', ['training_view' => 'completed'])]);
+            }
+            $student['currentPrograms'] = $savedStudent['currentPrograms'];
+        }
+
+        // An administrative closure records the decision; it does not manufacture exam results or completed tasks.
+        DB::transaction(function () use ($data, $user, $student, $program, $legacyProgram, $request) {
+        $assignment = $user ? \App\Models\TrainingAssignment::where('user_id', $user->id)->where('program_id', $data['program_id'])
+            ->whereDate('start_date', $data['start_date'])->lockForUpdate()->first() : null;
+        \App\Models\TrainingCompletion::firstOrCreate([
+            'student_key' => $data['student_key'], 'program_id' => $data['program_id'], 'start_date' => $data['start_date'],
+        ], [
+            'user_id' => $user?->id, 'student_name' => $student['name'], 'student_snapshot' => $student,
+            'program_name' => $program?->title ?? $legacyProgram['name'], 'completed_at' => now(),
+            'completed_by' => $request->user()->id,
+            'completed_by_name' => trim($request->user()->name.' '.$request->user()->lastname),
+        ]);
+        $assignment?->update(['status' => 'completed', 'completed_at' => now()]);
+        });
+
+        return response()->json([
+            'message' => 'La capacitación se concluyó anticipadamente.',
+            'redirect' => route('admin.capacitaciones.alumnos', ['training_view' => 'completed']),
         ]);
     }
 

@@ -834,6 +834,11 @@ Route::view('capacitaciones', 'admin.capacitaciones.index')
 Route::view('capacitaciones/programas', 'admin.capacitaciones.index')
     ->name('capacitaciones.programas');
 
+Route::get('capacitaciones/continua', [\App\Http\Controllers\Admin\TrainingContinuousController::class, 'index'])
+    ->name('capacitaciones.continua.index');
+Route::get('capacitaciones/continua/{program}/modulos/{module}/capitulos/{chapter}/video',
+    [\App\Http\Controllers\Admin\TrainingContinuousController::class, 'video'])->name('capacitaciones.continua.video');
+
 Route::prefix('capacitaciones/programas/catalogo')->name('capacitaciones.programas.catalogo.')
     ->middleware('role:Super Admin|Admin')->group(function () {
         $controller = \App\Http\Controllers\Admin\TrainingProgramController::class;
@@ -856,6 +861,17 @@ Route::get('capacitaciones/programas/{program}/modulos/{module}/capitulos/{chapt
 
 Route::get('capacitaciones/alumnos', [TrainingPersonnelController::class, 'students'])
     ->name('capacitaciones.alumnos');
+Route::post('capacitaciones/alumnos/concluir', [TrainingPersonnelController::class, 'concludeTraining'])
+    ->name('capacitaciones.alumnos.conclude')->middleware('role:Super Admin|Admin');
+
+Route::post('capacitaciones/alumnos/asignar', [\App\Http\Controllers\Admin\TrainingAssignmentController::class, 'store'])
+    ->name('capacitaciones.alumnos.assign')->middleware('role:Super Admin|Admin');
+Route::get('capacitaciones/asignaciones', [\App\Http\Controllers\Admin\TrainingAssignmentController::class, 'index'])
+    ->name('capacitaciones.asignaciones.index');
+Route::post('capacitaciones/asignaciones/{assignment}/iniciar', [\App\Http\Controllers\Admin\TrainingAssignmentController::class, 'start'])
+    ->name('capacitaciones.asignaciones.start');
+Route::get('capacitaciones/asignaciones/{assignment}/modulos/{module}/capitulos/{chapter}/video',
+    [\App\Http\Controllers\Admin\TrainingAssignmentController::class, 'video'])->name('capacitaciones.asignaciones.video');
 
 Route::get('capacitaciones/personal', [TrainingPersonnelController::class, 'index'])
     ->name('capacitaciones.personal');

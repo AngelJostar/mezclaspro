@@ -9,6 +9,30 @@ use Illuminate\Validation\ValidationException;
 
 class TrainingAccess
 {
+    /** Read-only library: employees need an explicit grant, even if they manage personnel. */
+    public static function continuousCatalog(?User $user): array
+    {
+        if (! $user) return [];
+
+        $programs = TrainingProgram::query()->where('status', 'Activo')
+            ->select(['id', 'title', 'description', 'module_definitions'])
+            ->orderBy('created_at')->orderBy('id')->get();
+        if (! $user->hasAnyRole(['Super Admin', 'Admin'])) {
+            $access = DB::table('training_program_access')->where('user_id', $user->id)->get()->keyBy('training_program_id');
+            $programs = $programs->filter(fn ($program) => $access->has($program->id));
+            foreach ($programs as $program) {
+                $entry = $access[$program->id];
+                if (! $entry->all_modules) {
+                    $ids = json_decode($entry->module_ids ?? '[]', true) ?: [];
+                    $program->module_definitions = array_values(array_filter($program->module_definitions ?? [],
+                        fn ($module) => in_array($module['id'], $ids, true)));
+                }
+            }
+        }
+
+        return $programs->toArray();
+    }
+
     public static function catalog(?User $user): array
     {
         $programs = TrainingProgram::query()->orderBy('created_at')->orderBy('id')->get();

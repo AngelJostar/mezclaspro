@@ -8,107 +8,8 @@
         $selectedLaboratory = $selectedLaboratory ?? null;
         $selectedLaboratoryId = (int) ($selectedLaboratory?->id ?? 0);
 
-        $personnel = [
-            [
-                'initials' => 'AT',
-                'name' => 'Ana Torres',
-                'completedPrograms' => [],
-                'currentPrograms' => [
-                    ['id' => 'induccion', 'name' => 'Induccion y seguridad operativa', 'progress' => 75, 'startDate' => '01/08/2026'],
-                ],
-                'positions' => [
-                    ['name' => 'Coordinadora administrativa', 'current' => true],
-                    ['name' => 'Auxiliar administrativa', 'current' => false],
-                ],
-                'hireDate' => '15/01/2021',
-                'examScores' => [
-                    ['exam' => 'Bienvenida e induccion', 'score' => 92],
-                    ['exam' => 'Seguridad operativa', 'score' => 88],
-                ],
-                'department' => 'Administracion',
-                'employmentStatus' => 'hired',
-                'activity' => 'Hoy, 09:40',
-                'avatar' => 'rose',
-            ],
-            [
-                'initials' => 'CH',
-                'name' => 'Carlos Hernandez',
-                'completedPrograms' => [],
-                'currentPrograms' => [
-                    ['id' => 'induccion', 'name' => 'Induccion y seguridad operativa', 'progress' => 40, 'startDate' => '12/08/2026'],
-                ],
-                'positions' => [
-                    ['name' => 'Almacenista', 'current' => true],
-                    ['name' => 'Auxiliar de almacen', 'current' => false],
-                ],
-                'hireDate' => '03/06/2022',
-                'examScores' => [
-                    ['exam' => 'Bienvenida e induccion', 'score' => 84],
-                    ['exam' => 'Seguridad operativa', 'score' => 80],
-                ],
-                'department' => 'Almacen',
-                'employmentStatus' => 'hired',
-                'activity' => 'Ayer, 16:20',
-                'avatar' => 'violet',
-            ],
-            [
-                'initials' => 'DC',
-                'name' => 'Daniela Cruz',
-                'completedPrograms' => ['Buenas practicas de almacenamiento'],
-                'currentPrograms' => [],
-                'positions' => [
-                    ['name' => 'Supervisora de operaciones', 'current' => true],
-                    ['name' => 'Almacenista', 'current' => false],
-                ],
-                'hireDate' => '20/09/2020',
-                'examScores' => [
-                    ['exam' => 'Recepcion de materiales', 'score' => 96],
-                    ['exam' => 'Inventario y trazabilidad', 'score' => 94],
-                ],
-                'department' => 'Operaciones',
-                'employmentStatus' => 'hired',
-                'activity' => '16 ago 2026',
-                'avatar' => 'mint',
-            ],
-            [
-                'initials' => 'FO',
-                'name' => 'Fernanda Ortiz',
-                'completedPrograms' => [],
-                'currentPrograms' => [
-                    ['id' => 'citotoxicos', 'name' => 'Manejo seguro de citotoxicos', 'progress' => 20, 'startDate' => '14/08/2026'],
-                ],
-                'positions' => [
-                    ['name' => 'Analista administrativa', 'current' => true],
-                ],
-                'hireDate' => '08/02/2024',
-                'examScores' => [],
-                'department' => 'Administracion',
-                'employmentStatus' => 'hired',
-                'activity' => '14 ago 2026',
-                'avatar' => 'cyan',
-            ],
-            [
-                'initials' => 'HR',
-                'name' => 'Hector Ruiz',
-                'completedPrograms' => [],
-                'currentPrograms' => [
-                    ['id' => 'proveedores', 'name' => 'Validacion de proveedores', 'progress' => 90, 'startDate' => '05/08/2026'],
-                ],
-                'positions' => [
-                    ['name' => 'Coordinador de calidad', 'current' => true],
-                    ['name' => 'Analista de calidad', 'current' => false],
-                ],
-                'hireDate' => '11/11/2019',
-                'examScores' => [
-                    ['exam' => 'Revision de cumplimiento', 'score' => 94],
-                    ['exam' => 'Validacion final', 'score' => 90],
-                ],
-                'department' => 'Calidad',
-                'employmentStatus' => 'hired',
-                'activity' => 'Hoy, 08:15',
-                'avatar' => 'sky',
-            ],
-        ];
+        $personnel = $isAlumnosPage && isset($studentPersonnel)
+            ? $studentPersonnel : \App\Support\TrainingStudentDefaults::records();
 
         $learnerProfiles = collect($personnel)
             ->filter(static fn (array $personRecord): bool => ! empty($personRecord['currentPrograms']))
@@ -174,10 +75,10 @@
 
         $personnelPageSize = 200;
         $personnelTotal = count($personnel);
-        $personnelPageCount = max(1, (int) ceil($personnelTotal / $personnelPageSize));
+        $personnelPageCount = $isAlumnosPage ? 1 : max(1, (int) ceil($personnelTotal / $personnelPageSize));
         $personnelCurrentPage = min(max(request()->integer('page', 1), 1), $personnelPageCount);
         $personnelOffset = ($personnelCurrentPage - 1) * $personnelPageSize;
-        $visiblePersonnel = array_slice($personnel, $personnelOffset, $personnelPageSize);
+        $visiblePersonnel = $isAlumnosPage ? $personnel : array_slice($personnel, $personnelOffset, $personnelPageSize);
         $personnelRangeStart = $personnelTotal === 0 ? 0 : $personnelOffset + 1;
         $personnelRangeEnd = min($personnelOffset + count($visiblePersonnel), $personnelTotal);
         $assignmentPersonnel = $assignmentPersonnel ?? array_map(
@@ -197,13 +98,13 @@
 
         $projects = \App\Support\TrainingAccess::catalog(auth()->user());
         $canManagePrograms = auth()->user()?->hasAnyRole(['Super Admin', 'Admin']) ?? false;
+        $showStudentConclusion = $isAlumnosPage && $canManagePrograms && $studentProgressView === 'in_progress';
         $modules = collect($projects)->flatMap(fn ($program) => $program['module_definitions'])->values()->all();
         $availableProgramIds = array_column($projects, 'id');
         $learnerProfiles = array_values(array_filter($learnerProfiles, fn ($profile) => in_array($profile['programId'], $availableProgramIds, true)));
         $defaultLearnerProfile = $learnerProfiles[0] ?? ['id' => 'default', 'name' => auth()->user()?->name ?? 'Alumno',
             'programId' => $projects[0]['id'] ?? '', 'programName' => $projects[0]['title'] ?? 'Sin programas asignados', 'progress' => 0];
-        if (auth()->user()?->personnelProfile?->training_access_configured && ! $canManagePrograms
-            && ! auth()->user()->can('menu.capacitaciones.personal')) {
+        if (! $canManagePrograms) {
             $defaultLearnerProfile = ['id' => 'user-'.auth()->id(), 'name' => trim(auth()->user()->name.' '.auth()->user()->lastname),
                 'programId' => $projects[0]['id'] ?? '', 'programName' => $projects[0]['title'] ?? 'Sin programas asignados', 'progress' => 0];
             $learnerProfiles = [$defaultLearnerProfile];
@@ -218,6 +119,7 @@
             ['id' => 'tasks', 'label' => 'Tareas', 'icon' => 'fa-solid fa-list-check'],
             ['id' => 'results', 'label' => 'Resultados', 'icon' => 'fa-solid fa-chart-line'],
             ['id' => 'certificates', 'label' => 'Certificados', 'icon' => 'fa-solid fa-award'],
+            ['id' => 'continuous', 'label' => 'Capacitación Continua', 'icon' => 'fa-solid fa-book-open'],
         ];
 
         $learnerTasks = [
@@ -826,11 +728,13 @@
 
             @if ($isAlumnosPage)
                 <div class="training-student-toolbar">
+                    @if ($canManagePrograms)
                     <button type="button" class="training-primary-button training-new-assignment-button"
                         data-open-new-training @disabled(empty($assignmentPersonnel))>
                         <i class="fa-solid fa-plus" aria-hidden="true"></i>
                         <span>Nueva Capacitaci&oacute;n</span>
                     </button>
+                    @endif
 
                     <nav class="training-student-view-switch" aria-label="Filtrar alumnos por avance de capacitacion">
                         <a href="{{ route('admin.capacitaciones.alumnos', ['training_view' => 'in_progress']) }}"
@@ -1022,7 +926,9 @@
                                 <th>Departamento</th>
                                 <th>Estatus</th>
                                 <th>Ultima actividad</th>
-                                <th>Nueva Capacitacion</th>
+                                @if ($showStudentConclusion)
+                                    <th>Concluir</th>
+                                @endif
                             </tr>
                         @endif
                     </thead>
@@ -1036,6 +942,8 @@
                                     : null;
                             @endphp
                             <tr data-student-row data-student-name="{{ $person['name'] }}"
+                                data-student-id="{{ $person['studentId'] ?? $personUser?->id ?? '' }}"
+                                @if ($isAlumnosPage) data-student-key="{{ $person['studentKey'] }}" @endif
                                 data-personnel-seller="{{ collect($person['positions'] ?? [])->contains('name', \App\Models\PersonnelProfile::POSITION_SELLER) ? '1' : '0' }}"
                                 data-student-index="{{ $loop->index }}"
                                 @if ($isPersonnelPage && ($loop->index < $personnelOffset || $loop->index >= $personnelOffset + $personnelPageSize)) hidden @endif>
@@ -1082,7 +990,13 @@
                                     @forelse ($person['completedPrograms'] as $program)
                                         <span class="training-completed-program">
                                             <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-                                            <span>{{ $program }}</span>
+                                            <span>{{ $program }}
+                                            @if ($isAlumnosPage)
+                                                @foreach (collect($person['earlyCompletions'] ?? [])->where('name', $program) as $completion)
+                                                    <small class="training-early-completion" title="Concluido por {{ $completion['completedBy'] }}">Concluido anticipadamente · {{ $completion['completedAt'] }}</small>
+                                                @endforeach
+                                            @endif
+                                            </span>
                                         </span>
                                     @empty
                                         <span class="training-empty-program">Ninguno</span>
@@ -1090,7 +1004,8 @@
                                 </td>
                                 <td class="training-program-cell" data-current-programs>
                                     @forelse ($person['currentPrograms'] as $program)
-                                        <div class="training-current-program" data-current-program-id="{{ $program['id'] }}">
+                                        <div class="training-current-program" data-current-program-id="{{ $program['id'] }}"
+                                            data-program-name="{{ $program['name'] }}" data-program-start-date="{{ $program['startDate'] ?? '' }}">
                                             <div class="training-current-program-heading">
                                                 <span>{{ $program['name'] }}</span>
                                                 <strong>{{ $program['progress'] }}%</strong>
@@ -1098,6 +1013,9 @@
                                             <span class="training-progress-track" aria-label="Progreso: {{ $program['progress'] }}%">
                                                 <span style="width: {{ $program['progress'] }}%"></span>
                                             </span>
+                                            @isset($program['statusLabel'])
+                                                <small>{{ $program['statusLabel'] }} · {{ $program['moduleCount'] }} módulos asignados</small>
+                                            @endisset
                                         </div>
                                     @empty
                                         <span class="training-empty-program" data-empty-current-program>Ninguno</span>
@@ -1106,8 +1024,8 @@
                                 @if ($isAlumnosPage)
                                     <td class="training-start-date-cell" data-training-start-dates>
                                         <div class="training-start-date-list">
-                                            @forelse ($person['currentPrograms'] as $program)
-                                                <span data-start-date-program-id="{{ $program['id'] }}">
+                                            @forelse ($studentProgressView === 'completed' ? ($person['earlyCompletions'] ?? []) : $person['currentPrograms'] as $program)
+                                                <span data-start-date-program-id="{{ $program['id'] ?? $program['programId'] }}">
                                                     {{ $program['startDate'] ?? 'Sin fecha' }}
                                                 </span>
                                             @empty
@@ -1155,6 +1073,18 @@
                                     </div>
                                 </td>
                                 <td>{{ $person['activity'] }}</td>
+                                @if ($showStudentConclusion)
+                                    <td data-conclude-training-actions>
+                                        @foreach ($person['currentPrograms'] as $program)
+                                            <button type="button" class="training-add-training-button" data-conclude-training
+                                                data-program-id="{{ $program['id'] }}" data-start-date="{{ $program['startDate'] ?? '' }}"
+                                                aria-label="Concluir {{ $program['name'] }} para {{ $person['name'] }}" title="{{ $program['name'] }}">
+                                                <span>Concluir</span>
+                                            </button>
+                                        @endforeach
+                                        <p data-conclude-error role="alert" hidden></p>
+                                    </td>
+                                @elseif ($isPersonnelPage)
                                 <td>
                                     <button type="button" class="training-add-training-button" data-add-training
                                         aria-label="Agregar capacitacion para {{ $person['name'] }}">
@@ -1162,6 +1092,7 @@
                                         <span>Agregar</span>
                                     </button>
                                 </td>
+                                @endif
                                 @if ($isPersonnelPage)
                                     <td class="training-user-id-cell">{{ $personUser?->id ?? '-' }}</td>
                                     <td class="training-user-access-cell is-software">
@@ -1258,7 +1189,7 @@
                         @endforeach
                         @if ($isPersonnelPage || $visiblePersonnel === [])
                             <tr @if ($isPersonnelPage) data-personnel-empty @if ($personnelTotal > 0) hidden @endif @endif>
-                                <td colspan="{{ $isPersonnelPage ? 20 : ($isAlumnosPage ? 8 : 7) }}" class="training-table-empty">
+                                <td colspan="{{ $isPersonnelPage ? 20 : ($showStudentConclusion ? 8 : 7) }}" class="training-table-empty">
                                     @if ($isPersonnelPage)
                                         No se encontro personal con los filtros seleccionados.
                                     @else
@@ -1271,6 +1202,11 @@
                 </table>
             </div>
 
+            @if ($isAlumnosPage)
+                <footer class="training-pagination" aria-label="Total de alumnos">
+                    <span>{{ $personnelTotal }} {{ $personnelTotal === 1 ? 'alumno' : 'alumnos' }}</span>
+                </footer>
+            @else
                 <footer class="training-pagination" aria-label="Paginacion de personal en bloques de 200"
                     @if ($isPersonnelPage) data-personnel-pagination data-page="{{ $personnelCurrentPage }}" data-page-size="{{ $personnelPageSize }}" @endif>
                 <span @if ($isPersonnelPage) data-personnel-count aria-live="polite" @endif>{{ $personnelRangeStart }}-{{ $personnelRangeEnd }} de {{ $personnelTotal }}</span>
@@ -1304,6 +1240,7 @@
                 @endif
                 @endif
             </footer>
+            @endif
 
             @if ($isPersonnelPage)
                 @include('admin.capacitaciones.partials.personnel-create-modal')
@@ -1379,6 +1316,7 @@
                                         @foreach ($projectModules as $module)
                                             <label>
                                                 <input type="checkbox" data-assignment-module-checkbox
+                                                    data-module-id="{{ $module['id'] }}"
                                                     data-module-label="{{ $module['stage'] }} - {{ $module['title'] }}">
                                                 <span>
                                                     <strong>{{ $module['stage'] }}</strong>
@@ -1393,6 +1331,7 @@
                     </div>
 
                     <footer>
+                        <p data-assignment-error role="alert" hidden></p>
                         <span class="training-assignment-count" data-assignment-count>0 modulos seleccionados</span>
                         <div class="training-assignment-actions">
                             <button type="button" class="training-secondary-button" data-close-training-assignment>Cancelar</button>
@@ -1478,6 +1417,7 @@
 
             <div id="learner-panel-home" class="training-learner-view" data-learner-panel="home"
                 role="tabpanel" aria-labelledby="learner-tab-home">
+                @include('admin.capacitaciones.partials.assigned-training')
                 <div class="training-learner-hero">
                     <div>
                         <span data-next-obligation-eyebrow>Siguiente obligacion</span>
@@ -1766,6 +1706,8 @@
                     </div>
                 </section>
             </div>
+
+            @include('admin.capacitaciones.partials.continuous-training')
 
             <dialog class="training-learner-dialog training-video-dialog" data-learner-video-dialog
                 aria-labelledby="learner-video-dialog-title">
@@ -4287,6 +4229,14 @@
                 margin-top: 0.15rem;
             }
 
+            .training-early-completion {
+                display: block;
+                margin-top: .35rem;
+                color: #52687f;
+                font-size: .8rem;
+                font-weight: 400;
+            }
+
             .training-current-program {
                 display: grid;
                 gap: 0.4rem;
@@ -4429,6 +4379,11 @@
                 color: #ffffff;
                 background: var(--training-teal-dark);
             }
+
+            [data-conclude-training-actions] { min-width: 9rem; }
+            [data-conclude-training-actions] button { margin-block: .25rem; }
+            [data-conclude-training]:disabled { opacity: .6; cursor: wait; }
+            [data-conclude-error] { margin-top: .5rem; max-width: 16rem; color: #b42318; font-size: .85rem; white-space: normal; }
 
             .training-pagination {
                 justify-content: flex-end;
@@ -6498,6 +6453,7 @@
                 const selectedProgramStorageKey = 'mezclaspro.training.selected-program.v1';
                 const examStorageKey = 'mezclaspro.training.exams.v1';
                 const assignmentStorageKey = 'mezclaspro.training.assignments.v1';
+                const completedTrainingAssignments = @json($trainingCompletions ?? []);
                 const employmentStatusStorageKey = 'mezclaspro.training.employment-statuses.v1';
                 const learnerStateStorageKey = 'mezclaspro.training.learner-state.v3';
                 const learnerSelectionStorageKey = 'mezclaspro.training.selected-learner.v1';
@@ -6663,7 +6619,9 @@
 
                         if (!storedAssignments || typeof storedAssignments !== 'object' || Array.isArray(storedAssignments)) return {};
                         return Object.fromEntries(Object.entries(storedAssignments).map(([name, assignments]) =>
-                            [name, Array.isArray(assignments) ? assignments.filter(item => availableProgramIds.includes(item.programId)) : []]));
+                            [name, Array.isArray(assignments) ? assignments.filter(item => availableProgramIds.includes(item.programId)
+                                && !completedTrainingAssignments.some(completed => completed.studentName === name
+                                    && completed.programId === item.programId && completed.startDate === item.startDate)) : []]));
                     } catch (error) {
                         return {};
                     }
@@ -6762,6 +6720,8 @@
 
                     program.className = 'training-current-program';
                     program.dataset.currentProgramId = assignment.programId;
+                    program.dataset.programName = assignment.programName;
+                    program.dataset.programStartDate = assignment.startDate || '';
                     program.dataset.addedAssignment = '';
                     heading.className = 'training-current-program-heading';
                     name.textContent = assignment.programName;
@@ -6851,12 +6811,15 @@
                         startDates.querySelector('[data-empty-start-date]')?.remove();
                     }
 
+                    renderConcludeTrainingButtons(row);
+
                 }
 
                 function applyStoredAssignments() {
                     const storedAssignments = readStoredAssignments();
 
                     root.querySelectorAll('[data-student-row]').forEach(function(row) {
+                        if (row.dataset.studentId) return;
                         renderAssignmentsForRow(row, storedAssignments[row.dataset.studentName] || []);
                     });
                 }
@@ -6935,6 +6898,7 @@
                             programId: program.dataset.programId,
                             programName: program.dataset.programName,
                             modules: selectedModules,
+                            moduleIds: moduleCheckboxes.filter(checkbox => checkbox.checked).map(checkbox => checkbox.dataset.moduleId),
                             allModules: selectedModules.length === moduleCheckboxes.length,
                             progress: 0,
                             startDate: assignmentStartDate?.value || currentAssignmentDate(),
@@ -6945,6 +6909,7 @@
                 }
 
                 function closeTrainingAssignment() {
+                    if (trainingAssignmentForm?.dataset.saving === 'true') return;
                     if (trainingAssignmentModal && trainingAssignmentModal.open) {
                         trainingAssignmentModal.close();
                     }
@@ -6971,7 +6936,7 @@
                     }
 
                     if (assignmentStudentSelect) {
-                        assignmentStudentSelect.value = row.dataset.studentIndex || '';
+                        assignmentStudentSelect.value = row.dataset.studentId || '';
                     }
 
                     if (assignmentStudent) {
@@ -7882,6 +7847,8 @@
                     }
                 }
 
+                @include('admin.capacitaciones.partials.conclude-training-script')
+
                 root.querySelectorAll('[data-add-training]').forEach(function(button) {
                     button.addEventListener('click', function() {
                         openTrainingAssignment(button);
@@ -7973,38 +7940,7 @@
                     });
                 }
 
-                if (trainingAssignmentForm) {
-                    trainingAssignmentForm.addEventListener('submit', function(event) {
-                        event.preventDefault();
-
-                        if (!assignmentTargetRow) {
-                            return;
-                        }
-
-                        const selectedAssignments = collectAssignments();
-
-                        if (!selectedAssignments.length) {
-                            return;
-                        }
-
-                        const studentName = assignmentTargetRow.dataset.studentName;
-                        const storedAssignments = readStoredAssignments();
-                        const mergedAssignments = mergeAssignments(
-                            storedAssignments[studentName] || [],
-                            selectedAssignments
-                        );
-
-                        storedAssignments[studentName] = mergedAssignments;
-                        persistAssignments(storedAssignments);
-                        hydrateLearnerSelectorFromAssignments();
-
-                        if (typeof assignmentTargetRow.querySelector === 'function') {
-                            renderAssignmentsForRow(assignmentTargetRow, mergedAssignments);
-                        }
-
-                        closeTrainingAssignment();
-                    });
-                }
+                @include('admin.capacitaciones.partials.assignment-submit-script')
 
                 employmentStatusControls.forEach(function(control) {
                     const select = control.querySelector('[data-student-status]');
@@ -9042,11 +8978,12 @@
 
                 function renderLearnerExperience() {
                     if (!learnerCurriculum.length) {
-                        root.querySelector('[data-next-obligation-summary]').textContent = 'Consulta tus programas y módulos disponibles en el carrusel de programas.';
+                        root.querySelector('[data-next-obligation-summary]').textContent = 'Consulta tus programas y módulos habilitados en Capacitación Continua.';
                         root.querySelector('[data-next-obligation-action]').hidden = true;
                         root.querySelector('[data-overall-progress]').textContent = '0%';
                         root.querySelector('[data-approved-module-count]').textContent = '0/0';
-                        root.querySelectorAll('[data-learner-tab]:not([data-learner-tab="home"])').forEach(button => { button.hidden = true; });
+                        root.querySelectorAll('[data-learner-tab]:not([data-learner-tab="home"]):not([data-learner-tab="continuous"])').forEach(button => { button.hidden = true; });
+                        root.querySelector('.training-obligation-flow').hidden = true;
                         return;
                     }
                     synchronizeLearnerState();
@@ -9269,6 +9206,9 @@
                         panel.hidden = panel.dataset.learnerPanel !== activeId;
                     });
 
+                    root.querySelector('.training-obligation-flow').hidden = activeId === 'continuous' || !learnerCurriculum.length;
+                    root.dispatchEvent(new CustomEvent('training-learner-tab', { detail: activeId }));
+
                     if (activeId === 'tasks') {
                         updateLearnerTasks();
                     }
@@ -9420,7 +9360,7 @@
                     return pill;
                 }
 
-                learnerTabButtons.forEach(function(button, buttonIndex) {
+                learnerTabButtons.forEach(function(button) {
                     button.addEventListener('click', function() {
                         activateLearnerTab(button.dataset.learnerTab, false);
                     });
@@ -9433,18 +9373,21 @@
                         }
 
                         event.preventDefault();
+                        const visibleTabs = Array.from(learnerTabButtons).filter(tab => !tab.hidden);
+                        const buttonIndex = visibleTabs.indexOf(button);
                         let nextIndex = buttonIndex;
 
                         if (event.key === 'Home') {
                             nextIndex = 0;
                         } else if (event.key === 'End') {
-                            nextIndex = learnerTabButtons.length - 1;
+                            nextIndex = visibleTabs.length - 1;
                         } else {
                             const direction = event.key === 'ArrowRight' ? 1 : -1;
-                            nextIndex = (buttonIndex + direction + learnerTabButtons.length) % learnerTabButtons.length;
+                            nextIndex = (buttonIndex + direction + visibleTabs.length) % visibleTabs.length;
                         }
 
-                        activateLearnerTab(learnerTabButtons[nextIndex].dataset.learnerTab, true);
+                        activateLearnerTab(visibleTabs[nextIndex].dataset.learnerTab, true);
+                        visibleTabs[nextIndex].scrollIntoView({ block: 'nearest', inline: 'nearest' });
                     });
                 });
 
@@ -9713,6 +9656,7 @@
                     panels.forEach(function(panel) {
                         panel.hidden = panel.dataset.rolePanel !== role;
                     });
+                    root.dispatchEvent(new CustomEvent('training-role-change', { detail: role }));
                 }
 
                 buttons.forEach(function(button) {
@@ -10042,6 +9986,8 @@
 
                 @include('admin.capacitaciones.partials.program-persistence-script')
                 @include('admin.capacitaciones.partials.content-script')
+                @include('admin.capacitaciones.partials.continuous-training-script')
+                @include('admin.capacitaciones.partials.assigned-training-script')
 
                 Object.keys(examRecords).forEach(function(examId) {
                     updateExamTableRow(examRecords[examId]);
@@ -10593,7 +10539,7 @@
                     });
                 }
 
-                activateRole('admin');
+                activateRole(@json($canManagePrograms || $isStudentsPage ? 'admin' : 'learner'));
 
                 if (programSelector) {
                     let selectedProgramId = programSelector.options[0]?.value || '';

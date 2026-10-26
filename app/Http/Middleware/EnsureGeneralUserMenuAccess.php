@@ -23,6 +23,12 @@ class EnsureGeneralUserMenuAccess
 
         $permission = AdminMenuAccess::requiredPermission($request);
 
+        // An explicit assignment grants access to the employee's own learner area, not to administration.
+        if ($request->routeIs('admin.capacitaciones.index', 'admin.capacitaciones.programas', 'admin.capacitaciones.asignaciones.*', 'admin.capacitaciones.continua.*')
+            && \App\Models\TrainingAssignment::where('user_id', $user->id)->exists()) {
+            return $next($request);
+        }
+
         if ($permission === null || ($permission !== '__deny__' && $user->can($permission))) {
             return $next($request);
         }

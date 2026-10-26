@@ -26,7 +26,7 @@ class RestrictCapacitacionAccess
         }
 
         if ($user?->hasSalesOnlyAccess()
-            && ! $request->routeIs('admin.solicitudes.cotizacion.*', 'admin.capacitaciones.index', 'admin.capacitaciones.programas')) {
+            && ! $request->routeIs('admin.solicitudes.cotizacion.*', 'admin.capacitaciones.index', 'admin.capacitaciones.programas', 'admin.capacitaciones.continua.*', 'admin.capacitaciones.asignaciones.*')) {
             return redirect()->route($usesTrainingCredentials ? 'admin.capacitaciones.index' : 'admin.solicitudes.cotizacion.index');
         }
 
