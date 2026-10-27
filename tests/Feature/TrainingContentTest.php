@@ -32,14 +32,19 @@ class TrainingContentTest extends TestCase
 
     private function url(string $path): string { return '/admin/capacitaciones/programas/catalogo/'.$path; }
 
-    private function module(string $program = 'induccion'): array
+    private function module(string $program = 'induccion', bool $withChapter = true): array
     {
-        return $this->postJson($this->url($program.'/modulos'), ['stage' => 'Módulo nuevo', 'title' => 'Trazabilidad', 'description' => 'Práctica'])->assertCreated()->json();
+        $module = $this->postJson($this->url($program.'/modulos'), ['stage' => 'Módulo nuevo', 'title' => 'Trazabilidad', 'description' => 'Práctica'])->assertCreated()->json();
+        if ($withChapter) {
+            $chapter = $this->postJson($this->url($program.'/modulos/'.$module['id'].'/capitulos'), ['title' => 'Técnica inicial', 'duration_seconds' => 60])->assertCreated()->json();
+            $module['chapter_definitions'] = [$chapter]; $module['chapters'] = 1;
+        }
+        return $module;
     }
 
     private function exam(array $module): array
     {
-        return ['id' => 'nuevo-examen', 'name' => 'Evaluación', 'moduleId' => $module['id'], 'module' => $module['title'],
+        return ['id' => 'nuevo-examen', 'name' => 'Evaluación', 'moduleId' => $module['id'], 'chapterId' => $module['chapter_definitions'][0]['id'], 'module' => $module['title'],
             'minimum' => 80, 'duration' => 20, 'attempts' => 2, 'randomize' => true, 'status' => 'Publicado',
             'items' => [['text' => 'Elige la respuesta', 'type' => 'single', 'points' => 100, 'options' => ['Sí', 'No'], 'correct' => 0]]];
     }
@@ -47,8 +52,8 @@ class TrainingContentTest extends TestCase
     public function test_module_creation_and_rename_preserve_children_and_relations(): void
     {
         $module = $this->module();
-        $this->assertSame(0, $module['chapters']);
-        $this->postJson($this->url('induccion/tareas'), ['title' => 'Evidencia', 'instructions' => 'Adjunta el formato.', 'moduleId' => $module['id'], 'status' => 'Activa', 'requires_file' => true])->assertCreated()->assertJsonPath('due', 'Sin fecha');
+        $this->assertSame(1, $module['chapters']);
+        $this->postJson($this->url('induccion/tareas'), ['title' => 'Evidencia', 'instructions' => 'Adjunta el formato.', 'moduleId' => $module['id'], 'chapterId' => $module['chapter_definitions'][0]['id'], 'status' => 'Activa', 'requires_file' => true])->assertCreated()->assertJsonPath('due', 'Sin fecha');
         $this->putJson($this->url('induccion/examenes/nuevo-examen'), $this->exam($module))->assertOk();
         $this->patchJson($this->url('induccion/modulos/'.$module['id']), ['stage' => 'Módulo 5', 'title' => 'Nuevo título'])->assertOk()->assertJsonPath('id', $module['id']);
         $record = TrainingProgram::findOrFail('induccion');
@@ -61,7 +66,7 @@ class TrainingContentTest extends TestCase
 
     public function test_chapters_persist_per_module_and_private_video_is_replaced_and_deleted(): void
     {
-        $module = $this->module();
+        $module = $this->module('induccion', false);
         $base = 'induccion/modulos/'.$module['id'].'/capitulos';
         $data = ['title' => 'Técnica', 'objective' => 'Identificar', 'duration_seconds' => 125, 'video' => 'https://example.test/video'];
         $chapter = $this->postJson($this->url($base), $data + ['video_file' => UploadedFile::fake()->create('clase.mp4', 10, 'video/mp4')])->assertCreated()->json();
@@ -86,7 +91,7 @@ class TrainingContentTest extends TestCase
     public function test_task_editing_validates_required_fields_and_program_module(): void
     {
         $module = $this->module();
-        $data = ['title' => 'Inspección', 'instructions' => 'Entregar checklist', 'moduleId' => $module['id'], 'due_date' => '2026-11-01', 'status' => 'Borrador', 'requires_file' => true];
+        $data = ['title' => 'Inspección', 'instructions' => 'Entregar checklist', 'moduleId' => $module['id'], 'chapterId' => $module['chapter_definitions'][0]['id'], 'due_date' => '2026-11-01', 'status' => 'Borrador', 'requires_file' => true];
         $task = $this->postJson($this->url('induccion/tareas'), $data)->assertCreated()->json();
         $this->patchJson($this->url('induccion/tareas/'.$task['id']), array_replace($data, ['status' => 'Activa', 'requires_file' => '0']))->assertOk()->assertJsonPath('status', 'Activa')->assertJsonPath('requires_file', false);
         $this->postJson($this->url('proveedores/tareas'), $data)->assertNotFound();
@@ -126,5 +131,90 @@ class TrainingContentTest extends TestCase
         $this->actingAs($person);
         $this->postJson($this->url('induccion/modulos'), ['stage' => 'Módulo 9', 'title' => 'No autorizado'])->assertForbidden();
         $this->get(route('admin.capacitaciones.programas.video', ['program' => 'induccion', 'module' => $module['id'], 'chapter' => 'chapter-1']))->assertForbidden();
+    }
+
+    public function test_chapter_activities_reject_missing_or_foreign_chapters_and_delete_only_their_own_children(): void
+    {
+        $module = $this->module();
+        $first = $module['chapter_definitions'][0]['id'];
+        $second = $this->postJson($this->url('induccion/modulos/'.$module['id'].'/capitulos'), ['title' => 'Segundo', 'duration_seconds' => 60])->assertCreated()->json('id');
+        $task = ['title' => 'Evidencia', 'instructions' => 'Respuesta', 'moduleId' => $module['id'], 'status' => 'Activa', 'requires_file' => false];
+        $this->postJson($this->url('induccion/tareas'), $task)->assertUnprocessable();
+        $this->postJson($this->url('induccion/tareas'), $task + ['chapterId' => 'c1'])->assertUnprocessable();
+        $a = $this->postJson($this->url('induccion/tareas'), $task + ['chapterId' => $first])->assertCreated()->json('id');
+        $b = $this->postJson($this->url('induccion/tareas'), $task + ['chapterId' => $second])->assertCreated()->json('id');
+        $exam = $this->exam($module);
+        $this->putJson($this->url('induccion/examenes/e1'), array_replace($exam, ['chapterId' => null]))->assertUnprocessable();
+        $this->putJson($this->url('induccion/examenes/e1'), array_replace($exam, ['chapterId' => 'foreign']))->assertUnprocessable();
+        $this->putJson($this->url('induccion/examenes/e1'), $exam)->assertOk()->assertJsonPath('chapterId', $first);
+        $this->putJson($this->url('induccion/examenes/e2'), array_replace($exam, ['chapterId' => $second]))->assertOk();
+        $this->deleteJson($this->url('induccion/modulos/'.$module['id'].'/capitulos/'.$first), ['confirmed' => true])->assertOk();
+        $record = TrainingProgram::find('induccion');
+        $this->assertNotContains($a, array_column($record->task_definitions, 'id'));
+        $this->assertContains($b, array_column($record->task_definitions, 'id'));
+        $this->assertNotContains('e1', array_column($record->exam_definitions, 'id'));
+        $this->assertContains('e2', array_column($record->exam_definitions, 'id'));
+        $this->assertNotEmpty(collect($record->exam_definitions)->filter(fn ($e) => empty($e['chapterId'])));
+    }
+
+    public function test_chapter_order_persists_without_changing_content_or_relations_and_rejects_stale_lists(): void
+    {
+        $module = $this->module();
+        $first = $module['chapter_definitions'][0]['id'];
+        $base = 'induccion/modulos/'.$module['id'].'/capitulos';
+        $second = $this->postJson($this->url($base), ['title' => 'Segundo', 'duration_seconds' => 120])->assertCreated()->json('id');
+        $third = $this->postJson($this->url($base), ['title' => 'Tercero', 'duration_seconds' => 180])->assertCreated()->json('id');
+        $this->postJson($this->url('induccion/tareas'), ['title' => 'Evidencia', 'instructions' => 'Respuesta', 'moduleId' => $module['id'], 'chapterId' => $first, 'status' => 'Activa', 'requires_file' => false])->assertCreated();
+        $this->putJson($this->url('induccion/examenes/e1'), $this->exam($module))->assertOk();
+        $before = TrainingProgram::findOrFail('induccion');
+        $oldOrder = [$first, $second, $third]; $newOrder = [$third, $first, $second];
+        $url = $this->url($base.'/ordenar');
+        foreach ([[$first, $first, $third], [$first], [$first, $second, 'foreign']] as $badOrder) {
+            $this->patchJson($url, ['chapter_ids' => $badOrder, 'expected_order' => $oldOrder])->assertUnprocessable();
+        }
+        $this->patchJson($this->url('proveedores/modulos/'.$module['id'].'/capitulos/ordenar'), ['chapter_ids' => $newOrder, 'expected_order' => $oldOrder])->assertNotFound();
+        $this->patchJson($url, ['chapter_ids' => $newOrder, 'expected_order' => $oldOrder])->assertOk()->assertJsonPath('chapter_ids', $newOrder);
+        // A retry after a lost response is safe, but another stale change must not overwrite it.
+        $this->patchJson($url, ['chapter_ids' => $newOrder, 'expected_order' => $oldOrder])->assertOk();
+        $this->patchJson($url, ['chapter_ids' => [$second, $first, $third], 'expected_order' => $oldOrder])->assertStatus(409);
+        $after = $before->fresh();
+        $saved = collect($after->module_definitions)->firstWhere('id', $module['id']);
+        $previous = collect($before->module_definitions)->firstWhere('id', $module['id']);
+        $this->assertSame($newOrder, array_column($saved['chapter_definitions'], 'id'));
+        $this->assertEquals(collect($previous['chapter_definitions'])->keyBy('id')->all(), collect($saved['chapter_definitions'])->keyBy('id')->all());
+        $this->assertSame($previous['duration'], $saved['duration']);
+        $this->assertSame($previous['chapters'], $saved['chapters']);
+        $this->assertSame($before->task_definitions, $after->task_definitions);
+        $this->assertSame($before->exam_definitions, $after->exam_definitions);
+        $this->assertSame($before->module_definitions[0], $after->module_definitions[0]);
+        $catalog = collect(TrainingAccess::catalog(auth()->user()))->firstWhere('id', 'induccion');
+        $this->assertSame($newOrder, array_column(collect($catalog['module_definitions'])->firstWhere('id', $module['id'])['chapter_definitions'], 'id'));
+    }
+
+    public function test_only_the_administrative_creator_can_reorder_new_modules_and_legacy_modules_remain_manageable(): void
+    {
+        $creator = auth()->user();
+        $module = $this->module(); $ids = array_column($module['chapter_definitions'], 'id');
+        $this->assertSame($creator->id, $module['created_by']);
+        $url = $this->url('induccion/modulos/'.$module['id'].'/capitulos/ordenar');
+        foreach (['Admin', 'Super Admin', 'Capacitacion'] as $role) {
+            $other = User::create(['name' => $role, 'lastname' => 'Prueba', 'username' => str_replace(' ', '', $role), 'password' => bcrypt('test'), 'is_active' => true]);
+            $other->assignRole(Role::findOrCreate($role));
+            $this->actingAs($other);
+            $this->patchJson($url, ['chapter_ids' => $ids, 'expected_order' => $ids])->assertForbidden();
+            $catalog = collect(TrainingAccess::catalog($other))->firstWhere('id', 'induccion');
+            $this->assertFalse(collect($catalog['module_definitions'])->firstWhere('id', $module['id'])['can_reorder_chapters']);
+        }
+        $this->actingAs($creator);
+        $this->patchJson($this->url('induccion/modulos/'.$module['id']), ['stage' => 'Editado', 'title' => 'Editado', 'created_by' => 999])->assertOk()->assertJsonPath('created_by', $creator->id);
+        $this->patchJson($url, ['chapter_ids' => $ids, 'expected_order' => $ids])->assertOk();
+        $creator->syncRoles([Role::findOrCreate('Super Admin')]);
+        $superModule = $this->module('proveedores');
+        $this->assertSame($creator->id, $superModule['created_by']);
+        $superIds = array_column($superModule['chapter_definitions'], 'id');
+        $this->patchJson($this->url('proveedores/modulos/'.$superModule['id'].'/capitulos/ordenar'), ['chapter_ids' => $superIds, 'expected_order' => $superIds])->assertOk();
+        $legacy = TrainingProgram::find('induccion')->module_definitions[0];
+        $legacyIds = array_column($legacy['chapter_definitions'], 'id');
+        $this->patchJson($this->url('induccion/modulos/'.$legacy['id'].'/capitulos/ordenar'), ['chapter_ids' => array_reverse($legacyIds), 'expected_order' => $legacyIds])->assertOk();
     }
 }

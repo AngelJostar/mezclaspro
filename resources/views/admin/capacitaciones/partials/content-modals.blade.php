@@ -12,10 +12,10 @@
     <form data-content-confirm-form>
         <header><h3 id="training-content-confirm-title">Eliminar capítulo</h3>
             <button type="button" class="training-modal-close" data-cancel-content-delete aria-label="Cerrar confirmación">×</button></header>
-        <div class="training-program-modal-body"><p class="is-wide" data-content-confirm-message></p></div>
+        <div class="training-program-modal-body"><p class="is-wide" data-content-confirm-message role="status" aria-live="polite"></p></div>
         <p class="training-program-error" role="alert" data-content-delete-error hidden></p>
-        <footer><button type="button" class="training-secondary-button" data-cancel-content-delete>No, conservar</button>
-            <button type="submit" class="training-primary-button">Sí, eliminar</button></footer>
+        <footer><button type="button" class="training-secondary-button" data-cancel-content-delete>No</button>
+            <button type="submit" class="training-primary-button">Sí</button></footer>
     </form>
 </dialog>
 <p class="training-exam-save-feedback" data-content-feedback role="status" hidden></p>

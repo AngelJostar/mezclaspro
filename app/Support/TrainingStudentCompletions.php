@@ -27,6 +27,7 @@ class TrainingStudentCompletions
                     'startDate' => $completion->start_date->format('d/m/Y'),
                     'completedAt' => $completion->completed_at->format('d/m/Y H:i'),
                     'completedBy' => $completion->completed_by_name,
+                    'completionType' => $completion->completion_type ?? 'administrative',
                 ];
                 $person['activity'] = $completion->completed_at->format('d/m/Y H:i');
             }

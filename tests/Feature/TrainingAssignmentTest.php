@@ -25,7 +25,8 @@ class TrainingAssignmentTest extends TestCase
             '2024_02_05_235617_add_hospital_to_users_table.php', '2024_04_11_013606_create_permission_tables.php',
             '2025_11_06_183220_create_laboratories_table.php', '2026_08_20_000006_create_personnel_profiles_table.php',
             '2026_10_23_000001_create_training_program_catalog.php', '2026_10_23_000002_add_training_content.php',
-            '2026_10_26_000001_create_training_completions_table.php', '2026_10_26_000002_create_training_assignments_table.php'] as $file) {
+            '2026_10_26_000001_create_training_completions_table.php', '2026_10_26_000002_create_training_assignments_table.php',
+            '2026_10_26_000003_add_training_learning_progress.php'] as $file) {
             (require database_path('migrations/'.$file))->up();
         }
         $this->manager = $this->account('manager', 'Admin');
@@ -137,7 +138,7 @@ class TrainingAssignmentTest extends TestCase
         $this->get($url)->assertOk();
         $this->get(str_replace('/module-2/', '/module-1/', $url))->assertForbidden();
         $this->actingAs($this->manager);
-        $this->get($url)->assertForbidden();
+        $this->get($url)->assertOk(); // Administrators can inspect the selected student's chapter.
         $program->delete();
         $this->assertDatabaseMissing('training_assignments', ['id' => $record->id]);
     }

@@ -849,6 +849,7 @@ Route::prefix('capacitaciones/programas/catalogo')->name('capacitaciones.program
         $content = \App\Http\Controllers\Admin\TrainingContentController::class;
         Route::post('/{program}/modulos', [$content, 'saveModule'])->name('modules.store');
         Route::patch('/{program}/modulos/{module}', [$content, 'saveModule'])->name('modules.update');
+        Route::patch('/{program}/modulos/{module}/capitulos/ordenar', [$content, 'reorderChapters'])->name('chapters.reorder');
         Route::post('/{program}/modulos/{module}/capitulos/{chapter?}', [$content, 'saveChapter'])->name('chapters.save');
         Route::delete('/{program}/modulos/{module}/capitulos/{chapter}', [$content, 'deleteChapter'])->name('chapters.destroy');
         Route::post('/{program}/tareas', [$content, 'saveTask'])->name('tasks.store');
@@ -872,6 +873,18 @@ Route::post('capacitaciones/asignaciones/{assignment}/iniciar', [\App\Http\Contr
     ->name('capacitaciones.asignaciones.start');
 Route::get('capacitaciones/asignaciones/{assignment}/modulos/{module}/capitulos/{chapter}/video',
     [\App\Http\Controllers\Admin\TrainingAssignmentController::class, 'video'])->name('capacitaciones.asignaciones.video');
+Route::post('capacitaciones/asignaciones/{assignment}/modulos/{module}/capitulos/{chapter}/completar',
+    [\App\Http\Controllers\Admin\TrainingLearningController::class, 'chapter'])->name('capacitaciones.asignaciones.chapter');
+Route::post('capacitaciones/asignaciones/{assignment}/modulos/{module}/tareas/{task}',
+    [\App\Http\Controllers\Admin\TrainingLearningController::class, 'task'])->name('capacitaciones.asignaciones.task');
+Route::get('capacitaciones/asignaciones/{assignment}/entregas/{submission}/archivo',
+    [\App\Http\Controllers\Admin\TrainingLearningController::class, 'file'])->name('capacitaciones.asignaciones.task.file');
+Route::post('capacitaciones/asignaciones/{assignment}/entregas/{submission}/revisar',
+    [\App\Http\Controllers\Admin\TrainingLearningController::class, 'review'])->name('capacitaciones.asignaciones.task.review')->middleware('role:Admin|Super Admin');
+Route::post('capacitaciones/asignaciones/{assignment}/modulos/{module}/examenes/{exam}',
+    [\App\Http\Controllers\Admin\TrainingLearningController::class, 'exam'])->name('capacitaciones.asignaciones.exam');
+Route::post('capacitaciones/asignaciones/{assignment}/intentos/{attempt}/entregar',
+    [\App\Http\Controllers\Admin\TrainingLearningController::class, 'submitExam'])->name('capacitaciones.asignaciones.exam.submit');
 
 Route::get('capacitaciones/personal', [TrainingPersonnelController::class, 'index'])
     ->name('capacitaciones.personal');

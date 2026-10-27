@@ -33,15 +33,18 @@ async function fixture(width = 1366) {
             let saved;
             if (section === 'modulos' && child === 'capitulos') {
                 const module = program.module_definitions.find(m => m.id === id);
-                if (req.method() === 'DELETE') {
+                if (childId === 'ordenar' && req.method() === 'PATCH') {
+                    module.chapter_definitions = data.chapter_ids.map(id => module.chapter_definitions.find(chapter => chapter.id === id));
+                    saved = { chapter_ids: data.chapter_ids };
+                } else if (req.method() === 'DELETE') {
                     module.chapter_definitions = module.chapter_definitions.filter(c => c.id !== childId); saved = { deleted: childId };
                 } else {
-                    saved = { ...data, id: childId || 'chapter-test', duration: Math.ceil(Number(data.duration_seconds) / 60) + ' min' };
+                    saved = { ...data, id: childId || 'chapter-' + (module.chapter_definitions.length + 1), duration: Math.ceil(Number(data.duration_seconds) / 60) + ' min' };
                     module.chapter_definitions = [...module.chapter_definitions.filter(c => c.id !== saved.id), saved];
                 }
                 module.chapters = module.chapter_definitions.length;
             } else if (section === 'modulos') {
-                saved = { ...(program.module_definitions.find(m => m.id === id) || { id: 'module-test', project: 'calidad', chapter_definitions: [], chapters: 0, duration: '0 min' }), ...data };
+                saved = { ...(program.module_definitions.find(m => m.id === id) || { id: 'module-test', project: 'calidad', created_by: 1, chapter_definitions: [], chapters: 0, duration: '0 min' }), ...data };
                 program.module_definitions = [...program.module_definitions.filter(m => m.id !== saved.id), saved];
             } else if (section === 'tareas') {
                 saved = { ...data, id: id || 'task-test', projectId: 'calidad', project: 'Calidad', stage: program.module_definitions.find(m => m.id === data.moduleId).stage, due: data.due_date || 'Sin fecha', tone: 'active', requires_file: data.requires_file === '1' };
@@ -64,6 +67,11 @@ async function saveContent(page) {
 async function addModule(page) {
     await page.locator('[data-add-module]').click();
     await page.locator('[data-content-form] [name=title]').fill('Trazabilidad');
+    await saveContent(page);
+}
+async function addChapter(page, title = 'Identificación') {
+    await page.locator('[data-add-chapter]').click();
+    await page.locator('[data-content-form] [name=title]').fill(title);
     await saveContent(page);
 }
 
@@ -96,28 +104,100 @@ test('module and chapter buttons save independent records, preserve input on fai
         await saveContent(page);
         await page.reload();
         assert.match(await page.locator('[data-chapter-list]').textContent(), /Identificación revisada/);
+        const confirmation = page.locator('[data-content-confirm]');
+        const no = confirmation.getByRole('button', { name: 'No', exact: true });
+        const yes = confirmation.getByRole('button', { name: 'Sí', exact: true });
+        const firstMessage = '¿Estás seguro que quieres eliminar el capítulo “Identificación revisada”?';
+        const finalMessage = 'Al eliminar el capítulo no podrás recuperar la información. ¿Estás seguro que quieres eliminarlo?';
         await page.locator('[data-delete-chapter]').click();
-        await page.locator('[data-content-confirm]').getByRole('button', { name: 'No, conservar' }).click();
+        assert.equal(await confirmation.locator('[data-content-confirm-message]').innerText(), firstMessage);
+        if (process.env.TRAINING_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-delete-chapter-first.png') });
+        await no.click();
         assert.equal(program.module_definitions[0].chapters, 1);
         await page.locator('[data-delete-chapter]').click();
-        await Promise.all([page.waitForEvent('load'), page.locator('[data-content-confirm]').getByRole('button', { name: 'Sí, eliminar' }).click()]);
+        await yes.click();
+        assert.equal(await confirmation.locator('[data-content-confirm-message]').innerText(), finalMessage);
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+        if (process.env.TRAINING_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-delete-chapter-final.png') });
+        await no.click();
+        assert.equal(program.module_definitions[0].chapters, 1);
+        await page.locator('[data-delete-chapter]').click();
+        assert.equal(await confirmation.locator('[data-content-confirm-message]').innerText(), firstMessage);
+        await yes.click();
+        await page.keyboard.press('Escape');
+        assert.equal(await confirmation.evaluate(node => node.open), false);
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+        await page.locator('[data-delete-chapter]').click();
+        assert.equal(await confirmation.locator('[data-content-confirm-message]').innerText(), firstMessage);
+        await yes.click();
+        fail(true); await yes.click();
+        await confirmation.locator('[data-content-delete-error]:visible').waitFor();
+        assert.equal(program.module_definitions[0].chapters, 1);
+        assert.equal(await confirmation.locator('[data-content-confirm-message]').innerText(), finalMessage);
+        fail(false);
+        await Promise.all([page.waitForEvent('load'), yes.click()]);
         assert.equal(program.module_definitions[0].chapters, 0);
-        assert.equal(requests.filter(r => r.method === 'DELETE').length, 1);
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, 2);
+        await page.reload();
+        assert.equal(await page.locator('[data-training-chapter]').count(), 0);
         assert.deepEqual(errors, []);
     } finally { await page.close(); }
 });
 
-test('new task in an empty program guides module creation, resumes the task, saves and edits it', async () => {
+test('chapter cards reorder by dragging and keyboard, persist, and roll back failed saves', async () => {
+    const { page, program, errors, requests, fail } = await fixture();
+    try {
+        await addModule(page); await addChapter(page, 'Primero'); await addChapter(page, 'Segundo'); await addChapter(page, 'Tercero');
+        program.task_definitions = [{ id: 't1', projectId: 'calidad', moduleId: 'module-test', chapterId: 'chapter-1', title: 'Tarea del primero', status: 'Activa', stage: 'Módulo 1', due: 'Sin fecha', tone: 'active' }];
+        await page.reload();
+        const order = () => page.locator('[data-training-chapter]').evaluateAll(rows => rows.map(row => row.dataset.trainingChapter));
+        const saved = () => page.locator('[data-chapter-order-status]').filter({ hasText: 'Orden de capítulos guardado.' }).waitFor();
+        assert.equal(await page.locator('[data-chapter-drag]').count(), 3);
+        await page.locator('[data-chapter-drag="chapter-3"]').dragTo(page.locator('[data-training-chapter="chapter-1"]'), { targetPosition: { x: 30, y: 8 } });
+        await saved();
+        assert.deepEqual(await order(), ['chapter-3', 'chapter-1', 'chapter-2']);
+        assert.match(await page.locator('[data-training-chapter="chapter-3"] strong').first().textContent(), /Capítulo 1 · Tercero/);
+        assert.equal(await page.locator('[data-training-chapter="chapter-1"] [data-chapter-activity-id=t1]').count(), 1);
+        assert.deepEqual(requests.find(r => r.path.endsWith('/ordenar')).data.expected_order, ['chapter-1', 'chapter-2', 'chapter-3']);
+        await page.reload();
+        assert.deepEqual(await order(), ['chapter-3', 'chapter-1', 'chapter-2']);
+        if (process.env.TRAINING_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-chapter-order.png'), fullPage: true });
+        fail(true);
+        const lastRow = page.locator('[data-training-chapter="chapter-2"]');
+        const box = await lastRow.boundingBox();
+        await page.locator('[data-chapter-drag="chapter-3"]').dragTo(lastRow, { targetPosition: { x: 30, y: box.height - 8 } });
+        await page.locator('[data-chapter-order-status]').filter({ hasText: 'No se guardó el nuevo orden.' }).waitFor();
+        assert.deepEqual(await order(), ['chapter-3', 'chapter-1', 'chapter-2']);
+        assert.deepEqual(program.module_definitions[0].chapter_definitions.map(c => c.id), ['chapter-3', 'chapter-1', 'chapter-2']);
+        fail(false);
+        await page.locator('[data-chapter-drag="chapter-3"]').focus(); await page.keyboard.press('ArrowDown'); await saved();
+        assert.deepEqual(await order(), ['chapter-1', 'chapter-3', 'chapter-2']);
+        await page.reload();
+        assert.deepEqual(await order(), ['chapter-1', 'chapter-3', 'chapter-2']);
+        const count = requests.length;
+        await page.locator('[data-chapter-drag="chapter-1"]').dragTo(page.locator('[data-module-editor-title]'));
+        assert.deepEqual(await order(), ['chapter-1', 'chapter-3', 'chapter-2']);
+        assert.equal(requests.length, count, 'dropping outside the chapter list does not save');
+        await page.setViewportSize({ width: 390, height: 900 });
+        await page.getByRole('button', { name: 'Subir capítulo Segundo', exact: true }).click(); await saved();
+        assert.deepEqual(await order(), ['chapter-1', 'chapter-2', 'chapter-3']);
+        program.module_definitions[0].created_by = 999;
+        await page.reload();
+        assert.equal(await page.locator('[data-chapter-drag]').count(), 0);
+        assert.equal(await page.locator('[data-training-chapter][draggable=true]').count(), 0);
+        assert.deepEqual(errors, []);
+    } finally { await page.close(); }
+});
+
+test('chapter tasks are created and edited on the right of their chapter and persist on mobile', async () => {
     const { page, program, errors } = await fixture(390);
     try {
-        await page.locator('[data-program-tab=tasks]').click();
-        await page.locator('[data-new-task]').click();
+        assert.equal(await page.locator('[data-program-tab=tasks]').count(), 0);
+        await addModule(page); await addChapter(page); await addChapter(page, 'Segundo capítulo');
+        await page.locator('[data-create-chapter-task="chapter-2"]').click();
         const modal = page.locator('[data-content-dialog]'), form = page.locator('[data-content-form]');
-        assert.equal(await page.locator('[data-content-save]').isDisabled(), true);
-        await modal.getByRole('button', { name: 'Agregar módulo' }).click();
-        await form.locator('[name=title]').fill('Trazabilidad'); await saveContent(page);
-        await modal.waitFor({ state: 'visible' });
         assert.equal(await page.locator('#training-content-title').textContent(), 'Nueva tarea');
+        assert.equal(await form.locator('[name=chapterId]').inputValue(), 'chapter-2');
         await form.locator('[name=title]').fill('Entrega de evidencia');
         await form.locator('[name=instructions]').fill('Adjunta el checklist completo.');
         await form.locator('[name=status]').selectOption('Activa');
@@ -126,34 +206,41 @@ test('new task in an empty program guides module creation, resumes the task, sav
         if (process.env.TRAINING_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-task-mobile.png') });
         await saveContent(page);
         assert.equal(program.task_definitions[0].moduleId, 'module-test');
-        await page.locator('[data-edit-task=task-test]').click();
+        assert.equal(program.task_definitions[0].chapterId, 'chapter-2');
+        assert.equal(await page.locator('[data-training-chapter="chapter-1"] [data-chapter-activity-id]').count(), 0);
+        await page.locator('[data-edit-chapter-task=task-test]').click();
         assert.equal(await form.locator('[name=instructions]').inputValue(), 'Adjunta el checklist completo.');
         await form.locator('[name=title]').fill('Evidencia revisada');
         await saveContent(page);
         await page.reload();
-        assert.match(await page.locator('[data-task-id=task-test]').textContent(), /Evidencia revisada/);
+        assert.match(await page.locator('[data-training-chapter="chapter-2"]').textContent(), /Evidencia revisada/);
         assert.deepEqual(errors, []);
     } finally { await page.close(); }
 });
 
-test('exams save to the server and survive reload; a program without modules starts module creation', async () => {
-    const { page, program, errors, requests } = await fixture();
+test('chapter exams preserve their association through creation, publication, editing and reload', async () => {
+    const { page, program, errors, requests, fail } = await fixture();
     try {
-        await page.locator('[data-program-tab=exams]').click();
-        await page.locator('[data-new-exam]').click();
-        await page.locator('[data-content-form] [name=title]').fill('Trazabilidad');
-        await saveContent(page);
+        assert.equal(await page.locator('[data-program-tab=exams]').count(), 0);
+        await addModule(page); await addChapter(page); await addChapter(page, 'Segundo capítulo');
+        await page.locator('[data-create-chapter-exam="chapter-1"]').click();
         const form = page.locator('[data-new-exam-form]');
         await form.waitFor({ state: 'visible' });
         await form.locator('[name=name]').fill('Evaluación de calidad');
+        fail(true); await form.getByRole('button', { name: 'Guardar borrador' }).click();
+        await form.locator('[data-exam-persistence-error]:visible').waitFor();
+        assert.equal(await form.locator('[name=chapterId]').inputValue(), 'chapter-1');
+        fail(false);
         await form.getByRole('button', { name: 'Guardar borrador' }).click();
         await form.waitFor({ state: 'hidden' });
         assert.equal(program.exam_definitions[0].status, 'Borrador');
+        assert.equal(program.exam_definitions[0].chapterId, 'chapter-1');
+        assert.equal(program.exam_definitions[0].moduleId, 'module-test');
         assert.equal(requests.at(-1).method, 'PUT');
         await page.reload();
         const examId = program.exam_definitions[0].id;
         assert.equal(await page.locator('[data-exam-id="' + examId + '"]').count(), 1);
-        await page.locator('[data-edit-exam="' + examId + '"]').click();
+        await page.locator('[data-edit-chapter-exam="' + examId + '"]').click();
         const edit = page.locator('[data-exam-editor-form]');
         await edit.locator('[name=status]').selectOption('Publicado');
         await edit.locator('[data-exam-question-text]').fill('¿Identificas el producto?');
@@ -163,7 +250,14 @@ test('exams save to the server and survive reload; a program without modules sta
         await edit.waitFor({ state: 'hidden' });
         assert.equal(program.exam_definitions[0].status, 'Publicado');
         await page.reload();
-        assert.match(await page.locator('[data-exam-id="' + examId + '"]').textContent(), /Publicado/);
+        assert.match(await page.locator('[data-training-chapter="chapter-1"]').textContent(), /Publicado/);
+        assert.equal(await page.locator('[data-training-chapter="chapter-2"] [data-chapter-activity-id]').count(), 0);
+        const info = await page.locator('[data-training-chapter="chapter-1"] .training-chapter-body').boundingBox();
+        const actions = await page.locator('[data-training-chapter="chapter-1"] [data-chapter-activities=exam]').boundingBox();
+        assert.ok(actions.x > info.x, 'exam menu is to the right of chapter information');
+        const taskMenu = await page.locator('[data-training-chapter="chapter-1"] [data-chapter-activities=task]').boundingBox();
+        assert.ok(taskMenu.x + taskMenu.width <= 1366, 'both activity menus fit the page');
+        if (process.env.TRAINING_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-chapter-activities.png'), fullPage: true });
         assert.deepEqual(errors, []);
     } finally { await page.close(); }
 });

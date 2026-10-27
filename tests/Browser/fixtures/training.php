@@ -8,7 +8,8 @@ Illuminate\Support\Facades\DB::purge('sqlite');
 foreach (['2014_10_12_000000_create_users_table.php', '2024_04_11_013606_create_permission_tables.php',
     '2025_11_06_183220_create_laboratories_table.php', '2026_08_20_000006_create_personnel_profiles_table.php',
     '2026_10_23_000001_create_training_program_catalog.php', '2026_10_23_000002_add_training_content.php',
-    '2026_10_26_000001_create_training_completions_table.php', '2026_10_26_000002_create_training_assignments_table.php'] as $file) (require database_path('migrations/'.$file))->up();
+    '2026_10_26_000001_create_training_completions_table.php', '2026_10_26_000002_create_training_assignments_table.php',
+    '2026_10_26_000003_add_training_learning_progress.php'] as $file) (require database_path('migrations/'.$file))->up();
 $user = App\Models\User::create(['name' => 'Admin', 'lastname' => 'Prueba', 'username' => 'prueba', 'password' => bcrypt('prueba'), 'is_active' => true]);
 $user->assignRole(Spatie\Permission\Models\Role::findOrCreate('Admin'));
 Illuminate\Support\Facades\Auth::login($user);
@@ -44,12 +45,14 @@ foreach ($scenario['personnel'] ?? [] as $person) {
 foreach ($scenario['assignments'] ?? [] as $assignment) {
     App\Models\TrainingAssignment::create($assignment + ['user_id' => $user->id, 'assigned_by' => $user->id, 'status' => 'assigned']);
 }
+foreach ($scenario['submissions'] ?? [] as $submission) App\Models\TrainingTaskSubmission::create($submission);
+foreach ($scenario['attempts'] ?? [] as $attempt) App\Models\TrainingExamAttempt::create($attempt);
 if (isset($scenario['as_user'])) {
     $user = App\Models\User::findOrFail($scenario['as_user']);
     Illuminate\Support\Facades\Auth::login($user);
 }
 if ($type === 'assignments') {
-    $request = Illuminate\Http\Request::create('http://training.test/admin/capacitaciones/asignaciones');
+    $request = Illuminate\Http\Request::create('http://training.test/admin/capacitaciones/asignaciones', 'GET', isset($scenario['view_user']) ? ['user_id' => $scenario['view_user']] : []);
     $request->setUserResolver(fn () => $user);
     Illuminate\Support\Facades\URL::forceRootUrl('http://training.test');
     echo app(App\Http\Controllers\Admin\TrainingAssignmentController::class)->index($request)->getContent();

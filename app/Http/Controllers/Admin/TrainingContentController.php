@@ -22,11 +22,20 @@ class TrainingContentController extends Controller
         return $index;
     }
 
+    private function validateChapter(array $module, ?string $chapter, bool $allowLegacy = false): ?string
+    {
+        if (!$chapter && $allowLegacy) return null;
+        if (!$chapter || !collect($module['chapter_definitions'] ?? [])->contains('id', $chapter)) {
+            throw ValidationException::withMessages(['chapterId' => 'Selecciona un capítulo de este módulo.']);
+        }
+        return $chapter;
+    }
+
     public function saveModule(Request $request, string $program, ?string $module = null)
     {
         $data = $request->validate(['stage' => ['required', 'string', 'max:60'], 'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000']]);
-        return DB::transaction(function () use ($program, $module, $data) {
+        return DB::transaction(function () use ($request, $program, $module, $data) {
             $record = TrainingProgram::query()->lockForUpdate()->findOrFail($program);
             $modules = $record->module_definitions ?? [];
             if (collect($modules)->contains(fn ($entry) => $entry['id'] !== $module && mb_strtolower($entry['title']) === mb_strtolower($data['title']))) {
@@ -34,7 +43,7 @@ class TrainingContentController extends Controller
             }
             $index = $module ? $this->moduleIndex($record, $module) : count($modules);
             $modules[$index] = array_replace($modules[$index] ?? ['id' => 'module-'.Str::uuid(), 'project' => $program,
-                'chapter_definitions' => [], 'chapters' => 0, 'duration' => '0 min'], $data);
+                'chapter_definitions' => [], 'chapters' => 0, 'duration' => '0 min', 'created_by' => $request->user()->id], $data);
             $saved = $modules[$index];
             $exams = collect($record->exam_definitions ?? [])->map(fn ($exam) => ($exam['moduleId'] ?? '') === $saved['id'] ? array_replace($exam, ['module' => $saved['title']]) : $exam)->all();
             $tasks = collect($record->task_definitions ?? [])->map(fn ($task) => ($task['moduleId'] ?? '') === $saved['id'] ? array_replace($task, ['stage' => $saved['stage']]) : $task)->all();
@@ -82,6 +91,36 @@ class TrainingContentController extends Controller
         return response()->json($saved, $chapter ? 200 : 201);
     }
 
+    public function reorderChapters(Request $request, string $program, string $module)
+    {
+        $data = $request->validate([
+            'chapter_ids' => ['required', 'array', 'min:1'],
+            'chapter_ids.*' => ['required', 'string', 'max:191', 'distinct:strict'],
+            'expected_order' => ['required', 'array', 'min:1'],
+            'expected_order.*' => ['required', 'string', 'max:191', 'distinct:strict'],
+        ]);
+        return DB::transaction(function () use ($request, $program, $module, $data) {
+            $record = TrainingProgram::query()->lockForUpdate()->findOrFail($program);
+            $modules = $record->module_definitions;
+            $index = $this->moduleIndex($record, $module);
+            abort_unless(TrainingAccess::canReorderChapters($request->user(), $modules[$index]), 403,
+                'Solo el administrador que creó el módulo puede reordenar sus capítulos.');
+            $chapters = $modules[$index]['chapter_definitions'] ?? [];
+            $current = array_column($chapters, 'id');
+            $order = array_values($data['chapter_ids']);
+            if (count($order) !== count($current) || array_diff($order, $current)) {
+                throw ValidationException::withMessages(['chapter_ids' => 'La lista de capítulos cambió. Actualiza la página antes de reordenarla.']);
+            }
+            // Do not overwrite another administrator's reorder from a stale page.
+            abort_unless($current === array_values($data['expected_order']) || $current === $order, 409,
+                'El orden cambió en otra ventana. Actualiza la página antes de reordenar.');
+            $byId = collect($chapters)->keyBy('id');
+            $modules[$index]['chapter_definitions'] = array_map(fn ($id) => $byId[$id], $order);
+            $record->update(['module_definitions' => $modules]);
+            return response()->json(['chapter_ids' => $order]);
+        });
+    }
+
     public function deleteChapter(Request $request, string $program, string $module, string $chapter)
     {
         $request->validate(['confirmed' => ['required', 'accepted']]);
@@ -96,7 +135,10 @@ class TrainingContentController extends Controller
             $modules[$index]['chapter_definitions'] = $chapters;
             $modules[$index]['chapters'] = count($chapters);
             $modules[$index]['duration'] = (int) ceil(array_sum(array_column($chapters, 'duration_seconds')) / 60).' min';
-            $record->update(['module_definitions' => $modules]);
+            $belongsToChapter = fn ($activity) => ($activity['moduleId'] ?? '') === $module && ($activity['chapterId'] ?? '') === $chapter;
+            $record->update(['module_definitions' => $modules,
+                'task_definitions' => collect($record->task_definitions ?? [])->reject($belongsToChapter)->values()->all(),
+                'exam_definitions' => collect($record->exam_definitions ?? [])->reject($belongsToChapter)->values()->all()]);
             return $entry['video_path'] ?? null;
         });
         if ($path) Storage::disk('local')->delete($path);
@@ -117,7 +159,7 @@ class TrainingContentController extends Controller
     public function saveTask(Request $request, string $program, ?string $task = null)
     {
         $data = $request->validate(['title' => ['required', 'string', 'max:150'], 'instructions' => ['required', 'string', 'max:5000'],
-            'moduleId' => ['required', 'string'], 'due_date' => ['nullable', 'date_format:Y-m-d'],
+            'moduleId' => ['required', 'string'], 'chapterId' => ['nullable', 'string', 'max:191'], 'due_date' => ['nullable', 'date_format:Y-m-d'],
             'status' => ['required', Rule::in(['Activa', 'Borrador', 'Inactiva'])], 'requires_file' => ['required', 'boolean']]);
         $data['requires_file'] = $request->boolean('requires_file');
         return DB::transaction(function () use ($program, $task, $data) {
@@ -126,6 +168,7 @@ class TrainingContentController extends Controller
             $tasks = $record->task_definitions ?? [];
             $index = $task ? collect($tasks)->search(fn ($entry) => $entry['id'] === $task) : count($tasks);
             abort_if($index === false, 404, 'La tarea ya no está disponible.');
+            $data['chapterId'] = $this->validateChapter($module, $data['chapterId'] ?? null, $task && empty($tasks[$index]['chapterId']));
             $saved = $data + ['id' => $task ?: 'task-'.Str::uuid(), 'projectId' => $program, 'project' => $record->title,
                 'stage' => $module['stage'], 'due' => !empty($data['due_date']) ? \Carbon\Carbon::parse($data['due_date'])->format('d/m/Y') : 'Sin fecha',
                 'tone' => ['Activa' => 'active', 'Borrador' => 'draft', 'Inactiva' => 'inactive'][$data['status']]];
@@ -135,11 +178,11 @@ class TrainingContentController extends Controller
         });
     }
 
-    private function validateExam(array $input, TrainingProgram $program): array
+    private function validateExam(array $input, TrainingProgram $program, bool $allowLegacy = false): array
     {
         $data = validator($input, ['id' => ['required', 'string', 'max:191', 'regex:/^[a-zA-Z0-9_-]+$/'],
             'name' => ['required', 'string', 'max:150'], 'module' => ['required', 'string', 'max:150'],
-            'moduleId' => ['nullable', 'string'], 'instructions' => ['nullable', 'string', 'max:5000'],
+            'moduleId' => ['nullable', 'string'], 'chapterId' => ['nullable', 'string', 'max:191'], 'instructions' => ['nullable', 'string', 'max:5000'],
             'minimum' => ['required', 'integer', 'between:1,100'], 'duration' => ['required', 'integer', 'between:1,1440'],
             'attempts' => ['required', 'integer', 'between:1,100'], 'randomize' => ['required', 'boolean'],
             'status' => ['required', Rule::in(['Borrador', 'Publicado'])], 'items' => ['present', 'array', 'max:100'],
@@ -149,6 +192,7 @@ class TrainingContentController extends Controller
         ])->validate();
         $module = collect($program->module_definitions)->first(fn ($entry) => !empty($data['moduleId']) ? $entry['id'] === $data['moduleId'] : $entry['title'] === $data['module']);
         if (!$module) throw ValidationException::withMessages(['module' => 'Selecciona un módulo de este programa.']);
+        $data['chapterId'] = $this->validateChapter($module, $data['chapterId'] ?? null, $allowLegacy);
         if ($data['status'] === 'Publicado' && !$data['items']) throw ValidationException::withMessages(['items' => 'Agrega al menos una pregunta antes de publicar.']);
         foreach ($data['items'] as $index => $item) {
             $answers = $item['type'] === 'multiple' ? $item['correct'] : [$item['correct']];
@@ -168,7 +212,8 @@ class TrainingContentController extends Controller
     {
         return DB::transaction(function () use ($request, $program, $exam) {
             $record = TrainingProgram::query()->lockForUpdate()->findOrFail($program);
-            $saved = $this->validateExam(array_replace($request->all(), ['id' => $exam]), $record);
+            $existing = collect($record->exam_definitions ?? [])->firstWhere('id', $exam);
+            $saved = $this->validateExam(array_replace($request->all(), ['id' => $exam]), $record, $existing && empty($existing['chapterId']));
             $exams = collect($record->exam_definitions ?? [])->keyBy('id');
             $exams[$exam] = $saved;
             $record->update(['exam_definitions' => $exams->values()->all(), 'exams_imported' => true]);
@@ -184,7 +229,7 @@ class TrainingContentController extends Controller
             if (!$record->exams_imported) {
                 $exams = collect($record->exam_definitions ?? [])->keyBy('id');
                 foreach ($input['exams'] as $exam) {
-                    $saved = $this->validateExam($exam, $record);
+                    $saved = $this->validateExam($exam, $record, true);
                     $exams[$saved['id']] = $saved;
                 }
                 $record->update(['exam_definitions' => $exams->values()->all(), 'exams_imported' => true]);

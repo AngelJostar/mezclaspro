@@ -9,7 +9,17 @@ class TrainingAssignment extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['module_ids' => 'array', 'start_date' => 'date', 'started_at' => 'datetime', 'completed_at' => 'datetime'];
+    protected $casts = ['module_ids' => 'array', 'learning_progress' => 'array', 'start_date' => 'date', 'started_at' => 'datetime', 'completed_at' => 'datetime'];
+
+    public function submissions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TrainingTaskSubmission::class, 'assignment_id');
+    }
+
+    public function attempts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TrainingExamAttempt::class, 'assignment_id');
+    }
 
     public function setStartDateAttribute($value): void
     {

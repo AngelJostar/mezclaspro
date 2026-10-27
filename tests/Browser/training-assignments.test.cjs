@@ -71,9 +71,8 @@ test('saved assignment appears in administrator table and selected learner can s
         await start.click();
         const reader = page.locator('[data-assigned-reader]');
         await reader.waitFor({ state: 'visible' });
-        assert.equal(await page.locator('[data-assigned-module] option').count(), 1);
-        assert.match(await page.locator('[data-assigned-module]').innerText(), /Seguridad operativa/);
-        assert.ok(await page.locator('[data-assigned-chapters] article').count() > 0);
+        assert.match(await page.locator('[data-assigned-chapter-position]').innerText(), /Seguridad operativa/);
+        assert.equal(await page.locator('[data-assigned-chapters] article').count(), 1);
         await page.locator('[data-close-assigned-reader]').click();
         await page.reload();
         await page.getByRole('button', { name: 'Continuar capacitación', exact: true }).waitFor();
@@ -83,7 +82,7 @@ test('saved assignment appears in administrator table and selected learner can s
         await page.screenshot({ path: path.join(root, 'output/screenshots/capacitacion-asignada-inicio.png'), fullPage: true });
         f.login(3);
         await page.reload();
-        await page.getByText('No tienes capacitaciones pendientes asignadas.', { exact: true }).waitFor();
+        await page.getByText('No tienes capacitaciones asignadas.', { exact: true }).waitFor();
         assert.equal(await page.locator('[data-start-assignment]').count(), 0);
         assert.deepEqual(f.errors, []);
     } finally { await page.close(); }
@@ -96,16 +95,16 @@ test('multiple assignments show only selected modules and an administrative clos
             { user_id: 2, program_id: 'proveedores', module_ids: ['module-3'], start_date: '2026-10-26', status: 'assigned' }]);
         f.login(2); await page.goto('http://training.test/admin/capacitaciones/programas');
         await page.locator('[data-start-assignment="2"]').waitFor();
-        assert.equal(await page.locator('[data-start-assignment]').count(), 2);
+        assert.equal(await page.locator('[data-own-assignment-list] article').count(), 2);
         await page.locator('[data-start-assignment="2"]').click();
         await page.locator('[data-assigned-reader]').waitFor({ state: 'visible' });
-        assert.match(await page.locator('[data-assigned-module]').innerText(), /Validacion final/);
+        assert.match(await page.locator('[data-assigned-chapter-position]').innerText(), /Validacion final/);
         f.seed([{ user_id: 2, program_id: 'induccion', module_ids: ['module-1'], start_date: '2026-10-26', status: 'assigned' },
             { user_id: 2, program_id: 'proveedores', module_ids: ['module-3'], start_date: '2026-10-26', status: 'completed' }]);
         await page.locator('[data-close-assigned-reader]').click();
         await page.locator('[data-refresh-assignments]').click();
-        await page.getByText('1 capacitación pendiente o en curso.', { exact: true }).waitFor();
-        assert.equal(await page.locator('[data-start-assignment]').count(), 1);
+        await page.getByText('Capacitación concluida', { exact: true }).waitFor();
+        assert.equal(await page.locator('[data-start-assignment="2"]').isDisabled(), true);
         assert.deepEqual(f.errors, []);
     } finally { await page.close(); }
 });

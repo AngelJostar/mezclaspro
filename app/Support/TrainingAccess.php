@@ -9,6 +9,13 @@ use Illuminate\Validation\ValidationException;
 
 class TrainingAccess
 {
+    public static function canReorderChapters(?User $user, array $module): bool
+    {
+        if (!$user?->hasAnyRole(['Super Admin', 'Admin'])) return false;
+        // Older modules have no recorded creator; retain administrative access to them.
+        return empty($module['created_by']) || (string) $module['created_by'] === (string) $user->id;
+    }
+
     /** Read-only library: employees need an explicit grant, even if they manage personnel. */
     public static function continuousCatalog(?User $user): array
     {
@@ -54,7 +61,18 @@ class TrainingAccess
                 }
             }
         }
-        return $programs->map->catalogEntry()->values()->all();
+        return $programs->map(function ($program) use ($user) {
+            $entry = $program->catalogEntry();
+            $entry['module_definitions'] = array_map(fn ($module) => array_replace($module,
+                ['can_reorder_chapters' => self::canReorderChapters($user, $module)]), $entry['module_definitions']);
+            if (!$user?->hasAnyRole(['Admin', 'Super Admin'])) {
+                $entry['exam_definitions'] = array_map(function ($exam) {
+                    $exam['items'] = array_map(fn ($item) => \Illuminate\Support\Arr::except($item, ['correct']), $exam['items'] ?? []);
+                    return $exam;
+                }, $entry['exam_definitions'] ?? []);
+            }
+            return $entry;
+        })->values()->all();
     }
 
     /** Call inside the personnel creation transaction; locks prevent assigning a deleted program. */

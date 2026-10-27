@@ -9,7 +9,19 @@ const contentConfirm = root.querySelector('[data-content-confirm]');
 let contentEditing = null;
 let contentBusy = false;
 let chapterToDelete = null;
+let chapterDeleteStep = 0;
+let chapterOrderBusy = false;
+const chapterOrderMessages = new Map();
 let pendingVideoUrl = null;
+const chapterExamDialog = document.createElement('dialog');
+chapterExamDialog.className = 'training-program-modal training-chapter-exam-dialog';
+chapterExamDialog.dataset.chapterExamDialog = '';
+chapterExamDialog.setAttribute('aria-label', 'Crear examen del capítulo');
+root.append(chapterExamDialog);
+chapterExamDialog.append(examCreateView);
+// Editors must remain visible while the module tab is active.
+root.append(examEditorModal, examViewModal);
+chapterExamDialog.addEventListener('cancel', event => { event.preventDefault(); closeNewExamBuilder(); });
 @php($chapterVideoUrl = route('admin.capacitaciones.programas.video', ['program' => '__PROGRAM__', 'module' => '__MODULE__', 'chapter' => '__CHAPTER__']))
 const chapterVideoRoute = @json($chapterVideoUrl);
 
@@ -51,12 +63,12 @@ function closeContentDialog() {
     contentEditing = null;
     clearVideoPreview();
 }
-function openContent(kind, entry = null, resume = null) {
+function openContent(kind, entry = null, resume = null, chapter = null) {
     const programId = programSelector?.value;
-    if (!canManagePrograms || !programId || !contentDialog || contentBusy) return;
+    if (!canManagePrograms || !programId || !contentDialog || contentBusy || chapterOrderBusy) return;
     const module = selectedContentModule();
     if (kind === 'chapter' && !module) return;
-    contentEditing = { kind, id: entry?.id || '', programId, moduleId: module?.id || '', resume };
+    contentEditing = { kind, id: entry?.id || '', programId, moduleId: module?.id || '', chapterId: chapter?.id || entry?.chapterId || '', resume };
     clearVideoPreview();
     contentFields.replaceChildren();
     contentError.hidden = true;
@@ -106,6 +118,16 @@ function openContent(kind, entry = null, resume = null) {
         const modules = moduleDefaults.filter(m => m.project === programId);
         const select = contentField('Módulo', 'moduleId', 'select', '', { required: true });
         contentOptions(select, modules.map(m => [m.id, m.stage + ' - ' + m.title]), entry?.moduleId || module?.id);
+        const chapters = contentField('Capítulo', 'chapterId', 'select', '', { required: !entry || !!entry.chapterId });
+        const fillChapters = () => {
+            chapters.replaceChildren();
+            const selected = modules.find(m => m.id === select.value);
+            const options = (selected?.chapter_definitions || []).map((c, i) => [c.id, 'Capítulo ' + (i + 1) + ' · ' + c.title]);
+            options.unshift(['', entry && !entry.chapterId ? 'Actividad general del módulo (existente)' : 'Selecciona un capítulo']);
+            contentOptions(chapters, options, contentEditing.chapterId);
+        };
+        fillChapters(); select.addEventListener('change', () => { contentEditing.chapterId = ''; fillChapters(); });
+        if (chapter) { select.disabled = true; chapters.disabled = true; }
         const status = contentField('Estatus', 'status', 'select', '', { required: true });
         contentOptions(status, ['Activa', 'Borrador', 'Inactiva'].map(value => [value, value]), entry?.status || 'Borrador');
         contentField('Instrucciones y evidencia esperada', 'instructions', 'textarea', entry?.instructions, { required: true, rows: 5, maxLength: 5000, wide: true });
@@ -134,6 +156,13 @@ function renderModuleChapters(item) {
     list.replaceChildren();
     const module = moduleDefaults.find(m => m.project === item.dataset.programId && m.id === item.dataset.moduleId);
     const chapters = module?.chapter_definitions || [];
+    const canReorder = canManagePrograms && module?.can_reorder_chapters && chapters.length > 1;
+    if (canReorder) {
+        const help = createExamElement('p', 'training-chapter-order-help', 'Arrastra los capítulos para cambiar su orden. Se guarda automáticamente.');
+        const status = createExamElement('span', 'training-chapter-order-status', chapterOrderMessages.get(module.project + '/' + module.id) || '');
+        status.dataset.chapterOrderStatus = ''; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+        help.append(status); list.append(help);
+    }
     if (!chapters.length) { const empty = document.createElement('p'); empty.textContent = 'Este módulo aún no tiene capítulos.'; list.append(empty); }
     chapters.forEach((chapter, index) => {
         const article = createExamElement('article', 'training-chapter-row'); article.dataset.trainingChapter = chapter.id;
@@ -145,10 +174,9 @@ function renderModuleChapters(item) {
             const remove = createExamElement('button', 'training-icon-button', '×'); remove.type = 'button'; remove.dataset.deleteChapter = chapter.id; remove.setAttribute('aria-label', 'Eliminar capítulo ' + chapter.title);
             edit.addEventListener('click', () => openContent('chapter', chapter));
             remove.addEventListener('click', () => {
-                chapterToDelete = { programId: item.dataset.programId, moduleId: module.id, id: chapter.id };
-                root.querySelector('[data-content-confirm-message]').textContent = '¿Eliminar el capítulo “' + chapter.title + '”? Se quitarán sus datos y el video adjunto. Esta acción no se puede deshacer.';
-                root.querySelector('[data-content-delete-error]').hidden = true;
-                contentConfirm.showModal(); root.querySelector('[data-cancel-content-delete]').focus();
+                if (chapterOrderBusy) return;
+                chapterToDelete = { programId: item.dataset.programId, moduleId: module.id, id: chapter.id, title: chapter.title };
+                showChapterDeleteStep(1);
             });
             heading.append(edit, remove);
         }
@@ -156,8 +184,158 @@ function renderModuleChapters(item) {
         const addLink = (url, title) => { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = title; body.append(a); };
         if (/^https?:\/\//i.test(chapter.video || '')) addLink(chapter.video, 'Ver video');
         if (chapter.video_path) addLink(chapterUrl(item.dataset.programId, module.id, chapter.id), 'Ver archivo: ' + (chapter.video_name || 'Video'));
-        article.append(body); list.append(article);
+        article.append(body);
+        if (canReorder) {
+            const controls = createExamElement('div', 'training-chapter-order-controls');
+            const handle = createExamElement('button', 'training-chapter-drag', '⠿'); handle.type = 'button';
+            handle.dataset.chapterDrag = chapter.id; handle.draggable = !chapterOrderBusy;
+            handle.setAttribute('aria-label', 'Reordenar capítulo ' + chapter.title);
+            handle.title = 'Arrastra para reordenar. Con teclado, usa las flechas arriba y abajo.';
+            handle.addEventListener('keydown', event => {
+                if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+                event.preventDefault(); moveChapterBy(module, chapter.id, event.key === 'ArrowUp' ? -1 : 1);
+            });
+            controls.append(handle);
+            [[-1, '↑', 'Subir'], [1, '↓', 'Bajar']].forEach(([delta, icon, label]) => {
+                const button = createExamElement('button', 'training-chapter-move', icon); button.type = 'button';
+                button.setAttribute('aria-label', label + ' capítulo ' + chapter.title);
+                button.disabled = chapterOrderBusy || index + delta < 0 || index + delta >= chapters.length;
+                button.addEventListener('click', () => moveChapterBy(module, chapter.id, delta)); controls.append(button);
+            });
+            body.prepend(controls);
+            article.draggable = !chapterOrderBusy;
+            article.addEventListener('pointerdown', event => {
+                article.draggable = !chapterOrderBusy && !event.target.closest('button:not([data-chapter-drag]), a, input, select, textarea');
+            });
+        }
+        if (canManagePrograms) article.append(chapterActivityMenu(module, chapter, 'exam'), chapterActivityMenu(module, chapter, 'task'));
+        list.append(article);
     });
+    list.setAttribute('aria-busy', String(chapterOrderBusy));
+    if (chapterOrderBusy) list.querySelectorAll('button').forEach(button => { button.disabled = true; });
+    installChapterDrag(list, canReorder ? module : null);
+    const legacyExams = Object.values(examRecords).filter(e => e.projectId === module?.project && e.moduleId === module?.id && !e.chapterId);
+    const legacyTasks = contentTasks.filter(t => t.projectId === module?.project && t.moduleId === module?.id && !t.chapterId);
+    if (canManagePrograms && (legacyExams.length || legacyTasks.length)) {
+        const legacy = createExamElement('section', 'training-chapter-legacy');
+        legacy.append(createExamElement('h4', '', 'Actividades generales del módulo'), createExamElement('p', '', 'Estas actividades se crearon antes de organizar por capítulo. Puedes editar su capítulo de destino.'));
+        legacy.append(chapterActivityMenu(module, null, 'exam', legacyExams), chapterActivityMenu(module, null, 'task', legacyTasks));
+        list.append(legacy);
+    }
+}
+function moveChapterBy(module, id, delta) {
+    const order = module.chapter_definitions.map(chapter => chapter.id);
+    const index = order.indexOf(id), target = index + delta;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    order.splice(index, 1); order.splice(target, 0, id);
+    saveChapterOrder(module, order, id);
+}
+async function saveChapterOrder(module, order, movedId) {
+    if (chapterOrderBusy || contentBusy || !canManagePrograms || !module.can_reorder_chapters) return;
+    const original = module.chapter_definitions;
+    const expected = original.map(chapter => chapter.id);
+    if (expected.every((id, index) => id === order[index])) return;
+    const key = module.project + '/' + module.id;
+    const render = () => {
+        const selected = root.querySelector('[data-module-item].is-active');
+        if (selected?.dataset.moduleId === module.id && selected.dataset.programId === module.project) renderModuleChapters(selected);
+    };
+    chapterOrderBusy = true;
+    module.chapter_definitions = order.map(id => original.find(chapter => chapter.id === id));
+    chapterOrderMessages.set(key, 'Guardando orden…'); render();
+    try {
+        await requestProgram('/' + encodeURIComponent(module.project) + '/modulos/' + encodeURIComponent(module.id) + '/capitulos/ordenar', 'PATCH',
+            { chapter_ids: order, expected_order: expected });
+        chapterOrderMessages.set(key, 'Orden de capítulos guardado.');
+    } catch (error) {
+        module.chapter_definitions = original;
+        chapterOrderMessages.set(key, 'No se guardó el nuevo orden. ' + error.message);
+    } finally {
+        chapterOrderBusy = false; refreshChapterActivities();
+        const selected = selectedContentModule();
+        if (selected === module) {
+            const handle = [...root.querySelectorAll('[data-chapter-drag]')].find(button => button.dataset.chapterDrag === movedId);
+            handle?.focus({ preventScroll: true });
+        }
+    }
+}
+function installChapterDrag(list, module) {
+    let dragged = null;
+    const clearMarkers = () => list.querySelectorAll('.is-drop-before, .is-drop-after').forEach(row => row.classList.remove('is-drop-before', 'is-drop-after'));
+    const reset = () => {
+        clearMarkers(); list.querySelectorAll('.is-dragging').forEach(row => row.classList.remove('is-dragging')); dragged = null;
+    };
+    list.ondragstart = event => {
+        const row = event.target.closest('[data-training-chapter]');
+        if (!module || chapterOrderBusy || contentBusy || !row) { event.preventDefault(); return; }
+        dragged = row.dataset.trainingChapter;
+        event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', dragged);
+        event.dataTransfer.setDragImage(row, 25, 25); row.classList.add('is-dragging');
+    };
+    list.ondragover = event => {
+        const row = event.target.closest('[data-training-chapter]');
+        clearMarkers();
+        if (!dragged || !row || row.dataset.trainingChapter === dragged) return;
+        event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+        const box = row.getBoundingClientRect();
+        row.classList.add(event.clientY < box.top + box.height / 2 ? 'is-drop-before' : 'is-drop-after');
+    };
+    list.ondrop = event => {
+        const row = event.target.closest('[data-training-chapter]');
+        if (!dragged || !row) return;
+        event.preventDefault();
+        const id = dragged, target = row.dataset.trainingChapter;
+        const after = event.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        reset();
+        if (id === target) return;
+        const order = module.chapter_definitions.map(chapter => chapter.id).filter(chapterId => chapterId !== id);
+        order.splice(order.indexOf(target) + (after ? 1 : 0), 0, id);
+        saveChapterOrder(module, order, id);
+    };
+    list.ondragend = reset;
+    list.ondragleave = event => { if (!list.contains(event.relatedTarget)) clearMarkers(); };
+}
+function refreshChapterActivities() {
+    const item = root.querySelector('[data-module-item].is-active');
+    if (item) renderModuleChapters(item);
+}
+function chapterActivityMenu(module, chapter, kind, legacy = null) {
+    const isExam = kind === 'exam';
+    const panel = createExamElement('section', 'training-chapter-activities');
+    panel.dataset.chapterActivities = kind;
+    const title = createExamElement('h4');
+    title.append(createExamElement('i', isExam ? 'fa-regular fa-clipboard' : 'fa-regular fa-file-lines'), document.createTextNode(isExam ? 'Exámenes' : 'Tareas'));
+    panel.append(title);
+    if (chapter) {
+        const create = createExamElement('button', 'training-secondary-button', isExam ? '+ Crear examen' : '+ Crear tarea');
+        create.type = 'button'; create.dataset[isExam ? 'createChapterExam' : 'createChapterTask'] = chapter.id;
+        create.addEventListener('click', () => isExam ? openNewExamBuilder({ moduleId: module.id, chapterId: chapter.id }) : openContent('task', null, null, chapter));
+        panel.append(create);
+    }
+    const entries = legacy || (isExam ? Object.values(examRecords) : contentTasks).filter(a => a.projectId === module.project && a.moduleId === module.id && a.chapterId === chapter.id);
+    entries.forEach(entry => {
+        const row = createExamElement('div', 'training-chapter-activity');
+        row.dataset.chapterActivityId = entry.id;
+        const details = createExamElement('span'); details.append(createExamElement('strong', '', isExam ? entry.name : entry.title), createExamElement('small', '', entry.status));
+        const edit = createExamElement('button', 'training-secondary-button', isExam ? 'Editar examen' : 'Editar tarea'); edit.type = 'button';
+        edit.dataset[isExam ? 'editChapterExam' : 'editChapterTask'] = entry.id;
+        edit.addEventListener('click', () => isExam ? openExamEditor(entry.id) : openContent('task', entry, null, chapter));
+        row.append(details, edit); panel.append(row);
+    });
+    if (!entries.length) panel.append(createExamElement('small', '', isExam ? 'Sin exámenes' : 'Sin tareas'));
+    return panel;
+}
+function examChapterOptions(form, module, selected, allowLegacy = false) {
+    let select = form.elements.chapterId;
+    if (!select) {
+        const label = createExamElement('label'); label.append(createExamElement('span', '', 'Capítulo'));
+        select = document.createElement('select'); select.name = 'chapterId'; label.append(select);
+        form.elements.module.closest('label').after(label);
+    }
+    select.replaceChildren(); select.required = !allowLegacy;
+    select.add(new Option(allowLegacy ? 'Actividad general del módulo (existente)' : 'Selecciona un capítulo', ''));
+    (module?.chapter_definitions || []).forEach((chapter, index) => select.add(new Option('Capítulo ' + (index + 1) + ' · ' + chapter.title, chapter.id)));
+    select.value = selected || '';
 }
 function reloadContent(message, moduleId, resume) {
     try {
@@ -188,7 +366,12 @@ contentForm?.addEventListener('submit', async event => {
     let path = '/' + encodeURIComponent(current.programId);
     let method = current.id ? 'PATCH' : 'POST';
     if (current.kind === 'module') path += '/modulos' + (current.id ? '/' + encodeURIComponent(current.id) : '');
-    if (current.kind === 'task') { path += '/tareas' + (current.id ? '/' + encodeURIComponent(current.id) : ''); data.set('requires_file', contentForm.elements.requires_file.checked ? '1' : '0'); }
+    if (current.kind === 'task') {
+        path += '/tareas' + (current.id ? '/' + encodeURIComponent(current.id) : '');
+        data.set('requires_file', contentForm.elements.requires_file.checked ? '1' : '0');
+        data.set('moduleId', contentForm.elements.moduleId.value);
+        data.set('chapterId', contentForm.elements.chapterId.value);
+    }
     if (current.kind === 'chapter') {
         path += '/modulos/' + encodeURIComponent(current.moduleId) + '/capitulos' + (current.id ? '/' + encodeURIComponent(current.id) : '');
         method = 'POST'; data.set('duration_seconds', Math.round(Number(data.get('duration_minutes')) * 60));
@@ -208,10 +391,28 @@ contentForm?.addEventListener('submit', async event => {
     } catch (error) { contentError.textContent = error.message; contentError.hidden = false; }
     finally { setContentBusy(false); }
 });
-root.querySelectorAll('[data-cancel-content-delete]').forEach(button => button.addEventListener('click', () => { if (!contentBusy) contentConfirm.close(); }));
-contentConfirm?.addEventListener('cancel', event => { if (contentBusy) event.preventDefault(); });
+function showChapterDeleteStep(step) {
+    chapterDeleteStep = step;
+    root.querySelector('#training-content-confirm-title').textContent = step === 1 ? 'Eliminar capítulo' : 'Confirmar eliminación';
+    root.querySelector('[data-content-confirm-message]').textContent = step === 1
+        ? '¿Estás seguro que quieres eliminar el capítulo “' + chapterToDelete.title + '”?'
+        : 'Al eliminar el capítulo no podrás recuperar la información. ¿Estás seguro que quieres eliminarlo?';
+    root.querySelector('[data-content-delete-error]').hidden = true;
+    if (!contentConfirm.open) contentConfirm.showModal();
+    contentConfirm.querySelector('footer [data-cancel-content-delete]').focus();
+}
+function cancelChapterDelete() {
+    if (contentBusy) return;
+    chapterToDelete = null; chapterDeleteStep = 0;
+    contentConfirm.close();
+}
+root.querySelectorAll('[data-cancel-content-delete]').forEach(button => button.addEventListener('click', cancelChapterDelete));
+contentConfirm?.addEventListener('cancel', event => { event.preventDefault(); cancelChapterDelete(); });
 root.querySelector('[data-content-confirm-form]')?.addEventListener('submit', async event => {
     event.preventDefault(); if (!chapterToDelete || contentBusy) return;
+    if (chapterDeleteStep === 1) { showChapterDeleteStep(2); return; }
+    if (chapterDeleteStep !== 2) return;
+    root.querySelector('[data-content-delete-error]').hidden = true;
     setContentBusy(true);
     try {
         const { programId, moduleId, id } = chapterToDelete;

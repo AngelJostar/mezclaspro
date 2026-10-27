@@ -22,6 +22,7 @@
                     'programId' => $currentProgram['id'],
                     'programName' => $currentProgram['name'],
                     'progress' => (int) $currentProgram['progress'],
+                    'userId' => $personRecord['studentId'] ?? null,
                 ];
             })
             ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
@@ -50,7 +51,27 @@
             ));
         }
 
+        $trainingStartTimestamp = static function (array $program): int {
+            try {
+                return \Carbon\Carbon::createFromFormat('!d/m/Y', $program['startDate'] ?? '')->getTimestamp();
+            } catch (\Throwable $exception) {
+                return 0;
+            }
+        };
+
         foreach ($personnel as &$personRecord) {
+            if ($isAlumnosPage) {
+                $programsKey = $studentProgressView === 'completed' ? 'earlyCompletions' : 'currentPrograms';
+                $trainingPrograms = $personRecord[$programsKey] ?? [];
+                usort($trainingPrograms, static fn (array $left, array $right): int =>
+                    ($trainingStartTimestamp($right) <=> $trainingStartTimestamp($left))
+                        ?: (($right['assignmentId'] ?? 0) <=> ($left['assignmentId'] ?? 0)));
+                $personRecord[$programsKey] = $trainingPrograms;
+                $personRecord['sortDate'] = $trainingStartTimestamp($trainingPrograms[0] ?? []);
+                $personRecord['sortId'] = $trainingPrograms[0]['assignmentId'] ?? 0;
+                continue;
+            }
+
             if (array_key_exists('sortDate', $personRecord)) {
                 continue;
             }
@@ -92,8 +113,6 @@
 
         $programTabs = [
             ['id' => 'modules', 'label' => 'Modulos', 'icon' => 'fa-solid fa-book-open', 'active' => true],
-            ['id' => 'exams', 'label' => 'Examenes', 'icon' => 'fa-regular fa-clipboard'],
-            ['id' => 'tasks', 'label' => 'Tareas', 'icon' => 'fa-solid fa-list-check'],
         ];
 
         $projects = \App\Support\TrainingAccess::catalog(auth()->user());
@@ -101,10 +120,11 @@
         $showStudentConclusion = $isAlumnosPage && $canManagePrograms && $studentProgressView === 'in_progress';
         $modules = collect($projects)->flatMap(fn ($program) => $program['module_definitions'])->values()->all();
         $availableProgramIds = array_column($projects, 'id');
-        $learnerProfiles = array_values(array_filter($learnerProfiles, fn ($profile) => in_array($profile['programId'], $availableProgramIds, true)));
+        $learnerProfiles = array_values(array_filter($learnerProfiles, fn ($profile) =>
+            !empty($profile['userId']) && in_array($profile['programId'], $availableProgramIds, true)));
         $defaultLearnerProfile = $learnerProfiles[0] ?? ['id' => 'default', 'name' => auth()->user()?->name ?? 'Alumno',
             'programId' => $projects[0]['id'] ?? '', 'programName' => $projects[0]['title'] ?? 'Sin programas asignados', 'progress' => 0];
-        if (! $canManagePrograms) {
+        if (auth()->check() && ! $canManagePrograms) {
             $defaultLearnerProfile = ['id' => 'user-'.auth()->id(), 'name' => trim(auth()->user()->name.' '.auth()->user()->lastname),
                 'programId' => $projects[0]['id'] ?? '', 'programName' => $projects[0]['title'] ?? 'Sin programas asignados', 'progress' => 0];
             $learnerProfiles = [$defaultLearnerProfile];
@@ -117,6 +137,7 @@
             ['id' => 'home', 'label' => 'Inicio', 'icon' => 'fa-solid fa-house', 'active' => true],
             ['id' => 'training', 'label' => 'Mi capacitacion', 'icon' => 'fa-solid fa-play'],
             ['id' => 'tasks', 'label' => 'Tareas', 'icon' => 'fa-solid fa-list-check'],
+            ['id' => 'assigned-exams', 'label' => 'Exámenes', 'icon' => 'fa-regular fa-clipboard'],
             ['id' => 'results', 'label' => 'Resultados', 'icon' => 'fa-solid fa-chart-line'],
             ['id' => 'certificates', 'label' => 'Certificados', 'icon' => 'fa-solid fa-award'],
             ['id' => 'continuous', 'label' => 'Capacitación Continua', 'icon' => 'fa-solid fa-book-open'],
@@ -511,13 +532,13 @@
                     <section class="training-exam-builder" data-exam-create-view hidden>
                         <div class="training-exam-builder-header">
                             <div>
-                                <p>Capacitaciones / Programas / Examenes / Nuevo examen</p>
+                                <p>Capacitaciones / Programas / Capítulo / Nuevo examen</p>
                                 <h2>Configurar examen</h2>
                                 <span>Crea la evaluacion correspondiente al modulo seleccionado.</span>
                             </div>
                             <button type="button" class="training-secondary-button" data-close-new-exam>
                                 <i class="fa-solid fa-arrow-left"></i>
-                                <span>Volver a examenes</span>
+                                <span>Volver al capítulo</span>
                             </button>
                         </div>
 
@@ -993,7 +1014,7 @@
                                             <span>{{ $program }}
                                             @if ($isAlumnosPage)
                                                 @foreach (collect($person['earlyCompletions'] ?? [])->where('name', $program) as $completion)
-                                                    <small class="training-early-completion" title="Concluido por {{ $completion['completedBy'] }}">Concluido anticipadamente · {{ $completion['completedAt'] }}</small>
+                                                    <small class="training-early-completion" title="Concluido por {{ $completion['completedBy'] }}">{{ ($completion['completionType'] ?? '') === 'earned' ? 'Capacitación completada' : 'Concluido anticipadamente' }} · {{ $completion['completedAt'] }}</small>
                                                 @endforeach
                                             @endif
                                             </span>
@@ -1063,13 +1084,19 @@
                                 <td>{{ $person['department'] }}</td>
                                 <td>
                                     <div class="training-employment-status is-{{ $person['employmentStatus'] }}"
-                                        data-employment-control>
+                                        @unless ($isAlumnosPage) data-employment-control @endunless>
                                         <span class="training-employment-dot" aria-hidden="true"></span>
+                                        @if ($isAlumnosPage)
+                                            <span class="training-employment-label" title="El estatus de contratación se modifica desde Personal.">
+                                                {{ $person['employmentStatus'] === 'inactive' ? 'Baja' : 'Contratado' }}
+                                            </span>
+                                        @else
                                         <select data-student-status aria-label="Estatus laboral de {{ $person['name'] }}">
                                             <option value="hired" @selected($person['employmentStatus'] === 'hired')>Contratado</option>
                                             <option value="inactive" @selected($person['employmentStatus'] === 'inactive')>Baja</option>
                                         </select>
                                         <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                                        @endif
                                     </div>
                                 </td>
                                 <td>{{ $person['activity'] }}</td>
@@ -1355,6 +1382,7 @@
                             <select data-learner-selector aria-label="Seleccionar usuario en capacitacion">
                                 @foreach ($learnerProfiles as $learnerProfile)
                                     <option value="{{ $learnerProfile['id'] }}"
+                                        data-user-id="{{ $learnerProfile['userId'] ?? '' }}"
                                         data-learner-name="{{ $learnerProfile['name'] }}"
                                         data-program-id="{{ $learnerProfile['programId'] }}"
                                         data-program-name="{{ $learnerProfile['programName'] }}"
@@ -1708,6 +1736,8 @@
             </div>
 
             @include('admin.capacitaciones.partials.continuous-training')
+            <div id="learner-panel-assigned-exams" class="training-learner-view" data-learner-panel="assigned-exams"
+                role="tabpanel" aria-labelledby="learner-tab-assigned-exams" hidden><div data-assigned-exams></div></div>
 
             <dialog class="training-learner-dialog training-video-dialog" data-learner-video-dialog
                 aria-labelledby="learner-video-dialog-title">
@@ -1876,9 +1906,13 @@
                 --training-mint: #e4fbf4;
                 --training-shadow: 0 14px 30px rgba(16, 42, 67, 0.08);
                 display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                min-width: 0;
                 gap: 1.25rem;
                 color: var(--training-ink);
             }
+
+            .training-screen > section { min-width:0; }
 
             .training-page-header,
             .training-section-heading,
@@ -2018,7 +2052,7 @@
             }
 
             .training-tabs.is-programs {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: 1fr;
             }
 
             .training-program-carousel {
@@ -3454,7 +3488,7 @@
 
             .training-chapter-row {
                 display: grid;
-                grid-template-columns: auto minmax(0, 1fr);
+                grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(190px, 1fr));
                 gap: 0.75rem;
                 padding: 0.9rem;
                 border-bottom: 1px solid var(--training-line);
@@ -3462,6 +3496,41 @@
 
             .training-chapter-row:last-child {
                 border-bottom: 0;
+            }
+
+            .training-chapter-order-help { margin:0; padding:12px 16px; background:#f5f9ff; color:var(--training-soft); font-size:13px; border-bottom:1px solid var(--training-line); }
+            .training-chapter-order-status { display:block; color:var(--training-ink); font-weight:600; }
+            .training-chapter-order-controls { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+            .training-chapter-drag, .training-chapter-move { width:32px; height:32px; border:1px solid var(--training-line); border-radius:6px; background:#f5f9ff; color:#1d70d8; font-size:20px; }
+            .training-chapter-drag { cursor:grab; }
+            .training-chapter-drag:active { cursor:grabbing; }
+            .training-chapter-order-controls button:disabled { opacity:.4; cursor:default; }
+            .training-chapter-row.is-dragging { opacity:.45; }
+            .training-chapter-row.is-drop-before { box-shadow:inset 0 4px #1d70d8; }
+            .training-chapter-row.is-drop-after { box-shadow:inset 0 -4px #1d70d8; }
+            .training-chapter-list[aria-busy=true] { opacity:.75; }
+
+            .training-chapter-body { min-width:0; overflow-wrap:anywhere; }
+            .training-chapter-body a { display:block; }
+            .training-chapter-row-heading { flex-wrap:wrap; }
+            .training-chapter-activities { min-width:0; padding-left:16px; border-left:1px solid var(--training-line); display:flex; flex-direction:column; align-items:stretch; gap:10px; }
+            .training-chapter-activities h4 { display:flex; align-items:center; gap:10px; font-weight:700; margin:0; }
+            .training-chapter-activities h4 i { color:#1d70d8; }
+            .training-chapter-activities > small, .training-chapter-activity small { color:var(--training-soft); font-size:12px; }
+            .training-chapter-activity { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+            .training-chapter-activity > span { min-width:0; flex:1 1 120px; overflow-wrap:anywhere; }
+            .training-chapter-activity strong, .training-chapter-activity small { display:block; }
+            .training-chapter-activities .training-secondary-button { padding:7px 10px; font-size:12px; }
+            .training-chapter-legacy { padding:18px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; background:#f7faff; }
+            .training-chapter-legacy > h4, .training-chapter-legacy > p { grid-column:1/-1; margin:0; }
+            dialog.training-program-modal.training-chapter-exam-dialog { width:min(1100px,96vw); max-width:96vw; max-height:94vh; padding:24px; overflow:auto; }
+            @media(max-width:1100px) {
+                .training-chapter-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+                .training-chapter-body { grid-column:1/-1; }
+            }
+            @media(max-width:600px) {
+                .training-chapter-row, .training-chapter-legacy { grid-template-columns:minmax(0,1fr); }
+                .training-chapter-activities { border-left:0; border-top:1px solid var(--training-line); padding:12px 0 0; }
             }
 
             .training-chapter-body {
@@ -4317,6 +4386,15 @@
             .training-employment-status select:focus {
                 outline: 2px solid rgba(29, 112, 216, 0.35);
                 outline-offset: 1px;
+            }
+
+            .training-employment-label {
+                display: inline-flex;
+                align-items: center;
+                min-height: 2.15rem;
+                padding: 0 0.65rem 0 0.5rem;
+                font-size: 0.75rem;
+                font-weight: 800;
             }
 
             .training-employment-status > i {
@@ -7348,6 +7426,7 @@
                     }
 
                     editingExam = cloneExam(exam);
+                    examChapterOptions(examEditorForm, moduleDefaults.find(m => m.project === exam.projectId && m.id === exam.moduleId), exam.chapterId, !exam.chapterId);
                     examEditorForm.elements.exam_id.value = exam.id;
                     examEditorForm.elements.module.value = exam.module;
                     examEditorForm.elements.minimum.value = exam.minimum;
@@ -7594,7 +7673,7 @@
                     return newExamModule.value;
                 }
 
-                function openNewExamBuilder() {
+                function openNewExamBuilder(context = {}) {
                     if (!examIndexView || !examCreateView || !newExamForm || !programSelector) {
                         return;
                     }
@@ -7610,13 +7689,22 @@
                         return;
                     }
                     const selectedProgram = programSelector.options[programSelector.selectedIndex];
-                    const moduleName = populateNewExamModules(projectId);
+                    populateNewExamModules(projectId);
+                    const selectedModule = moduleDefaults.find(m => m.project === projectId && m.id === context.moduleId) || selectedContentModule();
+                    if (!selectedModule?.chapter_definitions?.length) { contentNotice('Agrega un capítulo para crear su examen.'); return; }
+                    newExamModule.value = selectedModule.title;
+                    newExamModule.disabled = true;
+                    const moduleName = selectedModule.title;
+                    examChapterOptions(newExamForm, selectedModule, context.chapterId);
+                    newExamForm.elements.chapterId.disabled = !!context.chapterId;
 
                     creatingExam = {
                         id: '',
                         projectId: projectId,
                         project: selectedProgram ? selectedProgram.textContent.trim() : '',
                         module: moduleName,
+                        moduleId: selectedModule.id,
+                        chapterId: context.chapterId || '',
                         name: moduleName ? 'Evaluacion de ' + moduleName.toLowerCase() : '',
                         instructions: 'Lee cuidadosamente cada pregunta y selecciona la respuesta correcta.',
                         minimum: 80,
@@ -7638,7 +7726,8 @@
                     examCreateView.hidden = false;
 
                     renderNewExamQuestions();
-                    newExamModule.focus();
+                    if (!chapterExamDialog.open) chapterExamDialog.showModal();
+                    newExamForm.elements.name.focus();
                 }
 
                 function closeNewExamBuilder() {
@@ -7652,6 +7741,7 @@
                     }
 
                     creatingExam = null;
+                    if (chapterExamDialog.open) chapterExamDialog.close();
                 }
 
                 function createExamId() {
@@ -8977,6 +9067,7 @@
                 }
 
                 function renderLearnerExperience() {
+                    if (root.dataset.persistedLearning === 'true') return;
                     if (!learnerCurriculum.length) {
                         root.querySelector('[data-next-obligation-summary]').textContent = 'Consulta tus programas y módulos habilitados en Capacitación Continua.';
                         root.querySelector('[data-next-obligation-action]').hidden = true;
@@ -10212,6 +10303,7 @@
                         }
 
                         editingExam.module = examEditorForm.elements.module.value.trim();
+                        editingExam.chapterId = examEditorForm.elements.chapterId.value || null;
                         editingExam.minimum = Number.parseInt(examEditorForm.elements.minimum.value, 10);
                         editingExam.name = examEditorForm.elements.name.value.trim();
                         editingExam.status = examEditorForm.elements.status.value;
@@ -10235,7 +10327,9 @@
                         examRecords[editingExam.id] = normaliseExam(cloneExam(editingExam));
 
                         updateExamTableRow(examRecords[editingExam.id]);
+                        refreshChapterActivities();
                         closeExamEditor();
+                        contentNotice('Examen actualizado.');
                     });
                 }
 
@@ -10263,6 +10357,7 @@
                             newExamForm.elements.name.value.trim() === previousSuggestion;
 
                         creatingExam.module = newExamModule.value;
+                        creatingExam.chapterId = newExamForm.elements.chapterId.value;
 
                         if (shouldUpdateName) {
                             creatingExam.name = creatingExam.module
@@ -10506,6 +10601,7 @@
 
                         creatingExam.id = creatingExam.id || createExamId();
                         creatingExam.module = newExamModule.value;
+                        creatingExam.chapterId = newExamForm.elements.chapterId.value;
                         creatingExam.name = newExamForm.elements.name.value.trim() || 'Examen sin titulo';
                         creatingExam.instructions = newExamForm.elements.instructions.value.trim();
                         creatingExam.minimum = Number.parseInt(newExamForm.elements.minimum.value, 10);
@@ -10529,13 +10625,12 @@
                         const savedRow = updateExamTableRow(savedExam);
 
                         closeNewExamBuilder();
-                        activateProgramTab('exams');
+                        activateProgramTab('modules');
                         selectProgram(savedExam.projectId, false);
                         showExamSaveFeedback(savedExam, saveMode);
 
-                        if (savedRow) {
-                            savedRow.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-                        }
+                        refreshChapterActivities();
+                        contentNotice('Examen guardado.');
                     });
                 }
 
@@ -10556,7 +10651,7 @@
                 if (programButtons.length) {
                     let rememberedTab = 'modules';
                     try { rememberedTab = sessionStorage.getItem('mezclaspro.training.program-tab') || 'modules'; } catch (_) {}
-                    activateProgramTab(['modules', 'exams', 'tasks'].includes(rememberedTab) ? rememberedTab : 'modules');
+                    activateProgramTab('modules');
                 }
             });
         </script>

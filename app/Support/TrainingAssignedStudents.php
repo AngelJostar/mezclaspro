@@ -23,7 +23,7 @@ class TrainingAssignedStudents
 
     public static function records(?Collection $assignments = null): array
     {
-        $assignments ??= TrainingAssignment::with(['user.personnelProfile', 'program'])->orderBy('id')->get();
+        $assignments ??= TrainingAssignment::with(['user.personnelProfile', 'program', 'submissions', 'attempts'])->orderBy('id')->get();
         return $assignments->groupBy('user_id')->map(function ($records) {
             $person = self::person($records->first()->user);
             foreach ($records as $assignment) {
@@ -33,7 +33,7 @@ class TrainingAssignedStudents
                 }
                 $person['currentPrograms'][] = [
                     'id' => $assignment->program_id, 'name' => $assignment->program->title,
-                    'assignmentId' => $assignment->id, 'progress' => 0,
+                    'assignmentId' => $assignment->id, 'progress' => TrainingLearningProgress::describe($assignment)['progress'],
                     'startDate' => $assignment->start_date->format('d/m/Y'),
                     'statusLabel' => $assignment->started_at ? 'En curso' : 'Por iniciar',
                     'moduleCount' => count($assignment->modules()),

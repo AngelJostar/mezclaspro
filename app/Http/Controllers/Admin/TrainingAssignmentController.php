@@ -57,8 +57,16 @@ class TrainingAssignmentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $assignments = TrainingAssignment::with('program')->where('user_id', $request->user()->id)->latest('id')->get();
-        return response()->json(['assignments' => $assignments->map(fn ($assignment) => $this->entry($assignment))->values()])
+        $data = $request->validate(['user_id' => ['sometimes', 'integer', 'exists:users,id']]);
+        $userId = (int) ($data['user_id'] ?? $request->user()->id);
+        $readOnly = $userId !== $request->user()->id;
+        $canReview = $request->user()->hasAnyRole(['Super Admin', 'Admin']);
+        abort_if($readOnly && !$canReview, 403);
+        $student = User::findOrFail($userId);
+        $assignments = TrainingAssignment::with(['program', 'submissions', 'attempts'])->where('user_id', $userId)->orderByDesc('start_date')->latest('id')->get();
+        return response()->json(['student' => ['id' => $student->id, 'name' => trim($student->name.' '.$student->lastname)],
+            'read_only' => $readOnly, 'can_review' => $canReview,
+            'assignments' => $assignments->map(fn ($assignment) => $this->entry($assignment))->values()])
             ->header('Cache-Control', 'no-store, private');
     }
 
@@ -78,7 +86,11 @@ class TrainingAssignmentController extends Controller
 
     public function video(Request $request, TrainingAssignment $assignment, string $module, string $chapter)
     {
-        abort_unless($assignment->user_id === $request->user()->id && $assignment->status === 'in_progress', 403);
+        $canReview = $request->user()->hasAnyRole(['Super Admin', 'Admin']);
+        abort_unless($canReview || ($assignment->user_id === $request->user()->id && $assignment->started_at), 403);
+        $state = collect(\App\Support\TrainingLearningProgress::describe($assignment)['modules'])->firstWhere('id', $module);
+        abort_unless($state && ($canReview || $state['state'] !== 'locked'), 403);
+        abort_unless($canReview || ($state['chapter_states'][$chapter]['available'] ?? false), 403);
         $selected = collect($assignment->modules())->firstWhere('id', $module);
         abort_unless($selected, 403);
         $entry = collect($selected['chapter_definitions'] ?? [])->firstWhere('id', $chapter);
@@ -87,23 +99,55 @@ class TrainingAssignmentController extends Controller
         return response()->file(Storage::disk('local')->path($path), ['X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'no-store, private']);
     }
 
-    private function entry(TrainingAssignment $assignment): array
+    public function entry(TrainingAssignment $assignment): array
     {
+        $learning = \App\Support\TrainingLearningProgress::describe($assignment);
         return [
             'id' => $assignment->id, 'program_id' => $assignment->program_id, 'title' => $assignment->program->title,
             'description' => $assignment->program->description, 'start_date' => $assignment->start_date->format('Y-m-d'),
             'status' => $assignment->status, 'started_at' => $assignment->started_at?->toISOString(),
             'start_url' => route('admin.capacitaciones.asignaciones.start', $assignment),
+            'progress' => $learning['progress'], 'next' => $learning['next'], 'completed_steps' => $learning['completed_steps'],
+            'total_steps' => $learning['total_steps'], 'last_module_id' => $learning['last_module_id'],
             'modules' => array_map(fn ($module) => [
                 'id' => $module['id'], 'stage' => $module['stage'], 'title' => $module['title'], 'description' => $module['description'] ?? '',
+                'state' => $module['state'], 'progress' => $module['progress'], 'duration' => $module['duration'] ?? '',
+                'tasks' => array_map(function ($task) use ($assignment, $module) {
+                    $submission = $assignment->submissions->firstWhere('task_id', $task['id']);
+                    return \Illuminate\Support\Arr::only($task, ['id', 'title', 'instructions', 'due_date', 'requires_file', 'chapterId', 'available']) + [
+                        'chapter_title' => collect($module['chapter_definitions'] ?? [])->firstWhere('id', $task['chapterId'] ?? '')['title'] ?? null,
+                        'submit_url' => route('admin.capacitaciones.asignaciones.task', [$assignment, $module['id'], $task['id']]),
+                        'submission' => $submission ? ['id' => $submission->id, 'status' => $submission->status, 'response' => $submission->response,
+                            'file_name' => $submission->file_name, 'feedback' => $submission->feedback, 'submitted_at' => $submission->updated_at->toISOString(),
+                            'file_url' => $submission->file_path ? route('admin.capacitaciones.asignaciones.task.file', [$assignment, $submission]) : null,
+                            'review_url' => route('admin.capacitaciones.asignaciones.task.review', [$assignment, $submission])] : null,
+                    ];
+                }, $module['tasks']),
+                'exams' => array_map(function ($exam) use ($assignment, $module) {
+                    $attempts = $assignment->attempts->where('exam_id', $exam['id'])->sortByDesc('id')->values();
+                    return \Illuminate\Support\Arr::only($exam, ['id', 'name', 'instructions', 'minimum', 'duration', 'attempts', 'chapterId', 'available']) + [
+                        'chapter_title' => collect($module['chapter_definitions'] ?? [])->firstWhere('id', $exam['chapterId'] ?? '')['title'] ?? null,
+                        'question_count' => count($exam['items'] ?? []), 'passed' => $attempts->contains('passed', true),
+                        'begin_url' => route('admin.capacitaciones.asignaciones.exam', [$assignment, $module['id'], $exam['id']]),
+                        'results' => $attempts->map(function ($attempt) {
+                            $expired = !$attempt->submitted_at && $attempt->expires_at->isPast();
+                            return ['id' => $attempt->id, 'score' => $expired ? 0 : $attempt->score, 'passed' => $attempt->passed,
+                                'submitted_at' => ($attempt->submitted_at ?? ($expired ? $attempt->expires_at : null))?->toISOString(),
+                                'expires_at' => $attempt->expires_at->toISOString()];
+                        })->all(),
+                    ];
+                }, $module['exams']),
                 'chapters' => array_map(fn ($chapter) => [
                     'id' => $chapter['id'], 'title' => $chapter['title'], 'objective' => $chapter['objective'] ?? '', 'duration' => $chapter['duration'] ?? '',
+                    'completed' => in_array($chapter['id'], $module['completed_chapters'], true),
+                    'activity_state' => $module['chapter_states'][$chapter['id']],
+                    'complete_url' => route('admin.capacitaciones.asignaciones.chapter', [$assignment, $module['id'], $chapter['id']]),
                     'video_url' => preg_match('~^https?://~i', $chapter['video'] ?? '') ? $chapter['video'] : null,
                     'file_url' => empty($chapter['video_path']) ? null : route('admin.capacitaciones.asignaciones.video', [
                         'assignment' => $assignment->id, 'module' => $module['id'], 'chapter' => $chapter['id'],
                     ]),
                 ], $module['chapter_definitions'] ?? []),
-            ], $assignment->modules()),
+            ], $learning['modules']),
         ];
     }
 }

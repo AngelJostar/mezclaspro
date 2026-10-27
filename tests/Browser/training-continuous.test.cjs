@@ -26,6 +26,7 @@ async function fixture(grants = null, width = 1366) {
         const req = route.request(), url = new URL(req.url());
         if (url.hostname !== 'training.test') return route.abort();
         if (req.method() !== 'GET') { writes.push(req.url()); return route.fulfill({ status: 403, json: {} }); }
+        if (url.pathname === '/admin/capacitaciones/asignaciones') return route.fulfill({ json: { assignments: [], student: { name: 'Alumno' }, read_only: false, can_review: false } });
         if (url.pathname === '/admin/capacitaciones/continua') {
             requests++;
             return route.fulfill({ status: failure ? 503 : 200, json: failure ? { message: 'Temporal' } : catalog });
@@ -60,7 +61,7 @@ test('free chapter consultation leaves mandatory progress, tasks, exams and lock
         assert.match(await chapter.locator('a').getAttribute('href'), /^https:\/\//);
         assert.equal(await chapter.locator('a').getAttribute('rel'), 'noopener noreferrer');
         await page.getByRole('tab', { name: 'Mi capacitacion', exact: true }).click();
-        assert.equal(await page.locator('.training-obligation-flow').isVisible(), true);
+        assert.equal(await page.locator('.training-obligation-flow').isVisible(), false);
         assert.equal(await page.locator('[data-learner-panel="training"]').innerText(), before);
         assert.equal(await page.evaluate(() => JSON.stringify(localStorage)), storage);
         assert.deepEqual(f.writes, []);
@@ -73,7 +74,7 @@ test('an employee without mandatory induction can consult only their enabled mod
     try {
         const home = page.getByRole('tab', { name: 'Inicio', exact: true });
         await home.focus();
-        await home.press('ArrowRight');
+        await home.press('End');
         await page.locator('[data-continuous-content]:visible').waitFor();
         assert.equal(await page.getByRole('tab', { name: 'Capacitación Continua', exact: true }).getAttribute('aria-selected'), 'true');
         assert.equal(await page.locator('[data-continuous-program] option').count(), 1);
