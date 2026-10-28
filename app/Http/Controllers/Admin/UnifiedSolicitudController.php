@@ -38,12 +38,14 @@ class UnifiedSolicitudController extends Controller
         abort_unless($canViewNutrition || $canViewOncology, 403);
 
         $isHospitalUser = $user->hasAnyRole(['Cliente', 'Institucion']);
+        $selectedType = $user->isInstitutionAccount() && in_array($request->query('tipo'), ['nutricionales', 'oncologicos', 'antibioticos'], true)
+            ? $request->query('tipo') : 'todas';
         $requests = collect();
         $statusFilter = SolicitudStatusFilter::normalize($request->query('estado'));
 
         if ($canViewNutrition) {
             $nutritionQuery = NutritionSolicitud::query()
-                ->with(['hospital.instituciones', 'solicitud_detail', 'solicitud_patient', 'adjustment']);
+                ->with(['hospital.instituciones', 'user.hospital.instituciones', 'solicitud_detail', 'solicitud_patient', 'adjustment']);
 
             if ($isHospitalUser) {
                 $nutritionQuery->forRequestUser($user);
@@ -51,6 +53,7 @@ class UnifiedSolicitudController extends Controller
 
             $requests = $requests->concat(
                 $nutritionQuery->get()->map(function (NutritionSolicitud $solicitud) {
+                    if (!$solicitud->hospital) $solicitud->setRelation('hospital', $solicitud->user?->hospital);
                     $patient = trim(implode(' ', array_filter([
                         $solicitud->solicitud_patient?->nombre_paciente,
                         $solicitud->solicitud_patient?->apellidos_paciente,
@@ -90,7 +93,7 @@ class UnifiedSolicitudController extends Controller
                 ->whereIn('tipo_solicitud', ['oncologicos', 'antibioticos']);
 
             if ($isHospitalUser) {
-                $oncologyQuery->where('hospital_id', $user->hospital_id);
+                $oncologyQuery->whereIn('hospital_id', $user->portalHospitalIds());
             }
 
             $requests = $requests->concat(
@@ -129,6 +132,8 @@ class UnifiedSolicitudController extends Controller
                 })
             );
         }
+
+        if ($selectedType !== 'todas') $requests = $requests->where('type', $selectedType)->values();
 
         $pendingApprovalCount = $requests
             ->filter(fn (array $row) => SolicitudStatusFilter::matches(
@@ -202,6 +207,7 @@ class UnifiedSolicitudController extends Controller
             ->values();
 
         return compact(
+            'selectedType',
             'requests',
             'statusFilter',
             'pendingApprovalCount',

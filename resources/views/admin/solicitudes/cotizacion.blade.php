@@ -203,6 +203,9 @@
                                 </td>
                             @endunless
                             <td class="px-2 py-3 text-center">
+                                @if(auth()->user()->isInstitutionAccount())
+                                    <a class="quotation-row-pill quotation-row-pill--success" href="{{ route('admin.solicitudes.cotizacion.pdf', $quotation) }}">Descargar PDF</a>
+                                @else
                                 <button type="button" data-quotation-send="{{ json_encode([
                                     'folio' => $quotation->folio,
                                     'filename' => App\Services\RequestQuotationPdf::filename($quotation),
@@ -212,6 +215,7 @@
                                     class="quotation-row-pill quotation-row-pill--success">
                                     <i data-quotation-icon="send" class="h-3.5 w-3.5" aria-hidden="true"></i>Compartir
                                 </button>
+                                @endif
                             </td>
                             <td class="min-w-[10rem] px-2 py-3 text-center">
                                 @if ($quotation->authorized_at)

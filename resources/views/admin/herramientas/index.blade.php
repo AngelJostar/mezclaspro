@@ -90,7 +90,7 @@
                                 <td class="ht-nowrap"><span class="ht-client-status" data-client-submission-status data-status="{{ $conciliationStatus }}">{{ $conciliationStatus }}</span></td>
                                 <td class="ht-nowrap"><button type="button" class="ht-view" data-client-observations-open data-url="{{ route('admin.herramientas.conciliaciones.detail', $submission) }}">Ver</button></td>
                                 <td class="ht-nowrap">
-                                    @if ($submission->direction === 'sent')<button type="button" class="ht-secondary ht-conciliation-action" data-client-request-open data-url="{{ route('admin.herramientas.conciliaciones.change-request', $submission) }}">Solicitar cambios</button>@else — @endif
+                                    @if ($submission->direction === 'sent' && !auth()->user()->isInstitutionAccount())<button type="button" class="ht-secondary ht-conciliation-action" data-client-request-open data-url="{{ route('admin.herramientas.conciliaciones.change-request', $submission) }}">Solicitar cambios</button>@else — @endif
                                 </td>
                                 <td class="ht-nowrap"><a class="ht-secondary ht-conciliation-action" href="{{ route('admin.herramientas.conciliaciones.download', $submission) }}">Descargar reporte</a></td>
                             </tr>
@@ -107,7 +107,7 @@
                 <p data-client-detail-error class="cp-error" role="alert" hidden></p>
                 <button type="button" class="cp-secondary" data-client-detail-retry hidden>Reintentar</button>
                 <div data-client-detail-content></div>
-                <footer><button type="button" class="cp-secondary" data-client-detail-close>Cancelar</button><button type="button" class="cp-primary" data-client-detail-accept disabled>Aceptar y continuar</button></footer>
+                <footer><button type="button" class="cp-secondary" data-client-detail-close>{{ auth()->user()->isInstitutionAccount() ? 'Cerrar' : 'Cancelar' }}</button><button type="button" class="cp-primary" data-client-detail-accept disabled @if(auth()->user()->isInstitutionAccount()) hidden @endif>Aceptar y continuar</button></footer>
             </dialog>
             <dialog class="cp-dialog client-reason-dialog" data-client-reason-dialog aria-labelledby="client-reason-title">
                 <header><h2 id="client-reason-title">Motivo de No conciliable</h2><button type="button" class="cp-close" data-client-reason-close aria-label="Cerrar motivo">×</button></header>

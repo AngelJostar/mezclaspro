@@ -24,16 +24,13 @@
                     <x-filterable-table-header column="3" trigger-class="js-institution-column-filter"
                         scope="col">Razon social</x-filterable-table-header>
                     <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar razón social</span></th>
-                    <x-filterable-table-header column="5" trigger-class="js-institution-column-filter"
-                        scope="col">Usuario</x-filterable-table-header>
-                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar usuario</span></th>
+                    <x-filterable-table-header column="5" trigger-class="js-institution-column-filter" scope="col">Usuario</x-filterable-table-header>
                     <th scope="col" class="px-4 py-3">Contraseña</th>
-                    <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar contraseña</span></th>
                     <th scope="col" class="px-4 py-3 text-center">Editar</th>
-                    <x-filterable-table-header column="10" trigger-class="js-institution-column-filter"
+                    <x-filterable-table-header column="8" trigger-class="js-institution-column-filter"
                         scope="col">Mezclas habilitadas</x-filterable-table-header>
                     <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar mezclas habilitadas</span></th>
-                    <x-filterable-table-header column="12" trigger-class="js-institution-column-filter"
+                    <x-filterable-table-header column="10" trigger-class="js-institution-column-filter"
                         scope="col">Servicios habilitados</x-filterable-table-header>
                     <th scope="col" class="px-2 py-3" data-command-column><span class="sr-only">Editar servicios habilitados</span></th>
                     <th scope="col" class="px-4 py-3 text-center">Hospitales</th>
@@ -45,13 +42,6 @@
 
             <tbody>
                 @forelse ($instituciones as $institucion)
-                    @php
-                        $institutionAccesses = $institucion->hospitals->flatMap(
-                            fn ($hospital) => $hospital->users->map(
-                                fn ($user) => ['user' => $user, 'hospital' => $hospital->name]
-                            )
-                        );
-                    @endphp
                     <tr class="js-institution-filter-row bg-white border-b dark:bg-gray-800 dark:border-gray-700">
                         <th scope="row"
                             class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
@@ -76,55 +66,43 @@
                                 :data-url="route('admin.instituciones.fields.edit', [$institucion, 'razon_social'])" />
                         </td>
 
-                        <td class="px-4 py-4 align-top">
-                            @forelse ($institutionAccesses as $access)
-                                <div class="h-12 py-1 whitespace-nowrap">
-                                    <span class="block font-medium text-gray-900 dark:text-white">{{ $access['user']->username }}</span>
-                                    <span class="block truncate text-xs" style="max-width:16rem" title="{{ $access['hospital'] }}">{{ $access['hospital'] }}</span>
+                        <td class="px-4 py-4" data-institution-account-username>
+                            @if ($institucion->account)
+                                <div class="flex items-center gap-3">
+                                    <span>{{ $institucion->account->username }}</span>
+                                    @can('usuarios')
+                                        <x-column-edit-button :label="'Editar usuario de '.$institucion->nombre" data-institution-field-edit
+                                            data-field="username" data-label="Usuario de institución" :data-context="$institucion->nombre"
+                                            :data-value="$institucion->account->username"
+                                            :data-url="route('admin.instituciones.account.update', [$institucion, 'username'])" />
+                                    @endcan
                                 </div>
-                            @empty
-                                <span class="whitespace-nowrap">Sin usuario registrado</span>
-                            @endforelse
+                                <span class="block text-xs text-gray-500">Institución · Solo consulta</span>
+                            @else
+                                <span class="block text-xs text-gray-400">Sin usuario registrado</span>
+                                @can('usuarios')
+                                    <button type="button" class="mt-2 rounded border border-blue-300 px-3 py-1 text-xs text-blue-700"
+                                        data-institution-account-create data-name="{{ $institucion->nombre }}"
+                                        data-url="{{ route('admin.instituciones.account.store', $institucion) }}">Crear usuario</button>
+                                @endcan
+                            @endif
                         </td>
-                        <td class="px-2 py-4 align-top text-center">
-                            @forelse ($institutionAccesses as $access)
-                                <div class="flex h-12 items-center justify-center py-1">
-                                    <x-column-edit-button :label="'Editar usuario de '.$access['hospital'].' · '.$access['user']->username"
-                                        :disabled="!$canViewCredentials" data-institution-field-edit data-field="username" data-label="Usuario"
-                                        :data-context="$access['hospital'].' · '.$access['user']->username" :data-value="$access['user']->username"
-                                        :data-url="route('admin.instituciones.credentials.update', [$institucion, $access['user'], 'username'])" />
-                                </div>
-                            @empty
-                                <x-column-edit-button label="Sin usuarios registrados para editar" disabled />
-                            @endforelse
+                        <td class="px-4 py-4" data-institution-account-password>
+                            @can('usuarios')
+                                @if ($institucion->account)
+                                    <div class="flex items-center gap-3">
+                                        <span class="font-mono text-xs">{{ $institucion->account->credential_password ?: 'Sin contraseña registrada' }}</span>
+                                        <x-column-edit-button :label="'Editar contraseña de '.$institucion->nombre" data-institution-field-edit
+                                            data-field="password" data-label="Contraseña de institución" :data-context="$institucion->nombre"
+                                            :data-url="route('admin.instituciones.account.update', [$institucion, 'password'])" />
+                                    </div>
+                                @else
+                                    <span class="text-xs text-gray-400">Sin contraseña registrada</span>
+                                @endif
+                            @else
+                                <span class="text-xs text-gray-400">Acceso restringido</span>
+                            @endcan
                         </td>
-
-                        <td class="px-4 py-4 align-top">
-                            @forelse ($institutionAccesses as $access)
-                                <div class="h-12 py-1 whitespace-nowrap">
-                                    @if ($canViewCredentials)
-                                        <span class="font-mono text-gray-900 dark:text-white">{{ $access['user']->credential_password ?? 'Sin contraseña registrada' }}</span>
-                                    @else
-                                        <span aria-label="Contraseña protegida">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
-                                    @endif
-                                </div>
-                            @empty
-                                <span class="whitespace-nowrap">Sin contraseña registrada</span>
-                            @endforelse
-                        </td>
-                        <td class="px-2 py-4 align-top text-center">
-                            @forelse ($institutionAccesses as $access)
-                                <div class="flex h-12 items-center justify-center py-1">
-                                    <x-column-edit-button :label="'Editar contraseña de '.$access['hospital'].' · '.$access['user']->username"
-                                        :disabled="!$canViewCredentials" data-institution-field-edit data-field="password" data-label="Contraseña"
-                                        :data-context="$access['hospital'].' · '.$access['user']->username"
-                                        :data-url="route('admin.instituciones.credentials.update', [$institucion, $access['user'], 'password'])" />
-                                </div>
-                            @empty
-                                <x-column-edit-button label="Sin usuarios registrados para editar contraseña" disabled />
-                            @endforelse
-                        </td>
-
                         <td class="px-4 py-4 text-center whitespace-nowrap">
                             <a href="{{ route('admin.instituciones.edit', $institucion) }}"
                                 class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
@@ -241,7 +219,7 @@
                     </tr>
                 @empty
                     <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
-                        <td colspan="18" class="px-6 py-6 text-center text-gray-500">
+                        <td colspan="16" class="px-6 py-6 text-center text-gray-500">
                             No hay instituciones registradas.
                         </td>
                     </tr>
@@ -254,6 +232,9 @@
     </div>
     @include('admin.instituciones.partials.enabled-services-dialog')
     @include('admin.instituciones.partials.field-dialog')
+    @can('usuarios')
+        @include('admin.instituciones.partials.account-dialog')
+    @endcan
 
     @push('js')
         <script>

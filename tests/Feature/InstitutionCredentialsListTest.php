@@ -32,6 +32,10 @@ class InstitutionCredentialsListTest extends TestCase
             '2026_08_10_000001_add_profile_fields_to_hospitals_table.php',
             '2026_10_21_000001_add_service_lines_configured_to_hospitals.php',
             '2026_10_21_000002_add_enabled_services_to_institutions_and_hospitals.php',
+            '2026_08_26_000008_add_coordinates_to_hospitals_table.php',
+            '2026_08_20_000010_create_distribution_routes_tables.php',
+            '2026_10_02_000002_create_hospital_salesperson_table.php',
+            '2026_10_28_120000_add_institution_account_to_users.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -48,7 +52,7 @@ class InstitutionCredentialsListTest extends TestCase
         });
     }
 
-    public function test_list_shows_existing_institution_credentials_under_their_linked_hospitals(): void
+    public function test_credentials_are_only_listed_in_their_institutions_related_hospitals(): void
     {
         $manager = $this->manager();
         $institution = Institucion::create(['nombre' => 'Institucion principal']);
@@ -60,6 +64,7 @@ class InstitutionCredentialsListTest extends TestCase
         $otherInstitution->hospitals()->attach($otherHospital);
 
         $first = $this->account($hospital, 'acceso-a', '<clave-A&>', 'Institucion');
+        $extra = $this->account($hospital, 'acceso-a-turno', 'Clave-turno', 'Cliente');
         $second = $this->account($secondHospital, 'acceso-b', 'Clave-B', 'Cliente');
         $second->update(['is_active' => false]);
         $third = $this->account($otherHospital, 'acceso-c', 'Clave-C', 'Institucion');
@@ -68,24 +73,37 @@ class InstitutionCredentialsListTest extends TestCase
 
         $response = $this->actingAs($manager)->get(route('admin.instituciones.index'));
         $response->assertOk()
-            ->assertSeeInOrder(['Razon social', 'Usuario', 'Contraseña', 'Editar'])
-            ->assertSeeText('acceso-a')->assertSeeText('acceso-b')->assertSeeText('acceso-c')
+            ->assertSee(route('admin.instituciones.hospitals', $institution), false)
+            ->assertSee(route('admin.instituciones.hospitals', $otherInstitution), false)
+            ->assertDontSeeText('acceso-a')->assertDontSeeText('acceso-b')->assertDontSeeText('acceso-c')
+            ->assertDontSeeText('Clave-B')->assertDontSeeText('Clave-C')
+            ->assertDontSee('&lt;clave-A&amp;&gt;', false);
+        foreach ($response->viewData('instituciones') as $listedInstitution) {
+            foreach ($listedInstitution->hospitals as $listedHospital) {
+                $this->assertFalse($listedHospital->relationLoaded('users'));
+            }
+        }
+
+        $response = $this->get(route('admin.instituciones.hospitals', $institution));
+        $response->assertOk()
+            ->assertSeeInOrder(['Hospitales relacionados', 'Usuario', 'Contrase&ntilde;a'], false)
+            ->assertSeeText('acceso-a')->assertSeeText('acceso-a-turno')->assertSeeText('acceso-b')
             ->assertSee('&lt;clave-A&amp;&gt;', false)->assertDontSee('<clave-A&>', false)
-            ->assertSeeText('Clave-B')->assertSeeText('Clave-C')
+            ->assertSeeText('Clave-B')->assertSeeText('Clave-turno')
+            ->assertDontSeeText('acceso-c')->assertDontSeeText('Clave-C')
             ->assertDontSeeText('personal-interno')->assertDontSeeText('Clave-interna')
             ->assertDontSeeText('sin-hospital')->assertDontSeeText('Clave-sin-hospital');
 
-        $listed = $response->viewData('instituciones')->keyBy('id');
-        $this->assertSame(
-            [$first->id, $second->id],
-            $listed[$institution->id]->hospitals->flatMap->users->pluck('id')->all()
-        );
-        $this->assertSame(
-            [$third->id],
-            $listed[$otherInstitution->id]->hospitals->flatMap->users->pluck('id')->all()
-        );
+        $listed = $response->viewData('hospitals')->keyBy('id');
+        $this->assertSame([$first->id, $extra->id], $listed[$hospital->id]->users->pluck('id')->all());
+        $this->assertSame([$second->id], $listed[$secondHospital->id]->users->pluck('id')->all());
         $this->assertNotSame('<clave-A&>', $first->getRawOriginal('credential_password'));
         $response->assertDontSee($first->getRawOriginal('password'), false);
+
+        $response = $this->get(route('admin.instituciones.hospitals', $otherInstitution));
+        $response->assertOk()->assertSeeText('acceso-c')->assertSeeText('Clave-C')
+            ->assertDontSeeText('acceso-a')->assertDontSeeText('Clave-B');
+        $this->assertSame([$third->id], $response->viewData('hospitals')->first()->users->pluck('id')->all());
     }
 
     public function test_missing_password_is_reported_without_substituting_training_credentials(): void
@@ -95,9 +113,10 @@ class InstitutionCredentialsListTest extends TestCase
         $institution->hospitals()->attach($hospital);
         $account = $this->account($hospital, 'acceso-sin-clave', null, 'Institucion');
         $account->update(['training_credential_password' => 'Solo-capacitacion']);
-        Institucion::create(['nombre' => 'Institucion sin usuarios']);
+        $emptyHospital = Hospital::factory()->create(['name' => 'Hospital sin usuarios', 'adress' => 'Direccion']);
+        $institution->hospitals()->attach($emptyHospital);
 
-        $this->actingAs($this->manager())->get(route('admin.instituciones.index'))
+        $this->actingAs($this->manager())->get(route('admin.instituciones.hospitals', $institution))
             ->assertOk()
             ->assertSeeText('acceso-sin-clave')
             ->assertSeeText('Sin contraseña registrada')
@@ -114,20 +133,39 @@ class InstitutionCredentialsListTest extends TestCase
         $this->account($hospital, 'acceso-protegido', 'Clave-protegida', 'Institucion');
 
         $viewer = User::factory()->create(['hospital_id' => null]);
-        $viewer->givePermissionTo(Permission::findOrCreate('menu.instituciones.list', 'web'));
+        $viewer->givePermissionTo(Permission::findOrCreate('menu.instituciones.hospitals', 'web'));
 
-        $response = $this->actingAs($viewer)->get(route('admin.instituciones.index'));
+        $response = $this->actingAs($viewer)->get(route('admin.instituciones.hospitals', $institution));
         $response->assertOk()
             ->assertSeeText('acceso-protegido')
-            ->assertSee('aria-label="Contraseña protegida"', false)
+            ->assertSee('aria-label="Contrase&ntilde;a protegida"', false)
+            ->assertDontSee('data-inline-credential-form data-field=', false)
             ->assertDontSee('Clave-protegida', false);
 
-        $loadedUser = $response->viewData('instituciones')->first()->hospitals->first()->users->first();
+        $loadedUser = $response->viewData('hospitals')->first()->users->first();
         $this->assertArrayNotHasKey('credential_password', $loadedUser->getAttributes());
+        $this->assertArrayNotHasKey('training_credential_password', $loadedUser->getAttributes());
 
         $viewer->givePermissionTo(Permission::findOrCreate('usuarios', 'web'));
-        $this->actingAs($viewer->fresh())->get(route('admin.instituciones.index'))
+        $this->actingAs($viewer->fresh())->get(route('admin.instituciones.hospitals', $institution))
             ->assertOk()->assertSeeText('Clave-protegida');
+    }
+
+    public function test_institution_columns_only_show_the_own_account_and_protect_its_password(): void
+    {
+        $institution = Institucion::create(['nombre' => 'Institución con acceso propio']);
+        $account = User::factory()->create(['institution_id' => $institution->id, 'hospital_id' => null,
+            'username' => 'acceso.institucion', 'credential_password' => 'Clave-institucional']);
+        $viewer = User::factory()->create(['hospital_id' => null]);
+        $viewer->givePermissionTo(Permission::findOrCreate('menu.instituciones.list', 'web'));
+        $response = $this->actingAs($viewer)->get(route('admin.instituciones.index'));
+        $response->assertOk()->assertSeeText('acceso.institucion')->assertDontSeeText('Clave-institucional')
+            ->assertDontSee('data-institution-account-create', false);
+        $this->assertArrayNotHasKey('credential_password', $response->viewData('instituciones')->first()->account->getAttributes());
+        $this->actingAs($this->manager())->get(route('admin.instituciones.index'))->assertOk()
+            ->assertSeeText('acceso.institucion')->assertSeeText('Clave-institucional')
+            ->assertSee(route('admin.instituciones.account.update', [$institution, 'password']), false)
+            ->assertDontSee($account->password, false);
     }
 
     private function manager(): User
@@ -135,6 +173,7 @@ class InstitutionCredentialsListTest extends TestCase
         $user = User::factory()->create(['hospital_id' => null]);
         $user->givePermissionTo([
             Permission::findOrCreate('menu.instituciones.list', 'web'),
+            Permission::findOrCreate('menu.instituciones.hospitals', 'web'),
             Permission::findOrCreate('usuarios', 'web'),
         ]);
 

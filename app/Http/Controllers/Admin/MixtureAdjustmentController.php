@@ -18,7 +18,7 @@ class MixtureAdjustmentController extends Controller
         $target = $adjustment->target();
         abort_unless($service->canView($request->user(), $target), 403);
         $isHospital = $request->user()->hasAnyRole(['Cliente', 'Institucion']);
-        abort_if($isHospital && (int) $request->user()->hospital_id !== (int) $adjustment->hospital_id, 403);
+        abort_if($isHospital && !$request->user()->canConsultHospital($adjustment->hospital_id), 403);
 
         return view('admin.solicitudes.adjustment', compact('adjustment', 'target', 'isHospital'));
     }

@@ -56,7 +56,7 @@ class AdminLayout extends Component
                 });
 
             if (in_array($role, ['Cliente', 'Institucion'], true)) {
-                $nutritionQuery->where('user_id', $user->id);
+                $user->isInstitutionAccount() ? $nutritionQuery->forRequestUser($user) : $nutritionQuery->where('user_id', $user->id);
             }
 
             $total += $nutritionQuery->count();
@@ -72,7 +72,7 @@ class AdminLayout extends Component
                 });
 
             if (in_array($role, ['Cliente', 'Institucion'], true)) {
-                $oncologyQuery->where('hospital_id', $user->hospital_id);
+                $oncologyQuery->whereIn('hospital_id', $user->portalHospitalIds());
             }
 
             $total += $oncologyQuery->count();

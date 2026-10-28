@@ -26,4 +26,9 @@ class Institucion extends Model
     {
         return $this->belongsToMany(Hospital::class, 'cliente_hospital', 'cliente_id', 'hospital_id');
     }
+
+    public function account()
+    {
+        return $this->hasOne(User::class, 'institution_id');
+    }
 }

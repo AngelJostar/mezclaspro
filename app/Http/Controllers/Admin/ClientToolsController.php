@@ -14,10 +14,10 @@ class ClientToolsController extends Controller
 {
     public function detail(Request $request, HospitalConciliationSubmission $submission)
     {
-        abort_unless($request->user()->hospital_id, 403);
-        abort_unless($submission->hospital_id === (int) $request->user()->hospital_id, 404);
+        abort_unless($request->user()->canConsultHospital($submission->hospital_id), 404);
 
         $detail = app(ClientConciliationReview::class)->presentation($submission);
+        if ($request->user()->isInstitutionAccount()) $detail['canRespond'] = false;
         return response()->json($detail + ['html' => view('admin.herramientas._conciliation-detail', $detail)->render(),
             'accept_url' => route('admin.herramientas.conciliaciones.accept', $submission),
         ])->header('Cache-Control', 'no-store');
@@ -156,8 +156,7 @@ class ClientToolsController extends Controller
 
     public function download(Request $request, HospitalConciliationSubmission $submission)
     {
-        abort_unless($request->user()->hospital_id, 403);
-        abort_unless($submission->hospital_id === (int) $request->user()->hospital_id, 404);
+        abort_unless($request->user()->canConsultHospital($submission->hospital_id), 404);
 
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Exports\HospitalConciliationExport(collect($submission->snapshot), true),
@@ -174,12 +173,13 @@ class ClientToolsController extends Controller
             $billingRecords = app(InstitucionBillingController::class)->clientRecords($request);
         }
         if ($request->query('seccion') === 'conciliacion') {
-            abort_unless($request->user()->hospital_id, 403);
-            $hospital = Hospital::with('instituciones:id,nombre')->findOrFail($request->user()->hospital_id);
-            $institutionName = $hospital->instituciones->pluck('nombre')->filter()->unique()->sort()->implode(', ');
-            $submissions = HospitalConciliationSubmission::where('hospital_id', $hospital->id)
+            $user = $request->user();
+            abort_unless($user->hospital_id || $user->isInstitutionAccount(), 403);
+            $institutionName = $user->isInstitutionAccount() ? $user->institution?->nombre
+                : $user->hospital->instituciones->pluck('nombre')->filter()->unique()->sort()->implode(', ');
+            $submissions = HospitalConciliationSubmission::whereIn('hospital_id', $user->portalHospitalIds())
                 ->orderByDesc('id')->paginate(15)->withQueryString();
-            $responses = HospitalConciliationSubmission::where('hospital_id', $hospital->id)->where('direction', 'received')
+            $responses = HospitalConciliationSubmission::whereIn('hospital_id', $user->portalHospitalIds())->where('direction', 'received')
                 ->whereIn('filters->source_submission_id', $submissions->pluck('id'))
                 ->whereIn('filters->response_type', ['accepted', 'changes_requested'])->latest('id')->get()
                 ->unique(fn ($row) => $row->filters['source_submission_id'])->keyBy(fn ($row) => $row->filters['source_submission_id']);

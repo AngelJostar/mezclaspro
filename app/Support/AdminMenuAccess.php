@@ -263,6 +263,8 @@ final class AdminMenuAccess
             return false;
         }
 
+        if ($user->isInstitutionAccount()) return $permission === 'menu.solicitudes';
+
         if ($user->hasSalesOnlyAccess()) {
             return in_array($permission, ['menu.solicitudes', 'menu.capacitaciones', 'menu.capacitaciones.programas'], true);
         }

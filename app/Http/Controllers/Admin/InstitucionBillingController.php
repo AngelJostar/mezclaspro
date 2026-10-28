@@ -52,14 +52,16 @@ class InstitucionBillingController extends Controller
     public function clientRecords(Request $request)
     {
         $user = $request->user();
-        abort_unless($user->hasAnyRole(['Cliente', 'Institucion']) && $user->hospital_id, 403);
+        abort_unless($user->hasAnyRole(['Cliente', 'Institucion']) && ($user->hospital_id || $user->isInstitutionAccount()), 403);
         $records = collect();
         if ($user->can('oncologicos_solicitudes_index')) {
             $records = $records->concat($this->buildOncoQuery(null, $user->hospital_id, '', null, null, '')
+                ->whereHas('solicitud', fn ($query) => $query->whereIn('hospital_id', $user->portalHospitalIds()))
                 ->get()->map(fn ($record) => $this->transformRecord($record, 'onco', null)));
         }
         if ($user->can('nutricionales_solicitudes_index')) {
             $records = $records->concat($this->buildNutriQuery(null, $user->hospital_id, '', null, null, '')
+                ->forHospitalIds($user->portalHospitalIds())
                 ->get()->map(fn ($record) => $this->transformRecord($record, 'nutri', null)));
         }
         return $this->paginateCollection($records->sortByDesc('sort_date')->values(), 15, $request);

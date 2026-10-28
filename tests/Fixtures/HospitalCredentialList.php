@@ -41,6 +41,7 @@ class HospitalCredentialList extends Component
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
+        (require database_path('migrations/2026_10_28_120000_add_institution_account_to_users.php'))->up();
         foreach (['Super Admin', 'Admin', 'Cliente', 'Institucion', 'Capacitacion'] as $role) {
             Role::create(['name' => $role, 'guard_name' => 'web']);
         }

@@ -23,6 +23,9 @@ class AuthServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::before(function ($user, $ability) {
+            if ($user->isInstitutionAccount()) {
+                return in_array($ability, \App\Support\InstitutionPortal::PERMISSIONS, true);
+            }
             return $user->hasRole('Super Admin') ? true : null;
         });
     }

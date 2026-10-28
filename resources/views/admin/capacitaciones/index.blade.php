@@ -398,7 +398,7 @@
                 @include('admin.capacitaciones.partials.content-modals')
 
                 <div data-program-panel="modules">
-                    <div class="training-section-heading">
+                    <div class="training-section-heading training-modules-heading">
                         <div>
                             <h2>Modulos y capitulos</h2>
                             <p data-selected-program-name>Induccion y seguridad operativa</p>
@@ -417,20 +417,27 @@
                                 <span data-module-count>{{ count(array_filter($modules, fn ($module) => $module['project'] === ($projects[0]['id'] ?? ''))) }} modulos</span>
                             </div>
                             @foreach ($modules as $index => $module)
-                                <button type="button" class="training-module-item {{ $index === 0 ? 'is-active' : '' }}"
+                                <div class="training-module-item {{ $index === 0 ? 'is-active' : '' }}"
                                     data-module-item data-module-id="{{ $module['id'] }}"
                                     data-program-id="{{ $module['project'] }}"
                                     data-module-label="{{ $module['stage'] }}"
                                     data-module-title="{{ $module['title'] }}"
                                     data-module-description="{{ $module['description'] }}"
                                     @if ($module['project'] !== ($projects[0]['id'] ?? '')) hidden @endif>
-                                    <span class="training-module-symbol"><i class="fa-solid fa-book-open"></i></span>
-                                    <span>
-                                        <strong>{{ $module['stage'] }} - {{ $module['title'] }}</strong>
-                                        <small>{{ $module['chapters'] }} capitulos &middot; {{ $module['duration'] }}</small>
-                                    </span>
-                                    <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
-                                </button>
+                                    <button type="button" class="training-module-select" aria-pressed="{{ $index === 0 ? 'true' : 'false' }}">
+                                        <span class="training-module-symbol"><i class="fa-solid fa-book-open"></i></span>
+                                        <span>
+                                            <strong>{{ $module['stage'] }} - {{ $module['title'] }}</strong>
+                                            <small>{{ $module['chapters'] }} capitulos &middot; {{ $module['duration'] }}</small>
+                                        </span>
+                                    </button>
+                                    @if ($canManagePrograms)
+                                        <div class="training-module-actions">
+                                            <button type="button" class="training-secondary-button training-module-edit" data-edit-module>Editar módulo</button>
+                                            <button type="button" class="training-secondary-button training-module-delete" data-delete-module>Eliminar módulo</button>
+                                        </div>
+                                    @endif
+                                </div>
                             @endforeach
                         </aside>
 
@@ -440,7 +447,6 @@
                                     <span data-module-editor-label>Modulo 1</span>
                                     <h3 data-module-editor-title>Bienvenida e induccion</h3>
                                 </div>
-                                <button type="button" class="training-secondary-button" data-edit-module>Editar módulo</button>
                             </div>
 
                             <div class="training-module-fields">
@@ -3353,7 +3359,7 @@
             .training-module-item {
                 display: grid;
                 width: 100%;
-                grid-template-columns: auto minmax(0, 1fr) auto;
+                grid-template-columns: minmax(0, 1fr) auto;
                 gap: 0.7rem;
                 align-items: center;
                 border: 0;
@@ -3362,6 +3368,41 @@
                 color: var(--training-ink);
                 background: #ffffff;
                 text-align: left;
+            }
+
+            .training-module-select {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                gap: 0.7rem;
+                align-items: center;
+                width: 100%;
+                padding: 0;
+                border: 0;
+                background: transparent;
+                color: inherit;
+                text-align: left;
+            }
+
+            .training-module-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 0.4rem;
+                justify-self: end;
+            }
+
+            .training-module-actions > .training-secondary-button {
+                width: auto;
+                padding: 0.35rem 0.65rem;
+                font-size: 0.75rem;
+            }
+
+            .training-module-actions > .training-module-delete {
+                color: #b42318;
+                border-color: #f0b4ae;
+            }
+
+            .training-module-actions > .training-module-delete:hover {
+                background: #fff1f0;
             }
 
             .training-module-item:last-child {
@@ -3396,6 +3437,12 @@
 
             .training-module-item small {
                 margin-top: 0.25rem;
+            }
+
+            .training-module-select strong,
+            .training-module-select small {
+                white-space: normal;
+                overflow-wrap: anywhere;
             }
 
             .training-module-item > i,
@@ -3861,6 +3908,21 @@
                 margin: 0;
                 font-size: 1.25rem;
                 font-weight: 750;
+            }
+
+            .training-section-heading.training-modules-heading {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+
+            .training-modules-heading > div {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .training-modules-heading > [data-add-module] {
+                flex: 0 0 auto;
+                width: auto;
             }
 
             .training-actions {
@@ -9898,6 +9960,7 @@
                 function activateModuleItem(item) {
                     moduleItems.forEach(function(moduleItem) {
                         moduleItem.classList.toggle('is-active', moduleItem === item);
+                        moduleItem.querySelector('.training-module-select')?.setAttribute('aria-pressed', String(moduleItem === item));
                     });
 
                     if (moduleEditor) {

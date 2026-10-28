@@ -308,9 +308,10 @@ class RequestQuotationController extends Controller
             ? null : $user->personnelProfile?->laboratory_id;
         $hospitals = Hospital::query()->select('id', 'name')->with('instituciones:id,nombre')
             ->when($laboratoryId, fn ($query) => $query->where('laboratory_id', $laboratoryId))
-            ->when($isHospitalView, fn ($query) => $query->whereKey($user->hospital_id ?: 0))
+            ->when($isHospitalView, fn ($query) => $query->whereIn('id', $user->portalHospitalIds()))
             ->orderBy('name')->get();
         $institutions = Institucion::query()->select('id', 'nombre')
+            ->when($user->isInstitutionAccount(), fn ($query) => $query->whereKey($user->institution_id))
             ->whereHas('hospitals', fn ($query) => $query->whereIn('hospitals.id', $hospitals->modelKeys()))
             ->orderBy('nombre')->get();
 
@@ -318,7 +319,7 @@ class RequestQuotationController extends Controller
             ->withCount('documents')
             ->forSalesperson($user)
             ->whereIn('category', $selectedType === 'todas' ? $allowedTypes : [$selectedType])
-            ->when($isHospitalView, fn ($query) => $query->where('hospital_id', $user->hospital_id ?: 0))
+            ->when($isHospitalView, fn ($query) => $query->whereIn('hospital_id', $user->portalHospitalIds()))
             ->when($filters['institucion_id'], fn ($query, $id) => $query->where('institution_id', $id))
             ->when($filters['hospital_id'], fn ($query, $id) => $query->where('hospital_id', $id))
             ->when($filters['desde'], fn ($query, $date) => $query->whereDate('created_at', '>=', $date))

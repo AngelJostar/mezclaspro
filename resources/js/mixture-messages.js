@@ -126,6 +126,7 @@ function initializeMixtureMessages() {
     const atBottom = () => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 40;
 
     async function acknowledge(state) {
+        if (state.readOnly) return;
         if (current !== state || !dialog.open || document.hidden || !atBottom() || state.reading || !state.messages.size) return;
         const latest = Math.max(...state.messages.keys());
         if (latest <= state.readThrough) return;
@@ -154,6 +155,8 @@ function initializeMixtureMessages() {
             const initial = !state.messages.size;
             state.side = data.side;
             state.canSend = data.can_send;
+            state.readOnly = Boolean(data.read_only);
+            form.hidden = state.readOnly;
             document.getElementById('mixture-chat-title').textContent = `Mensajes · Mezcla #${data.target.id}`;
             dialog.querySelector('[data-chat-hospital]').textContent = `Hospital: ${data.target.hospital}`;
             dialog.querySelector('[data-chat-patient]').textContent = `Paciente: ${data.target.patient}`;

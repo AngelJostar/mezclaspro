@@ -43,6 +43,11 @@ async function fixture(width = 1366) {
                     module.chapter_definitions = [...module.chapter_definitions.filter(c => c.id !== saved.id), saved];
                 }
                 module.chapters = module.chapter_definitions.length;
+            } else if (section === 'modulos' && req.method() === 'DELETE') {
+                program.module_definitions = program.module_definitions.filter(m => m.id !== id);
+                program.task_definitions = program.task_definitions.filter(t => t.moduleId !== id);
+                program.exam_definitions = program.exam_definitions.filter(e => e.moduleId !== id);
+                saved = { deleted: id };
             } else if (section === 'modulos') {
                 saved = { ...(program.module_definitions.find(m => m.id === id) || { id: 'module-test', project: 'calidad', created_by: 1, chapter_definitions: [], chapters: 0, duration: '0 min' }), ...data };
                 program.module_definitions = [...program.module_definitions.filter(m => m.id !== saved.id), saved];
@@ -87,7 +92,8 @@ test('module and chapter buttons save independent records, preserve input on fai
         fail(false); await saveContent(page);
         assert.equal(program.module_definitions.length, 1);
         assert.equal(await page.locator('[data-module-editor-title]').textContent(), 'Trazabilidad');
-        await page.locator('[data-edit-module]').click();
+        if (process.env.TRAINING_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-module-edit-location.png'), fullPage: true });
+        await page.locator('[data-edit-module]:visible').click();
         await form.locator('[name=title]').fill('Trazabilidad actualizada');
         await saveContent(page);
         assert.equal(program.module_definitions.length, 1);
@@ -140,6 +146,46 @@ test('module and chapter buttons save independent records, preserve input on fai
         assert.equal(requests.filter(r => r.method === 'DELETE').length, 2);
         await page.reload();
         assert.equal(await page.locator('[data-training-chapter]').count(), 0);
+        assert.deepEqual(errors, []);
+    } finally { await page.close(); }
+});
+
+test('module deletion asks once, cancels safely, retries failures and persists without deleting other modules', async () => {
+    const { page, program, errors, requests, fail } = await fixture(530);
+    try {
+        await addModule(page); await addChapter(page);
+        program.module_definitions.push({ ...program.module_definitions[0], id: 'module-keep', title: 'Conservar', chapter_definitions: [], chapters: 0 });
+        await page.reload();
+        await page.locator('[data-module-id="module-keep"] .training-module-select').click();
+        const remove = page.locator('[data-module-id="module-test"] [data-delete-module]');
+        const confirm = page.locator('[data-content-confirm]');
+        const yes = confirm.getByRole('button', { name: 'Sí', exact: true });
+        const no = confirm.getByRole('button', { name: 'No', exact: true });
+        if (process.env.TRAINING_SCREENSHOTS) await page.locator('.training-module-list').screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-delete-module-buttons.png') });
+        await remove.click();
+        assert.equal(await confirm.locator('[data-content-confirm-message]').innerText(), '¿Estás seguro que quieres eliminar el módulo “Trazabilidad”?');
+        assert.equal(await confirm.locator('[data-content-delete-details]').isVisible(), true);
+        if (process.env.TRAINING_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.TRAINING_SCREENSHOTS, 'training-delete-module-confirm.png') });
+        await no.click();
+        assert.equal(program.module_definitions.length, 2);
+        assert.equal(await page.locator('[data-module-editor-title]').textContent(), 'Conservar');
+        await remove.click(); await page.keyboard.press('Escape');
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+        await remove.click(); fail(true); await yes.click();
+        await confirm.locator('[data-content-delete-error]:visible').waitFor();
+        assert.equal(program.module_definitions.length, 2);
+        fail(false);
+        await Promise.all([page.waitForEvent('load'), yes.click()]);
+        assert.deepEqual(program.module_definitions.map(m => m.id), ['module-keep']);
+        assert.equal(await page.locator('[data-module-editor-title]').textContent(), 'Conservar');
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, 2);
+        await page.reload();
+        assert.equal(await page.locator('[data-module-id="module-test"]').count(), 0);
+        await page.locator('[data-module-id="module-keep"] [data-delete-module]').click();
+        await Promise.all([page.waitForEvent('load'), yes.click()]);
+        assert.equal(await page.locator('[data-module-item]:visible').count(), 0);
+        assert.match(await page.locator('[data-module-empty]').textContent(), /aún no tiene módulos/);
+        assert.equal(await page.locator('[data-add-module]').isEnabled(), true);
         assert.deepEqual(errors, []);
     } finally { await page.close(); }
 });

@@ -69,6 +69,10 @@ Route::get('ventas/hospitales', [\App\Http\Controllers\Admin\SalesHospitalAssign
     ->middleware('role_or_permission:Super Admin|menu.instituciones.hospitals')->name('sales.hospitals.index');
 Route::put('ventas/hospitales/{hospital}', [\App\Http\Controllers\Admin\SalesHospitalAssignmentController::class, 'update'])
     ->middleware('role_or_permission:Super Admin|menu.instituciones.hospitals')->name('sales.hospitals.update');
+Route::post('instituciones/{institucion}/cuenta', [\App\Http\Controllers\Admin\InstitutionAccountController::class, 'store'])
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.list', 'can:usuarios'])->name('instituciones.account.store');
+Route::patch('instituciones/{institucion}/cuenta/{field}', [\App\Http\Controllers\Admin\InstitutionAccountController::class, 'update'])
+    ->middleware(['role_or_permission:Super Admin|menu.instituciones.list', 'can:usuarios'])->name('instituciones.account.update');
 Route::middleware(\App\Http\Middleware\EnsureQuotationServiceEnabled::class)->group(function () {
 Route::get('solicitudes/cotizacion', [RequestQuotationController::class, 'index'])
     ->name('solicitudes.cotizacion.index');
@@ -849,6 +853,7 @@ Route::prefix('capacitaciones/programas/catalogo')->name('capacitaciones.program
         $content = \App\Http\Controllers\Admin\TrainingContentController::class;
         Route::post('/{program}/modulos', [$content, 'saveModule'])->name('modules.store');
         Route::patch('/{program}/modulos/{module}', [$content, 'saveModule'])->name('modules.update');
+        Route::delete('/{program}/modulos/{module}', [$content, 'deleteModule'])->name('modules.destroy');
         Route::patch('/{program}/modulos/{module}/capitulos/ordenar', [$content, 'reorderChapters'])->name('chapters.reorder');
         Route::post('/{program}/modulos/{module}/capitulos/{chapter?}', [$content, 'saveChapter'])->name('chapters.save');
         Route::delete('/{program}/modulos/{module}/capitulos/{chapter}', [$content, 'deleteChapter'])->name('chapters.destroy');

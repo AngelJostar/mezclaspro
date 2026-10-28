@@ -8,7 +8,7 @@
             <i data-mixture-chat-icon="phone" aria-hidden="true"></i>
             <span class="mixture-message-unread" hidden></span>
         </button>
-        @if ($messageTarget && $isHospitalView)
+        @if ($messageTarget && $isHospitalView && !auth()->user()->isInstitutionAccount())
             <button type="button" class="mixture-message-compose" title="Enviar mensaje" aria-label="Enviar mensaje">
                 <i data-mixture-chat-icon="send" aria-hidden="true"></i>
             </button>

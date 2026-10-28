@@ -5,10 +5,11 @@
     <div class="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="min-w-0">
             <h1 class="text-2xl font-medium text-gray-800">Lista de Solicitudes</h1>
-            @include('admin.solicitudes._type-selector', ['selectedType' => 'todas'])
+            @include('admin.solicitudes._type-selector', ['selectedType' => $selectedType ?? 'todas'])
         </div>
 
         <div class="flex shrink-0 flex-wrap items-center gap-2 pb-1">
+            @unless(auth()->user()->isInstitutionAccount())
             <div class="relative" data-request-create-menu x-data="{ open: false }">
                 <button type="button" @click="open = !open"
                     class="inline-flex items-center gap-2 rounded-full bg-azul-prodifem px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800">
@@ -30,7 +31,8 @@
                     @endif
                 </div>
             </div>
-            <a href="{{ route('admin.solicitudes.exportar', ['estado' => $statusFilter]) }}"
+            @endunless
+            <a href="{{ route('admin.solicitudes.exportar', array_filter(['estado' => $statusFilter, 'tipo' => ($selectedType ?? 'todas') === 'todas' ? null : $selectedType])) }}"
                 class="inline-flex items-center gap-2 rounded-full bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-800 focus:outline-none focus:ring-4 focus:ring-green-300">
                 <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
                 Exportar a Excel

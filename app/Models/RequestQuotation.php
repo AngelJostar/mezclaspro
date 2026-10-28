@@ -35,6 +35,7 @@ class RequestQuotation extends Model
 
     public static function canCreate(User $user, string $category): bool
     {
+        if ($user->isInstitutionAccount()) return false;
         $permissionType = $category === 'antibioticos' ? 'oncologicos' : $category;
         return $user->canUseQuotationRequests()
             && in_array($category, ['oncologicos', 'nutricionales', 'antibioticos'], true)
@@ -55,7 +56,7 @@ class RequestQuotation extends Model
                 || ((int) $this->seller_id === (int) $user->id && $this->status !== 'borrador')
                 || (!$this->seller_id && $this->status !== 'borrador' && $this->hospital?->salespeople()->where('users.id', $user->id)->exists()))
             && (!$user->hasAnyRole(['Cliente', 'Institucion'])
-                || ($user->hospital_id && (int) $user->hospital_id === (int) $this->hospital_id))
+                || $user->canConsultHospital($this->hospital_id))
             && (!$laboratoryId || (int) $this->hospital?->laboratory_id === (int) $laboratoryId);
     }
 
@@ -68,6 +69,7 @@ class RequestQuotation extends Model
 
     public function canPrepareBy(User $user): bool
     {
+        if ($user->isInstitutionAccount()) return false;
         $type = $this->category === 'nutricionales' ? 'nutricionales' : 'oncologicos';
         return $this->canBeViewedBy($user) && $user->can($type.'_solicitudes_create')
             && $user->can($type.'_solicitudes_store');

@@ -35,8 +35,9 @@ class MixtureMessageController extends Controller
         return $this->response([
             'target' => ['kind' => $kind, 'id' => $target, 'hospital' => $record['hospital'], 'patient' => $record['patient']],
             'side' => $this->messaging->side($request->user()),
-            'clinical_enabled' => app(\App\Services\Clinical\ClinicalReviewService::class)->installed(),
-            'can_send' => $this->messaging->side($request->user()) === 'hospital' || $this->messaging->messages($record)->where('sender_side', 'hospital')->exists(),
+            'read_only' => $request->user()->isInstitutionAccount(),
+            'clinical_enabled' => !$request->user()->isInstitutionAccount() && app(\App\Services\Clinical\ClinicalReviewService::class)->installed(),
+            'can_send' => !$request->user()->isInstitutionAccount() && ($this->messaging->side($request->user()) === 'hospital' || $this->messaging->messages($record)->where('sender_side', 'hospital')->exists()),
             'messages' => $messages->map(fn ($message) => $this->messaging->serialize($message))->all(),
             'has_older' => $oldest && $this->messaging->messages($record)->where('id', '<', $oldest)->exists(),
         ]);

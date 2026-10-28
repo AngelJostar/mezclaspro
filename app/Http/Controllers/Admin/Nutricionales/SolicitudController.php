@@ -2373,7 +2373,8 @@ class SolicitudController extends Controller
         $user = Auth::user();
         $role = $user->roles[0]->name;
 
-        if (!in_array($role, ['Admin', 'Super Admin']) && $solicitud->user_id != $user->id) {
+        if ($user->isInstitutionAccount() ? ! $user->canConsultHospital($solicitud->hospital_id)
+            : (!in_array($role, ['Admin', 'Super Admin']) && $solicitud->user_id != $user->id)) {
             abort(Response::HTTP_NOT_FOUND, 'Página no encontrada');
         }
 

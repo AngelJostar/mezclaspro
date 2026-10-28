@@ -19,14 +19,24 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 
-async function pageFixture(width = 1366) {
+async function pageFixture(width = 1366, withAccount = false) {
     const page = await browser.newPage({ viewport: { width, height: 850 } });
-    const state = { patches: [], getFailure: false, patchFailure: false, fields: structuredClone(fixture.fields), errors: [] };
+    const state = { patches: [], accounts: [], created: withAccount, createFailure: false, getFailure: false, patchFailure: false, fields: structuredClone(fixture.fields), errors: [] };
     page.on('pageerror', error => state.errors.push(error.message));
     await page.route('**/*', async route => {
         const request = route.request();
         const url = new URL(request.url());
         const field = url.pathname.split('/').at(-1);
+        if (request.method() === 'POST' && field === 'cuenta') {
+            state.accounts.push(request.postData());
+            if (state.createFailure) return route.fulfill({status: 422, json: {errors: {username: ['Este usuario ya está registrado.']}}});
+            state.created = true;
+            return route.fulfill({status: 201, json: {message: 'Acceso creado'}});
+        }
+        if (request.method() === 'POST' && ['username','password'].includes(field)) {
+            state.patches.push({field, url: url.pathname, body: request.postData()});
+            return route.fulfill({json: {message: 'Cambios guardados'}});
+        }
         if (['nombre','razon_social','username','password','mixtures'].includes(field)) {
             if (request.method() === 'PATCH') {
                 const payload = request.postDataJSON();
@@ -38,7 +48,8 @@ async function pageFixture(width = 1366) {
             if (state.getFailure) return route.fulfill({ status: 500, json: { message: 'No se pudo cargar.' } });
             return route.fulfill({ json: field === 'mixtures' ? (url.pathname.includes('/2/') ? fixture.empty : fixture.mixtures) : state.fields[field] });
         }
-        return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body><div class="admin-page sm:ml-44">${fixture.html}</div><script>${source}</script></body></html>` });
+        const html = url.pathname.endsWith('/hospitals') ? fixture.hospitalsHtml : (state.created ? fixture.accountHtml : fixture.html);
+        return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body><div class="admin-page sm:ml-44">${html}</div><script>${source}</script></body></html>` });
     });
     await page.goto('http://institution-fields.test/admin/instituciones');
     const row = page.locator('#institutions-table tbody tr').filter({ hasText: 'Institución de prueba' });
@@ -46,17 +57,94 @@ async function pageFixture(width = 1366) {
 }
 const ready = page => page.waitForFunction(() => !document.querySelector('[data-institution-field-save]').disabled);
 
+test('institution account creation validates, recovers from errors and displays its own credentials', async () => {
+    for (const width of [1366, 390]) {
+        const {page, row, state} = await pageFixture(width);
+        try {
+            await row.getByRole('button', {name: 'Crear usuario'}).click();
+            const dialog = page.locator('[data-institution-account-dialog]');
+            await dialog.getByLabel('Usuario', {exact: true}).fill('institucion.demo');
+            await dialog.getByLabel('Contraseña', {exact: true}).fill('Clave-institucion-demo');
+            const box = await dialog.boundingBox();
+            assert.ok(box.x >= 0 && box.x + box.width <= width);
+            if (process.env.INSTITUTION_EDITOR_SCREENSHOTS) await page.screenshot({path:path.join(process.env.INSTITUTION_EDITOR_SCREENSHOTS,`institution-create-account-${width}.png`)});
+            state.createFailure = true;
+            await dialog.getByRole('button', {name: 'Crear acceso'}).click();
+            await dialog.getByText('Este usuario ya está registrado.').waitFor();
+            assert.equal(await dialog.getByLabel('Usuario', {exact: true}).inputValue(), 'institucion.demo');
+            state.createFailure = false;
+            await Promise.all([page.waitForEvent('load'), dialog.getByRole('button', {name: 'Crear acceso'}).click()]);
+            assert.match(await row.innerText(), /institucion.demo/);
+            assert.match(await row.innerText(), /Clave-institucion-demo/);
+            assert.doesNotMatch(await row.innerText(), /hospital.uno|hospital.turno|hospital.dos/);
+            assert.equal(state.accounts.length, 2);
+            assert.deepEqual(state.errors, []);
+        } finally { await page.close(); }
+    }
+});
+
+test('institution username and password editors use institution-only routes', async () => {
+    const {page, row, state, dialog} = await pageFixture(1366, true);
+    try {
+        for (const field of ['username', 'password']) {
+            await row.locator(`[data-field="${field}"]`).click();
+            const input = dialog.locator('[data-institution-field-input]');
+            assert.equal(await input.inputValue(), field === 'username' ? 'institucion.demo' : '');
+            await input.fill(field === 'username' ? 'institucion.cambio' : 'Clave-cambiada-2026');
+            await Promise.all([page.waitForEvent('load'), dialog.getByRole('button', {name:'Guardar cambios'}).click()]);
+            assert.match(state.patches.at(-1).url, new RegExp(`/instituciones/1/cuenta/${field}$`));
+        }
+        if (process.env.INSTITUTION_EDITOR_SCREENSHOTS) await page.screenshot({path:path.join(process.env.INSTITUTION_EDITOR_SCREENSHOTS,'institution-own-account-columns.png')});
+        assert.deepEqual(state.errors, []);
+    } finally { await page.close(); }
+});
+
+test('Hospitales opens all related hospital accounts and keeps their inline editing available', async () => {
+    const { page, row, state } = await pageFixture();
+    try {
+        assert.equal(await page.locator('#institutions-table [data-field="username"], #institutions-table [data-field="password"]').count(),0);
+        if (process.env.INSTITUTION_EDITOR_SCREENSHOTS) await page.screenshot({path:path.join(process.env.INSTITUTION_EDITOR_SCREENSHOTS,'institution-accesses-index.png')});
+        await Promise.all([page.waitForEvent('load'), row.getByRole('link',{name:'Hospitales',exact:true}).click()]);
+        await page.getByText('Hospitales relacionados',{exact:true}).waitFor();
+        const hospital = page.locator('[data-hospital-credential-group]').filter({hasText:'Hospital de prueba'});
+        assert.equal(await hospital.count(),1);
+        assert.match(await hospital.innerText(),/hospital\.uno/);
+        assert.match(await hospital.innerText(),/hospital\.turno/);
+        assert.doesNotMatch(await hospital.innerText(),/hospital\.dos/);
+        assert.equal(await hospital.locator('[data-field="password"] [data-inline-value]').count(),2);
+        assert.equal(await hospital.locator('[data-field="password"] [data-inline-value]').first().innerText(),'clave-prueba');
+        if (process.env.INSTITUTION_EDITOR_SCREENSHOTS) await page.screenshot({path:path.join(process.env.INSTITUTION_EDITOR_SCREENSHOTS,'institution-related-hospital-accesses.png')});
+        for (const field of ['username','password']) {
+            const form = hospital.locator(`[data-field="${field}"]`).first();
+            const value = field === 'username' ? 'hospital.actualizado' : 'Clave-Actualizada';
+            await form.locator('[data-inline-start]').click();
+            await form.locator('[data-inline-input]').fill('Descartar');
+            await form.locator('[data-inline-cancel]').click();
+            assert.equal(state.patches.length,field === 'username' ? 0 : 1);
+            await form.locator('[data-inline-start]').click();
+            await form.locator('[data-inline-input]').fill(value);
+            const action = new URL(await form.getAttribute('action'), page.url()).pathname;
+            await form.locator('[data-inline-submit]').click();
+            await form.locator('[data-inline-editor]').waitFor({state:'hidden'});
+            assert.equal(await form.locator('[data-inline-value]').innerText(),value);
+            assert.equal(state.patches.at(-1).url,action);
+            assert.ok(state.patches.at(-1).body.includes(value));
+        }
+        assert.deepEqual(state.errors,[]);
+    } finally { await page.close(); }
+});
+
 test('pencil columns align with their data and each popup saves only its selected field', async () => {
     for (const width of [1366,390]) {
         const { page, state, row, dialog } = await pageFixture(width);
         try {
             const headers = await page.locator('#institutions-table thead th').allTextContents();
-            assert.equal(headers.length,18);
-            for (const [index, text] of [[2,'Editar nombre'],[4,'Editar razón social'],[6,'Editar usuario'],[8,'Editar contraseña'],[11,'Editar mezclas habilitadas'],[13,'Editar servicios habilitados']]) assert.equal(headers[index].trim(),text);
-            assert.equal(await row.locator('td,th').count(),18);
-            assert.equal(await row.locator('[data-field="username"]').count(),3);
-            assert.equal(await row.locator('[data-field="password"]').count(),3);
-            for (const field of ['nombre','razon_social','username','password']) {
+            assert.equal(headers.length,16);
+            for (const [index, text] of [[2,'Editar nombre'],[4,'Editar razón social'],[9,'Editar mezclas habilitadas'],[11,'Editar servicios habilitados']]) assert.equal(headers[index].trim(),text);
+            assert.equal(await row.locator('td,th').count(),16);
+            assert.equal(await row.locator('[data-field="username"], [data-field="password"]').count(),0);
+            assert.doesNotMatch(await row.innerText(), /hospital\.uno|hospital\.turno|hospital\.dos|clave-prueba/);
+            for (const field of ['nombre','razon_social']) {
                 const trigger = row.locator(`[data-field="${field}"]`).first();
                 await trigger.click();
                 await ready(page);
@@ -65,16 +153,11 @@ test('pencil columns align with their data and each popup saves only its selecte
                 await input.fill('Edición descartada');
                 await dialog.locator('.hospital-field-cross').click();
                 assert.equal(await trigger.evaluate(node => node === document.activeElement),true);
-                assert.equal(state.patches.length,['nombre','razon_social','username','password'].indexOf(field));
+                assert.equal(state.patches.length,['nombre','razon_social'].indexOf(field));
                 await trigger.click();
                 await ready(page);
                 assert.equal(await input.inputValue(),original);
-                if (field === 'password') {
-                    assert.equal(await input.getAttribute('type'),'password');
-                    await dialog.getByRole('button',{name:'Mostrar contraseña'}).click();
-                    assert.equal(await input.getAttribute('type'),'text');
-                }
-                const value = field === 'username' ? 'usuario.modificado' : 'Valor de prueba';
+                const value = 'Valor de prueba';
                 await input.fill(value);
                 const box = await dialog.boundingBox();
                 assert.ok(box.x >= 0 && box.x + box.width <= width && box.y + box.height <= 851);

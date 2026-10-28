@@ -10,6 +10,7 @@ let contentEditing = null;
 let contentBusy = false;
 let chapterToDelete = null;
 let chapterDeleteStep = 0;
+let moduleToDelete = null;
 let chapterOrderBusy = false;
 const chapterOrderMessages = new Map();
 let pendingVideoUrl = null;
@@ -145,7 +146,7 @@ function openContent(kind, entry = null, resume = null, chapter = null) {
 }
 
 function updateContentActions(programId, count) {
-    root.querySelectorAll('[data-add-module], [data-edit-module], [data-add-chapter], [data-new-task], [data-edit-task], [data-new-exam], [data-edit-exam]').forEach(button => { button.hidden = !canManagePrograms; button.disabled = !programId; });
+    root.querySelectorAll('[data-add-module], [data-edit-module], [data-delete-module], [data-add-chapter], [data-new-task], [data-edit-task], [data-new-exam], [data-edit-exam]').forEach(button => { button.hidden = !canManagePrograms; button.disabled = !programId; });
     let empty = root.querySelector('[data-module-empty]');
     if (!empty && moduleEditor) { empty = document.createElement('p'); empty.dataset.moduleEmpty = ''; moduleEditor.parentElement.append(empty); }
     if (empty) { empty.hidden = count > 0; empty.textContent = programId ? 'Este programa aún no tiene módulos. Usa “Agregar módulo” para comenzar.' : 'Selecciona o crea un programa para comenzar.'; }
@@ -351,7 +352,25 @@ function setContentBusy(busy) {
     const save = root.querySelector('[data-content-save]'); if (save) save.textContent = busy ? 'Guardando…' : 'Guardar cambios';
 }
 root.querySelector('[data-add-module]')?.addEventListener('click', () => openContent('module'));
-root.querySelector('[data-edit-module]')?.addEventListener('click', () => openContent('module', selectedContentModule()));
+root.querySelectorAll('[data-edit-module]').forEach(button => button.addEventListener('click', event => {
+    event.stopPropagation();
+    if (!canManagePrograms || contentBusy || chapterOrderBusy) return;
+    activateModuleItem(button.closest('[data-module-item]'));
+    openContent('module', selectedContentModule());
+}));
+root.querySelectorAll('[data-delete-module]').forEach(button => button.addEventListener('click', event => {
+    event.stopPropagation();
+    if (!canManagePrograms || contentBusy || chapterOrderBusy) return;
+    const item = button.closest('[data-module-item]');
+    moduleToDelete = { programId: item.dataset.programId, id: item.dataset.moduleId };
+    chapterToDelete = null; chapterDeleteStep = 0;
+    root.querySelector('#training-content-confirm-title').textContent = 'Eliminar módulo';
+    root.querySelector('[data-content-confirm-message]').textContent = '¿Estás seguro que quieres eliminar el módulo “' + item.dataset.moduleTitle + '”?';
+    root.querySelector('[data-content-delete-details]').hidden = false;
+    root.querySelector('[data-content-delete-error]').hidden = true;
+    contentConfirm.showModal();
+    contentConfirm.querySelector('footer [data-cancel-content-delete]').focus();
+}));
 root.querySelector('[data-add-chapter]')?.addEventListener('click', () => openContent('chapter'));
 root.querySelector('[data-new-task]')?.addEventListener('click', () => openContent('task'));
 root.querySelectorAll('[data-edit-task]').forEach(button => button.addEventListener('click', () => openContent('task', contentTasks.find(task => task.projectId === programSelector.value && task.id === button.dataset.editTask))));
@@ -392,6 +411,8 @@ contentForm?.addEventListener('submit', async event => {
     finally { setContentBusy(false); }
 });
 function showChapterDeleteStep(step) {
+    moduleToDelete = null;
+    root.querySelector('[data-content-delete-details]').hidden = true;
     chapterDeleteStep = step;
     root.querySelector('#training-content-confirm-title').textContent = step === 1 ? 'Eliminar capítulo' : 'Confirmar eliminación';
     root.querySelector('[data-content-confirm-message]').textContent = step === 1
@@ -401,20 +422,29 @@ function showChapterDeleteStep(step) {
     if (!contentConfirm.open) contentConfirm.showModal();
     contentConfirm.querySelector('footer [data-cancel-content-delete]').focus();
 }
-function cancelChapterDelete() {
+function cancelContentDelete() {
     if (contentBusy) return;
-    chapterToDelete = null; chapterDeleteStep = 0;
+    chapterToDelete = null; chapterDeleteStep = 0; moduleToDelete = null;
     contentConfirm.close();
 }
-root.querySelectorAll('[data-cancel-content-delete]').forEach(button => button.addEventListener('click', cancelChapterDelete));
-contentConfirm?.addEventListener('cancel', event => { event.preventDefault(); cancelChapterDelete(); });
+root.querySelectorAll('[data-cancel-content-delete]').forEach(button => button.addEventListener('click', cancelContentDelete));
+contentConfirm?.addEventListener('cancel', event => { event.preventDefault(); cancelContentDelete(); });
 root.querySelector('[data-content-confirm-form]')?.addEventListener('submit', async event => {
-    event.preventDefault(); if (!chapterToDelete || contentBusy) return;
-    if (chapterDeleteStep === 1) { showChapterDeleteStep(2); return; }
-    if (chapterDeleteStep !== 2) return;
+    event.preventDefault(); if ((!chapterToDelete && !moduleToDelete) || contentBusy) return;
+    if (!moduleToDelete && chapterDeleteStep === 1) { showChapterDeleteStep(2); return; }
+    if (!moduleToDelete && chapterDeleteStep !== 2) return;
     root.querySelector('[data-content-delete-error]').hidden = true;
     setContentBusy(true);
     try {
+        if (moduleToDelete) {
+            const { programId, id } = moduleToDelete;
+            await requestProgram('/' + encodeURIComponent(programId) + '/modulos/' + encodeURIComponent(id), 'DELETE', { confirmed: true });
+            if (selectedContentModule()?.id === id) {
+                try { localStorage.removeItem('mezclaspro.training.module.' + programId); } catch (_) {}
+            }
+            reloadContent('Módulo eliminado.');
+            return;
+        }
         const { programId, moduleId, id } = chapterToDelete;
         await requestProgram('/' + encodeURIComponent(programId) + '/modulos/' + encodeURIComponent(moduleId) + '/capitulos/' + encodeURIComponent(id), 'DELETE', { confirmed: true });
         reloadContent('Capítulo eliminado.', moduleId);

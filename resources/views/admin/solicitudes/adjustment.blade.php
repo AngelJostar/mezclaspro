@@ -61,7 +61,7 @@
     @endif
     @if ($adjustment->isPending() && (int) $target->adjustment_id === (int) $adjustment->id)
         <div class="mt-5 border-t border-gray-200 pt-4">
-            @if ($isHospital && $adjustment->status === 'requested')
+            @if ($isHospital && !auth()->user()->isInstitutionAccount() && $adjustment->status === 'requested')
                 <form method="POST" action="{{ route('admin.solicitudes.ajustes.authorize', $adjustment) }}" class="space-y-3">
                     @csrf
                     <input type="hidden" name="approval_popup" value="{{ request()->boolean('approval_popup') ? 1 : 0 }}">

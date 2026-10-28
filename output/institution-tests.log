@@ -1,0 +1,39 @@
+PHPUnit 10.5.65 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.13
+
+...............F...........E..............                        42 / 42 (100%)
+
+Time: 00:04.467, Memory: 80.00 MB
+
+There was 1 error:
+
+1) Tests\Feature\MixtureAdjustmentTest::test_nutrition_controller_preserves_original_until_final_approval
+Illuminate\Validation\ValidationException: El campo presentación de Insumo de prueba es obligatorio. (and 5 more errors)
+
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Support\helpers.php:343
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Validation\Validator.php:536
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Foundation\Providers\FoundationServiceProvider.php:124
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Macroable\Traits\Macroable.php:123
+C:\laragon\www\mezclaspro\app\Http\Controllers\Admin\Nutricionales\SolicitudController.php:1545
+C:\laragon\www\mezclaspro\app\Http\Controllers\Admin\MixtureAdjustmentController.php:71
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Database\Concerns\ManagesTransactions.php:30
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:509
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:355
+C:\laragon\www\mezclaspro\app\Http\Controllers\Admin\MixtureAdjustmentController.php:57
+C:\laragon\www\mezclaspro\tests\Feature\MixtureAdjustmentTest.php:169
+
+--
+
+There was 1 failure:
+
+1) Tests\Feature\InstitutionToolsTest::test_billing_includes_both_related_hospitals_and_empty_membership_returns_no_records
+Expected response status code [200] but received 500.
+Failed asserting that 500 is identical to 200.
+
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:148
+C:\laragon\www\mezclaspro\vendor\laravel\framework\src\Illuminate\Testing\Concerns\AssertsStatusCodes.php:16
+C:\laragon\www\mezclaspro\tests\Feature\InstitutionToolsTest.php:67
+
+ERRORS!
+Tests: 42, Assertions: 375, Errors: 1, Failures: 1.

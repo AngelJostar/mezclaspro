@@ -20,8 +20,13 @@ $fields = [];
 foreach (['nombre', 'razon_social'] as $field) $fields[$field] = $controller->edit($institution, $field)->getData(true);
 $request = Illuminate\Http\Request::create('/');
 $request->setUserResolver(fn () => $fixture['manager']);
+$indexHtml = app(App\Http\Controllers\Admin\InstitucionController::class)->index($request)->render();
+$institution->account()->create(['name' => $institution->nombre, 'username' => 'institucion.demo',
+    'password' => Illuminate\Support\Facades\Hash::make('Clave-institucion-demo'), 'credential_password' => 'Clave-institucion-demo']);
 echo json_encode([
-    'html' => app(App\Http\Controllers\Admin\InstitucionController::class)->index($request)->render(),
+    'html' => $indexHtml,
+    'accountHtml' => app(App\Http\Controllers\Admin\InstitucionController::class)->index($request)->render(),
+    'hospitalsHtml' => app(App\Http\Controllers\Admin\InstitucionController::class)->hospitales($request, $institution)->render(),
     'fields' => $fields,
     'mixtures' => app(App\Http\Controllers\Admin\InstitutionMixturesController::class)->edit($institution)->getData(true),
     'empty' => app(App\Http\Controllers\Admin\InstitutionMixturesController::class)->edit($empty)->getData(true),

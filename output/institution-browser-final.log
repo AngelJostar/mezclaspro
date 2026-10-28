@@ -1,0 +1,19 @@
+✔ clients can inspect the shared period detail, retry errors and cancel without submitting changes (1719.2384ms)
+✔ hospital accepts or requests changes through the shared detail and safely retries saving (9947.1583ms)
+✔ observations retry loading and display saved notes as text (6998.5059ms)
+✔ clients request changes with reasons, cancel and retry without authorization controls or duplicate requests (1526.0649ms)
+✔ institution account creation validates, recovers from errors and displays its own credentials (1421.5426ms)
+✔ institution username and password editors use institution-only routes (499.951ms)
+✔ Hospitales opens all related hospital accounts and keeps their inline editing available (785.9509ms)
+✔ pencil columns align with their data and each popup saves only its selected field (1553.9569ms)
+✔ mixture pencil opens three columns; bulk and individual selections stay independent (3386.0712ms)
+✔ loading can retry; saving errors keep the popup and the edited input (1442.5114ms)
+✔ institution client home shows its hospitals and only consultation actions on desktop and mobile (2035.6063ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 21690.4848

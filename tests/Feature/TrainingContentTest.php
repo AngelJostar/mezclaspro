@@ -64,6 +64,51 @@ class TrainingContentTest extends TestCase
         $this->patchJson($this->url('proveedores/modulos/'.$module['id']), ['stage' => 'Otra', 'title' => 'Ajeno'])->assertNotFound();
     }
 
+    public function test_module_deletion_requires_confirmation_and_removes_only_its_content(): void
+    {
+        $module = $this->module();
+        $chapter = $this->postJson($this->url('induccion/modulos/'.$module['id'].'/capitulos'), ['title' => 'Video', 'duration_seconds' => 60,
+            'video_file' => UploadedFile::fake()->create('clase.mp4', 10, 'video/mp4')])->assertCreated()->json();
+        $this->postJson($this->url('induccion/tareas'), ['title' => 'Evidencia', 'instructions' => 'Respuesta', 'moduleId' => $module['id'],
+            'chapterId' => $module['chapter_definitions'][0]['id'], 'status' => 'Activa', 'requires_file' => false])->assertCreated();
+        $this->putJson($this->url('induccion/examenes/nuevo-examen'), $this->exam($module))->assertOk();
+        $before = TrainingProgram::findOrFail('induccion');
+        $foreign = TrainingProgram::findOrFail('proveedores')->module_definitions;
+        $url = $this->url('induccion/modulos/'.$module['id']);
+        $this->deleteJson($url)->assertUnprocessable();
+        $this->deleteJson($url, ['confirmed' => false])->assertUnprocessable();
+        $this->deleteJson($this->url('proveedores/modulos/'.$module['id']), ['confirmed' => true])->assertNotFound();
+        $this->assertSame($before->module_definitions, $before->fresh()->module_definitions);
+        Storage::disk('local')->assertExists($chapter['video_path']);
+        $this->deleteJson($url, ['confirmed' => true])->assertOk()->assertJsonPath('deleted', $module['id']);
+        $after = $before->fresh();
+        $this->assertSame(collect($before->module_definitions)->reject(fn ($m) => $m['id'] === $module['id'])->values()->all(), $after->module_definitions);
+        foreach (['task_definitions', 'exam_definitions'] as $field) {
+            $this->assertSame(collect($before->$field)->reject(fn ($entry) => $entry['moduleId'] === $module['id'])->values()->all(), $after->$field);
+        }
+        $this->assertSame($foreign, TrainingProgram::find('proveedores')->module_definitions);
+        Storage::disk('local')->assertMissing($chapter['video_path']);
+        $this->deleteJson($url, ['confirmed' => true])->assertNotFound();
+        $catalog = collect(TrainingAccess::catalog(auth()->user()))->firstWhere('id', 'induccion');
+        $this->assertNotContains($module['id'], array_column($catalog['module_definitions'], 'id'));
+    }
+
+    public function test_module_deletion_is_restricted_to_administrators_and_supports_an_empty_program(): void
+    {
+        $admin = auth()->user();
+        $this->postJson($this->url(''), ['title' => 'Programa vacío', 'owner' => 'Calidad', 'status' => 'Activo'])->assertCreated();
+        $program = TrainingProgram::where('title', 'Programa vacío')->firstOrFail();
+        $module = $this->module($program->id, false);
+        $url = $this->url($program->id.'/modulos/'.$module['id']);
+        $student = User::create(['name' => 'Alumno', 'lastname' => 'Prueba', 'username' => 'alumno', 'password' => bcrypt('test'), 'is_active' => true]);
+        $this->actingAs($student)->deleteJson($url, ['confirmed' => true])->assertForbidden();
+        $this->assertCount(1, $program->fresh()->module_definitions);
+        $admin->syncRoles([Role::findOrCreate('Super Admin')]);
+        $this->actingAs($admin)->deleteJson($url, ['confirmed' => true])->assertOk();
+        $this->assertSame([], $program->fresh()->module_definitions);
+        $this->assertSame(0, $program->fresh()->catalogEntry()['modules']);
+    }
+
     public function test_chapters_persist_per_module_and_private_video_is_replaced_and_deleted(): void
     {
         $module = $this->module('induccion', false);

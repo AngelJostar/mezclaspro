@@ -22,7 +22,7 @@ class MixtureMessagingService
             return collect();
         }
         $hospitalSide = $this->side($user) === 'hospital';
-        if ($hospitalSide && !$user->hospital_id) return collect();
+        if ($hospitalSide && !$user->hospital_id && !$user->isInstitutionAccount()) return collect();
         $result = collect();
         foreach (['nutricionales', 'oncologicos', 'antibioticos'] as $kind) {
             $permission = $kind === 'nutricionales' ? 'nutricionales_solicitudes_index' : 'oncologicos_solicitudes_index';
@@ -32,17 +32,17 @@ class MixtureMessagingService
             if ($ids->isEmpty()) continue;
             if ($kind === 'nutricionales') {
                 $query = Solicitud::with(['hospital', 'solicitud_patient'])->whereIn('id', $ids);
-                if ($hospitalSide) $query->where('user_id', $user->id);
+                if ($hospitalSide) $user->isInstitutionAccount() ? $query->forRequestUser($user) : $query->where('user_id', $user->id);
             } else {
                 $query = Mezcla::with('solicitud.hospital')->whereIn('id', $ids)
                     ->whereHas('solicitud', function ($query) use ($kind, $hospitalSide, $user) {
                         $query->where('tipo_solicitud', $kind);
-                        if ($hospitalSide) $query->where('hospital_id', $user->hospital_id);
+                        if ($hospitalSide) $query->whereIn('hospital_id', $user->portalHospitalIds());
                     });
             }
             foreach ($query->get() as $model) {
                 $hospital = $kind === 'nutricionales' ? $model->hospital : $model->solicitud?->hospital;
-                if (!$hospital || ($hospitalSide && (int) $hospital->id !== (int) $user->hospital_id)) continue;
+                if (!$hospital || ($hospitalSide && !$user->canConsultHospital($hospital->id))) continue;
                 $result->put($kind.':'.$model->id, [
                     'kind' => $kind, 'id' => $model->id, 'hospital_id' => $hospital->id,
                     'hospital' => $hospital->name,

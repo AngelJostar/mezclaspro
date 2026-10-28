@@ -21,7 +21,9 @@ class User extends Authenticatable
     use HasApiTokens;
     use HasFactory;
     use HasProfilePhoto;
-    use HasRoles;
+    use HasRoles {
+        checkPermissionTo as private checkRolePermissionTo;
+    }
     use Notifiable;
     use TwoFactorAuthenticatable;
 
@@ -36,6 +38,7 @@ class User extends Authenticatable
         'training_credential_password',
         'is_active',
         'hospital_id',
+        'institution_id',
     ];
 
     protected $hidden = [
@@ -81,6 +84,49 @@ class User extends Authenticatable
         return $this->belongsTo(Hospital::class);
     }
 
+    public function institution()
+    {
+        return $this->belongsTo(Institucion::class);
+    }
+
+    public function isInstitutionAccount(): bool
+    {
+        return (int) $this->institution_id > 0;
+    }
+
+    public function checkPermissionTo($permission, $guardName = null): bool
+    {
+        // Spatie's Gate hook runs before the application's hook. Cap legacy role grants here too.
+        if ($this->isInstitutionAccount()) {
+            $name = $permission instanceof \BackedEnum ? $permission->value : ($permission->name ?? $permission);
+            return in_array($name, \App\Support\InstitutionPortal::PERMISSIONS, true);
+        }
+        return $this->checkRolePermissionTo($permission, $guardName);
+    }
+
+    public function accessibleHospitalIds(): array
+    {
+        if (! $this->isInstitutionAccount()) {
+            return $this->hospital_id ? [(int) $this->hospital_id] : [];
+        }
+
+        // Query membership on every request; a removed hospital immediately loses access.
+        return Hospital::whereHas('instituciones', fn ($query) => $query->where('clientes.id', $this->institution_id))
+            ->pluck('hospitals.id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function portalHospitalIds(): array
+    {
+        $ids = $this->accessibleHospitalIds();
+        $selected = $this->isInstitutionAccount() ? request()->attributes->get('institution_hospital') : null;
+        return $selected ? array_values(array_intersect($ids, [(int) $selected])) : $ids;
+    }
+
+    public function canConsultHospital($hospitalId): bool
+    {
+        return $hospitalId && in_array((int) $hospitalId, $this->accessibleHospitalIds(), true);
+    }
+
     public function personnelProfile(): HasOne
     {
         return $this->hasOne(PersonnelProfile::class);
@@ -114,6 +160,9 @@ class User extends Authenticatable
 
     public function canUseQuotationRequests(): bool
     {
+        if ($this->isInstitutionAccount()) {
+            return $this->institution()->exists();
+        }
         if (! $this->hasAnyRole(['Cliente', 'Institucion'])) {
             return true;
         }
@@ -127,6 +176,9 @@ class User extends Authenticatable
 
     public function isBlockedByInstitution(): bool
     {
+        if ($this->isInstitutionAccount()) {
+            return ! $this->institution()->where('is_active', true)->exists();
+        }
         if (! $this->hospital_id || ! $this->hasAnyRole(['Cliente', 'Institucion'])) {
             return false;
         }

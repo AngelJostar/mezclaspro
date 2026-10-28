@@ -52,6 +52,25 @@ class TrainingContentController extends Controller
         });
     }
 
+    public function deleteModule(Request $request, string $program, string $module)
+    {
+        $request->validate(['confirmed' => ['required', 'accepted']]);
+        $paths = DB::transaction(function () use ($program, $module) {
+            $record = TrainingProgram::query()->lockForUpdate()->findOrFail($program);
+            $modules = $record->module_definitions;
+            $index = $this->moduleIndex($record, $module);
+            $paths = collect($modules[$index]['chapter_definitions'] ?? [])->pluck('video_path')->filter()->all();
+            unset($modules[$index]);
+            $belongsToModule = fn ($activity) => ($activity['moduleId'] ?? '') === $module;
+            $record->update(['module_definitions' => array_values($modules),
+                'task_definitions' => collect($record->task_definitions ?? [])->reject($belongsToModule)->values()->all(),
+                'exam_definitions' => collect($record->exam_definitions ?? [])->reject($belongsToModule)->values()->all()]);
+            return $paths;
+        });
+        if ($paths) Storage::disk('local')->delete($paths);
+        return response()->json(['deleted' => $module]);
+    }
+
     public function saveChapter(Request $request, string $program, string $module, ?string $chapter = null)
     {
         $data = $request->validate(['title' => ['required', 'string', 'max:150'], 'objective' => ['nullable', 'string', 'max:2000'],

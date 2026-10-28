@@ -61,9 +61,19 @@ class Solicitud extends Model
 
     public function scopeForRequestUser($query, User $user)
     {
+        if ($user->isInstitutionAccount()) {
+            return $query->forHospitalIds($user->portalHospitalIds());
+        }
         return $query->where(fn ($visible) => $visible->where('solicituds.user_id', $user->id)
             ->orWhere(fn ($quoted) => $quoted->whereNotNull('solicituds.request_quotation_id')
                 ->where('solicituds.hospital_id', $user->hospital_id ?: 0)));
+    }
+
+    public function scopeForHospitalIds($query, array $ids)
+    {
+        return $query->where(fn ($visible) => $visible->whereIn('solicituds.hospital_id', $ids)
+            ->orWhere(fn ($legacy) => $legacy->whereNull('solicituds.hospital_id')
+                ->whereHas('user', fn ($users) => $users->whereIn('hospital_id', $ids))));
     }
 
     //Relacion uno a uno inversa

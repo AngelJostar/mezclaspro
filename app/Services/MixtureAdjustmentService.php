@@ -42,6 +42,7 @@ class MixtureAdjustmentService
 
     public function canView(User $user, Model $target): bool
     {
+        if ($user->isInstitutionAccount()) return $user->canConsultHospital($this->hospitalId($target));
         if ($user->hasAnyRole(['Admin', 'Super Admin'])) {
             return $user->can($target instanceof Solicitud ? 'nutricionales_solicitudes_index' : 'oncologicos_solicitudes_index');
         }

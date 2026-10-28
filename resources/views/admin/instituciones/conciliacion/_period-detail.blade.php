@@ -30,7 +30,8 @@
 <p class="cp-note" data-period-excluded-count>{{ collect($group['rows'])->where('conciliable', false)->count() }} remisiones marcadas No.</p>
 @if ($group['missing_prices'])<p class="cp-error">Hay {{ $group['missing_prices'] }} remisiones sin precio válido. {{ ($clientReview ?? false) ? 'Solicita su revisión a PROMESA Prodifem.' : 'Regístralo en «Por remisión» antes de enviar.' }}</p>@endif
 <p class="cp-note">El precio total corresponde al importe de venta de la remisión, incluidos servicios, insumos y ajustes registrados.
-    @if ($clientReview ?? false) Aceptar sin cambios confirma la conciliación a PROMESA Prodifem. Si cambias una selección, indica el motivo; los cambios quedan pendientes de autorización por su personal.
+    @if (auth()->user()?->isInstitutionAccount()) El acceso institucional permite consultar las respuestas registradas por el hospital.
+    @elseif ($clientReview ?? false) Aceptar sin cambios confirma la conciliación a PROMESA Prodifem. Si cambias una selección, indica el motivo; los cambios quedan pendientes de autorización por su personal.
     @else Aceptar guarda la selección y actualiza el resumen. El envío al hospital se realiza desde el listado. @endif
 </p>
 @if ($group['client_acceptance'] ?? null)<p class="cp-authorized">Aceptada por el hospital: {{ $group['client_acceptance']['by'] }} · {{ $group['client_acceptance']['at'] }} · {{ $group['client_acceptance']['folio'] }}.</p>@endif

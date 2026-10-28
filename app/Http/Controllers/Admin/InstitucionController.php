@@ -32,15 +32,11 @@ class InstitucionController extends Controller
 {
     public function index(Request $request)
     {
-        $canViewCredentials = $request->user()?->can('usuarios') ?? false;
-        $userColumns = ['id', 'hospital_id', 'username'];
-        if ($canViewCredentials) {
-            $userColumns[] = 'credential_password';
-        }
-
         $instituciones = Institucion::query()
             ->withCount('hospitals')
             ->with([
+                'account' => fn ($query) => $query->select(array_merge(['id', 'institution_id', 'username'],
+                    $request->user()->can('usuarios') ? ['credential_password'] : [])),
                 'hospitals' => fn ($query) => $query
                     ->select('hospitals.id', 'hospitals.name', 'hospitals.service_oncology',
                         'hospitals.service_antibiotics', 'hospitals.service_nutrition',
@@ -48,16 +44,11 @@ class InstitucionController extends Controller
                         'hospitals.enabled_services')
                     ->orderBy('hospitals.name'),
                 'hospitals.instituciones:id,enabled_services',
-                'hospitals.users' => fn ($query) => $query
-                    ->select($userColumns)
-                    ->whereHas('roles', fn ($roles) => $roles->whereIn('name', ['Cliente', 'Institucion']))
-                    ->orderBy('username')
-                    ->orderBy('id'),
             ])
             ->orderBy('id', 'desc')
             ->paginate(10);
 
-        return view('admin.instituciones.index', compact('instituciones', 'canViewCredentials'));
+        return view('admin.instituciones.index', compact('instituciones'));
     }
 
     public function reportes(Request $request, InstitutionReportTemplateService $templates)
@@ -387,6 +378,11 @@ class InstitucionController extends Controller
 
     public function hospitales(Request $request, Institucion $institucion)
     {
+        $userColumns = ['id', 'hospital_id', 'username', 'is_active'];
+        if (auth()->user()?->can('usuarios')) {
+            $userColumns[] = 'credential_password';
+        }
+
         $search = trim((string) $request->query('search', ''));
         $status = (string) $request->query('status', 'all');
         $unitType = (string) $request->query('unit_type', 'all');
@@ -398,11 +394,12 @@ class InstitucionController extends Controller
                 'distributionRoutes' => fn ($query) => $query->orderBy('name'),
                 'salespeople' => fn ($query) => $query->orderBy('name'),
                 'users' => fn ($query) => $query
-                    ->select('id', 'hospital_id', 'username', 'credential_password', 'training_credential_password', 'is_active')
+                    ->select($userColumns)
                     ->whereHas('roles', fn ($roleQuery) => $roleQuery
                         ->whereIn('name', ['Cliente', 'Institucion']))
                     ->orderByDesc('is_active')
-                    ->orderBy('username'),
+                    ->orderBy('username')
+                    ->orderBy('id'),
             ])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($subquery) use ($search) {

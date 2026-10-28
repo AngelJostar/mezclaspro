@@ -1,0 +1,49 @@
+✖ clients can inspect the shared period detail, retry errors and cancel without submitting changes (31052.4136ms)
+✔ hospital accepts or requests changes through the shared detail and safely retries saving (7643.847ms)
+✔ observations retry loading and display saved notes as text (6966.3388ms)
+✔ clients request changes with reasons, cancel and retry without authorization controls or duplicate requests (1585.5262ms)
+✔ institution account creation validates, recovers from errors and displays its own credentials (1586.12ms)
+✔ institution username and password editors use institution-only routes (525.1021ms)
+✔ Hospitales opens all related hospital accounts and keeps their inline editing available (790.5067ms)
+✔ pencil columns align with their data and each popup saves only its selected field (1516.9924ms)
+✔ mixture pencil opens three columns; bulk and individual selections stay independent (1217.8076ms)
+✔ loading can retry; saving errors keep the popup and the edited input (1403.4006ms)
+✖ mixture chat preserves history, unread badges, drafts and safe retry on desktop and mobile (1032.6191ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 9
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 48838.5567
+
+✖ failing tests:
+
+test at tests\Browser\client-conciliation.test.cjs:15:1
+✖ clients can inspect the shared period detail, retry errors and cancel without submitting changes (31052.4136ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByRole('dialog', { name: 'Detalle de conciliación', exact: true }).locator('footer').getByRole('button', { name: 'Cancelar', exact: true })[22m
+  
+      at TestContext.<anonymous> (C:\laragon\www\mezclaspro\tests\Browser\client-conciliation.test.cjs:66:99) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('dialog', { name: 'Detalle de conciliación', exact: true }).locator('footer').getByRole('button', { name: 'Cancelar', exact: true })" ]
+  }
+
+test at tests\Browser\mixture-messages.test.cjs:16:1
+✖ mixture chat preserves history, unread badges, drafts and safe retry on desktop and mobile (1032.6191ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (C:\laragon\www\mezclaspro\tests\Browser\mixture-messages.test.cjs:97:24)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

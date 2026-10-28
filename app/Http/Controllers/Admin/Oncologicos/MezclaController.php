@@ -2132,7 +2132,7 @@ class MezclaController extends Controller
         ])->findOrFail($mezcla->id);
 
         // ✅ Asegurar que exista inspección (para evitar null en la vista)
-        $inspeccion = $mezcla->inspeccion ?: InspeccionMezcla::firstOrCreate(
+        $inspeccion = $mezcla->inspeccion ?: (auth()->user()?->isInstitutionAccount() ? new InspeccionMezcla() : InspeccionMezcla::firstOrCreate(
             ['mezcla_id' => $mezcla->id],
             [
                 'fecha_inspeccion' => now()->toDateString(),
@@ -2142,7 +2142,7 @@ class MezclaController extends Controller
                 'reviso_nombre'    => '',
                 'aprobo_nombre'    => '',
             ]
-        );
+        ));
 
         $pdf = Pdf::loadView('pdfs.oncologicos.inspeccion', [
             'mezcla'     => $mezcla,

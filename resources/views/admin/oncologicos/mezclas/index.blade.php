@@ -40,7 +40,7 @@
             </p>
         </div>
         <div>
-            <a href="{{ route('admin.oncologicos.solicitudes.edit', $solicitud->id) }}"
+            <a href="{{ route(auth()->user()->isInstitutionAccount() ? 'admin.oncologicos.mezclas.solicitudCompleta' : 'admin.oncologicos.solicitudes.edit', $solicitud->id) }}"
                 class="inline-block px-6 py-3 bg-yellow-500 text-white text-base font-semibold rounded-lg hover:bg-yellow-600 transition duration-200">
                 Ver Solicitud Completa
             </a>
@@ -166,7 +166,7 @@
                         </td>
 
                         <td class="px-6 py-4 text-center whitespace-nowrap">
-                            @if ($approvalUrl)
+                            @if ($approvalUrl && !auth()->user()->isInstitutionAccount())
                                 <x-table-action-link href="{{ $approvalUrl }}"
                                     data-approval-popup="approval-{{ $solicitud->tipo_solicitud ?? 'oncologicos' }}-{{ $mezcla->id }}"
                                     variant="yellow" icon="fa-solid fa-check">
@@ -185,7 +185,7 @@
                         </td>
 
                         <td class="px-6 py-4 text-center whitespace-nowrap">
-                            @if ($mezcla->estado === 'aprobada')
+                            @if ($mezcla->estado === 'aprobada' && !auth()->user()->isInstitutionAccount())
                                 <x-table-action-link
                                     href="{{ route('admin.oncologicos.mezclas.edit', [
                                         'mezcla' => $mezcla->id,
@@ -199,7 +199,7 @@
                                     icon="fa-solid fa-box-open">
                                     Dispensar
                                 </x-table-action-link>
-                            @elseif ($mezcla->estado === 'dispensada')
+                            @elseif ($mezcla->estado === 'dispensada' && !auth()->user()->isInstitutionAccount())
                                 <form id="formPreparar-{{ $mezcla->id }}"
                                     action="{{ route('admin.oncologicos.mezclas.update', $mezcla->id) }}"
                                     method="POST" class="inline">
@@ -219,7 +219,7 @@
                         </td>
 
                         <td class="px-6 py-4 text-center whitespace-nowrap">
-                            @if ($mezcla->estado === 'preparada')
+                            @if ($mezcla->estado === 'preparada' && !auth()->user()->isInstitutionAccount())
                                 <x-table-action-button
                                     :variant="$mezcla->has_inspection_rejection ? 'red' : 'warning'"
                                     title="{{ $mezcla->has_inspection_rejection ? 'Inspeccionar nuevamente: rechazo previo en inspección' : 'Inspeccionar mezcla' }}"
@@ -232,7 +232,7 @@
                         </td>
 
                         <td class="px-6 py-4 text-center whitespace-nowrap">
-                            @if ($mezcla->estado === 'revisada')
+                            @if ($mezcla->estado === 'revisada' && !auth()->user()->isInstitutionAccount())
                                 <form id="formEntregar-{{ $mezcla->id }}"
                                     action="{{ route('admin.oncologicos.mezclas.update', $mezcla->id) }}"
                                     method="POST" class="inline">

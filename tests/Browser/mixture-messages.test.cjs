@@ -13,6 +13,36 @@ const script = buildSync({ stdin: { contents: "import './resources/js/mixture-me
     bundle: true, write: false, format: 'iife', loader: { '.css': 'empty' } }).outputFiles[0].text;
 const fixture = role => execFileSync('php', ['tests/Browser/fixtures/mixture-messages.php', role], { cwd: root, encoding: 'utf8' });
 
+test('institution consultation reads message history without sending messages, read receipts or clinical requests', async () => {
+    const browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL || undefined});
+    const html = fixture('Institucion');
+    try {
+        const page = await browser.newPage();
+        const writes = [];
+        const errors = [];
+        page.on('pageerror', error => errors.push(error.message));
+        await page.route('**/*', route => {
+            const url = new URL(route.request().url());
+            if (url.pathname === '/fixture') return route.fulfill({contentType:'text/html', body:`<!doctype html><html><head><meta charset="utf-8"><style>${styles}</style></head><body>${html}<script>${script}</script></body></html>`});
+            if (route.request().method() !== 'GET') writes.push(url.pathname);
+            if (url.pathname.endsWith('/mensajes/estado')) return route.fulfill({json:{summaries:{'nutricionales:17':{total:1,unread:0,latest_id:1}}}});
+            return route.fulfill({json:{target:{kind:'nutricionales',id:17,hospital:'Hospital de prueba',patient:'Paciente de prueba'},
+                side:'hospital', can_send:false, read_only:true, clinical_enabled:false, has_older:false,
+                messages:[{id:1,side:'central',author:'Central',body:'Entrega confirmada.',sent_at:'2026-09-14T09:10:00-06:00'}]}});
+        });
+        await page.goto('http://mixture.test/fixture');
+        const history = page.locator('[data-mixture-message-key="nutricionales:17"] .mixture-message-history');
+        await history.click();
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText('Entrega confirmada.', {exact:true}).waitFor();
+        assert.equal(await dialog.locator('form').isVisible(), false);
+        assert.equal(await dialog.locator('[data-chat-clinical]').isVisible(), false);
+        await dialog.getByRole('button', {name:'Cerrar mensajes'}).click();
+        assert.deepEqual(writes, []);
+        assert.deepEqual(errors, []);
+    } finally {await browser.close();}
+});
+
 test('mixture chat preserves history, unread badges, drafts and safe retry on desktop and mobile', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
     try {

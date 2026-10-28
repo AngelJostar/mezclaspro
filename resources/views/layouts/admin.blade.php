@@ -61,6 +61,7 @@
 
     <main @class(['admin-page', 'sm:ml-44' => ! $isWorkflowPage, 'workflow-page' => $isWorkflowPage, 'purchase-popup-page' => $isPurchasePopup, 'request-creation-page' => $isRequestCreationPopup])>
         <div class="admin-content">
+            @include('admin.instituciones.partials.portal-banner')
             {{ $slot }}
         </div>
     </main>

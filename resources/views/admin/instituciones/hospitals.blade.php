@@ -174,15 +174,10 @@
                                 </td>
                                 <td data-hospital-password-cell class="px-2 py-3 align-top" style="width:176px;max-width:176px">
                                     @forelse ($hospital->users as $accessUser)
-                                        @php
-                                            $accessPassword = (string) ($accessUser->credential_password
-                                                ?: $accessUser->training_credential_password
-                                                ?: '');
-                                        @endphp
                                         <div style="width:160px" class="{{ ! $loop->first ? 'mt-2 border-t border-gray-100 pt-2' : '' }}">
                                             @can('usuarios')
                                                 <x-inline-user-credential-editor :user="$accessUser" field="password" compact
-                                                    :display-value="$accessPassword" empty-label="Sin contrasena" />
+                                                    empty-label="Sin contraseña registrada" />
                                             @else
                                                 <span aria-label="Contrase&ntilde;a protegida" class="text-gray-500">
                                                     &bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;
