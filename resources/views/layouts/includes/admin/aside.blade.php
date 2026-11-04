@@ -392,6 +392,14 @@
                 </li>
             @endhasanyrole
 
+            @if ($sidebarUser && !$sidebarUser->hasRole('Super Admin'))
+                <li class="rounded-lg border border-sky-200 bg-sky-50 p-1">
+                    <a href="{{ route('admin.agents.index') }}" x-on:click="open = false" aria-label="Centro de agentes"
+                        class="flex w-full items-center rounded-lg p-2 text-xs font-bold leading-4 text-gray-900 hover:bg-sky-100 {{ request()->routeIs('admin.agents.*') ? 'bg-sky-100' : '' }}">
+                        Centro de agentes
+                    </a>
+                </li>
+            @endif
         </ul>
     </div>
 </aside>

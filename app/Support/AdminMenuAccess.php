@@ -291,7 +291,7 @@ final class AdminMenuAccess
     {
         $routeName = (string) $request->route()?->getName();
 
-        if ($routeName === 'admin.dashboard') {
+        if ($routeName === 'admin.dashboard' || str_starts_with($routeName, 'admin.agents.')) {
             return null;
         }
 

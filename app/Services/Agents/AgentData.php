@@ -15,6 +15,13 @@ class AgentData
         $rows = [];
         $issues = [];
         foreach ($this->queries($source, $config) as [$query, $key, $hospital, $laboratory, $warehouse]) {
+            if (array_key_exists('access_hospital_ids', $config)) {
+                if (!$hospital) {
+                    $issues[] = 'Esta fuente no permite delimitar los registros a tus hospitales.';
+                    continue;
+                }
+                $query->whereIn($hospital, $config['access_hospital_ids']);
+            }
             if (! $config['scope_all']) {
                 foreach (['institutions' => $hospital, 'laboratories' => $laboratory, 'warehouses' => $warehouse] as $dimension => $column) {
                     if (! empty($config[$dimension]) && ! $column) {

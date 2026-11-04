@@ -35,6 +35,11 @@ class AgentCenter extends Component
     public string $agentName = '';
     public string $agentDescription = '';
     public string $agentInstructions = '';
+    #[Locked]
+    public ?int $accessAgentId = null;
+    #[Locked]
+    public string $accessRevision = '';
+    public array $accessRows = [];
     public array $agentConfig = [];
     #[Locked]
     public bool $showProviderForm = false;
@@ -86,6 +91,33 @@ class AgentCenter extends Component
     private function authorizeAccess(): void
     {
         abort_unless(Auth::user()?->hasRole('Super Admin'), 403);
+    }
+
+    public function openAccess(int $id): void
+    {
+        $this->authorizeAccess();
+        $agent = AiAgent::findOrFail($id);
+        $access = app(\App\Services\Agents\AgentAccess::class);
+        $this->accessAgentId = $id;
+        $this->accessRows = $access->editorRows($agent);
+        $this->accessRevision = $access->revision($agent);
+        $this->resetValidation();
+    }
+
+    public function closeAccess(): void
+    {
+        $this->authorizeAccess();
+        $this->reset('accessAgentId', 'accessRows', 'accessRevision');
+        $this->resetValidation();
+    }
+
+    public function saveAccess(): void
+    {
+        $this->authorizeAccess();
+        abort_unless($this->accessAgentId, 403);
+        app(\App\Services\Agents\AgentAccess::class)->replace(Auth::user(), AiAgent::findOrFail($this->accessAgentId), $this->accessRows, $this->accessRevision);
+        $this->closeAccess();
+        $this->status = 'Autorizaciones del agente guardadas.';
     }
 
     public function mount(): void

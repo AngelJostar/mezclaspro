@@ -14,8 +14,8 @@ const filters = buildSync({ entryPoints: [path.join(root, 'resources/js/table-co
 const livewire = readFileSync(path.join(root, 'vendor/livewire/livewire/dist/livewire.js'), 'utf8');
 
 test('waste totals follow column filters and active sections without mixing units or requests', async () => {
-    const html = execFileSync('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3',
-        'tests/Browser/fixtures/waste-report.php'], { cwd: root, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+    const html = execFileSync('php', ['tests/Browser/fixtures/waste-report.php'],
+        { cwd: root, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
     try {
         for (const width of [1600, 390]) {
@@ -28,6 +28,28 @@ test('waste totals follow column filters and active sections without mixing unit
             const sectionTotal = page.locator('[data-waste-current-total]');
             const allTotal = '300.00 mg \u00b7 70.00 mL \u00b7 2.00 frascos \u00b7 2.00 mezclas';
             await total.waitFor();
+            const folders = page.getByRole('tablist', { name: 'Secciones de Superadministrador', exact: true });
+            const tabs = folders.getByRole('tab');
+            assert.deepEqual(await tabs.locator('span:first-child').allTextContents(),
+                ['Centro de agentes', 'Aplicación móvil', 'Autorizaciones', 'Reporte de mermas']);
+            for (const [index, panel] of ['agents', 'mobile', 'authorizations', 'waste'].entries()) {
+                await tabs.nth(index).click();
+                await page.locator(`#folder-panel-${panel}`).waitFor({ state: 'visible' });
+                assert.equal(await page.locator(`#folder-panel-${panel}`).isVisible(), true);
+                assert.equal(await page.getByRole('tabpanel').count(), 1);
+                assert.equal(await tabs.nth(index).getAttribute('aria-selected'), 'true');
+            }
+            await tabs.last().focus();
+            await page.keyboard.press('Home');
+            await page.locator('#folder-panel-agents').waitFor({ state: 'visible' });
+            assert.equal(await page.locator('#folder-panel-agents').isVisible(), true);
+            await page.keyboard.press('ArrowRight');
+            await page.locator('#folder-panel-mobile').waitFor({ state: 'visible' });
+            assert.equal(await page.locator('#folder-panel-mobile').isVisible(), true);
+            await page.keyboard.press('End');
+            await page.locator('#folder-panel-waste').waitFor({ state: 'visible' });
+            assert.equal(await page.locator('#folder-panel-waste').isVisible(), true);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
             assert.equal(await total.innerText(), allTotal);
             assert.equal(await sectionTotal.innerText(), allTotal);
             assert.equal(await page.locator('[data-waste-total="inspeccion"]').innerText(), '290.00 mg \u00b7 2.00 mezclas');
@@ -43,6 +65,7 @@ test('waste totals follow column filters and active sections without mixing unit
                 el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= window.innerWidth));
             assert.equal(summaryFits, true);
             if (process.env.INSPECTION_SCREENSHOTS) {
+                await page.getByRole('heading', { name: 'Superadministrador', exact: true }).click();
                 await page.screenshot({ path: path.join(process.env.INSPECTION_SCREENSHOTS, `waste-report-${width}.png`) });
             }
 
@@ -59,6 +82,10 @@ test('waste totals follow column filters and active sections without mixing unit
             };
             await select('Lote', 'LOTE-A');
             assert.equal(await reportRows.count(), 3);
+            await tabs.first().click();
+            await tabs.last().click();
+            await page.locator('#folder-panel-waste').waitFor({ state: 'visible' });
+            assert.equal(await reportRows.count(), 3, 'Switching folders preserves the report filters');
             const lotTotal = '100.00 mg \u00b7 50.00 mL \u00b7 2.00 frascos \u00b7 1.00 mezcla';
             assert.equal(await total.innerText(), lotTotal);
             await page.getByRole('tab', { name: /Mermas de inspecci/ }).click();

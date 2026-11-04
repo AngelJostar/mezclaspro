@@ -5,8 +5,6 @@
         </div>
     </div>
 
-    <livewire:admin.agent-center />
-
     @if (session('status'))
         <div class="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
             role="status">
@@ -24,51 +22,73 @@
         </div>
     @endif
 
-    <details class="mt-6 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
-        <summary class="cursor-pointer px-4 py-5 text-lg font-semibold text-gray-900">Aplicación móvil <span class="ml-2 rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">{{ $mobilePersonnel->count() }}</span></summary>
-        <div class="overflow-x-auto border-t border-gray-200">
+    @php
+        $folderTabs = [
+            'agents' => ['label' => 'Centro de agentes', 'count' => $agentCount],
+            'mobile' => ['label' => 'Aplicación móvil', 'count' => $mobilePersonnel->count()],
+            'authorizations' => ['label' => 'Autorizaciones', 'count' => $administrators->count()],
+            'waste' => ['label' => 'Reporte de mermas', 'count' => $wasteSummary['all']],
+        ];
+    @endphp
+    <div class="superadministrator-folders" x-data="{
+        activeTab: '{{ $initialSection }}',
+        selectTab(tab) {
+            this.activeTab = tab;
+            this.$nextTick(() => window.dispatchEvent(new Event('resize')));
+        },
+        moveTab(event) {
+            const tabs = Array.from(this.$refs.folderTabs.querySelectorAll('[role=tab]'));
+            const index = tabs.indexOf(event.target);
+            if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+                : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+            tabs[next].click();
+            tabs[next].focus();
+        }
+    }" x-init="$nextTick(() => $refs.folderTabs.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))">
+        <div class="superadministrator-folder-tabs" role="tablist" aria-label="Secciones de Superadministrador"
+            x-ref="folderTabs" @keydown="moveTab($event)" data-disable-sticky-x>
+            @foreach ($folderTabs as $tab => $folder)
+                <button type="button" role="tab" class="superadministrator-folder-tab" id="folder-tab-{{ $tab }}"
+                    aria-controls="folder-panel-{{ $tab }}" aria-selected="{{ $initialSection === $tab ? 'true' : 'false' }}"
+                    :aria-selected="(activeTab === '{{ $tab }}').toString()"
+                    tabindex="{{ $initialSection === $tab ? '0' : '-1' }}" :tabindex="activeTab === '{{ $tab }}' ? 0 : -1"
+                    @click="selectTab('{{ $tab }}')">
+                    <span>{{ $folder['label'] }}</span>
+                    <span class="superadministrator-folder-count">{{ $folder['count'] }}</span>
+                </button>
+            @endforeach
+        </div>
+
+        <section id="folder-panel-agents" role="tabpanel" aria-labelledby="folder-tab-agents" tabindex="0"
+            class="superadministrator-folder-panel" x-show="activeTab === 'agents'" x-cloak>
+            <livewire:admin.agent-center />
+        </section>
+
+        <section id="folder-panel-mobile" role="tabpanel" aria-labelledby="folder-tab-mobile" tabindex="0"
+            class="superadministrator-folder-panel" x-show="activeTab === 'mobile'" x-cloak>
+        <div class="overflow-x-auto rounded-lg border border-gray-200">
             <table class="w-full text-left text-sm"><thead class="bg-gray-50"><tr><th class="p-4">Personal</th><th class="p-4">Departamento</th><th class="p-4">Acceso a Ventas móvil</th></tr></thead><tbody>
                 @forelse ($mobilePersonnel as $mobilePerson)
                     <tr class="border-t"><td class="p-4">{{ $mobilePerson->name }} {{ $mobilePerson->lastname }}</td><td class="p-4">{{ $mobilePerson->personnelProfile->department }}</td><td class="p-4">{{ $mobilePerson->is_active && $mobilePerson->isSalesperson() && $mobilePerson->personnelProfile->employment_status === 'hired' ? 'Habilitado' : 'Inactivo o sin perfil Vendedor' }}</td></tr>
                 @empty <tr><td colspan="3" class="p-4 text-gray-500">No hay personal con la casilla Aplicación Móvil seleccionada.</td></tr> @endforelse
             </tbody></table>
         </div>
-    </details>
-    <section class="mt-6 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm"
-        aria-labelledby="authorizations-title" x-data="{ authorizationsOpen: false }">
-        <button type="button"
-            class="group flex min-h-16 w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-blue-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
-            aria-controls="authorizations-table" :aria-expanded="authorizationsOpen.toString()"
-            :aria-label="authorizationsOpen ? 'Ocultar autorizaciones' : 'Mostrar autorizaciones'"
-            :title="authorizationsOpen ? 'Ocultar autorizaciones' : 'Mostrar autorizaciones'"
-            @click="authorizationsOpen = ! authorizationsOpen">
-            <span class="flex items-center gap-2">
-                <span id="authorizations-title" role="heading" aria-level="2" class="text-lg font-semibold text-gray-900">Autorizaciones</span>
-                <span class="inline-flex min-w-6 items-center justify-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
-                    {{ $administrators->count() }}
-                </span>
-            </span>
-
-            <span class="inline-flex h-9 w-9 flex-none items-center justify-center rounded-md border border-blue-200 bg-white text-blue-700 transition group-hover:border-blue-300 group-hover:bg-blue-50">
-                <svg class="h-4 w-4 transition-transform duration-200" :class="{ 'rotate-180': authorizationsOpen }"
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="m6 9 6 6 6-6"></path>
-                </svg>
-            </span>
-        </button>
-
-        <div id="authorizations-table" class="overflow-x-auto border-t border-gray-200"
-            x-cloak x-show="authorizationsOpen" x-transition.opacity.duration.150ms>
-            <table class="w-full min-w-[980px] table-fixed text-left text-sm text-gray-600">
+        </section>
+    <section id="folder-panel-authorizations" role="tabpanel" aria-labelledby="folder-tab-authorizations" tabindex="0"
+        class="superadministrator-folder-panel" x-show="activeTab === 'authorizations'" x-cloak>
+        <div id="authorizations-table" class="overflow-x-auto rounded-lg border border-gray-200">
+            <table class="w-full min-w-[1100px] table-fixed text-left text-sm text-gray-600">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-700">
                     <tr>
-                        <th class="w-[24%] px-4 py-3">Personal</th>
-                        <th class="w-[13%] px-4 py-3">Usuario</th>
-                        <th class="w-[15%] px-4 py-3">Contraseña</th>
-                        <th class="w-[28%] px-4 py-3">Hospital</th>
-                        <th class="w-[9%] px-4 py-3 text-center">Estado</th>
-                        <th class="w-[11%] px-4 py-3 text-right">Acción</th>
+                        <th class="w-[20%] px-4 py-3">Personal</th>
+                        <th class="w-[12%] px-4 py-3">Usuario</th>
+                        <th class="w-[14%] px-4 py-3">Contraseña</th>
+                        <th class="w-[24%] px-4 py-3">Hospital</th>
+                        <th class="w-[13%] px-4 py-3">Rol</th>
+                        <th class="w-[8%] px-4 py-3 text-center">Estado</th>
+                        <th class="w-[9%] px-4 py-3 text-right">Acción</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 bg-white">
@@ -92,6 +112,9 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3">{{ $administrator->hospital?->name ?? 'Sin hospital' }}</td>
+                            <td class="px-4 py-3">
+                                {{ $administrator->roles->pluck('name')->map(fn ($role) => \App\Support\AdminMenuAccess::roleLabel($role))->sort()->implode(', ') ?: 'Sin rol asignado' }}
+                            </td>
                             <td class="px-4 py-3 text-center">
                                 <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold {{ $administrator->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700' }}">
                                     <span class="h-2 w-2 rounded-full {{ $administrator->is_active ? 'bg-emerald-500' : 'bg-gray-500' }}"></span>
@@ -114,7 +137,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
                                 No hay administradores nombrados.
                             </td>
                         </tr>
@@ -124,35 +147,12 @@
         </div>
     </section>
 
-    <section class="mt-4 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm"
-        aria-labelledby="waste-report-title"
+    <section id="folder-panel-waste" role="tabpanel" aria-labelledby="folder-tab-waste" tabindex="0"
+        class="superadministrator-folder-panel" x-show="activeTab === 'waste'" x-cloak
         data-waste-view="{{ $initialWasteView }}" :data-waste-view="wasteFilter"
         x-effect="$dispatch('waste-filter-changed', { filter: wasteFilter })"
-        x-data="{ wasteOpen: {{ $wasteDateRange['open'] ? 'true' : 'false' }}, wasteFilter: '{{ $initialWasteView }}' }">
-        <button type="button"
-            class="group flex min-h-16 w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-amber-50/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-300"
-            aria-controls="waste-report-content" :aria-expanded="wasteOpen.toString()"
-            :aria-label="wasteOpen ? 'Ocultar reporte de mermas' : 'Mostrar reporte de mermas'"
-            :title="wasteOpen ? 'Ocultar reporte de mermas' : 'Mostrar reporte de mermas'"
-            @click="wasteOpen = ! wasteOpen">
-            <span class="flex items-center gap-2">
-                <span id="waste-report-title" role="heading" aria-level="2" class="text-lg font-semibold text-gray-900">Reporte de mermas</span>
-                <span class="inline-flex min-w-6 items-center justify-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                    {{ $wasteSummary['all'] }}
-                </span>
-            </span>
-
-            <span class="inline-flex h-9 w-9 flex-none items-center justify-center rounded-md border border-amber-300 bg-white text-amber-700 transition group-hover:border-amber-400 group-hover:bg-amber-50">
-                <svg class="h-4 w-4 transition-transform duration-200" :class="{ 'rotate-180': wasteOpen }"
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="m6 9 6 6 6-6"></path>
-                </svg>
-            </span>
-        </button>
-
-        <div id="waste-report-content" class="border-t border-gray-200"
-            x-cloak x-show="wasteOpen" x-transition.opacity.duration.150ms>
+        x-data="{ wasteFilter: '{{ $initialWasteView }}' }">
+        <div id="waste-report-content" class="overflow-hidden rounded-lg border border-gray-200">
             <div class="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-3"
                 role="tablist" aria-label="Tipo de merma">
                 <button type="button" role="tab" @click="wasteFilter = 'all'"
@@ -592,6 +592,11 @@
             </div>
         </div>
     </section>
+    </div>
+
+    @push('css')
+        @include('admin.superadministrator.partials.folder-tabs-styles')
+    @endpush
 
     @push('js')
         <script>

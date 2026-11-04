@@ -222,6 +222,13 @@ Route::prefix('distribucion')
         Route::redirect('/rutas', '/admin/distribucion/catalogo-rutas')->name('routes.legacy');
     });
 
+Route::prefix('centro-de-agentes')->name('agents.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Admin\AgentPortalController::class, 'index'])->name('index');
+    Route::get('/{agent}', [\App\Http\Controllers\Admin\AgentPortalController::class, 'index'])->whereNumber('agent')->name('show');
+    Route::put('/{agent}', [\App\Http\Controllers\Admin\AgentPortalController::class, 'update'])->whereNumber('agent')->name('update');
+    Route::post('/{agent}/ejecutar', [\App\Http\Controllers\Admin\AgentPortalController::class, 'run'])->whereNumber('agent')->middleware('throttle:10,1')->name('run');
+});
+
 Route::prefix('superadministrador')
     ->name('superadministrator.')
     ->middleware(['role:Super Admin'])

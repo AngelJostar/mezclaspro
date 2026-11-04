@@ -44,14 +44,72 @@ class SuperAdministratorManagementTest extends TestCase
             ->assertOk()
             ->assertSee('Superadministrador')
             ->assertSee($administrator->username)
-            ->assertSee($personnel->username);
+            ->assertDontSee($personnel->username);
 
         $this->actingAs($administrator)
             ->get(route('admin.superadministrator.index'))
             ->assertForbidden();
     }
 
-    public function test_super_administrator_panel_opens_waste_report_and_keeps_authorizations_collapsed(): void
+    public function test_superadministrator_menu_is_hidden_from_administrators(): void
+    {
+        foreach (['Admin' => false, 'Super Admin' => true, 'Quimico o Tecnico' => false] as $role => $visible) {
+            $user = $this->userWithRole($role);
+            $this->actingAs($user);
+            $html = view('layouts.includes.admin.aside', [
+                'pendingSolicitudesCount' => 0,
+                'myPurchaseOrdersCount' => 0,
+            ])->render();
+
+            $this->assertSame($visible, str_contains($html, 'aria-label="Superadministrador"'), $role);
+        }
+    }
+
+    public function test_responsible_sanitary_position_does_not_grant_superadministrator_access(): void
+    {
+        foreach (['Admin', 'Responsable sanitario'] as $role) {
+            $user = $this->userWithRole($role);
+            $user->personnelProfile()->create(['positions' => ['Responsable sanitario']]);
+            $this->actingAs($user);
+
+            $html = view('layouts.includes.admin.aside', [
+                'pendingSolicitudesCount' => 0,
+                'myPurchaseOrdersCount' => 0,
+            ])->render();
+
+            $this->assertStringNotContainsString('aria-label="Superadministrador"', $html);
+            $this->get(route('admin.superadministrator.index'))->assertForbidden();
+        }
+    }
+
+    public function test_authorizations_show_the_actual_roles_of_each_hospital_user(): void
+    {
+        $superAdministrator = $this->userWithRole('Super Admin');
+        $hospitalUser = $this->userWithRole('Admin');
+        $hospitalUser->assignRole(Role::findOrCreate('Cliente', 'web'));
+
+        $this->mock(InstitutionBillingPendingSummaryService::class, function ($mock) {
+            $mock->shouldReceive('counts')->once()->andReturn(['yellow' => 0, 'red' => 0]);
+        });
+
+        $response = $this->actingAs($superAdministrator)
+            ->get(route('admin.superadministrator.index'))
+            ->assertOk();
+
+        $document = new \DOMDocument();
+        @$document->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
+        $xpath = new \DOMXPath($document);
+        $headers = $xpath->query('//*[@id="authorizations-table"]//thead/tr/th');
+        $this->assertSame(7, $headers->length);
+        $this->assertSame('Rol', trim($headers->item(4)->textContent));
+        $row = $xpath->query('//*[@id="authorizations-table"]//tbody/tr')->item(0);
+        $cells = $xpath->query('./td', $row);
+        $this->assertSame(7, $cells->length);
+        $this->assertSame($hospitalUser->username, trim($cells->item(1)->textContent));
+        $this->assertSame('Administrador, Cliente', trim($cells->item(4)->textContent));
+    }
+
+    public function test_super_administrator_panel_opens_waste_report_in_folder_tabs(): void
     {
         $superAdministrator = $this->userWithRole('Super Admin');
         $this->userWithRole('Admin');
@@ -84,10 +142,11 @@ class SuperAdministratorManagementTest extends TestCase
             ->assertSee('min-height: clamp(500px, 62vh, 760px);', false)
             ->assertSee('Aplicar filtro')
             ->assertSee('Borrar filtro')
-            ->assertSee('authorizationsOpen: false', false)
-            ->assertSee("wasteOpen: true, wasteFilter: 'all'", false)
-            ->assertSee('aria-controls="authorizations-table"', false)
-            ->assertSee('aria-controls="waste-report-content"', false);
+            ->assertSee("activeTab: 'waste'", false)
+            ->assertSee("wasteFilter: 'all'", false)
+            ->assertSee('aria-controls="folder-panel-agents"', false)
+            ->assertSee('aria-controls="folder-panel-authorizations"', false)
+            ->assertSee('aria-controls="folder-panel-waste"', false);
 
         $document = new \DOMDocument();
         @$document->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
@@ -118,7 +177,8 @@ class SuperAdministratorManagementTest extends TestCase
             ->assertSee('value="08" selected', false)
             ->assertSee('value="09" selected', false)
             ->assertSee('value="2026" selected', false)
-            ->assertSee("wasteOpen: true, wasteFilter: 'all'", false)
+            ->assertSee("activeTab: 'waste'", false)
+            ->assertSee("wasteFilter: 'all'", false)
             ->assertSee('Borrar filtro');
     }
 
@@ -386,7 +446,7 @@ class SuperAdministratorManagementTest extends TestCase
 
         $this->actingAs($superAdministrator)
             ->patch(route('admin.superadministrator.administrators.dismiss', $administrator))
-            ->assertRedirect(route('admin.superadministrator.index'));
+            ->assertRedirect(route('admin.superadministrator.index', ['section' => 'authorizations']));
 
         $administrator->refresh();
 
@@ -403,7 +463,7 @@ class SuperAdministratorManagementTest extends TestCase
 
         $this->actingAs($superAdministrator)
             ->patch(route('admin.superadministrator.personnel.appoint', $personnel))
-            ->assertRedirect(route('admin.superadministrator.index'));
+            ->assertRedirect(route('admin.superadministrator.index', ['section' => 'authorizations']));
 
         $personnel->refresh();
 
@@ -1241,6 +1301,7 @@ class SuperAdministratorManagementTest extends TestCase
     private function createTestSchema(): void
     {
         (require database_path('migrations/2026_09_08_000003_create_ai_agents_table.php'))->up();
+        (require database_path('migrations/2026_11_04_000001_create_ai_agent_access_grants.php'))->up();
         (require database_path('migrations/2026_09_14_000005_add_agent_execution.php'))->up();
 
         Schema::create('laboratory_purchase_orders', function (Blueprint $table) {
@@ -1273,6 +1334,13 @@ class SuperAdministratorManagementTest extends TestCase
             $table->foreignId('warehouse_id')->nullable();
             $table->text('two_factor_secret')->nullable();
             $table->text('two_factor_recovery_codes')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('personnel_profiles', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id');
+            $table->json('positions')->nullable();
             $table->timestamps();
         });
 

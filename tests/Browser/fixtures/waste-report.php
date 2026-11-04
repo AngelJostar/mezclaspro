@@ -7,8 +7,13 @@ config(['database.default' => 'sqlite', 'database.connections.sqlite.database' =
 Illuminate\Support\Facades\DB::purge('sqlite');
 Tests\Fixtures\InspectionWorkflow::seed();
 (require database_path('migrations/2026_09_08_000003_create_ai_agents_table.php'))->up();
+(require database_path('migrations/2026_09_11_000001_add_is_active_to_ai_agents_table.php'))->up();
+(require database_path('migrations/2026_11_04_000001_create_ai_agent_access_grants.php'))->up();
 (require database_path('migrations/2026_09_14_000005_add_agent_execution.php'))->up();
 Spatie\Permission\Models\Role::create(['name' => 'Admin', 'guard_name' => 'web']);
+foreach (['Auditoría de consumos', 'Calidad y trazabilidad', 'Inventarios y abasto'] as $name) {
+    App\Models\AiAgent::create(['name' => $name, 'description' => 'Agente de demostración', 'instructions' => 'Revisar registros de prueba.']);
+}
 foreach ([90, 200] as $index => $dose) {
     App\Models\InspectionWaste::create([
         'mezcla_id' => $index + 1, 'production_attempt' => 1, 'reason' => 'Fuga detectada',
@@ -48,6 +53,6 @@ $data['wasteAuthorizationRequests'] = collect([1, 2])->map(function ($id) {
 });
 $data['requestedUnitTotals'] = App\Support\WasteReportUnits::sum([['frascos' => 3, 'mL' => 30]]);
 $data['errors'] = new Illuminate\Support\ViewErrorBag();
-$source = str_replace(['<x-admin-layout>', '</x-admin-layout>'], ['', '@stack("js")'],
+$source = str_replace(['<x-admin-layout>', '</x-admin-layout>'], ['', '@stack("css") @stack("js")'],
     file_get_contents(resource_path('views/admin/superadministrator/index.blade.php')));
 echo Illuminate\Support\Facades\Blade::render($source, $data);

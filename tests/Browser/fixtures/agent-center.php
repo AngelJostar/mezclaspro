@@ -13,6 +13,12 @@ if (($argv[1] ?? '') === 'promesa') {
     Tests\Fixtures\AgentCenter::seed((int) ($argv[1] ?? 8));
 }
 Tests\Fixtures\AgentAuditData::seed();
+if (($argv[1] ?? '') === 'access') {
+    App\Models\AiAgent::create(['name' => 'Auditoría de prueba', 'description' => 'Revisión de entregas', 'instructions' => 'Revisar los registros asignados.']);
+    $member = App\Models\User::forceCreate(['name' => 'Ana García', 'username' => 'ana.prueba']);
+    $member->assignRole(Spatie\Permission\Models\Role::create(['name' => 'Admin', 'guard_name' => 'web']));
+    App\Models\PersonnelProfile::create(['user_id' => $member->id, 'positions' => ['Responsable sanitario']]);
+}
 if (($argv[1] ?? '') === 'clinical-chat') {
     (require database_path('migrations/2026_09_29_000001_create_clinical_support.php'))->up();
     (require database_path('migrations/2026_09_30_000007_version_clinical_manual_sources.php'))->up();

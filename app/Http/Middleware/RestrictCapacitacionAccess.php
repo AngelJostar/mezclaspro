@@ -12,6 +12,9 @@ class RestrictCapacitacionAccess
     {
         $user = $request->user();
 
+        // Each agent and action is separately authorized by AgentPortalController.
+        if ($request->routeIs('admin.agents.*')) return $next($request);
+
         if ($user?->hasAnyRole(['Cliente', 'Institucion'])) {
             abort_if($request->routeIs('admin.capacitaciones.*', 'admin.users.*'), 403);
 

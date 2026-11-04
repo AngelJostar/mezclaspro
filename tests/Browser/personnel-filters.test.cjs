@@ -37,6 +37,7 @@ test('personnel filters use the correct grouped columns, combine, cancel, clear 
         const panel = page.locator('#personnel-column-filter-panel');
         const count = page.locator('[data-personnel-count]');
         const clear = page.locator('[data-personnel-clear-filters]');
+        const search = page.getByRole('searchbox', { name: 'Nombre del personal', exact: true });
         const filter = async (column, values) => {
             await table.locator(`.js-personnel-filter[data-column="${column}"]`).click();
             await panel.locator('[data-filter-all]').uncheck();
@@ -52,6 +53,12 @@ test('personnel filters use the correct grouped columns, combine, cancel, clear 
         await page.locator('[data-personnel-next]').click();
         assert.equal(await visible.count(), 5);
         assert.equal(await count.innerText(), '201-205 de 205');
+        await search.fill('205 prueba');
+        assert.equal(await visible.count(), 1);
+        assert.equal(await visible.locator('.training-person strong').innerText(), 'Persona de prueba 205');
+        assert.equal(await count.innerText(), '1-1 de 1');
+        await clear.click();
+        assert.equal(await search.inputValue(), '');
         await filter(0, ['Brenda Perez']);
         assert.equal(await visible.count(), 1);
         assert.equal(await visible.locator('.training-person strong').innerText(), 'Brenda Perez');
@@ -67,7 +74,7 @@ test('personnel filters use the correct grouped columns, combine, cancel, clear 
         await panel.getByRole('button', { name: 'Cancelar', exact: true }).click();
         assert.equal(await visible.count(), 1);
         await clear.click();
-        await page.locator('[data-personnel-department]').selectOption('Calidad');
+        await search.fill('  \u00c1lVaRo  ');
         assert.equal(await visible.count(), 2);
         await filter(8, ['Contratado']);
         assert.equal(await visible.count(), 1);

@@ -6,7 +6,7 @@
     <section class="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-blue-200 bg-blue-50 p-4" aria-label="Acceso de institución">
         <div>
             <p class="font-semibold text-blue-900">{{ $portalUser->institution?->nombre }}</p>
-            <p class="text-sm text-blue-800">Perfil Institución · Solo consulta · {{ $portalHospitals->count() }} hospitales relacionados</p>
+            <p class="text-sm text-blue-800">Perfil Institución · {{ request()->routeIs('admin.agents.*') ? 'Permisos por agente' : 'Solo consulta' }} · {{ $portalHospitals->count() }} hospitales relacionados</p>
         </div>
         <form method="GET" action="{{ route('admin.solicitudes.index') }}" class="flex flex-wrap items-end gap-2">
             <div>

@@ -16,14 +16,15 @@
         const next = pagination.querySelector('[data-personnel-next]');
         const counter = pagination.querySelector('[data-personnel-count]');
         const empty = tbody.querySelector('[data-personnel-empty]');
-        const department = root.querySelector('[data-personnel-department]');
+        const search = root.querySelector('[data-personnel-search]');
         const sortButtons = Array.from(table.querySelectorAll('.js-personnel-sort'));
         const normalize = value => String(value ?? '').replace(/\s+/g, ' ').trim();
+        const searchableValue = value => normalize(value).toLocaleLowerCase('es')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         let currentPage = Number(pagination.dataset.page);
         let orderedRows = [...rows];
         let activeSort = null;
         let initialized = false;
-        let selectedDepartment = '';
         let quickFilter = 'all';
         const quickButtons = Array.from(root.querySelectorAll('[data-personnel-quick-filter]'));
         const matchesQuickFilter = row => {
@@ -92,9 +93,10 @@
         }
 
         function renderPage() {
+            const searchTerms = searchableValue(search.value).split(' ').filter(Boolean);
             const matches = orderedRows.filter(row => row.dataset.columnFilterMatch !== '0'
                 && matchesQuickFilter(row)
-                && (!selectedDepartment || cellValue(row, 7) === selectedDepartment));
+                && searchTerms.every(term => searchableValue(cellValue(row, 0)).includes(term)));
             const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
             currentPage = Math.min(Math.max(1, currentPage), pageCount);
             const offset = (currentPage - 1) * pageSize;
@@ -143,12 +145,12 @@
             document.dispatchEvent(new Event('personnel-table-sorted'));
         }));
 
-        const applyDepartment = () => {
-            selectedDepartment = department.value;
+        const applySearch = () => {
             currentPage = 1;
             renderPage();
         };
-        department.addEventListener('change', applyDepartment);
+        search.addEventListener('input', applySearch);
+        search.addEventListener('search', applySearch);
         quickButtons.forEach(button => button.addEventListener('click', () => {
             quickFilter = button.dataset.personnelQuickFilter;
             currentPage = 1;
@@ -156,10 +158,9 @@
             filters.close();
             renderPage();
         }));
-        root.querySelector('[data-personnel-apply-department]').addEventListener('click', applyDepartment);
+        root.querySelector('[data-personnel-apply-search]').addEventListener('click', applySearch);
         root.querySelector('[data-personnel-clear-filters]').addEventListener('click', () => {
-            department.value = '';
-            selectedDepartment = '';
+            search.value = '';
             quickFilter = 'all';
             quickButtons.forEach(item => item.setAttribute('aria-pressed', String(item.dataset.personnelQuickFilter === 'all')));
             filters.clear();

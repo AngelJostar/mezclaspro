@@ -17,6 +17,11 @@ class AiAgent extends Model
         return $this->hasMany(AiAgentRun::class);
     }
 
+    public function accessGrants()
+    {
+        return $this->hasMany(AiAgentAccessGrant::class);
+    }
+
     public function findings()
     {
         return $this->hasMany(AiAgentFinding::class);

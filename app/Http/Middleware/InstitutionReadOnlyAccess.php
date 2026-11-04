@@ -19,6 +19,10 @@ class InstitutionReadOnlyAccess
         $route = (string) $request->route()?->getName();
         if ($route === 'logout') return $next($request);
         abort_unless($user->hasRole('Institucion'), 403, 'La cuenta debe conservar el perfil de institución.');
+        // Explicit per-agent permissions allow only these delegated actions; business operations remain read-only.
+        if (($request->isMethod('GET') || $request->isMethod('HEAD')) && $request->routeIs('admin.agents.index', 'admin.agents.show')) return $next($request);
+        if ($request->isMethod('PUT') && $request->routeIs('admin.agents.update')) return $next($request);
+        if ($request->isMethod('POST') && $request->routeIs('admin.agents.run')) return $next($request);
         if ($request->isMethod('GET') && ($request->path() === '/' || in_array($route, ['login', 'admin.dashboard'], true))) {
             return redirect()->route('admin.solicitudes.index');
         }

@@ -25,7 +25,9 @@ class AgentRunner
         $sectionAccess = $agent->integration_key === 'admin_conciliation'
             && !$actor->hasAnyRole(['Cliente', 'Institucion']) && \App\Support\AdministrationNavigation::canViewReports($actor)
             && ($agent->configuration['rules'] ?? []) === ['conciliation'] && ($agent->configuration['sources'] ?? []) === ['conciliations'];
-        abort_unless($actor->hasRole('Super Admin') || ($sectionAccess && $trigger === 'manual'), 403);
+        $access = app(AgentAccess::class);
+        $delegated = $trigger === 'manual' && $access->permissions($actor, $agent)['can_run'];
+        abort_unless($actor->hasRole('Super Admin') || $delegated || ($sectionAccess && $trigger === 'manual'), 403);
         abort_if(isset($actor->is_active) && ! $actor->is_active, 403);
         if ($context) {
             abort_unless($sectionAccess && $trigger === 'manual', 403);
@@ -39,7 +41,8 @@ class AgentRunner
             if (! $agent->is_active) throw ValidationException::withMessages(['execution' => 'Activa el agente antes de ejecutarlo.']);
             if (! $agent->configuration) throw ValidationException::withMessages(['execution' => 'Configura y guarda el alcance y las reglas del agente.']);
             $config = AgentConfiguration::validate($agent->configuration, true);
-            if ($context || !$actor->hasRole('Super Admin')) abort_unless($agent->configuration['rules'] === ['conciliation'] && $agent->configuration['sources'] === ['conciliations'], 403);
+            if ($context || (!$actor->hasRole('Super Admin') && !$delegated)) abort_unless($agent->configuration['rules'] === ['conciliation'] && $agent->configuration['sources'] === ['conciliations'], 403);
+            if ($access->isHospitalScoped($actor)) $config['access_hospital_ids'] = $actor->accessibleHospitalIds();
             if ($context) $config['run_context'] = $context;
             if ($trigger !== 'manual' && ($config['activation'] === 'manual' || $agent->next_run_at?->isFuture())) return null;
             $now = CarbonImmutable::now();
@@ -113,6 +116,8 @@ class AgentRunner
                         'result' => ['engine' => 'Reglas del sistema', 'analysis' => $analysis, 'coverage' => $coverage, 'issues' => $issues, 'findings' => $found, 'alerts' => $stored,
                             'draft' => array_key_exists('conciliations', $sources) ? ConciliationAgentData::draft($sources['conciliations']) : null,
                             'limits' => array_map(fn ($rule) => AgentConfiguration::rules()[$rule]['limit'], $config['rules'])]]);
+                    // A hospital-scoped manual run must not alter the global scheduler or its fingerprint.
+                    if (array_key_exists('access_hospital_ids', $config)) return;
                     $agent->source_fingerprint = $config['analysis'] === 'openai' && ! $analysis ? null : $fingerprint;
                     $agent->next_run_at = match ($config['activation']) {
                         'hourly' => now()->addHour(), 'daily' => now()->addDay(), 'changes' => now()->addMinutes($issues ? 5 : 1), default => null,

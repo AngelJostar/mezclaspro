@@ -131,4 +131,5 @@
         </div>
     @endif
     @include('livewire.admin.agent-center-dialogs')
+    @include('livewire.admin.agent-access-dialog')
 </section>

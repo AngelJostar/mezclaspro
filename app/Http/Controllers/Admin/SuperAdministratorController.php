@@ -52,6 +52,9 @@ class SuperAdministratorController extends Controller
 
     public function index(Request $request): View
     {
+        $agentCount = \App\Models\AiAgent::count();
+        $initialSection = in_array($request->query('section'), ['agents', 'mobile', 'authorizations', 'waste'], true)
+            ? (string) $request->query('section') : 'waste';
         $administrators = User::query()
             ->role('Admin')
             ->whereDoesntHave('roles', fn ($query) => $query->where('name', 'Super Admin'))
@@ -103,6 +106,8 @@ class SuperAdministratorController extends Controller
         $mobilePersonnel = User::with('personnelProfile')->whereHas('personnelProfile', fn ($q) => $q
             ->whereJsonContains('positions', \App\Models\PersonnelProfile::POSITION_MOBILE))->orderBy('name')->get();
         return view('admin.superadministrator.index', compact(
+            'agentCount',
+            'initialSection',
             'mobilePersonnel',
             'administrators',
             'wasteRecords',
@@ -138,7 +143,7 @@ class SuperAdministratorController extends Controller
         });
 
         return redirect()
-            ->route('admin.superadministrator.index')
+            ->route('admin.superadministrator.index', ['section' => 'authorizations'])
             ->with('status', 'El administrador fue destituido y sus accesos quedaron bloqueados.');
     }
 
@@ -165,7 +170,7 @@ class SuperAdministratorController extends Controller
         });
 
         return redirect()
-            ->route('admin.superadministrator.index')
+            ->route('admin.superadministrator.index', ['section' => 'authorizations'])
             ->with('status', 'El personal seleccionado ahora tiene acceso de administrador.');
     }
 

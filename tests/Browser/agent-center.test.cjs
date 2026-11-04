@@ -18,8 +18,7 @@ const icons = buildSync({ entryPoints: [path.join(root, 'resources/js/agent-cent
 const livewire = readFileSync(path.join(root, 'vendor/livewire/livewire/dist/livewire.js'), 'utf8');
 
 function fixture(count = 8) {
-    const php = spawn('php', ['-d', 'extension=pdo_sqlite', '-d', 'extension=sqlite3',
-        'tests/Browser/fixtures/agent-center.php', String(count)], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'],
+    const php = spawn('php', ['tests/Browser/fixtures/agent-center.php', String(count)], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, CACHE_DRIVER: 'array', SESSION_DRIVER: 'array' } });
     const waiting = [];
     let stderr = '';
@@ -51,6 +50,64 @@ function fixture(count = 8) {
         },
     };
 }
+
+test('agent authorizations grant, persist and revoke individual permissions on desktop and mobile', async () => {
+    const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
+    try {
+        for (const width of [1366, 390]) {
+            const server = fixture('access');
+            const page = await browser.newPage({ viewport: { width, height: 900 } });
+            const errors = [];
+            page.on('pageerror', error => errors.push(error.message));
+            try {
+                await page.route('**/*', async route => {
+                    const url = new URL(route.request().url());
+                    if (url.origin !== 'http://agents.test') return route.abort();
+                    if (url.pathname === '/livewire/update') {
+                        return route.fulfill({ contentType: 'application/json', body: JSON.stringify(await server.send(route.request().postDataJSON())) });
+                    }
+                    const result = await server.send({ type: 'render' });
+                    return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${styles}</style>${result.styles}</head><body><main class="admin-content">${result.html}</main><script>${icons}</script><script>window.livewireScriptConfig={uri:'http://agents.test/livewire/update',csrf:'test'};</script><script>${livewire}</script><script>window.Livewire.start();</script></body></html>` });
+                });
+                await page.goto('http://agents.test/access');
+                await page.getByRole('button', { name: 'Auditoría de prueba', exact: true }).click();
+                await page.getByRole('button', { name: 'Dar accesos a usuarios y roles' }).click();
+                const dialog = page.getByRole('dialog', { name: 'Autorizaciones' });
+                await dialog.waitFor();
+                await dialog.getByRole('searchbox').fill('ana garcia');
+                const row = dialog.getByRole('row').filter({ hasText: 'Ana García' });
+                await row.getByRole('checkbox', { name: 'Editar · Ana García · ana.prueba', exact: true }).check();
+                await page.waitForFunction(() => [...document.querySelectorAll('.agent-access-table tbody tr')].find(row => row.textContent.includes('Ana García'))?.querySelector('input')?.checked);
+                assert.equal(await row.getByRole('checkbox', { name: 'Consultar · Ana García · ana.prueba', exact: true }).isChecked(), true);
+                assert.equal(await row.getByRole('checkbox', { name: 'Ejecutar · Ana García · ana.prueba', exact: true }).isChecked(), false);
+                await dialog.getByRole('tab', { name: 'Roles', exact: true }).click();
+                await dialog.getByRole('row').filter({ hasText: 'Administrador' }).waitFor();
+                await dialog.getByRole('tab', { name: 'Puestos', exact: true }).click();
+                await dialog.getByRole('searchbox').fill('Responsable sanitario');
+                await dialog.getByRole('row').filter({ hasText: 'Responsable sanitario' }).first().waitFor();
+                await dialog.getByRole('tab', { name: 'Usuarios', exact: true }).click();
+                await row.waitFor();
+                assert.equal(await dialog.locator('.agent-access-table-wrap').evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
+                if (process.env.AGENT_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.AGENT_SCREENSHOTS, `agent-authorizations-${width}.png`) });
+                await dialog.getByRole('button', { name: 'Guardar autorizaciones' }).click();
+                await dialog.waitFor({ state: 'hidden' });
+                await page.getByText('1 usuario autorizado', { exact: true }).waitFor();
+                await page.getByText('Ver usuarios y permisos', { exact: true }).click();
+                assert.equal(await page.getByText('Consultar · Editar', { exact: true }).isVisible(), true);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+                if (process.env.AGENT_SCREENSHOTS) await page.screenshot({ path: path.join(process.env.AGENT_SCREENSHOTS, `agent-access-summary-${width}.png`), fullPage: true });
+                await page.getByRole('button', { name: 'Dar accesos a usuarios y roles' }).click();
+                await dialog.waitFor();
+                assert.equal(await row.getByRole('checkbox', { name: 'Editar · Ana García · ana.prueba', exact: true }).isChecked(), true);
+                await row.getByRole('checkbox', { name: 'Asignar autorización a Ana García · ana.prueba', exact: true }).uncheck();
+                await dialog.getByRole('button', { name: 'Guardar autorizaciones' }).click();
+                await dialog.waitFor({ state: 'hidden' });
+                await page.getByText('0 usuarios autorizados', { exact: true }).waitFor();
+                assert.deepEqual(errors, []);
+            } finally { await page.close(); await server.close(); }
+        }
+    } finally { await browser.close(); }
+});
 
 test('agent carousel toggles information and creates, edits and persists agents through Livewire', async () => {
     const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
@@ -178,14 +235,14 @@ test('agent carousel toggles information and creates, edits and persists agents 
                 assert.equal(await page.locator('[data-agent-select]').count(), 13);
                 assert.equal(await page.locator('[data-agent-information]').count(), 1);
                 assert.equal(await page.getByRole('button', { name: agentName, exact: true }).getAttribute('aria-pressed'), 'true');
-                await page.getByRole('button', { name: `Editar agente ${agentName}`, exact: true }).click();
+                await page.getByRole('button', { name: 'Editar información', exact: true }).click();
                 await dialog.waitFor();
                 assert.equal(await dialog.getByLabel('Nombre', { exact: true }).inputValue(), agentName);
                 await dialog.getByLabel('Nombre', { exact: true }).fill('Cambio cancelado');
                 await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
                 await dialog.waitFor({ state: 'hidden' });
                 assert.equal(await page.getByRole('button', { name: agentName, exact: true }).count(), 1);
-                await page.getByRole('button', { name: `Editar agente ${agentName}`, exact: true }).click();
+                await page.getByRole('button', { name: 'Editar información', exact: true }).click();
                 await dialog.getByLabel('Nombre', { exact: true }).fill('Agente actualizado de prueba');
                 await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
                 await dialog.waitFor({ state: 'hidden' });
@@ -199,13 +256,14 @@ test('agent carousel toggles information and creates, edits and persists agents 
                 assert.equal(await page.getByRole('button', { name: 'Todos', exact: true }).getAttribute('aria-expanded'), 'false');
                 await page.getByRole('button', { name: 'Agente actualizado de prueba', exact: true }).click();
                 await page.waitForFunction(() => document.querySelectorAll('[data-agent-information]').length === 1);
-                assert.equal(await page.locator('.agent-instructions').filter({ hasText: 'Primera instruccion.' }).count(), 1);
+                assert.equal(await page.locator('.overview-full pre').filter({ hasText: 'Primera instruccion.' }).count(), 1);
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
                 assert.equal(await track.evaluate(el => el.getBoundingClientRect().right > innerWidth), false);
                 assert.equal(await page.locator('.agent-choice').evaluateAll(els => els.some(el => el.scrollWidth > el.clientWidth + 1)), false);
                 assert.ok(await page.locator('svg[data-agent-icon="bot"]').count() >= 12);
                 await page.getByRole('button', {name: 'Caducidades y mermas', exact: true}).click();
-                await page.getByRole('button', {name: 'Editar agente Caducidades y mermas', exact: true}).click();
+                await page.getByRole('heading', {name: 'Caducidades y mermas', exact: true}).waitFor();
+                await page.getByRole('button', {name: 'Editar información', exact: true}).click();
                 await dialog.getByRole('checkbox', {name: 'Central A', exact: true}).check();
                 await dialog.getByLabel('Responsable de seguimiento (persona o área)', {exact: true}).fill('Almacén A');
                 await dialog.getByLabel('Caducidad: anticipación (días)', {exact: true}).fill('10');

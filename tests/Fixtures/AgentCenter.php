@@ -27,6 +27,13 @@ class AgentCenter
         (require database_path('migrations/2026_09_11_000001_add_is_active_to_ai_agents_table.php'))->up();
         (require database_path('migrations/2026_09_14_000005_add_agent_execution.php'))->up();
         (require database_path('migrations/2026_09_16_000001_add_integration_key_to_ai_agents.php'))->up();
+        (require database_path('migrations/2026_11_04_000001_create_ai_agent_access_grants.php'))->up();
+        Schema::create('personnel_profiles', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id');
+            $table->json('positions')->nullable();
+            $table->timestamps();
+        });
         foreach (['clientes' => 'nombre', 'laboratories' => 'nombre', 'warehouses' => 'name'] as $name => $label) {
             Schema::create($name, function (Blueprint $table) use ($name, $label) {
                 $table->id();

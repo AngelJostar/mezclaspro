@@ -871,7 +871,12 @@
             @endif
 
             <div class="training-filters {{ $isPersonnelPage ? 'is-personnel' : '' }}">
-                @unless ($isPersonnelPage)
+                @if ($isPersonnelPage)
+                    <label>
+                        <span>Nombre del personal</span>
+                        <input type="search" data-personnel-search placeholder="Buscar por nombre o apellido" autocomplete="off">
+                    </label>
+                @else
                     <label>
                         <span>Nombre o puesto</span>
                         <div class="training-input-icon">
@@ -879,22 +884,21 @@
                             <input type="search" placeholder="Buscar por nombre o puesto">
                         </div>
                     </label>
-                @endunless
+                    <label>
+                        <span>Departamento</span>
+                        <select>
+                            <option value="">Todos los departamentos</option>
+                            <option>Administracion</option>
+                            <option>Almacen</option>
+                            <option>Calidad</option>
+                            <option>Operaciones</option>
+                            <option>Produccion</option>
+                            <option>Ventas</option>
+                        </select>
+                    </label>
+                @endif
 
-                <label>
-                    <span>Departamento</span>
-                    <select @if ($isPersonnelPage) data-personnel-department @endif>
-                        <option value="">Todos los departamentos</option>
-                        <option>Administracion</option>
-                        <option>Almacen</option>
-                        <option>Calidad</option>
-                        <option>Operaciones</option>
-                        <option>Produccion</option>
-                        <option>Ventas</option>
-                    </select>
-                </label>
-
-                <button type="button" class="training-filter-button" @if ($isPersonnelPage) data-personnel-apply-department @endif>
+                <button type="button" class="training-filter-button" @if ($isPersonnelPage) data-personnel-apply-search @endif>
                     <i class="fa-solid fa-filter h-4 w-4" @if ($isPersonnelPage) data-personnel-table-icon="filter" @endif aria-hidden="true"></i>
                     <span>Filtros</span>
                 </button>

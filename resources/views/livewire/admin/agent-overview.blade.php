@@ -22,6 +22,22 @@
         <div>{!! $overviewIcon('file-text') !!}<div><strong>Descripción</strong><p>{{ $agent->description ?: 'Sin descripción' }}</p></div></div>
         <div>{!! $overviewIcon('folder') !!}<div><strong>Área</strong><p>{{ $isClinical ? 'Solicitudes y mensajes' : ($configuration['owner'] ?: 'Sin asignar') }}</p></div></div>
         <div>{!! $overviewIcon('play') !!}<div><strong>Ejecución</strong><p>{{ $isClinical ? 'Bajo demanda' : $activationLabel }}</p></div></div>
+        <div class="overview-authorizations">
+            {!! $overviewIcon('shield-check') !!}
+            <div>
+                <strong>Autorizaciones</strong>
+                @php($authorizedUsers = app(\App\Services\Agents\AgentAccess::class)->effectiveUsers($agent))
+                <p>{{ $authorizedUsers->count() }} {{ $authorizedUsers->count() === 1 ? 'usuario autorizado' : 'usuarios autorizados' }}</p>
+                @if ($authorizedUsers->isNotEmpty())
+                    <details><summary>Ver usuarios y permisos</summary>
+                        <ul class="agent-authorized-users">@foreach ($authorizedUsers as $authorizedUser)
+                            <li><strong>{{ $authorizedUser['name'] }}</strong><span>{{ collect(\App\Services\Agents\AgentAccess::LABELS)->filter(fn ($label, $key) => $authorizedUser['permissions'][$key])->implode(' · ') }}</span></li>
+                        @endforeach</ul>
+                    </details>
+                @else<p>Sin accesos delegados</p>@endif
+                <button class="overview-edit" type="button" wire:click="openAccess({{ $agent->id }})">Dar accesos a usuarios y roles</button>
+            </div>
+        </div>
         <button class="overview-edit" type="button" wire:click="editAgent({{ $agent->id }})">{!! $overviewIcon('pencil') !!}Editar información</button>
     </div>
     <div class="overview-columns">
