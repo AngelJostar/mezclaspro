@@ -36,6 +36,7 @@
         @endif
 
         <form id="nutrition-request-form" action="{{ isset($preparationQuotation) ? route('admin.solicitudes.cotizacion.prepare', $preparationQuotation) : route('admin.nutricionales.solicitudes.store') }}" method="POST"
+            autocomplete="off" data-nutrition-request-form
             @if (isset($preparationQuotation)) data-quotation-preparation @endif
             class="bg-white rounded-lg p-6 shadow-lg">
             @csrf
@@ -410,6 +411,8 @@
                 </x-button>
             </div>
         </form>
+
+        @include('admin.nutricionales.solicitudes.partials.prevent-component-autofill')
     </div>
 
     @push('js')
@@ -804,4 +807,5 @@
     @isset($preparationQuotation)
         @include('admin.solicitudes.quotations.preparation-script')
     @endisset
+    @include('admin.nutricionales.solicitudes.partials.duplicate-confirmation')
 </x-admin-layout>

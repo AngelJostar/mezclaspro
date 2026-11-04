@@ -52,7 +52,7 @@
 @endphp
 @include('pdfs.nutricionales.partials.remision-page', [
     'issuerName' => !empty($distributor) ? $distributorName : 'CMP Prodifem',
-    'issuerLogo' => $prodifemLogo,
+    'issuerLogo' => !empty($distributor) ? ($distributorLogo ?: $prodifemLogo) : $prodifemLogo,
     'issuerInformation' => !empty($distributor) ? $distributorInformation : null,
 ])
 </body></html>

@@ -200,10 +200,18 @@
                         </td>
 
                         <td class="px-4 py-2 text-center whitespace-nowrap">
-                            <button type="button" disabled
-                                class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
-                                Remision Subdistribuidor
-                            </button>
+                            @if ($solicitud->has_subdistributor_remission)
+                                <a href="{{ route('admin.nutricionales.solicitudes.remision', ['solicitud' => $solicitud, 'subdistribuidor' => 1]) }}"
+                                    target="_blank" rel="noopener"
+                                    class="inline-flex items-center justify-center rounded-full bg-azul-prodifem px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                                    Remisión Subdistribuidor
+                                </a>
+                            @else
+                                <button type="button" disabled title="La lista de precios no tiene un subdistribuidor configurado"
+                                    class="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 opacity-80">
+                                    Remisión Subdistribuidor
+                                </button>
+                            @endif
                         </td>
                         @endunless
                     </tr>

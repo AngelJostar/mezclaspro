@@ -26,6 +26,10 @@ function initializePurchaseOrder() {
     const supplierCatalog = config.suppliers;
     const supplierInput = document.getElementById('supplier');
     const supplierPicker = createSupplierPicker(supplierInput, document.getElementById('po-supplier-toggle'), supplierCatalog, applyCatalogSupplier);
+    const creditSelect = document.getElementById('is_credit');
+    const creditDaysInput = document.getElementById('credit_days');
+    const dueDateInput = document.getElementById('due_date');
+    const requestedAtInput = document.getElementById('requested_at');
     const slots = Array.from(document.querySelectorAll('[data-item-part]'), (element) => Number(element.dataset.itemSlot)).map((slot) => ({
         slot,
         part: document.querySelector(`[data-item-part][data-item-slot="${slot}"]`),
@@ -84,6 +88,19 @@ function initializePurchaseOrder() {
     function validateDescription(slot, item) {
         slot.description.setCustomValidity(item && !products.has(item.product_key)
             ? 'Selecciona un producto del catálogo del almacén y subalmacén.' : '');
+    }
+
+    function updatePaymentTerms() {
+        const isCredit = creditSelect.value === '1';
+        creditDaysInput.disabled = !isCredit;
+        creditDaysInput.required = isCredit;
+        if (!isCredit) creditDaysInput.value = '';
+
+        if (!requestedAtInput.value) return;
+        const days = isCredit ? Number.parseInt(creditDaysInput.value || '0', 10) : 0;
+        const due = new Date(`${requestedAtInput.value}T12:00:00`);
+        due.setDate(due.getDate() + (Number.isFinite(days) ? days : 0));
+        dueDateInput.value = due.toISOString().slice(0, 10);
     }
 
     async function loadProducts(reset = false) {
@@ -405,6 +422,9 @@ function initializePurchaseOrder() {
     warehouseSelect.addEventListener('change', () => { updateDeliveryAddress(); loadProducts(true); });
     inventoryDestinationSelect.addEventListener('change', () => { syncDeliveryFields(); loadProducts(true); });
     retryCatalog.addEventListener('click', () => loadProducts());
+    creditSelect.addEventListener('change', updatePaymentTerms);
+    creditDaysInput.addEventListener('input', updatePaymentTerms);
+    requestedAtInput.addEventListener('change', updatePaymentTerms);
     [previousPage, nextPage].forEach((button, index) => button.addEventListener('click', () => {
         saveVisibleItems();
         currentPage = Math.max(0, Math.min(currentPage + (index ? 1 : -1), pageCount() - 1));
@@ -458,7 +478,11 @@ function initializePurchaseOrder() {
             picker.close();
             form.hidden = true;
             const result = document.querySelector('[data-po-success]');
-            result.querySelector('[data-po-success-title]').textContent = `Orden ${data.folio} generada`;
+            const sync = data.oc_sync ?? {};
+            const syncMessage = sync.status === 'synced'
+                ? ` y registrada como ${sync.folio}`
+                : `; pendiente en Ordenes de Compra: ${sync.message ?? 'sin confirmacion'}`;
+            result.querySelector('[data-po-success-title]').textContent = `Orden ${data.folio} generada${syncMessage}`;
             const download = result.querySelector('[data-po-download]');
             download.href = downloadUrl.href;
             result.hidden = false;
@@ -502,6 +526,7 @@ function initializePurchaseOrder() {
 
     syncDeliveryFields();
     renderPage();
+    updatePaymentTerms();
     loadProducts();
 }
 

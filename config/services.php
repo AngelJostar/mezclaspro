@@ -45,4 +45,11 @@ return [
         'webhook_max_attempts' => (int) env('DR_SAM_WEBHOOK_MAX_ATTEMPTS', 8),
     ],
 
+    'purchase_orders' => [
+        'api_url' => env('PURCHASE_ORDERS_API_URL'),
+        'token' => env('PURCHASE_ORDERS_API_TOKEN'),
+        'timeout' => (int) env('PURCHASE_ORDERS_API_TIMEOUT', 10),
+        'connect_timeout' => (int) env('PURCHASE_ORDERS_API_CONNECT_TIMEOUT', 3),
+    ],
+
 ];

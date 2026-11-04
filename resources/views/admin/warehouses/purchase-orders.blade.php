@@ -118,6 +118,20 @@
                                         Descargar
                                     </a>
                                     @endif
+                                    @if ($order->oc_sync_status === 'synced')
+                                        <div class="mt-1 text-xs font-semibold text-emerald-700">
+                                            Registrada: {{ $order->oc_remote_folio }}
+                                        </div>
+                                    @elseif (in_array($order->oc_sync_status, ['pending', 'rejected'], true))
+                                        <div class="mt-1 text-xs {{ $order->oc_sync_status === 'rejected' ? 'text-red-700' : 'text-amber-700' }}"
+                                            title="{{ $order->oc_sync_error }}">
+                                            {{ $order->oc_sync_status === 'rejected' ? 'Rechazada por OC' : 'Pendiente de enviar' }}
+                                        </div>
+                                        <form method="POST" action="{{ route('admin.oncologicos.laboratory.purchase-orders.sync', [$selectedLaboratory, $order]) }}" class="mt-1">
+                                            @csrf
+                                            <button type="submit" class="text-xs font-semibold text-blue-700 underline">Reintentar</button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

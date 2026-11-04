@@ -105,6 +105,25 @@
             </div>
 
             <div id="item-hidden-inputs"></div>
+            <section style="margin:16px 0;padding:16px;border:1px solid #d1d5db;background:#fff;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
+                <label style="display:flex;flex-direction:column;gap:6px;font-weight:600;">
+                    Condici&oacute;n de pago
+                    <select id="is_credit" name="is_credit" required style="border:1px solid #d1d5db;padding:9px;">
+                        <option value="0" @selected(old('is_credit', '0') === '0')>Contado</option>
+                        <option value="1" @selected(old('is_credit') === '1')>Cr&eacute;dito</option>
+                    </select>
+                </label>
+                <label style="display:flex;flex-direction:column;gap:6px;font-weight:600;">
+                    D&iacute;as de cr&eacute;dito
+                    <input id="credit_days" name="credit_days" type="number" min="1" max="366"
+                        value="{{ old('credit_days') }}" style="border:1px solid #d1d5db;padding:9px;">
+                </label>
+                <label style="display:flex;flex-direction:column;gap:6px;font-weight:600;">
+                    Fecha de vencimiento
+                    <input id="due_date" name="due_date" type="date" required
+                        value="{{ old('due_date', now()->toDateString()) }}" style="border:1px solid #d1d5db;padding:9px;">
+                </label>
+            </section>
             </div>
 
             @if ($isPurchasePopup)

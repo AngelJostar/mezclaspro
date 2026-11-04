@@ -42,6 +42,7 @@ use App\Services\LabelPrintingService;
 use App\Services\MedicineRemainderService;
 use App\Services\NutritionTheoreticalWeightService;
 use App\Services\NutritionDiluentService;
+use App\Services\NutritionDuplicateRequestService;
 use App\Support\SolicitudStatusFilter;
 use App\Support\RequestCreationPopup;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -877,6 +878,25 @@ class SolicitudController extends Controller
             ])->withInput();
         }
 
+        $duplicateService = app(NutritionDuplicateRequestService::class);
+        $duplicate = $duplicateService->findForCreation(
+            (int) $hospital->id,
+            $request->only(['registro', 'nombre_paciente', 'apellidos_paciente', 'fecha_nacimiento']),
+            (string) $request->input('fecha_hora_entrega'),
+            $request->boolean('confirmar_duplicado')
+        );
+
+        if ($duplicate) {
+            return redirect()->back()->withInput()->with('nutrition_duplicate_confirmation', [
+                'title' => 'Posible solicitud duplicada',
+                'message' => 'Ya existe una solicitud para este paciente y esta fecha de entrega. ¿Deseas capturar otra?',
+                'confirm_text' => 'Sí, capturar otra',
+                'confirmation_field' => 'confirmar_duplicado',
+                'form_id' => 'nutrition-request-form',
+                'request' => $duplicateService->confirmationData($duplicate),
+            ]);
+        }
+
         if (! $quotation) {
             $submissionFingerprint = hash('sha256', json_encode([
             'user_id' => $user->id,
@@ -1460,6 +1480,35 @@ class SolicitudController extends Controller
                         ($finding['message'] ?? 'La mezcla incumple una regla de validación.')
                         .(!empty($finding['calculation']) ? ' '.$finding['calculation'] : '')
                     )->all(),
+                ]);
+            }
+
+            $identity = $request->validate([
+                'nombre_paciente' => 'required|string|max:255',
+                'apellidos_paciente' => 'required|string|max:255',
+                'registro' => 'nullable|string|max:50',
+                'fecha_nacimiento' => 'required|date',
+                'fecha_hora_entrega' => 'required|date_format:Y-m-d\TH:i',
+            ]);
+
+            $duplicateService = app(NutritionDuplicateRequestService::class);
+            $duplicate = $duplicateService->findApprovedForApproval(
+                (int) $solicitud->hospital_id,
+                $identity,
+                (string) $identity['fecha_hora_entrega'],
+                (int) $solicitud->id,
+                $request->boolean('confirmar_duplicado_aprobacion')
+            );
+
+            if ($duplicate) {
+                return redirect()->back()->withInput()->with('nutrition_duplicate_confirmation', [
+                    'title' => 'Solicitud aprobada para la misma fecha',
+                    'message' => 'Este paciente ya tiene una solicitud aprobada para esta fecha de entrega. ¿Deseas aprobar esta solicitud de todos modos?',
+                    'confirm_text' => 'Sí, aprobar de todos modos',
+                    'confirmation_field' => 'confirmar_duplicado_aprobacion',
+                    'form_id' => 'solicitudForm',
+                    'action' => 'aprobar',
+                    'request' => $duplicateService->confirmationData($duplicate),
                 ]);
             }
         }
@@ -2624,7 +2673,7 @@ class SolicitudController extends Controller
         return $this->ordenPreparacion($solicitud, true);
     }
 
-    public function remision(Solicitud $solicitud, InstitutionBillingPricingService $pricing)
+    public function remision(Request $request, Solicitud $solicitud, InstitutionBillingPricingService $pricing)
     {
         $solicitud->load('hospital.nutriMedicineList.distributor');
 
@@ -2632,7 +2681,10 @@ class SolicitudController extends Controller
         $nutriMedicineListId = $hospital?->nutri_medicine_list_id;
         $priceList = $hospital?->nutriMedicineList;
         $imprimirMarcas = (bool) optional($hospital?->nutriMedicineList)->active_brands;
-        $distributor = $hospital?->nutriMedicineList?->distributor;
+        $subdistributor = $hospital?->nutriMedicineList?->distributor;
+        $subdistributorOnly = $request->boolean('subdistribuidor');
+        abort_if($subdistributorOnly && !$subdistributor, 404);
+        $distributor = $subdistributorOnly ? $subdistributor : null;
 
         $inputs_solicitud = SolicitudInput::where('solicitud_id', $solicitud->id)
             ->whereNotIn('input_id', function ($query) {
@@ -2788,7 +2840,11 @@ class SolicitudController extends Controller
             'medicalAuthorizationObservation'
         ))->setPaper('letter', 'portrait');
 
-        return $pdf->stream();
+        $filename = $subdistributorOnly
+            ? "remision-subdistribuidor-{$solicitud->id}.pdf"
+            : "remision-{$solicitud->id}.pdf";
+
+        return $pdf->stream($filename);
     }
 
     public function envio(Solicitud $solicitud)

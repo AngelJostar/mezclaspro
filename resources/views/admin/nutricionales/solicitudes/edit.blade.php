@@ -191,6 +191,7 @@
         </div>
 
         <form id="solicitudForm" action="{{ route('admin.nutricionales.solicitudes.update', $solicitud) }}" method="POST"
+            autocomplete="off" data-nutrition-request-form
             data-rule-validation-url="{{ route('admin.solicitudes.rules.validate', ['kind' => 'nutricionales']) }}"
             class="bg-white rounded-lg p-6 shadow-lg w-full">
 
@@ -491,6 +492,8 @@
                 </div>
             @endif
         </form>
+
+        @include('admin.nutricionales.solicitudes.partials.prevent-component-autofill')
     </div>
 
     @if ($isApprovalMode && $isPendingApproval)
@@ -663,6 +666,18 @@
                         const title = document.createElement('strong');
                         title.textContent = finding.severity === 'blocking' ? 'Rechazo: ' : 'Advertencia: ';
                         item.append(title, document.createTextNode(finding.message || 'Regla incumplida.'));
+                        if (finding.rule_code) {
+                            const ruleCode = document.createElement('p');
+                            ruleCode.className = 'mt-1 text-xs font-semibold text-slate-600';
+                            ruleCode.textContent = `Regla que falló: ${finding.rule_code}`;
+                            item.append(ruleCode);
+                        }
+                        if (finding.composition_code) {
+                            const compositionCode = document.createElement('p');
+                            compositionCode.className = 'mt-1 text-xs font-semibold text-blue-700';
+                            compositionCode.textContent = `Combinación detectada: ${finding.composition_code}`;
+                            item.append(compositionCode);
+                        }
                         if (finding.calculation) {
                             const calculation = document.createElement('p');
                             calculation.className = 'mt-1 text-sm';
@@ -851,4 +866,5 @@
             });
         </script>
     @endpush
+    @include('admin.nutricionales.solicitudes.partials.duplicate-confirmation')
 </x-admin-layout>

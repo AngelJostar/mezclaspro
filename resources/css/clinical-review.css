@@ -6,6 +6,8 @@
 .clinical-review ul { margin-block: 10px; padding-left: 20px; list-style: disc; }
 .clinical-review li { margin-block: 9px; }
 .clinical-review .clinical-suggestion { margin-block: 8px; padding-left: 10px; border-left: 3px solid #147664; color: #153962; }
+.clinical-review .clinical-rule-code { margin-block: 3px; color: #526a83; font-size: 12px; font-weight: 700; }
+.clinical-review .clinical-composition-code { margin-block: 3px; color: #1d4ed8; font-size: 12px; font-weight: 700; }
 .clinical-review details { margin-block: 10px; }
 .clinical-review summary { cursor: pointer; font-weight: 600; }
 .clinical-review [data-clinical-ack] { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; }

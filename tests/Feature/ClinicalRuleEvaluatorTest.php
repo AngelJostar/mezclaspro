@@ -101,6 +101,45 @@ class ClinicalRuleEvaluatorTest extends TestCase
         $this->assertSame('passed', $result['evaluations'][0]['status']);
     }
 
+    public function test_mathematical_finding_includes_the_matched_composition_identifier(): void
+    {
+        $this->rule([
+            'code' => 'TEST.COMP.CATALOG.V2',
+            'engine' => 'composition',
+            'configuration' => [
+                'mode' => 'allowed_catalog',
+                'allow_any_single_component' => false,
+                'allowed_compositions' => [[
+                    'code' => 'AD2-171',
+                    'label' => 'Aminoácidos + dextrosa',
+                    'groups' => ['amino_acids', 'dextrose'],
+                ]],
+            ],
+        ]);
+        $this->rule([
+            'code' => 'NP.R6.CHEM.AA.PERCENT',
+            'name' => 'Concentración final de aminoácidos',
+            'engine' => 'mathematical',
+            'configuration' => [
+                'source_variable' => 'groups.amino_acids.dose_g_kg_day',
+                'formula_template' => 'dose_times_weight_percentage_of_volume',
+                'operator' => 'between',
+                'threshold_min' => 2.5,
+                'threshold_max' => 20,
+                'unit' => '%',
+            ],
+        ]);
+
+        $result = app(ClinicalRuleEvaluator::class)->evaluate($this->adultCase([
+            $this->componentData(4, 1, 'AMINOACIDOS CRISTALINOS AL 10%', 10, 10, 'i_4_g/Kg'),
+            $this->componentData(8, 2, 'SOLUCION GLUCOSADA AL 50%', 100, 100, 'i_8_g/Kg'),
+        ]));
+
+        $finding = collect($result['findings'])->firstWhere('rule_code', 'NP.R6.CHEM.AA.PERCENT');
+        $this->assertNotNull($finding);
+        $this->assertSame('AD2-171', $finding['composition_code']);
+    }
+
     public function test_missing_clinical_stage_is_not_inferred(): void
     {
         $this->rule([

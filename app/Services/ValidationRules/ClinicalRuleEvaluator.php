@@ -37,6 +37,7 @@ class ClinicalRuleEvaluator
         $evaluations = [];
         foreach ($case['mixtures'] ?? [] as $mixtureIndex => $mixture) {
             $facts = $this->facts($case, $mixture);
+            $matchedCompositionCode = null;
             foreach ($rules as $rule) {
                 $applicable = $this->applicable($rule->configuration['applicability'] ?? [], $facts);
                 if ($applicable !== true) {
@@ -63,8 +64,14 @@ class ClinicalRuleEvaluator
                 }
 
                 $evaluations[] = $this->audit($rule, $mixtureIndex, $result['passed'] ? 'passed' : 'failed', $result);
+                if ($rule->engine === 'composition' && $result['passed']) {
+                    $matchedCode = trim((string) data_get($result, 'result.matched_code', ''));
+                    if ($matchedCode !== '' && $matchedCode !== 'single-component-exception') {
+                        $matchedCompositionCode = $matchedCode;
+                    }
+                }
                 if (! $result['passed']) {
-                    $findings[] = $this->finding($rule, $mixtureIndex, $facts, $result);
+                    $findings[] = $this->finding($rule, $mixtureIndex, $facts, $result, $matchedCompositionCode);
                 }
             }
         }
@@ -78,13 +85,19 @@ class ClinicalRuleEvaluator
         $ageDays = (int) data_get($case, 'patient.age_days', 0);
         $facts = [
             'patient' => ['weight_kg' => $weight, 'age_days' => $ageDays],
-            'mixture' => ['total_volume_ml' => (float) ($mixture['volume_ml'] ?? 0)],
+            'mixture' => [
+                'total_volume_ml' => (float) ($mixture['volume_ml'] ?? 0),
+                'component_volume_ml' => 0.0,
+            ],
             'active_groups' => [],
             'active_component_ids' => [],
             'active_component_terms' => [],
             'active_component_names' => [],
             'group_component_names' => [],
             'group_fields' => [],
+            'group_captured_values' => [],
+            'group_input_units' => [],
+            'group_weighted_inputs' => [],
             'unavailable_sources' => [],
             'groups' => [
                 'amino_acids' => ['dose_g_kg_day' => 0.0],
@@ -115,6 +128,9 @@ class ClinicalRuleEvaluator
             if ($group) {
                 $facts['active_groups'][] = $group;
                 $facts['group_fields'][$group] ??= $field;
+                $facts['group_captured_values'][$group][] = (float) ($component['quantity'] ?? 0);
+                $facts['group_input_units'][$group][] = trim((string) ($component['unit'] ?? ''));
+                $facts['group_weighted_inputs'][$group][] = (bool) ($component['weight_factor_applied'] ?? false);
             }
             if (isset($component['input_id'])) {
                 $facts['active_component_ids'][] = (int) $component['input_id'];
@@ -132,12 +148,18 @@ class ClinicalRuleEvaluator
             }
             if ($group === 'water') {
                 $facts['groups']['water']['volume_ml'] += (float) ($component['volume_ml'] ?? $component['quantity'] ?? 0);
+            } else {
+                $facts['mixture']['component_volume_ml'] += (float) ($component['volume_ml'] ?? 0);
             }
             if ($category === 4) {
                 foreach ($this->electrolytes($name) as $electrolyte) {
                     $facts['groups'][$electrolyte]['total_meq'] += $total;
                     $facts['groups'][$electrolyte]['dose_meq_kg_day'] += $weight > 0 ? $total / $weight : 0.0;
                     $facts['group_fields'][$electrolyte] ??= $field;
+                    $facts['group_component_names'][$electrolyte][] = trim((string) ($component['medicine'] ?? ''));
+                    $facts['group_captured_values'][$electrolyte][] = (float) ($component['quantity'] ?? 0);
+                    $facts['group_input_units'][$electrolyte][] = trim((string) ($component['unit'] ?? ''));
+                    $facts['group_weighted_inputs'][$electrolyte][] = (bool) ($component['weight_factor_applied'] ?? false);
                 }
             }
         }
@@ -267,7 +289,13 @@ class ClinicalRuleEvaluator
         return $items;
     }
 
-    private function finding(ValidationRule $rule, int $mixtureIndex, array $facts, array $result): array
+    private function finding(
+        ValidationRule $rule,
+        int $mixtureIndex,
+        array $facts,
+        array $result,
+        ?string $matchedCompositionCode = null
+    ): array
     {
         $source = (string) ($rule->configuration['source_variable'] ?? '');
         preg_match('/^groups\.([^.]+)/', $source, $match);
@@ -293,6 +321,7 @@ class ClinicalRuleEvaluator
             'suggestion' => $compositionExplanation['suggestion'] ?? $mathematicalSuggestion,
             'source_ids' => ['SYSTEM'],
             'rule_code' => $rule->code,
+            'composition_code' => $matchedCompositionCode,
             'rule_version' => $rule->version,
             'mixture_index' => $mixtureIndex,
         ];
@@ -309,18 +338,50 @@ class ClinicalRuleEvaluator
         $component = implode(' / ', $facts['group_component_names'][$group] ?? []) ?: $this->groupLabel((string) $group);
 
         if ($formula === 'direct_value') {
-            $target = match ($operator) {
+            $rawTarget = match ($operator) {
                 '<', '<=', '>', '>=' => isset($configuration['threshold_value']) ? (float) $configuration['threshold_value'] : null,
                 'between' => $value < (float) ($configuration['threshold_min'] ?? 0)
                     ? (float) $configuration['threshold_min']
                     : ($value > (float) ($configuration['threshold_max'] ?? 0) ? (float) $configuration['threshold_max'] : null),
                 default => null,
             };
-            if ($target === null) return '';
+            if ($rawTarget === null) return '';
+
+            $increase = $value < $rawTarget;
+            $strict = in_array($operator, ['<', '>'], true);
+            $target = $this->safeCaptureTarget($rawTarget, $increase, $strict);
 
             $difference = $target - $value;
             $action = $difference >= 0 ? 'aumentar' : 'disminuir';
             $unit = trim((string) ($configuration['unit'] ?? $result['unit'] ?? ''));
+
+            $capturedValues = $facts['group_captured_values'][$group] ?? [];
+            $componentNames = $facts['group_component_names'][$group] ?? [];
+            $inputUnits = $facts['group_input_units'][$group] ?? [];
+            if (count($capturedValues) > 1 && count($capturedValues) === count($componentNames) && $value > 0) {
+                $scale = $target / $value;
+                $distributed = [];
+                $distributedTotal = 0.0;
+                $lastIndex = array_key_last($capturedValues);
+                foreach ($capturedValues as $index => $capturedValue) {
+                    if ($index === $lastIndex) {
+                        $suggestedValue = max(0, round($target - $distributedTotal, 4));
+                    } else {
+                        $rawSuggested = (float) $capturedValue * $scale;
+                        $suggestedValue = $difference < 0
+                            ? floor($rawSuggested * 10000) / 10000
+                            : ceil($rawSuggested * 10000) / 10000;
+                        $distributedTotal += $suggestedValue;
+                    }
+                    $inputUnit = trim((string) ($inputUnits[$index] ?? $unit));
+                    $distributed[] = $componentNames[$index].': '.round($suggestedValue, 4).' '.$inputUnit;
+                }
+
+                return 'Este límite aplica a la suma de los componentes indicados: '.round($value, 4).' '.$unit
+                    .'. El total combinado debe ajustarse a '.round($target, 4).' '.$unit.'. '
+                    .'Una distribución proporcional es '.implode('; ', $distributed)
+                    .'. También puedes redistribuirlos de otra forma, siempre que la suma no exceda el límite.';
+            }
 
             return 'La dosis de '.$component.' actualmente es '.round($value, 4).' '.$unit
                 .'. Para cumplir esta regla debe ajustarse a '.round($target, 4).' '.$unit.' ('
@@ -328,7 +389,41 @@ class ClinicalRuleEvaluator
                 .'). Captura el valor ajustado en '.$component.' y confirma el cambio con el profesional responsable.';
         }
 
-        if ($formula !== 'dose_times_weight_percentage_of_volume' || $operator !== 'between') return '';
+        if ($formula === 'percentage_of_volume') {
+            $volume = (float) data_get($facts, 'mixture.total_volume_ml', 0);
+            $source = (float) data_get($facts, (string) ($configuration['source_variable'] ?? ''), 0);
+            if ($volume <= 0 || $source <= 0) return '';
+
+            $targetPercent = $this->failedPercentageTarget($configuration, $value);
+            if ($targetPercent === null) return '';
+
+            $increase = $value < $targetPercent;
+            $strict = in_array($operator, ['<', '>'], true);
+
+            if ($group === 'water' && ($facts['calculated_water'] ?? false) && $targetPercent > 0 && $targetPercent < 100) {
+                $componentVolume = (float) data_get($facts, 'mixture.component_volume_ml', 0);
+                if ($componentVolume <= 0) {
+                    $componentVolume = max(0, $volume - $source);
+                }
+                if ($componentVolume > 0) {
+                    $rawWaterTarget = $componentVolume * $targetPercent / (100 - $targetPercent);
+                    $waterTarget = $this->safeCaptureTarget($rawWaterTarget, $increase, $strict);
+                    $totalVolumeTarget = $componentVolume + $waterTarget;
+                    return 'El volumen total sugerido es de '.round($totalVolumeTarget, 4).' mL.';
+                }
+            }
+
+            $rawTarget = $volume * $targetPercent / 100;
+            $target = $this->safeCaptureTarget($rawTarget, $increase, $strict);
+            $difference = $target - $source;
+            $action = $difference >= 0 ? 'aumentar' : 'disminuir';
+
+            return 'Para cumplir el límite de '.$targetPercent.'%, '.$component.' debe quedar en '
+                .($increase ? 'al menos ' : 'máximo ').round($target, 4).' mL ('
+                .$action.' '.round(abs($difference), 4).' mL respecto al valor actual).';
+        }
+
+        if ($formula !== 'dose_times_weight_percentage_of_volume') return '';
 
         $volume = (float) data_get($facts, 'mixture.total_volume_ml', 0);
         $weight = (float) data_get($facts, 'patient.weight_kg', 0);
@@ -336,19 +431,65 @@ class ClinicalRuleEvaluator
         if ($volume <= 0 || $weight <= 0 || $dose <= 0) return '';
 
         $actual = $dose * $weight;
-        $minimum = (float) ($configuration['threshold_min'] ?? 0);
-        $maximum = (float) ($configuration['threshold_max'] ?? 0);
-        $targetPercent = $value < $minimum ? $minimum : ($value > $maximum ? $maximum : null);
+        $targetPercent = $this->failedPercentageTarget($configuration, $value);
         if ($targetPercent === null) return '';
 
-        $target = $volume * $targetPercent / 100;
+        $increase = $value < $targetPercent;
+        $strict = in_array($operator, ['<', '>'], true);
+        $rawTarget = $volume * $targetPercent / 100;
+        $target = $this->safeCaptureTarget($rawTarget, $increase, $strict);
         $difference = $target - $actual;
         $action = $difference >= 0 ? 'aumentar' : 'disminuir';
+
+        $weightedInputs = $facts['group_weighted_inputs'][$group] ?? [];
+        $capturedValues = $facts['group_captured_values'][$group] ?? [];
+        $inputUnits = array_values(array_filter($facts['group_input_units'][$group] ?? []));
+        $allInputsAreWeighted = $weightedInputs !== [] && ! in_array(false, $weightedInputs, true);
+        if ($allInputsAreWeighted && $capturedValues !== []) {
+            $captured = array_sum($capturedValues);
+            $rawTargetCaptured = $rawTarget / $weight;
+            $targetCaptured = $this->safeCaptureTarget($rawTargetCaptured, $increase, $strict);
+            $capturedDifference = $targetCaptured - $captured;
+            $capturedAction = $capturedDifference >= 0 ? 'aumentar' : 'disminuir';
+            $inputUnit = count(array_unique($inputUnits)) === 1 ? $inputUnits[0] : 'g/kg';
+
+            return 'Para cumplir el límite de '.$targetPercent.'%, cambia el valor capturado de '.$component
+                .' de '.round($captured, 4).' '.$inputUnit.' a aproximadamente '.round($targetCaptured, 4).' '.$inputUnit.' ('
+                .$capturedAction.' '.round(abs($capturedDifference), 4).' '.$inputUnit
+                .'). El cálculo interno equivale a '.round($target, 4).' g totales.';
+        }
 
         return 'Para cumplir el límite de '.$targetPercent.'%, el valor de '.$component
             .' tendría que cambiar de '.round($actual, 4).' g a aproximadamente '.round($target, 4).' g ('
             .$action.' '.round(abs($difference), 4).' g). Captura el nuevo total en el campo de '.$component
             .' y confirma el ajuste con el profesional responsable.';
+    }
+
+    private function failedPercentageTarget(array $configuration, float $value): ?float
+    {
+        return match ($configuration['operator'] ?? null) {
+            '<', '<=', '>', '>=' => isset($configuration['threshold_value'])
+                ? (float) $configuration['threshold_value']
+                : null,
+            'between' => $value < (float) ($configuration['threshold_min'] ?? 0)
+                ? (float) $configuration['threshold_min']
+                : ($value > (float) ($configuration['threshold_max'] ?? 0)
+                    ? (float) $configuration['threshold_max']
+                    : null),
+            default => null,
+        };
+    }
+
+    private function safeCaptureTarget(float $target, bool $increase, bool $strict, int $precision = 4): float
+    {
+        $factor = 10 ** $precision;
+        if ($increase) {
+            $scaled = $strict ? floor($target * $factor) + 1 : ceil(($target * $factor) - 0.0000001);
+        } else {
+            $scaled = $strict ? ceil($target * $factor) - 1 : floor(($target * $factor) + 0.0000001);
+        }
+
+        return $scaled / $factor;
     }
 
     private function compositionExplanation(array $details): array
@@ -374,7 +515,11 @@ class ClinicalRuleEvaluator
                 $changes[] = 'retirar '.implode(', ', $forbiddenTerms);
             }
 
-            return ($alternative['label'] ?? 'Alternativa permitida')
+            $code = trim((string) ($alternative['code'] ?? ''));
+            $label = trim((string) ($alternative['label'] ?? 'Alternativa permitida'));
+            $identifiedLabel = $code !== '' ? $code.' — '.$label : $label;
+
+            return $identifiedLabel
                 .($changes ? ' ('.implode('; ', $changes).')' : '');
         })->values()->all();
 

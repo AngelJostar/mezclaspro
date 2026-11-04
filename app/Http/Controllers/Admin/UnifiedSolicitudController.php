@@ -45,7 +45,7 @@ class UnifiedSolicitudController extends Controller
 
         if ($canViewNutrition) {
             $nutritionQuery = NutritionSolicitud::query()
-                ->with(['hospital.instituciones', 'user.hospital.instituciones', 'solicitud_detail', 'solicitud_patient', 'adjustment']);
+                ->with(['hospital.instituciones', 'hospital.nutriMedicineList.distributor', 'user.hospital.instituciones', 'user.hospital.nutriMedicineList.distributor', 'solicitud_detail', 'solicitud_patient', 'adjustment']);
 
             if ($isHospitalUser) {
                 $nutritionQuery->forRequestUser($user);
@@ -74,6 +74,7 @@ class UnifiedSolicitudController extends Controller
                         'status' => $solicitud->estado ?: 'Pendiente',
                         'remission' => $solicitud->remision,
                         'lot' => $solicitud->lote,
+                        'has_subdistributor_remission' => (bool) $solicitud->hospital?->nutriMedicineList?->distributor,
                         'url' => route('admin.nutricionales.solicitudes.edit', $solicitud),
                     ];
                 })
@@ -84,6 +85,8 @@ class UnifiedSolicitudController extends Controller
             $oncologyQuery = SolicitudOnco::query()
                 ->with([
                     'hospital.instituciones',
+                    'hospital.oncoMedicineList.distributor',
+                    'hospital.antibioticMedicineList.distributor',
                     'user',
                     'mezclas' => fn ($query) => $query
                         ->select('id', 'solicitud_id', 'lote', 'estado', 'remision', 'fecha_entrega', 'production_attempt', 'adjustment_id')
@@ -110,6 +113,10 @@ class UnifiedSolicitudController extends Controller
                         fn (Mezcla $mezcla) => $mezcla->setRelation('solicitud', $solicitud)
                     );
 
+                    $priceList = $type === 'antibioticos'
+                        ? $solicitud->hospital?->antibioticMedicineList
+                        : $solicitud->hospital?->oncoMedicineList;
+
                     return $mixtures->map(fn (?Mezcla $mezcla) => [
                         'type' => $type,
                         'type_label' => $type === 'antibioticos' ? 'Antibiotico' : 'Oncologica',
@@ -125,6 +132,7 @@ class UnifiedSolicitudController extends Controller
                         'status' => $mezcla?->operational_status ?? ($solicitud->estado ?: 'pendiente'),
                         'remission' => $mezcla?->remision,
                         'lot' => $mezcla?->lote,
+                        'has_subdistributor_remission' => (bool) $priceList?->distributor,
                         'url' => $mezcla
                             ? route('admin.oncologicos.mezclas.show', $mezcla)
                             : route('admin.oncologicos.solicitudes.edit', $solicitud),

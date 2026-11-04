@@ -1149,6 +1149,10 @@ Route::get('/oncologicos/laboratory/{laboratory}/ordenes-de-compra/{purchaseOrde
     ->name('oncologicos.laboratory.purchase-orders.download')
     ->middleware(['can:oncologicos_laboratory_index']);
 
+Route::post('/oncologicos/laboratory/{laboratory}/ordenes-de-compra/{purchaseOrder}/sincronizar', [LaboratoryPurchaseOrderController::class, 'sync'])
+    ->name('oncologicos.laboratory.purchase-orders.sync')
+    ->middleware(['can:oncologicos_laboratory_index']);
+
 // Editar
 Route::get('/oncologicos/laboratory/{laboratory}/editar', [LaboratoryController::class, 'edit'])
     ->name('oncologicos.laboratory.edit')

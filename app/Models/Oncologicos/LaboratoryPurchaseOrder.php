@@ -59,6 +59,16 @@ class LaboratoryPurchaseOrder extends Model
         'is_automatic',
         'automatic_open_key',
         'reorder_snapshot',
+        'due_date',
+        'is_credit',
+        'credit_days',
+        'oc_sync_status',
+        'oc_sync_error',
+        'oc_synced_at',
+        'oc_remote_id',
+        'oc_remote_folio',
+        'oc_sync_attempts',
+        'oc_last_sync_attempt_at',
     ];
 
     protected $casts = [
@@ -72,6 +82,11 @@ class LaboratoryPurchaseOrder extends Model
         'total' => 'decimal:2',
         'is_automatic' => 'boolean',
         'reorder_snapshot' => 'array',
+        'due_date' => 'date',
+        'is_credit' => 'boolean',
+        'credit_days' => 'integer',
+        'oc_synced_at' => 'datetime',
+        'oc_last_sync_attempt_at' => 'datetime',
     ];
 
     public function laboratory(): BelongsTo

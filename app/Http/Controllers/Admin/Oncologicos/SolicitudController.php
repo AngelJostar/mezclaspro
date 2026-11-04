@@ -1686,6 +1686,7 @@ class SolicitudController extends Controller
         $subdistributorOnly = $request->boolean('subdistribuidor');
 
         abort_if($subdistributorOnly && !$distributor, 404);
+        $documentDistributor = $subdistributorOnly ? $distributor : null;
 
         // =========================================================
         // ✅ 2) CONFIG POR PRESENTACIÓN (fallback si no hay snapshot)
@@ -1902,7 +1903,7 @@ class SolicitudController extends Controller
             'totalServicioMezclado' => round($totalServicioMezclado, 2),
             'cantidadServiciosMezclado' => $cantidadServiciosMezclado,
             'precioUnitarioServicioMezclado' => $precioUnitarioServicioMezclado,
-            'distributor'   => $distributor, // ✅ ahora viene por lista del hospital
+            'distributor'   => $documentDistributor,
             'subdistributorOnly' => $subdistributorOnly,
         ])->setPaper('letter', 'landscape');
 

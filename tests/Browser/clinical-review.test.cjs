@@ -15,6 +15,8 @@ const result = passed => ({ review_id: 'synthetic-receipt', can_submit: passed, 
     expires_at: new Date(Date.now() + 600000).toISOString(), result: {
         status: passed ? 'no_blockers' : 'blocked', summary: 'Resultado de prueba de interfaz; no es una evaluacion clinica.',
         findings: passed ? [] : [{ field: 'volumen_total', severity: 'blocking',
+            rule_code: 'NP.R6.TEST.VOLUME',
+            composition_code: 'AD2-171',
             message: 'Verifica el volumen. <img src=x onerror="window.clinicalXss=true">', calculation: 'Calculo de prueba.',
             suggestion: 'Volumen total: 1000 mL. Debe contener los 1200 mL de componentes, conforme a la orden medica. <img src=x onerror="window.suggestionXss=true">', source_ids: ['SYSTEM'] }],
         sources: [{ id: 'S1', title: 'Protocolo de prueba', reference: 'Seccion de prueba', reviewed: true, sha256: 'a'.repeat(64) }],
@@ -68,6 +70,8 @@ test('clinical review gates submission, preserves notes and rejects stale respon
             const button = page.locator('[data-clinical-submit]');
             await button.click();
             await page.getByText('Error:', { exact: true }).waitFor();
+            assert.equal(await page.getByText('Regla que falló: NP.R6.TEST.VOLUME', { exact: true }).isVisible(), true);
+            assert.equal(await page.getByText('Combinación detectada: AD2-171', { exact: true }).isVisible(), true);
             assert.equal(await page.locator('[data-medical-authorization]').isVisible(), false);
             assert.equal(await page.locator('[name=clinical_review_token]').inputValue(), '');
             assert.equal(await button.innerText(), 'Validar y Continuar');

@@ -54,6 +54,7 @@ class SolicitudesTable extends Component
             ->with([
                 'adjustment',
                 'hospital.instituciones',
+                'hospital.nutriMedicineList.distributor',
                 'solicitud_detail',
                 'solicitud_patient',
             ]);
@@ -101,6 +102,13 @@ class SolicitudesTable extends Component
         }
 
         $solicitudes = $query->paginate(50);
+
+        $solicitudes->getCollection()->each(function (NutricionalesSolicitud $solicitud): void {
+            $solicitud->setAttribute(
+                'has_subdistributor_remission',
+                (bool) $solicitud->hospital?->nutriMedicineList?->distributor
+            );
+        });
 
         return view('livewire.nutricionales.solicitudes-table', compact('solicitudes'));
     }

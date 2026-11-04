@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Nutricionales\Input;
 use App\Models\ValidationRule;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -77,9 +78,22 @@ class ValidationRuleController extends Controller
         $engine = in_array($request->string('engine')->toString(), ValidationRule::ENGINES, true)
             ? $request->string('engine')->toString()
             : null;
+        $search = trim($request->string('search')->toString());
         $rules = ValidationRule::query()
             ->with(['updater:id,name,lastname', 'approver:id,name,lastname'])
             ->when($engine, fn ($query) => $query->where('engine', $engine))
+            ->when($search !== '', function ($query) use ($search) {
+                $term = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%';
+
+                $query->where(function ($query) use ($term) {
+                    $query->where('name', 'like', $term)
+                        ->orWhere('code', 'like', $term)
+                        ->orWhere('engine', 'like', $term)
+                        ->orWhere('population', 'like', $term)
+                        ->orWhere('severity', 'like', $term)
+                        ->orWhere('status', 'like', $term);
+                });
+            })
             ->orderBy('engine')->orderBy('code')->paginate(25)->withQueryString();
 
         $indexRouteName = $canManage
@@ -90,7 +104,7 @@ class ValidationRuleController extends Controller
             : 'admin.validation-rules.approve';
 
         return view('admin.validation-rules.index', compact(
-            'rules', 'engine', 'canManage', 'canApprove', 'indexRouteName', 'approveRouteName'
+            'rules', 'engine', 'search', 'canManage', 'canApprove', 'indexRouteName', 'approveRouteName'
         ));
     }
 
@@ -182,13 +196,28 @@ class ValidationRuleController extends Controller
             ]);
         }
 
-        $validationRule->update([
-            'status' => 'active',
-            'is_enforced' => true,
-            'approved_by' => $request->user()->id,
-            'approved_at' => now(),
-            'updated_by' => $request->user()->id,
-        ]);
+        DB::transaction(function () use ($request, $validationRule): void {
+            $supersededCodes = data_get($validationRule->configuration, 'supersedes_codes', []);
+            if ($supersededCodes) {
+                ValidationRule::query()
+                    ->whereIn('code', $supersededCodes)
+                    ->where('id', '!=', $validationRule->id)
+                    ->update([
+                        'status' => 'inactive',
+                        'is_enforced' => false,
+                        'updated_by' => $request->user()->id,
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            $validationRule->update([
+                'status' => 'active',
+                'is_enforced' => true,
+                'approved_by' => $request->user()->id,
+                'approved_at' => now(),
+                'updated_by' => $request->user()->id,
+            ]);
+        });
 
         return back()->with('status', 'La regla fue aprobada y activada correctamente.');
     }
@@ -237,7 +266,7 @@ class ValidationRuleController extends Controller
         ])['rule_mode'];
 
         if ($mode === 'allowed_catalog') {
-            return $this->compositionCatalogConfiguration($request);
+            return $this->compositionCatalogConfiguration($request, $rule);
         }
         $data = $request->validate([
             'match_mode' => ['required', Rule::in(['exact', 'contains'])],
@@ -275,12 +304,12 @@ class ValidationRuleController extends Controller
         ];
     }
 
-    private function compositionCatalogConfiguration(Request $request): array
+    private function compositionCatalogConfiguration(Request $request, ?ValidationRule $rule = null): array
     {
         $data = $request->validate([
             'allow_any_single_component' => ['nullable', 'boolean'],
             'review_notes' => ['nullable', 'string', 'max:5000'],
-            'allowed_compositions' => ['required', 'array', 'min:1', 'max:100'],
+            'allowed_compositions' => ['required', 'array', 'min:1', 'max:250'],
             'allowed_compositions.*.code' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9._-]+$/', 'distinct'],
             'allowed_compositions.*.label' => ['required', 'string', 'max:255'],
             'allowed_compositions.*.groups' => ['required', 'array', 'min:1'],
@@ -313,7 +342,7 @@ class ValidationRuleController extends Controller
             ];
         })->values()->all();
 
-        return [
+        $configuration = [
             'mode' => 'allowed_catalog',
             'allow_any_single_component' => $request->boolean('allow_any_single_component'),
             'manual_declared_count' => count($compositions),
@@ -321,6 +350,13 @@ class ValidationRuleController extends Controller
             'review_notes' => collect(preg_split('/\R/', $data['review_notes'] ?? ''))
                 ->map(fn ($note) => trim($note))->filter()->values()->all(),
         ];
+
+        $supersededCodes = data_get($rule?->configuration, 'supersedes_codes', []);
+        if ($supersededCodes) {
+            $configuration['supersedes_codes'] = $supersededCodes;
+        }
+
+        return $configuration;
     }
 
     private function mathematicalConfiguration(Request $request, ?ValidationRule $rule = null): array

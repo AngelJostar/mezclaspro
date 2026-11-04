@@ -67,7 +67,7 @@ class ValidationRuleApprovalTest extends TestCase
         $this->actingAs($assistant)
             ->get(route('admin.validation-rules.index'))
             ->assertOk()
-            ->assertSee('Aprobar y activar')
+            ->assertSee('Aprobar')
             ->assertDontSee('Nueva regla de composición')
             ->assertDontSee('Editar')
             ->assertDontSee('Eliminar');
@@ -129,6 +129,67 @@ class ValidationRuleApprovalTest extends TestCase
             ->assertSee('Vista previa de la regla')
             ->assertSee('x-model="source"', false)
             ->assertSee('x-model="operator"', false);
+    }
+
+    public function test_rules_can_be_searched_by_name_or_code_without_losing_engine_filter(): void
+    {
+        $admin = $this->superadministrator();
+        $matching = $this->rule([
+            'code' => 'NP.R6.ADULT.CLIN.MAGNESIUM',
+            'name' => 'Límite clínico de Magnesio en adulto',
+            'engine' => 'mathematical',
+        ]);
+        $this->rule([
+            'code' => 'NP.R6.ADULT.CLIN.CALCIUM',
+            'name' => 'Límite clínico de Calcio en adulto',
+            'engine' => 'mathematical',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.superadministrator.validation-rules.index', [
+                'engine' => 'mathematical',
+                'search' => 'MAGNESIUM',
+            ]))
+            ->assertOk()
+            ->assertSee($matching->name)
+            ->assertDontSee('Límite clínico de Calcio en adulto')
+            ->assertSee('value="MAGNESIUM"', false)
+            ->assertSee('engine=mathematical&amp;search=MAGNESIUM', false);
+    }
+
+    public function test_approving_replacement_rule_deactivates_superseded_catalog(): void
+    {
+        $admin = $this->superadministrator();
+        $current = $this->rule([
+            'code' => 'NP.R6.ADULT.COMP.CATALOG',
+            'status' => 'active',
+            'is_enforced' => true,
+        ]);
+        $replacement = $this->rule([
+            'code' => 'NP.R6.ADULT.COMP.CATALOG.V2',
+            'status' => 'review',
+            'configuration' => [
+                'mode' => 'allowed_catalog',
+                'supersedes_codes' => [$current->code],
+                'allowed_compositions' => [],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.superadministrator.validation-rules.approve', $replacement))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('validation_rules', [
+            'id' => $current->id,
+            'status' => 'inactive',
+            'is_enforced' => false,
+        ]);
+        $this->assertDatabaseHas('validation_rules', [
+            'id' => $replacement->id,
+            'status' => 'active',
+            'is_enforced' => true,
+        ]);
     }
 
     private function superadministrator(): User

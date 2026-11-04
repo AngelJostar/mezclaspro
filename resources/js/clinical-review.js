@@ -10,15 +10,17 @@ const conciseClinicalMessage = finding => {
         .trim();
 };
 
+const paragraph = (text, className) => {
+    const element = document.createElement('p');
+    element.textContent = text;
+    if (className) element.className = className;
+    return element;
+};
+
 export function renderClinicalResult(container, data) {
     container.replaceChildren();
     const result = data.result;
     container.dataset.clinicalStatus = result.status;
-    const paragraph = (text, className) => {
-        const element = document.createElement('p'); element.textContent = text;
-        if (className) element.className = className;
-        return element;
-    };
     const findings = result.findings || [];
     if (!findings.length) {
         if (result.status === 'no_blockers') container.append(paragraph('Sin errores ni advertencias.', 'clinical-status'));
@@ -29,9 +31,15 @@ export function renderClinicalResult(container, data) {
         const item = document.createElement('li'); item.dataset.severity = finding.severity;
         const isError = ['blocking', 'review'].includes(finding.severity);
         item.append(paragraph(isError ? 'Error:' : 'Advertencia:', 'clinical-status'));
+        if (String(finding.rule_code || '').trim()) {
+            item.append(paragraph(`Regla que falló: ${String(finding.rule_code).trim()}`, 'clinical-rule-code'));
+        }
+        if (String(finding.composition_code || '').trim()) {
+            item.append(paragraph(`Combinación detectada: ${String(finding.composition_code).trim()}`, 'clinical-composition-code'));
+        }
         item.append(paragraph(conciseClinicalMessage(finding)));
         if (finding.calculation) item.append(paragraph(finding.calculation));
-        if (finding.severity === 'blocking' && String(finding.suggestion || '').trim()) {
+        if (['blocking', 'authorization', 'review'].includes(finding.severity) && String(finding.suggestion || '').trim()) {
             item.append(paragraph(`Sugerencia: ${String(finding.suggestion).trim()}`, 'clinical-suggestion'));
         }
         list.append(item);
@@ -191,11 +199,23 @@ window.validateClinicalRequest = async form => {
             state.authorizationFindings.replaceChildren();
             for (const finding of (data.result.findings || []).filter(finding => finding.severity === 'authorization')) {
                 const item = document.createElement('li');
+                if (String(finding.rule_code || '').trim()) {
+                    item.append(paragraph(`Regla que falló: ${String(finding.rule_code).trim()}`, 'clinical-rule-code'));
+                }
+                if (String(finding.composition_code || '').trim()) {
+                    item.append(paragraph(`Combinación detectada: ${String(finding.composition_code).trim()}`, 'clinical-composition-code'));
+                }
                 const message = document.createElement('strong'); message.textContent = conciseClinicalMessage(finding);
                 item.append(message);
                 if (finding.calculation) {
                     const calculation = document.createElement('p'); calculation.textContent = finding.calculation;
                     item.append(calculation);
+                }
+                if (String(finding.suggestion || '').trim()) {
+                    const suggestion = document.createElement('p');
+                    suggestion.className = 'clinical-suggestion';
+                    suggestion.textContent = `Sugerencia: ${String(finding.suggestion).trim()}`;
+                    item.append(suggestion);
                 }
                 state.authorizationFindings.append(item);
             }

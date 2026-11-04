@@ -8,6 +8,7 @@ use App\Models\Warehouse;
 use App\Models\Oncologicos\Laboratory;
 use App\Models\Oncologicos\LaboratoryPurchaseOrder;
 use App\Services\PurchaseOrderCatalogService;
+use App\Services\Integrations\PurchaseOrders\PurchaseOrderSyncService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -94,8 +95,13 @@ class LaboratoryPurchaseOrderController extends Controller
         ];
     }
 
-    public function store(Request $request, Laboratory $laboratory, PurchaseOrderCatalogService $catalog): RedirectResponse|JsonResponse
+    public function store(Request $request, Laboratory $laboratory, PurchaseOrderCatalogService $catalog, PurchaseOrderSyncService $syncService): RedirectResponse|JsonResponse
     {
+        $request->merge([
+            'is_credit' => $request->input('is_credit', 0),
+            'due_date' => $request->input('due_date', $request->input('proposed_delivery_at', $request->input('requested_at'))),
+        ]);
+
         $validated = $request->validate([
             'department' => ['required', 'string', 'max:255'],
             'supplier' => ['required', 'string', 'max:255'],
@@ -125,6 +131,9 @@ class LaboratoryPurchaseOrderController extends Controller
             'discount' => ['nullable', 'numeric', 'min:0'],
             'tax_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:10000'],
+            'due_date' => ['required', 'date'],
+            'is_credit' => ['required', 'boolean'],
+            'credit_days' => ['nullable', 'integer', 'min:1', 'max:366', 'required_if:is_credit,1'],
         ]);
 
         $creator = $request->user();
@@ -190,6 +199,7 @@ class LaboratoryPurchaseOrderController extends Controller
                 'tax_amount' => $taxAmount,
                 'total' => $total,
                 'status' => 'enviada',
+                'oc_sync_status' => 'pending',
                 'created_by' => auth()->id(),
             ]);
 
@@ -202,10 +212,13 @@ class LaboratoryPurchaseOrderController extends Controller
             return $order;
         });
 
+        $sync = $syncService->sync($order->fresh(['warehouse']));
+
         if ($request->boolean('purchase_popup') && $request->expectsJson()) {
             return response()->json([
                 'folio' => $order->folio,
                 'download_url' => route('admin.oncologicos.laboratory.purchase-orders.download', [$laboratory, $order]),
+                'oc_sync' => $sync,
             ], 201);
         }
 
@@ -226,6 +239,19 @@ class LaboratoryPurchaseOrderController extends Controller
         ])
             ->setPaper('letter', 'portrait')
             ->download($purchaseOrder->folio . '.pdf');
+    }
+
+    public function sync(Laboratory $laboratory, LaboratoryPurchaseOrder $purchaseOrder, PurchaseOrderSyncService $syncService): RedirectResponse
+    {
+        abort_unless($purchaseOrder->laboratory_id === $laboratory->id, 404);
+        $result = $syncService->sync($purchaseOrder->loadMissing('warehouse'));
+
+        return back()->with(
+            $result['status'] === 'synced' ? 'success' : 'error',
+            $result['status'] === 'synced'
+                ? "La orden {$purchaseOrder->folio} se registro en Ordenes de Compra."
+                : $result['message']
+        );
     }
 
     private function syncSupplierCatalog(array $orderData): void

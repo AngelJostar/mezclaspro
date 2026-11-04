@@ -47,12 +47,13 @@
     $showPresentationColumn = in_array($remissionMode, ['frasco', 'mixed'], true);
     $prodifemLogoFile = public_path('img/logo-cbta.jpg');
     $prodifemLogo = file_exists($prodifemLogoFile) ? 'file://' . $prodifemLogoFile : null;
+    $distributorLogo = null; if (!empty($distributor?->logo_path)) { $file = public_path('storage/' . $distributor->logo_path); $distributorLogo = file_exists($file) ? 'file://' . $file : null; }
     $distributorName = $distributor->nombre ?? $distributor->name ?? 'Distribuidor';
     $distributorInformation = $distributor->informacion_adicional ?? $distributor->direccion ?? $distributor->address ?? null;
 @endphp
 @include('pdfs.oncologicos.partials.remision-page', [
     'issuerName' => !empty($distributor) ? $distributorName : 'CMP Prodifem',
-    'issuerLogo' => $prodifemLogo,
+    'issuerLogo' => !empty($distributor) ? ($distributorLogo ?: $prodifemLogo) : $prodifemLogo,
     'issuerInformation' => !empty($distributor) ? $distributorInformation : null,
 ])
 </body></html>

@@ -9,6 +9,7 @@ use App\Services\PurchaseOrderCatalogService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class PurchaseOrderCatalogTest extends TestCase
@@ -46,6 +47,7 @@ class PurchaseOrderCatalogTest extends TestCase
             '2026_08_20_000001_add_inventory_destination_to_laboratory_purchase_orders.php',
             '2026_08_20_000007_create_suppliers_table.php',
             '2026_09_04_000001_create_consumable_inventory_tables.php',
+            '2026_10_22_000001_add_oc_sync_fields_to_laboratory_purchase_orders_table.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -234,6 +236,39 @@ class PurchaseOrderCatalogTest extends TestCase
             ->assertJsonPath('download_url', route('admin.oncologicos.laboratory.purchase-orders.download', [1, 1]));
         $this->assertSame(1, LaboratoryPurchaseOrder::count());
         $this->assertSame('220.40', LaboratoryPurchaseOrder::sole()->total);
+    }
+
+    public function test_store_sends_the_order_to_the_central_purchase_order_system(): void
+    {
+        $this->withoutPurchaseAuthorization();
+        config()->set('services.purchase_orders.api_url', 'https://orders.test/api/integrations/mezclas/purchase-orders');
+        config()->set('services.purchase_orders.token', 'secret');
+        Http::fake([
+            'https://orders.test/*' => Http::response([
+                'message' => 'Orden registrada correctamente.',
+                'purchase_order' => ['id' => 99, 'folio' => 'OC-501'],
+            ], 201),
+        ]);
+
+        $payload = $this->payload() + [
+            'supplier_rfc' => 'AAA010101AAA',
+            'is_credit' => 1,
+            'credit_days' => 30,
+            'due_date' => '2026-10-04',
+        ];
+
+        $this->postJson($this->url('store').'?purchase_popup=1', $payload)
+            ->assertCreated()
+            ->assertJsonPath('oc_sync.status', 'synced')
+            ->assertJsonPath('oc_sync.folio', 'OC-501');
+
+        $order = LaboratoryPurchaseOrder::sole();
+        $this->assertSame('synced', $order->oc_sync_status);
+        $this->assertSame('OC-501', $order->oc_remote_folio);
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer secret')
+            && $request['external_folio'] === $order->folio
+            && $request['provider_rfc'] === 'AAA010101AAA'
+            && $request['credit_days'] === 30);
     }
 
     public function test_one_order_cannot_mix_subwarehouses_or_warehouses_across_its_lines(): void
