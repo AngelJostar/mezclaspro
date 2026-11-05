@@ -1,5 +1,6 @@
 @php
     $sidebarUser = auth()->user();
+    $hasFullNavigation = \App\Support\AdminMenuAccess::hasFullNavigation($sidebarUser);
     $menuAllows = fn (string $permission, bool $legacyAccess = true) =>
         \App\Support\AdminMenuAccess::allows($sidebarUser, $permission, $legacyAccess);
     $isRequestsSection = request()->routeIs('admin.solicitudes.*', 'admin.nutricionales.solicitudes.*', 'admin.oncologicos.solicitudes.*', 'admin.antibioticos.solicitudes.*', 'admin.oncologicos.mezclas.*');
@@ -32,8 +33,8 @@
     <div class="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
         <ul class="space-y-2 font-medium">
 
-            @unless (auth()->user()?->hasRole('Capacitacion') && !$sidebarUser->isSalesperson())
-            @unless (auth()->user()?->hasRole('Administracion y facturacion'))
+            @unless (!$hasFullNavigation && auth()->user()?->hasRole('Capacitacion') && !$sidebarUser->isSalesperson())
+            @unless (!$hasFullNavigation && auth()->user()?->hasRole('Administracion y facturacion'))
 
             @if ($menuAllows('menu.solicitudes', $sidebarUser?->can('nutricionales_solicitudes_index') || $sidebarUser?->can('oncologicos_solicitudes_index')))
                 <li class="rounded-lg border border-blue-200 bg-blue-50 p-1 dark:border-blue-700 dark:bg-blue-900/20">
@@ -269,7 +270,7 @@
             @endunless
 
             <!-- Personal y Capacitaciones -->
-            @unless (auth()->user()?->hasRole('Administracion y facturacion'))
+            @unless (!$hasFullNavigation && auth()->user()?->hasRole('Administracion y facturacion'))
             @if ($menuAllows('menu.capacitaciones'))
             <li
                 class="rounded-lg border border-blue-200 bg-blue-50 p-1 dark:border-blue-700 dark:bg-blue-900/20">
@@ -328,7 +329,7 @@
                 </li>
             @endif
 
-            @unless (auth()->user()?->hasRole('Capacitacion'))
+            @unless (!$hasFullNavigation && auth()->user()?->hasRole('Capacitacion'))
             <!-- Roles y Permisos -->
             @if ($menuAllows('menu.users', $sidebarUser?->can('roles') || $sidebarUser?->can('permisos')))
                 <li

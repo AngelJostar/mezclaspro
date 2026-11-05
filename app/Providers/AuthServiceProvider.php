@@ -26,6 +26,9 @@ class AuthServiceProvider extends ServiceProvider
             if ($user->isInstitutionAccount()) {
                 return in_array($ability, \App\Support\InstitutionPortal::PERMISSIONS, true);
             }
+            if (request()->isMethodSafe()
+                && in_array($ability, \App\Support\AdminMenuAccess::navigationPermissionNames(), true)
+                && \App\Support\AdminMenuAccess::hasFullNavigation($user)) return true;
             return $user->hasRole('Super Admin') ? true : null;
         });
     }

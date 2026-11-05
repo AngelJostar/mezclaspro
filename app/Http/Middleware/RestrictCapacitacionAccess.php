@@ -23,6 +23,8 @@ class RestrictCapacitacionAccess
 
         $usesTrainingCredentials = $request->session()->get('access_context') === 'training';
 
+        if (!$usesTrainingCredentials && \App\Support\AdminMenuAccess::hasFullNavigation($user)) return $next($request);
+
         if (($usesTrainingCredentials || ($user?->hasRole('Capacitacion') && ! $user->isSalesperson()))
             && ! $request->routeIs('admin.capacitaciones.*')) {
             return redirect()->route('admin.capacitaciones.index');

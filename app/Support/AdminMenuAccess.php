@@ -9,6 +9,29 @@ final class AdminMenuAccess
 {
     public const GENERAL_ROLE = 'Usuario general';
 
+    /** Administrative navigation does not confer the Super Admin role or agent grants. */
+    public static function hasFullNavigation(?User $user): bool
+    {
+        if (!$user || (isset($user->is_active) && !$user->is_active)
+            || $user->isInstitutionAccount() || $user->hasAnyRole(['Cliente', 'Institucion'])) return false;
+
+        if ($user->hasAnyRole(['Super Admin', 'Admin', 'Responsable sanitario'])) return true;
+
+        // The first position is the employee's current position; the others are previous positions.
+        if (!$user->exists && !$user->relationLoaded('personnelProfile')) return false;
+        return ($user->personnelProfile?->positions[0] ?? null) === 'Responsable sanitario';
+    }
+
+    /** Compatibility checks used to open the existing menu screens, without adding write permissions. */
+    public static function navigationPermissionNames(): array
+    {
+        return array_merge(self::permissionNames(), [
+            'nutricionales_solicitudes_index', 'oncologicos_solicitudes_index', 'oncologicos_mezclas_index',
+            'medicamentos_nutricionales', 'nutricionales_listas', 'medicamentos_oncologicos',
+            'oncologicos_laboratory_index', 'laboratorios', 'hospitales', 'roles', 'permisos',
+        ]);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -264,6 +287,8 @@ final class AdminMenuAccess
         }
 
         if ($user->isInstitutionAccount()) return $permission === 'menu.solicitudes';
+
+        if (self::hasFullNavigation($user) && in_array($permission, self::permissionNames(), true)) return true;
 
         if ($user->hasSalesOnlyAccess()) {
             return in_array($permission, ['menu.solicitudes', 'menu.capacitaciones', 'menu.capacitaciones.programas'], true);

@@ -24,6 +24,15 @@ final class PurchaseNavigationData
                 $table->timestamps();
             });
         }
+        Schema::create('personnel_profiles', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id');
+            $table->json('positions')->nullable();
+        });
+        Schema::create('training_assignments', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id');
+        });
         foreach ([
             '2026_08_11_000004_create_laboratory_purchase_orders_table.php',
             '2026_08_11_000006_expand_laboratory_purchase_orders.php',
