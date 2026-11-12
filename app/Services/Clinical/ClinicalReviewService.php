@@ -323,7 +323,7 @@ class ClinicalReviewService
             $result = Arr::only($result, ['status', 'summary', 'findings', 'requires_medical_authorization',
                 'requires_risk_acknowledgement', 'requires_acknowledgement']);
             $result['findings'] = array_map(fn ($finding) => Arr::only($finding,
-                ['field', 'severity', 'observation_type', 'rule_code', 'composition_code', 'message', 'calculation', 'suggestion']), $result['findings']);
+                ['field', 'severity', 'observation_type', 'rule_code', 'composition_code', 'message', 'calculation', 'suggestion', 'suggested_changes']), $result['findings']);
         }
         return ['review_id' => $review->id, 'can_submit' => $review->can_submit, 'expires_at' => $review->expires_at->toIso8601String(),
             'can_view_internal' => $canViewInternal,

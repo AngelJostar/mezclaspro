@@ -45,6 +45,43 @@ export function renderClinicalResult(container, data) {
         list.append(item);
     }
     container.append(list);
+
+    const proposed = new Map();
+    const conflicts = new Set();
+    for (const finding of findings) {
+        for (const change of finding.suggested_changes || []) {
+            const field = String(change.field || '');
+            const value = Number(change.value);
+            if (!field || !Number.isFinite(value)) continue;
+            if (proposed.has(field) && Number(proposed.get(field)) !== value) {
+                if (field === 'volumen_total') proposed.set(field, Math.min(Number(proposed.get(field)), value));
+                else conflicts.add(field);
+            } else proposed.set(field, value);
+        }
+    }
+    for (const field of conflicts) proposed.delete(field);
+    if (proposed.size) {
+        const apply = document.createElement('button');
+        apply.type = 'button';
+        apply.className = 'clinical-apply-suggestions';
+        apply.textContent = 'Aplicar cambios sugeridos';
+        apply.addEventListener('click', () => {
+            const form = container.closest('form');
+            let applied = 0;
+            for (const [name, value] of proposed) {
+                const field = form?.elements.namedItem(name);
+                if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)) continue;
+                field.value = String(value);
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+                applied++;
+            }
+            if (!applied) return;
+            apply.disabled = true;
+            apply.textContent = 'Cambios aplicados';
+        });
+        container.append(apply);
+    }
 }
 
 const states = new WeakMap();
@@ -186,90 +223,8 @@ function bind(form) {
         ack: form.elements.clinical_acknowledged, ackText: panel.querySelector('[data-clinical-ack-text]'), error: panel.querySelector('[data-clinical-error]'), result: panel.querySelector('[data-clinical-result]'),
         authorization: panel.querySelector('[data-medical-authorization]'), authorizationFindings: panel.querySelector('[data-medical-authorization-findings]'),
         authorizationError: panel.querySelector('[data-medical-authorization-error]'), authorizationSubmit: panel.querySelector('[data-medical-authorization-submit]'),
-        rulesUrl: panel.dataset.rulesValidationUrl || '', liveStatus: panel.querySelector('[data-clinical-live-status]'),
-        liveTimer: null, liveController: null, liveSnapshot: '', requiresAuthorization: false,
+        requiresAuthorization: false,
         requiresAcknowledgement: true, fieldError: false };
-
-    const clearLiveMarks = () => {
-        form.querySelectorAll('.clinical-live-field').forEach(field => {
-            field.classList.remove('clinical-live-field', 'clinical-field-error', 'clinical-field-advisory');
-            if (!field.classList.contains('clinical-field-required-error')) field.removeAttribute('aria-invalid');
-        });
-    };
-    const relevantForLiveRules = field => {
-        const name = String(field?.name || '');
-        return ['peso', 'fecha_nacimiento', 'sexo', 'npt', 'volumen_total', 'via_administracion', 'tiempo_infusion_min', 'velocidad_infusion'].includes(name)
-            || /^i_\d+/.test(name)
-            || /^nutrition_diluents\[\d+\]\[volume_ml\]$/.test(name);
-    };
-    const hasLiveMinimum = () => {
-        const positiveComponent = [...form.querySelectorAll('input[name^="i_"], input[name^="nutrition_diluents"][name$="[volume_ml]"]')]
-            .some(field => !field.disabled && Number.parseFloat(field.value || '0') > 0);
-        return Number.parseFloat(form.elements.peso?.value || '0') > 0
-            && Boolean(form.elements.fecha_nacimiento?.value)
-            && ['ADULT', 'INF'].includes(form.elements.npt?.value)
-            && Number.parseFloat(form.elements.volumen_total?.value || '0') > 0
-            && Boolean(form.elements.via_administracion?.value)
-            && positiveComponent;
-    };
-    const setLiveStatus = (message = '', status = '') => {
-        if (!state.liveStatus) return;
-        state.liveStatus.textContent = message;
-        state.liveStatus.dataset.state = status;
-        state.liveStatus.hidden = message === '';
-    };
-    const runLiveRules = async () => {
-        if (!state.rulesUrl || state.busy || !hasLiveMinimum()) {
-            setLiveStatus();
-            return;
-        }
-        const currentSnapshot = fingerprint(form);
-        if (currentSnapshot === state.liveSnapshot) return;
-        state.liveController?.abort();
-        state.liveController = new AbortController();
-        setLiveStatus('Actualizando reglas matemáticas…', 'checking');
-        try {
-            const response = await fetch(state.rulesUrl, {
-                method: 'POST', credentials: 'same-origin', cache: 'no-store', body: new FormData(form),
-                signal: state.liveController.signal,
-                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': form.elements._token?.value || '' },
-            });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                if (response.status === 422) { setLiveStatus(); return; }
-                throw new Error(data.message || 'No fue posible actualizar las reglas.');
-            }
-            if (fingerprint(form) !== currentSnapshot) return;
-            state.liveSnapshot = currentSnapshot;
-            clearLiveMarks();
-            renderClinicalResult(state.result, {
-                result: {
-                    status: data.status === 'passed' ? 'no_blockers' : (data.status === 'blocked' ? 'blocked' : 'authorization_required'),
-                    findings: data.findings || [],
-                },
-            });
-            for (const finding of data.findings || []) {
-                if (finding.severity === 'information') continue;
-                markField(form, finding.field, false, finding.severity === 'advisory', true);
-            }
-            setLiveStatus('Reglas matemáticas actualizadas.', 'updated');
-        } catch (failure) {
-            if (failure.name !== 'AbortError') setLiveStatus(failure.message, 'error');
-        }
-    };
-    const scheduleLiveRules = field => {
-        if (!state.rulesUrl || !relevantForLiveRules(field)) return;
-        clearTimeout(state.liveTimer);
-        state.liveController?.abort();
-        state.liveSnapshot = '';
-        setLiveStatus(hasLiveMinimum() ? 'Esperando cambios…' : '', 'waiting');
-        state.liveTimer = setTimeout(runLiveRules, 800);
-    };
-    state.cancelLive = () => {
-        clearTimeout(state.liveTimer);
-        state.liveController?.abort();
-        setLiveStatus();
-    };
     const closeAuthorization = () => {
         if (!state.authorization) return;
         if (typeof state.authorization.close === 'function' && state.authorization.open) state.authorization.close();
@@ -312,7 +267,6 @@ function bind(form) {
         if (state.fieldError && !form.querySelector(':invalid')) {
             state.error.hidden = true; state.fieldError = false;
         }
-        scheduleLiveRules(field);
     };
     form.addEventListener('input', changed);
     form.addEventListener('change', changed);
@@ -347,7 +301,6 @@ function bind(form) {
 window.validateClinicalRequest = async form => {
     const state = bind(form);
     if (!state || state.busy) return;
-    state.cancelLive?.();
     const snapshot = fingerprint(form);
     if (state.token.value && state.snapshot === snapshot && state.expires > Date.now()) {
         if (state.requiresAuthorization) {

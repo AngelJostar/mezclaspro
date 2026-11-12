@@ -4,6 +4,8 @@ namespace Tests\Unit;
 
 use App\Models\ValidationRule;
 use App\Services\ValidationRules\ClinicalRuleEvaluator;
+use App\Services\ValidationRules\CompositionRuleEngine;
+use App\Services\ValidationRules\MathematicalRuleEngine;
 use ReflectionClass;
 use Tests\TestCase;
 
@@ -168,14 +170,137 @@ class ClinicalRuleSuggestionTest extends TestCase
 
         $this->assertSame('NP.R6.CHEM.WATER.PERCENT', $findings[0]['rule_code']);
         $this->assertSame('NP.R6.CHEM.CALCIUM_PHOSPHATE.PER1000', $findings[1]['rule_code']);
-        $this->assertStringContainsString('Ajusta primero el volumen total', $findings[1]['suggestion']);
-        $this->assertStringContainsString('se recalculará con el nuevo volumen total', $findings[1]['suggestion']);
+    }
+
+    public function test_volume_dependent_suggestion_uses_water_adjusted_volume(): void
+    {
+        $rule = new ValidationRule(['configuration' => [
+            'source_variable' => 'groups.dextrose.dose_g_kg_day',
+            'formula_template' => 'dose_times_weight_percentage_of_volume',
+            'operator' => 'between',
+            'threshold_min' => 5,
+            'threshold_max' => 35,
+            'unit' => '%',
+        ]]);
+        $facts = [
+            'patient' => ['weight_kg' => 1.1],
+            'mixture' => ['total_volume_ml' => 300],
+            'suggested_total_volume_ml' => 229.7728,
+            'groups' => ['dextrose' => ['dose_g_kg_day' => 9]],
+            'group_component_names' => ['dextrose' => ['SOLUCION GLUCOSADA AL 50%']],
+            'group_captured_values' => ['dextrose' => [9]],
+            'group_input_units' => ['dextrose' => ['g/Kg']],
+            'group_weighted_inputs' => ['dextrose' => [true]],
+        ];
+
+        $suggestion = $this->suggestion($rule, $facts, ['value' => 3.3], 'dextrose');
+
+        $this->assertStringContainsString('volumen total sugerido de 229.7728 mL', $suggestion);
+        $this->assertStringContainsString('aproximadamente 10.4443 g/Kg', $suggestion);
+        $this->assertStringNotContainsString('13.6364 g/Kg', $suggestion);
+    }
+
+    public function test_conflicting_suggestions_for_same_component_are_consolidated(): void
+    {
+        $reflection = new ReflectionClass(ClinicalRuleEvaluator::class);
+        $service = new ClinicalRuleEvaluator(new CompositionRuleEngine(), new MathematicalRuleEngine());
+        $method = $reflection->getMethod('coordinateConflictingSuggestions');
+        $method->setAccessible(true);
+        $findings = $method->invoke($service, [[
+            'rule_code' => 'NP.R6.CHEM.AA.PERCENT',
+            'field' => 'i_10_g/Kg',
+            'suggestion' => 'Aumentar aminoácidos.',
+            '_group' => 'amino_acids',
+            '_configuration' => ['formula_template' => 'dose_times_weight_percentage_of_volume', 'operator' => '>', 'threshold_value' => 2.5, 'unit' => '%'],
+            '_result' => ['value' => 2.256196],
+        ], [
+            'rule_code' => 'NP.R6.PED.CLIN.AA.NEONATE',
+            'suggestion' => 'Disminuir aminoácidos.',
+            '_group' => 'amino_acids',
+            '_configuration' => ['formula_template' => 'direct_value', 'operator' => '<=', 'threshold_value' => 4, 'unit' => 'g/kg/día'],
+            '_result' => ['value' => 6.0727],
+        ]], [
+            'patient' => ['weight_kg' => 1.1],
+            'mixture' => ['total_volume_ml' => 296.2],
+            'group_component_names' => ['amino_acids' => ['AMINOACIDOS PEDIATRICOS 10%']],
+        ]);
+
+        $this->assertStringContainsString('Ajuste conjunto para AMINOACIDOS PEDIATRICOS 10%', $findings[0]['suggestion']);
+        $this->assertStringContainsString('4 g/kg/día', $findings[0]['suggestion']);
+        $this->assertStringContainsString('volumen total máximo 175.9999 mL', $findings[0]['suggestion']);
+        $this->assertSame([
+            ['field' => 'i_10_g/Kg', 'value' => 4.0],
+            ['field' => 'volumen_total', 'value' => 175.9999],
+        ], $findings[0]['suggested_changes']);
+        $this->assertSame('', $findings[1]['suggestion']);
+        $this->assertSame([], $findings[1]['suggested_changes']);
+    }
+
+    public function test_the_projected_volume_uses_the_strictest_conflicting_component_limit(): void
+    {
+        $service = new ClinicalRuleEvaluator(new CompositionRuleEngine(), new MathematicalRuleEngine());
+        $method = (new ReflectionClass($service))->getMethod('suggestedTotalVolume');
+        $rules = collect([
+            new ValidationRule(['configuration' => [
+                'source_variable' => 'groups.amino_acids.dose_g_kg_day',
+                'formula_template' => 'direct_value', 'operator' => '<=', 'threshold_value' => 4,
+                'applicability' => ['required_group' => 'amino_acids'],
+            ]]),
+            new ValidationRule(['configuration' => [
+                'source_variable' => 'groups.amino_acids.dose_g_kg_day',
+                'formula_template' => 'dose_times_weight_percentage_of_volume', 'operator' => '>', 'threshold_value' => 2.5,
+                'applicability' => ['required_group' => 'amino_acids'],
+            ]]),
+        ]);
+        $facts = [
+            'patient' => ['weight_kg' => 1.1],
+            'mixture' => ['total_volume_ml' => 296.2, 'component_volume_ml' => 80],
+            'groups' => ['amino_acids' => ['dose_g_kg_day' => 6.0727]],
+            'active_groups' => ['amino_acids'], 'calculated_water' => false,
+            'patient_class' => 'neonate', 'clinical_text' => '', 'unavailable_sources' => [],
+        ];
+
+        $this->assertSame(175.9999, $method->invoke($service, $rules, $facts));
+
+        $facts['groups']['amino_acids']['dose_g_kg_day'] = 4;
+        $this->assertSame(175.9999, $method->invoke($service, $rules, $facts));
+    }
+
+    public function test_a_clinical_dose_adjustment_also_applies_the_compatible_volume(): void
+    {
+        $service = new ClinicalRuleEvaluator(new CompositionRuleEngine(), new MathematicalRuleEngine());
+        $method = (new ReflectionClass($service))->getMethod('finding');
+        $rule = new ValidationRule([
+            'engine' => 'mathematical', 'severity' => 'authorization', 'name' => 'Aminoácidos pediátricos',
+            'code' => 'NP.R6.PED.CLIN.AA.NEONATE', 'version' => 1,
+            'configuration' => [
+                'source_variable' => 'groups.amino_acids.dose_g_kg_day',
+                'formula_template' => 'direct_value', 'operator' => '<=', 'threshold_value' => 4,
+                'unit' => 'g/kg/día',
+            ],
+        ]);
+        $finding = $method->invoke($service, $rule, 0, [
+            'patient' => ['weight_kg' => 1.1],
+            'mixture' => ['total_volume_ml' => 195.4],
+            'suggested_total_volume_ml' => 175.9999,
+            'group_fields' => ['amino_acids' => 'i_10_g/Kg'],
+            'group_component_names' => ['amino_acids' => ['AMINOACIDOS PEDIATRICOS 10%']],
+            'group_captured_values' => ['amino_acids' => [4.4409]],
+            'group_input_units' => ['amino_acids' => ['g/Kg']],
+            'group_weighted_inputs' => ['amino_acids' => [true]],
+        ], ['value' => 4.4409, 'unit' => 'g/kg/día', 'message' => 'Exceso de aminoácidos.'], 'C20');
+
+        $this->assertSame([
+            ['field' => 'i_10_g/Kg', 'value' => 4.0],
+            ['field' => 'volumen_total', 'value' => 175.9999],
+        ], $finding['suggested_changes']);
+        $this->assertStringContainsString('captura 4 g/kg/día y un volumen total máximo de 175.9999 mL', $finding['suggestion']);
     }
 
     public function test_calcium_phosphate_calculation_explains_sum_capacity_and_formula(): void
     {
         $reflection = new ReflectionClass(ClinicalRuleEvaluator::class);
-        $service = $reflection->newInstanceWithoutConstructor();
+        $service = new ClinicalRuleEvaluator(new CompositionRuleEngine(), new MathematicalRuleEngine());
         $method = $reflection->getMethod('mathematicalCalculation');
         $method->setAccessible(true);
 
@@ -246,7 +371,7 @@ class ClinicalRuleSuggestionTest extends TestCase
     private function suggestion(ValidationRule $rule, array $facts, array $result, string $group): string
     {
         $reflection = new ReflectionClass(ClinicalRuleEvaluator::class);
-        $service = $reflection->newInstanceWithoutConstructor();
+        $service = new ClinicalRuleEvaluator(new CompositionRuleEngine(), new MathematicalRuleEngine());
         $method = $reflection->getMethod('mathematicalSuggestion');
         $method->setAccessible(true);
 

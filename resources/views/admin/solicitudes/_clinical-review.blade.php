@@ -1,6 +1,5 @@
 <section class="clinical-review" data-clinical-review
     data-validation-url="{{ route('admin.solicitudes.clinical.validate', ['kind' => $clinicalKind]) }}"
-    @if ($clinicalKind === 'nutricionales') data-rules-validation-url="{{ route('admin.solicitudes.rules.validate', ['kind' => $clinicalKind]) }}" @endif
     aria-label="Observaciones de validacion clinica">
     @if (isset($preparationQuotation))<input type="hidden" name="clinical_quotation_id" value="{{ $preparationQuotation->id }}">@endif
     <input type="hidden" name="clinical_review_token" value="">
@@ -15,7 +14,6 @@
             @endforeach
         </div>
     </details>
-    @if ($clinicalKind === 'nutricionales')<p class="clinical-live-status" data-clinical-live-status hidden aria-live="polite"></p>@endif
     <div data-clinical-result aria-live="polite"></div>
     <p data-clinical-error role="alert" hidden></p>
     <dialog class="clinical-authorization-modal" data-medical-authorization disabled aria-labelledby="clinical-authorization-title">
