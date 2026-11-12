@@ -82,6 +82,10 @@ function initializeConciliationPeriod() {
         authorizeOpen.textContent = group.authorization ? 'Autorizados' : 'Autorizar cambios';
         row.querySelector('[data-period-send-cell]').dataset.filterValue = group.sent_folio ? 'Enviada' : 'Pendiente de envío';
         row.querySelector('[data-period-folio]').textContent = group.sent_folio || (group.missing_prices ? 'Revisar precios faltantes' : '');
+        const createdAt = row.querySelector('[data-period-created-at]');
+        createdAt.textContent = createdAt.dataset.filterValue = group.created_at || 'Sin crear';
+        const sentAt = row.querySelector('[data-period-sent-at]');
+        sentAt.textContent = sentAt.dataset.filterValue = group.sent_at || 'Sin enviar';
         const send = row.querySelector('[data-period-send]');
         send.textContent = group.sent_folio ? 'Enviada' : 'Enviar';
         send.disabled = !!group.sent_folio || !!group.missing_prices;
@@ -202,7 +206,7 @@ function initializeConciliationPeriod() {
             send.textContent = 'Enviando…';
             try {
                 const result = await api(root.dataset.sendUrl, { ...scope(group), version: group.version, submission_key: group.submission_key });
-                updateRow({ ...group, sent_folio: result.folio, bucket: 'enviadas' });
+                updateRow({ ...group, sent_folio: result.folio, sent_at: result.sent_at, bucket: 'enviadas' });
                 announce(`Conciliación ${result.folio} enviada a ${group.hospital}.`);
             } catch (failure) {
                 send.disabled = false;

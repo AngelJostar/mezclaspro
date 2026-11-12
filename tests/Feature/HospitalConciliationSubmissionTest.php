@@ -100,6 +100,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         $scope = $this->periodScope();
         DB::table('mezclas')->where('id', 2)->update(['fecha_entrega' => '2026-10-06 18:00:00']);
         $payload = $this->createPeriodPayload(['oncologicos-1', 'antibioticos-2']);
+        $payload['creation_action'] = 'draft';
         $created = $this->postJson(route('admin.instituciones.conciliacion-periodos.store'), $payload)->assertCreated();
         $id = $created->json('period_id');
         $periodScope = array_replace($scope, ['desde' => '2026-09-09', 'hasta' => '2026-10-06', 'period_id' => $id]);
@@ -110,8 +111,10 @@ class HospitalConciliationSubmissionTest extends TestCase
         $this->assertDatabaseCount('hospital_conciliation_submissions', 0);
         $this->postJson(route('admin.instituciones.conciliacion-periodos.store'), $payload)->assertOk()->assertJsonPath('period_id', $id);
         $this->assertDatabaseCount('conciliation_periods', 1);
-        $this->get($created->json('redirect'))->assertOk()->assertViewHas('groups', function ($groups) use ($id) {
+        $this->get($created->json('redirect'))->assertOk()->assertSee('Guardado en borrador.')->assertViewHas('groups', function ($groups) use ($id) {
             $saved = $groups->firstWhere('period_id', $id);
+            $this->assertNull($saved['sent_folio']);
+            $this->assertSame(0, $saved['missing_prices']);
             $this->assertCount(2, $saved['rows']);
             $this->assertSame(70025, $saved['total_cents']);
             $keys = $groups->flatMap(fn ($g) => array_column($g['rows'], 'key'));
@@ -199,11 +202,89 @@ class HospitalConciliationSubmissionTest extends TestCase
             $scope = ['institucion_id' => 1, 'hospital_id' => $period->hospital_id, 'period_id' => $period->id, 'desde' => '2026-09-09', 'hasta' => '2026-10-06'];
             $group = $this->periodDetail($scope);
             $this->assertSame([$period->hospital_id], collect($group['rows'])->pluck('hospital_id')->unique()->values()->all());
+            $wrongScope = array_replace($scope, ['hospital_id' => $period->hospital_id === 1 ? 2 : 1]);
+            $this->getJson(route('admin.instituciones.conciliacion-periodos.detail', $wrongScope))->assertNotFound();
+            $this->postJson(route('admin.instituciones.conciliacion-periodos.send'), $wrongScope + [
+                'version' => $group['version'], 'submission_key' => (string) Str::uuid(),
+            ])->assertNotFound();
             $this->postJson(route('admin.instituciones.conciliacion-periodos.send'), $scope + ['version' => $group['version'], 'submission_key' => $group['submission_key']])->assertOk();
         }
         $sent = HospitalConciliationSubmission::orderBy('hospital_id')->get();
         $this->assertSame([1, 2], $sent->pluck('hospital_id')->all());
         $this->assertSame([2, 1], $sent->pluck('mixture_count')->all());
+        $secondUser = User::forceCreate(['name' => 'Usuario del segundo hospital', 'hospital_id' => 2]);
+        $secondUser->syncRoles(Role::findOrCreate('Cliente', 'web'));
+        foreach ([$this->hospital, $secondUser->refresh()] as $user) {
+            $own = $sent->firstWhere('hospital_id', (int) $user->hospital_id);
+            $other = $sent->firstWhere('hospital_id', $user->hospital_id == 1 ? 2 : 1);
+            $expected = $user->hospital_id == 1 ? ['nutricionales-11', 'oncologicos-1'] : ['oncologicos-3'];
+            $this->assertSame($expected, collect($own->snapshot)->map(fn ($row) => $row['kind'].'-'.$row['id'])->sort()->values()->all());
+            $this->actingAs($user)->get(route('admin.herramientas.index', ['seccion' => 'conciliacion', 'hospital_id' => $other->hospital_id]))
+                ->assertOk()->assertSee($own->folio())->assertDontSee($other->folio())
+                ->assertViewHas('submissions', fn ($submissions) => $submissions->pluck('id')->all() === [$own->id]);
+            $detail = $this->getJson(route('admin.herramientas.conciliaciones.detail', $own))->assertOk();
+            $this->assertSame($expected, collect($detail->json('group.rows'))->pluck('key')->sort()->values()->all());
+            $this->getJson(route('admin.herramientas.conciliaciones.detail', $other))->assertNotFound();
+            $this->get(route('admin.herramientas.conciliaciones.download', $other))->assertNotFound();
+            $this->postJson(route('admin.herramientas.conciliaciones.accept', $other), [])->assertNotFound();
+            Excel::fake();
+            $this->get(route('admin.herramientas.conciliaciones.download', $own))->assertOk();
+            Excel::assertDownloaded($own->folio().'.xlsx', fn (HospitalConciliationExport $export) => $export->collection()->all() === $own->snapshot);
+        }
+    }
+
+    public function test_period_can_be_created_and_sent_to_each_hospital_in_one_idempotent_operation(): void
+    {
+        $this->periodScope();
+        DB::table('cliente_hospital')->insertOrIgnore(['cliente_id' => 1, 'hospital_id' => 2]);
+        $payload = array_replace($this->createPeriodPayload(['oncologicos-1', 'nutricionales-11', 'oncologicos-3']), [
+            'hospital_id' => null, 'creation_action' => 'send',
+        ]);
+        $url = route('admin.instituciones.conciliacion-periodos.store');
+        $created = $this->postJson($url, $payload)->assertCreated()->assertJsonPath('period_count', 2);
+        $this->assertDatabaseCount('conciliation_periods', 2);
+        $this->assertDatabaseCount('conciliation_period_items', 3);
+        $this->assertDatabaseCount('hospital_conciliation_submissions', 2);
+        $sent = HospitalConciliationSubmission::orderBy('hospital_id')->get();
+        $this->assertSame([1, 2], $sent->pluck('hospital_id')->all());
+        $this->assertSame([2, 1], $sent->pluck('mixture_count')->all());
+        foreach ($sent as $submission) {
+            $this->assertSame('sent', $submission->direction);
+            $scope = ['institucion_id' => 1, 'hospital_id' => $submission->hospital_id,
+                'period_id' => $submission->filters['period_id'], 'desde' => $payload['desde'], 'hasta' => $payload['hasta']];
+            $group = $this->periodDetail($scope);
+            $this->assertSame($submission->folio(), $group['sent_folio']);
+            $this->assertNotNull($group['sent_at']);
+            $this->assertSame([$submission->hospital_id], collect($group['rows'])->pluck('hospital_id')->unique()->values()->all());
+            $this->assertSame(collect($group['rows'])->pluck('key')->all(), collect($submission->snapshot)->map(fn ($row) => $row['kind'].'-'.$row['id'])->all());
+        }
+        $this->get($created->json('redirect'))->assertOk()->assertSee('Enviados a sus hospitales correspondientes.')->assertViewHas('createdSentCount', 2);
+        $this->postJson($url, $payload)->assertOk()->assertJsonPath('period_ids', $created->json('period_ids'));
+        $this->postJson($url, array_replace($payload, ['creation_action' => 'draft']))->assertConflict();
+        $this->assertDatabaseCount('hospital_conciliation_submissions', 2);
+        $this->assertDatabaseCount('conciliation_periods', 2);
+        $this->actingAs($this->hospital)->get(route('admin.herramientas.index', ['seccion' => 'conciliacion']))
+            ->assertOk()->assertSee($sent[0]->folio())->assertDontSee($sent[1]->folio());
+        $this->getJson(route('admin.herramientas.conciliaciones.detail', $sent[0]))->assertOk();
+        $this->getJson(route('admin.herramientas.conciliaciones.detail', $sent[1]))->assertNotFound();
+    }
+
+    public function test_period_immediate_send_requires_all_prices_and_allows_draft_instead(): void
+    {
+        $this->periodScope();
+        DB::table('cliente_hospital')->insertOrIgnore(['cliente_id' => 1, 'hospital_id' => 2]);
+        DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 3)->update(['precio_total' => null]);
+        $this->mock(\App\Services\InstitutionBillingPricingService::class, fn ($mock) => $mock->shouldReceive('priceOncoMix', 'priceNutritionRequest')->andReturn(['total_iva_included' => 0]));
+        $payload = array_replace($this->createPeriodPayload(['oncologicos-1', 'oncologicos-3']), ['hospital_id' => null, 'creation_action' => 'send']);
+        $url = route('admin.instituciones.conciliacion-periodos.store');
+        $this->postJson($url, array_replace($payload, ['creation_action' => 'invalid']))->assertUnprocessable()->assertJsonValidationErrors('creation_action');
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('conciliation_periods', 0);
+        $this->assertDatabaseCount('conciliation_period_items', 0);
+        $this->assertDatabaseCount('hospital_conciliation_submissions', 0);
+        $this->postJson($url, array_replace($payload, ['creation_action' => 'draft']))->assertCreated()->assertJsonPath('period_count', 2);
+        $this->assertDatabaseCount('conciliation_periods', 2);
+        $this->assertDatabaseCount('hospital_conciliation_submissions', 0);
     }
 
     public function test_period_batch_validates_all_hospitals_before_writing_and_rejects_mixed_institutions(): void
@@ -269,12 +350,17 @@ class HospitalConciliationSubmissionTest extends TestCase
     public function test_period_groups_actual_remittances_by_month_and_keeps_remission_screen(): void
     {
         $scope = $this->periodScope();
+        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))->assertOk()
+            ->assertViewIs('admin.instituciones.conciliacion.period')->assertSee('aria-current="page" >Por periodo', false);
         DB::table('mezclas')->where('id', 2)->update(['fecha_entrega' => '2026-10-06 23:59:59']);
         DB::table('mezclas')->where('id', 4)->update(['remision' => null]);
         $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'periodo', 'desde' => '2026-09-09', 'hasta' => '2026-10-06']);
         $this->get($url)->assertOk()->assertSee('Por periodo')->assertSee('Por remisión')->assertSee('Monto de Conciliación')
+            ->assertSee('Sin crear')
             ->assertViewHas('groups', function ($groups) {
                 $this->assertCount(2, $groups);
+                $this->assertNull($groups[0]['created_at']);
+                $this->assertNull($groups[1]['created_at']);
                 $this->assertSame('2026-09-09', $groups[0]['from']);
                 $this->assertSame('2026-09-30', $groups[0]['to']);
                 $this->assertSame(100000, $groups[0]['total_cents']);
@@ -284,7 +370,7 @@ class HospitalConciliationSubmissionTest extends TestCase
                 $this->assertSame(20025, $groups[1]['new_cents']);
                 return true;
             });
-        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))->assertOk()
+        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))->assertOk()
             ->assertSee('Por remisión')->assertSee('Solicitudes de conciliación')->assertViewHas('rows');
         $this->assertSame(0, DB::table('institution_billing_movements')->count());
     }
@@ -593,6 +679,51 @@ class HospitalConciliationSubmissionTest extends TestCase
         $this->get(route('admin.herramientas.conciliaciones.download', $sent))->assertOk();
         $this->hospital->hospital_id = 2; $this->hospital->save();
         $this->get(route('admin.herramientas.conciliaciones.download', $sent))->assertNotFound();
+    }
+
+    public function test_period_dates_preserve_creation_and_track_real_delivery_without_leaking_to_another_period(): void
+    {
+        $scope = $this->periodScope();
+        try {
+            $this->travelTo(\Carbon\Carbon::parse('2026-11-10 09:15:00'));
+            $payload = $this->createPeriodPayload(['oncologicos-1']);
+            $firstId = $this->postJson(route('admin.instituciones.conciliacion-periodos.store'), $payload)->assertCreated()->json('period_id');
+            $this->travelTo(\Carbon\Carbon::parse('2026-11-10 14:20:00'));
+            $secondId = $this->postJson(route('admin.instituciones.conciliacion-periodos.store'), $this->createPeriodPayload(['nutricionales-11']))
+                ->assertCreated()->json('period_id');
+            $scope = array_replace($scope, ['period_id' => $firstId, 'desde' => $payload['desde'], 'hasta' => $payload['hasta']]);
+            $otherScope = array_replace($scope, ['period_id' => $secondId]);
+            $group = $this->periodDetail($scope);
+            $this->assertSame('10/11/2026 09:15', $group['created_at']);
+            $this->assertSame('10/11/2026 14:20', $this->periodDetail($otherScope)['created_at']);
+            $this->assertNull($group['sent_at']);
+            $send = $scope + ['version' => $group['version'], 'submission_key' => $group['submission_key']];
+            $url = route('admin.instituciones.conciliacion-periodos.send');
+            $this->travelTo(\Carbon\Carbon::parse('2026-11-11 10:30:00'));
+            $this->postJson($url, $send)->assertOk()->assertJsonPath('sent_at', '11/11/2026 10:30');
+            $this->travelTo(\Carbon\Carbon::parse('2026-11-11 12:45:00'));
+            $this->postJson($url, $send)->assertOk()->assertJsonPath('sent_at', '11/11/2026 10:30');
+            $this->postJson($url, array_replace($send, ['submission_key' => (string) Str::uuid()]))
+                ->assertOk()->assertJsonPath('sent_at', '11/11/2026 10:30');
+            $this->assertDatabaseCount('hospital_conciliation_submissions', 1);
+            $this->assertNull($this->periodDetail($otherScope)['sent_at']);
+            DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['precio_total' => '111.11']);
+            $changed = $this->periodDetail($scope);
+            $this->assertSame('10/11/2026 09:15', $changed['created_at']);
+            $this->assertNull($changed['sent_folio']);
+            $this->assertSame('11/11/2026 10:30', $changed['sent_at']);
+            $this->postJson($url, $scope + ['version' => $changed['version'], 'submission_key' => $changed['submission_key']])
+                ->assertOk()->assertJsonPath('sent_at', '11/11/2026 12:45');
+            $this->assertSame('11/11/2026 12:45', $this->periodDetail($scope)['sent_at']);
+            $this->assertSame('10/11/2026 09:15', $this->periodDetail($scope)['created_at']);
+            $this->assertNull($this->periodDetail($otherScope)['sent_at']);
+            $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'periodo'] + $scope))
+                ->assertOk()->assertSeeInOrder(['Periodo de la', 'Fecha de creación', 'Fecha de envío', 'Monto total de la'])
+                ->assertSee('10/11/2026 09:15')->assertSee('10/11/2026 14:20')
+                ->assertSee('11/11/2026 12:45')->assertSee('Sin enviar');
+        } finally {
+            $this->travelBack();
+        }
     }
 
     public function test_period_scopes_institutions_permissions_and_dates(): void
@@ -998,10 +1129,10 @@ class HospitalConciliationSubmissionTest extends TestCase
         DB::table('institution_billings')->where('origen_id', 1)->update(['conciliable' => 'No']);
         DB::table('solicitud_oncos')->where('id', 1)->update(['nombre_paciente' => 'PATIENT CHANGED']);
         $this->actingAs($this->internalUser());
-        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))->assertOk()
+        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))->assertOk()
             ->assertSee('Panel Administrativo')->assertSee('CON-000001')->assertSee('Hospital de prueba')
             ->assertViewHas('submissions', fn ($rows) => $rows->total() === 1);
-        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'search' => 'missing']))
+        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision', 'search' => 'missing']))
             ->assertOk()->assertSee('No hay solicitudes')->assertDontSee('CON-000001');
         $this->get(route('admin.instituciones.conciliaciones.show', $submission))->assertOk()
             ->assertSee('Paciente 1')->assertDontSee('PATIENT CHANGED')->assertDontSee('Paciente 2 Nutricion');
@@ -1021,7 +1152,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         $submission = HospitalConciliationSubmission::sole();
         Permission::findOrCreate('menu.administracion.reports', 'web');
         $this->hospital->givePermissionTo('menu.administracion.reports');
-        $urls = [route('admin.instituciones.reportes', ['seccion' => 'conciliacion']),
+        $urls = [route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']),
             route('admin.instituciones.conciliaciones.show', $submission), route('admin.instituciones.conciliaciones.download', $submission)];
         foreach ($urls as $url) $this->get($url)->assertForbidden();
         $user = $this->internalUser();
@@ -1052,7 +1183,7 @@ class HospitalConciliationSubmissionTest extends TestCase
             $copy->save();
         }
         $this->actingAs($this->internalUser());
-        $url = fn ($query = []) => route('admin.instituciones.reportes', ['seccion' => 'conciliacion'] + $query);
+        $url = fn ($query = []) => route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision'] + $query);
         $response = $this->get($url(['institucion_id' => 1]))->assertOk()->assertSee('Todas las instituciones')->assertSee('Todos los hospitales')
             ->assertViewHas('institutionId', 1)->assertViewHas('submissions', fn ($rows) => $rows->total() === 17 && $rows->count() === 15);
         parse_str(parse_url($response->viewData('submissions')->nextPageUrl(), PHP_URL_QUERY), $next);
@@ -1076,7 +1207,7 @@ class HospitalConciliationSubmissionTest extends TestCase
     {
         $this->send()->assertCreated();
         $this->actingAs($this->internalUser());
-        $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion']);
+        $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']);
         $this->get($url)->assertOk()->assertSeeInOrder(['<th>Fecha de envío</th>', '<th>Institución</th>', '<th>Hospital</th>'], false)
             ->assertSee('<td>Institucion de prueba</td><td>Hospital de prueba</td>', false);
         DB::table('clientes')->insert(['id' => 2, 'nombre' => 'Otra institucion']);
@@ -1092,7 +1223,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         $submission = $this->inboxSubmission();
         $original = $submission->refresh()->toArray();
         $this->actingAs($this->internalUser());
-        $page = $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))->assertOk()
+        $page = $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))->assertOk()
             ->assertSeeInOrder(['aria-label="Tipo"', 'aria-label="Paciente"', 'aria-label="Fecha y hora de solicitud"', 'aria-label="Ver"', 'aria-label="Conciliable"'], false)
             ->assertDontSee('<th>Folio</th>', false)->assertDontSee('<th>Conciliables Sí</th>', false)->assertDontSee('<th>Conciliables No</th>', false)
             ->assertSee('data-inbox-conciliable-choice="1"', false)
@@ -1111,7 +1242,7 @@ class HospitalConciliationSubmissionTest extends TestCase
             $movement = \App\Models\InstitutionBillingMovement::where('origen_tipo', $origin)->where('origen_id', $row['id'])->latest('id')->firstOrFail();
             $this->assertSame('administration_conciliation', $movement->details['source']);
             $this->assertSame($submission->id, $movement->details['submission_id']);
-            $reloaded = $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))->assertOk()->viewData('submissionRows')->get($submission->id);
+            $reloaded = $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))->assertOk()->viewData('submissionRows')->get($submission->id);
             $this->assertFalse($reloaded->firstWhere('kind', $kind)['current_conciliable']);
             $this->patchJson($url, ['conciliable' => true, 'previous' => $row['previous_conciliable']])->assertConflict();
             $this->patchJson($url, ['conciliable' => true, 'previous' => 'No'])->assertOk()->assertJsonPath('conciliable', 'Si');
@@ -1154,7 +1285,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         }
 
         $this->actingAs($this->internalUser());
-        $query = ['seccion' => 'conciliacion', 'institucion_id' => 1, 'hospital_id' => 1, 'search' => 'Paciente', 'bandeja' => 'pendientes'];
+        $query = ['seccion' => 'conciliacion', 'modalidad' => 'remision', 'institucion_id' => 1, 'hospital_id' => 1, 'search' => 'Paciente', 'bandeja' => 'pendientes'];
         $url = fn ($extra = []) => route('admin.instituciones.reportes', $query + $extra);
         $page = $this->get($url())->assertOk();
         $this->assertSame(20, $page->viewData('rows')->count());
@@ -1190,7 +1321,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         $selected = ['type' => ['Oncologica'], 'patient' => ['Paciente 1'],
             'date' => ['2026-09-08 10:00'], 'view' => ['Ver'], 'conciliable' => ['No'],
             'conciliation_status' => ['Recibida']];
-        $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'columnas' => $selected]);
+        $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision', 'columnas' => $selected]);
         $page = $this->get($url)->assertOk();
         $this->assertSame(1, $page->viewData('rows')->count());
         $this->assertSame('oncologicos', $page->viewData('rows')->first()['mixture']['kind']);
@@ -1201,16 +1332,16 @@ class HospitalConciliationSubmissionTest extends TestCase
         $this->patchJson($switch, ['conciliable' => true, 'previous' => 'No'])->assertOk();
         $this->get($url)->assertOk()->assertViewHas('rows', fn ($rows) => $rows->count() === 0)
             ->assertSee('para los filtros seleccionados');
-        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'columnas' => ['type' => ['']]]))
+        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision', 'columnas' => ['type' => ['']]]))
             ->assertOk()->assertViewHas('rows', fn ($rows) => $rows->count() === 0);
-        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))
+        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))
             ->assertOk()->assertViewHas('rows', fn ($rows) => $rows->count() === 4);
     }
 
     public function test_inbox_column_filters_are_available_when_empty_and_reject_invalid_parameters(): void
     {
         $this->actingAs($this->internalUser());
-        $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'search' => 'sin resultados']);
+        $url = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision', 'search' => 'sin resultados']);
         $page = $this->get($url)->assertOk()->assertSee('data-server-column-filters="conciliation-inbox-filters"', false);
         $this->assertSame(8, substr_count($page->getContent(), '<th data-force-column-filter'));
         $this->assertSame(8, substr_count($page->getContent(), 'data-table-column-trigger'));
@@ -1229,7 +1360,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         DB::table('mezclas')->where('id', 1)->update(['remision' => 'REM-ONCO-1']);
         DB::table('mezclas')->where('id', 2)->update(['remision' => 'REM-ANT-2']);
         $this->actingAs($this->internalUser());
-        $inbox = route('admin.instituciones.reportes', ['seccion' => 'conciliacion']);
+        $inbox = route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']);
         $page = $this->get($inbox)->assertOk()->assertSee('No. de remisión')->assertSee('Precio de venta total editable');
         $rows = $page->viewData('submissionRows')->get($submission->id);
         $this->assertSame('500.00', $rows->firstWhere('kind', 'nutricionales')['current_price']);
@@ -1296,7 +1427,7 @@ class HospitalConciliationSubmissionTest extends TestCase
     public function test_conciliation_lists_live_requests_without_submissions_and_filters_latest_exchange(): void
     {
         $this->actingAs($this->internalUser());
-        $url = fn ($tab = 'todas') => route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'bandeja' => $tab]);
+        $url = fn ($tab = 'todas') => route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision', 'bandeja' => $tab]);
         $page = $this->get($url())->assertOk()->assertSeeInOrder(['Todas', 'Recibidas', 'Enviadas', 'Pendientes']);
         $this->assertSame(4, $page->viewData('rows')->count());
         $this->assertSame(['todas' => 4, 'recibidas' => 0, 'enviadas' => 0, 'pendientes' => 4], $page->viewData('tabCounts'));
@@ -1352,7 +1483,7 @@ class HospitalConciliationSubmissionTest extends TestCase
             $this->assertSame($movement->from_stage, $movement->to_stage);
         }
         $this->assertSame(0, HospitalConciliationSubmission::count());
-        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'bandeja' => 'pendientes',
+        $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision', 'bandeja' => 'pendientes',
             'columnas' => ['conciliable' => ['No']]]))->assertOk()
             ->assertViewHas('rows', fn ($rows) => $rows->count() === 1 && $rows->first()['cells']['price'] === '125.50');
     }
@@ -1371,7 +1502,7 @@ class HospitalConciliationSubmissionTest extends TestCase
         \App\Models\InstitutionBilling::create(['origen_tipo' => 'oncologica_mezcla', 'origen_id' => 4,
             'hospital_id' => 1, 'institucion_id' => 1, 'conciliable' => 'Conciliado']);
         $this->actingAs($this->internalUser());
-        $expected = $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))->assertOk()
+        $expected = $this->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))->assertOk()
             ->viewData('rows')->mapWithKeys(fn ($row) => [
                 $row['mixture']['kind'].':'.$row['mixture']['id'] => $row['cells']['conciliation_status'],
             ])->all();
@@ -1435,12 +1566,12 @@ class HospitalConciliationSubmissionTest extends TestCase
     {
         $this->send()->assertCreated();
         $admin = $this->internalUser();
-        $this->actingAs($admin)->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))
+        $this->actingAs($admin)->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))
             ->assertOk()->assertDontSee('class="ht-no-count"', false);
         $this->actingAs($this->hospital);
         DB::table('institution_billings')->where('origen_tipo', 'oncologica_mezcla')->where('origen_id', 1)->update(['conciliable' => 'No']);
         $this->send()->assertCreated();
-        $this->actingAs($admin)->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion']))
+        $this->actingAs($admin)->get(route('admin.instituciones.reportes', ['seccion' => 'conciliacion', 'modalidad' => 'remision']))
             ->assertOk()->assertSee('<span class="ht-no-count" title="1 mezclas no conciliables">1</span>', false);
     }
 

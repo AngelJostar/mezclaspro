@@ -35,7 +35,7 @@ class ConciliationSubmissionController extends Controller
     {
         $this->authorizeInternal($request);
         $request->validate(['modalidad' => ['sometimes', Rule::in(['periodo', 'remision'])]]);
-        if ($request->query('modalidad') === 'periodo') return app(ConciliationPeriodController::class)->index($request);
+        if ($request->query('modalidad', 'periodo') === 'periodo') return app(ConciliationPeriodController::class)->index($request);
         $filters = ConciliationInboxFilters::validate($request->query());
         $fields = array_keys(ConciliationInboxTable::COLUMNS);
         $tableFilters = $request->validate([

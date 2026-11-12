@@ -75,7 +75,7 @@ test('period view filters, reviews drafts, cancels, accepts totals and sends a r
             if (url.pathname.endsWith('/enviar')) {
                 assert.equal(request.postDataJSON().hospital_id, 1);
                 sends++;
-                return route.fulfill({ json: { folio: 'CON-000001' } });
+                return route.fulfill({ json: { folio: 'CON-000001', sent_at: '11/11/2026 12:35' } });
             }
             return route.abort();
         });
@@ -93,6 +93,7 @@ test('period view filters, reviews drafts, cancels, accepts totals and sends a r
         }
         assert.equal(await page.getByRole('link', { name: 'Por periodo', exact: true }).getAttribute('aria-current'), 'page');
         const row = rows.first();
+        assert.equal(await row.locator('[data-period-sent-at]').innerText(), 'Sin enviar');
         assert.match(await row.locator('[data-period-total]').innerText(), /1,200.25/);
         assert.equal(await row.getAttribute('data-conciliation-differences'), 'false');
         assert.equal(await row.locator('[data-period-total-count]').innerText(), '3');
@@ -176,6 +177,8 @@ test('period view filters, reviews drafts, cancels, accepts totals and sends a r
         await row.locator('[data-period-send]').click();
         await page.getByRole('status').filter({ hasText: 'enviada a' }).waitFor();
         assert.equal(sends, 1);
+        assert.equal(await row.locator('[data-period-sent-at]').innerText(), '11/11/2026 12:35');
+        assert.equal(await row.locator('[data-period-sent-at]').getAttribute('data-filter-value'), '11/11/2026 12:35');
         assert.equal(await page.locator('[data-conciliation-count="enviadas"]').innerText(), '1');
         assert.equal(await page.locator('[data-conciliation-count="pendientes"]').innerText(), '1');
         assert.equal(await row.locator('[data-period-send]').isDisabled(), true);

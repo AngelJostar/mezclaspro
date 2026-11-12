@@ -1,7 +1,8 @@
 function initializePeriodCreator() {
     const dialog = document.querySelector('[data-period-create-dialog]');
     const launch = document.querySelector('[data-period-create-open]');
-    if (!dialog || !launch || dialog.dataset.ready) return;
+    const confirmation = document.querySelector('[data-period-create-confirm]');
+    if (!dialog || !launch || !confirmation || dialog.dataset.ready) return;
     dialog.dataset.ready = 'true';
     const find = selector => dialog.querySelector(selector);
     const form = find('[data-create-filters]');
@@ -13,6 +14,7 @@ function initializePeriodCreator() {
     const money = cents => cents === null ? 'Sin registrar' : new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cents / 100) + ' MXN';
     const date = value => value.slice(0, 10).split('-').reverse().join('/');
     let rows = [], filtered = [], selection = new Map(), filters = {}, columnFilters = null, saving = false, loading = false, sequence = 0, creationKey;
+    let pendingCreation = null, creationAction = null;
 
     function announce(message = '', retry = false) {
         error.textContent = message;
@@ -58,8 +60,34 @@ function initializePeriodCreator() {
         form.elements.to.setCustomValidity(from && to && from > to ? 'La fecha final debe ser igual o posterior a la inicial.' : '');
     }
 
+    function renderDestinations(selected) {
+        const preview = find('[data-create-destinations]');
+        const list = find('[data-create-hospitals]');
+        const groups = new Map();
+        for (const row of selected) {
+            const key = `${row.institution_id}:${row.hospital_id}`;
+            if (!groups.has(key)) groups.set(key, { hospital: row.hospital, rows: [] });
+            groups.get(key).rows.push(row);
+        }
+        const fragment = document.createDocumentFragment();
+        for (const group of [...groups.values()].sort((a, b) => a.hospital.localeCompare(b.hospital, 'es'))) {
+            const item = document.createElement('li');
+            const name = document.createElement('strong');
+            const count = document.createElement('span');
+            const amount = document.createElement('span');
+            name.textContent = group.hospital;
+            count.textContent = group.rows.length === 1 ? '1 remisión' : `${group.rows.length} remisiones`;
+            amount.textContent = money(group.rows.some(row => row.amount_cents === null) ? null : group.rows.reduce((sum, row) => sum + row.amount_cents, 0));
+            item.append(name, count, amount);
+            fragment.append(item);
+        }
+        list.replaceChildren(fragment);
+        preview.hidden = !selected.length;
+    }
+
     function summary() {
         const selected = [...selection.values()];
+        renderDestinations(selected);
         const from = form.elements.from.value, to = form.elements.to.value;
         find('[data-create-range]').textContent = from && to && from <= to ? `${date(from)} – ${date(to)}` : 'Sin definir';
         find('[data-create-selected]').textContent = selected.length === 1 ? '1 remisión seleccionada' : `${selected.length} remisiones seleccionadas`;
@@ -157,6 +185,7 @@ function initializePeriodCreator() {
         columnFilters = null;
         rows = []; selection.clear(); filters = {}; form.reset(); validateDates();
         creationKey = crypto.randomUUID();
+        creationAction = null;
         announce(); renderRows();
         try {
             const result = await api(dialog.dataset.candidatesUrl);
@@ -195,45 +224,72 @@ function initializePeriodCreator() {
     refresh.addEventListener('click', load);
     dialog.querySelectorAll('[data-create-close]').forEach(button => button.addEventListener('click', () => { if (!saving) dialog.close(); }));
     dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
-    dialog.addEventListener('close', () => { sequence++; selection.clear(); columnFilters?.close(); });
-    submit.addEventListener('click', async () => {
+    dialog.addEventListener('close', () => { sequence++; selection.clear(); columnFilters?.close(); if (confirmation.open) confirmation.close(); });
+    confirmation.querySelector('[data-create-confirm-cancel]').addEventListener('click', () => { if (!saving) confirmation.close(); });
+    confirmation.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+    confirmation.addEventListener('close', () => { pendingCreation = null; });
+    submit.addEventListener('click', () => {
         if (saving || loading || !selection.size) return;
         validateDates();
         if (!form.reportValidity()) return;
         const institutionId = Number(form.elements.institution.value);
+        const hospitalId = form.elements.hospital.value ? Number(form.elements.hospital.value) : null;
         const from = form.elements.from.value, to = form.elements.to.value;
         const selected = [...selection.values()];
         if (selected.some(row => Number(row.institution_id) !== institutionId)) {
             announce('Las remisiones seleccionadas deben pertenecer a la institución indicada. Revisa la selección.');
             return;
         }
+        if (hospitalId && selected.some(row => Number(row.hospital_id) !== hospitalId)) {
+            announce('Hay remisiones seleccionadas de otros hospitales. Elige Todos los hospitales para crear un periodo por hospital o quita esas remisiones de la selección.');
+            return;
+        }
         if (selected.some(row => row.date.slice(0, 10) < from || row.date.slice(0, 10) > to)) {
             announce('Hay remisiones seleccionadas fuera del rango Desde–Hasta. Ajusta las fechas o quita esas remisiones de la selección.');
             return;
         }
+        pendingCreation = {
+            institucion_id: institutionId, hospital_id: hospitalId, desde: from, hasta: to,
+            selection: Object.fromEntries(selected.map(row => [row.key, row.version])),
+        };
+        columnFilters?.close();
+        confirmation.querySelector('[data-create-confirm-status]').hidden = true;
+        confirmation.showModal();
+        confirmation.querySelector('h2').focus();
+    });
+    confirmation.querySelectorAll('[data-create-action]').forEach(button => button.addEventListener('click', async () => {
+        if (saving || loading || !pendingCreation) return;
+        const action = button.dataset.createAction;
+        if (creationAction && creationAction !== action) creationKey = crypto.randomUUID();
+        creationAction = action;
         saving = true; announce();
         columnFilters?.close();
         dialog.setAttribute('aria-busy', 'true');
         dialog.querySelectorAll('button, input, select').forEach(control => { control.disabled = true; });
+        confirmation.setAttribute('aria-busy', 'true');
+        confirmation.querySelectorAll('button').forEach(control => { control.disabled = true; });
+        const status = confirmation.querySelector('[data-create-confirm-status]');
+        status.hidden = false;
+        status.textContent = action === 'send' ? 'Creando y enviando los periodos a sus hospitales…' : 'Guardando los periodos en borrador…';
         submit.textContent = 'Creando periodo…';
         try {
-            const hospitalIds = [...new Set(selected.map(row => row.hospital_id))];
             const result = await api(dialog.dataset.storeUrl, {
-                creation_key: creationKey, institucion_id: institutionId, hospital_id: hospitalIds.length === 1 ? hospitalIds[0] : null,
-                desde: from, hasta: to,
-                selection: Object.fromEntries(selected.map(row => [row.key, row.version])),
+                ...pendingCreation, creation_key: creationKey, creation_action: action,
             });
             window.location.assign(result.redirect);
         } catch (failure) {
             announce(failure.message, true);
             saving = false;
+            confirmation.setAttribute('aria-busy', 'false');
+            confirmation.querySelectorAll('button').forEach(control => { control.disabled = false; });
+            confirmation.close();
             dialog.setAttribute('aria-busy', 'false');
             dialog.querySelectorAll('button, input, select').forEach(control => { control.disabled = false; });
             submit.textContent = 'Crear periodo';
             updateSelection();
         }
-    });
-    document.addEventListener('livewire:navigating', () => { sequence++; if (dialog.open) dialog.close(); columnFilters?.destroy(); }, { once: true });
+    }));
+    document.addEventListener('livewire:navigating', () => { sequence++; if (confirmation.open) confirmation.close(); if (dialog.open) dialog.close(); columnFilters?.destroy(); }, { once: true });
 }
 
 document.addEventListener('DOMContentLoaded', initializePeriodCreator);

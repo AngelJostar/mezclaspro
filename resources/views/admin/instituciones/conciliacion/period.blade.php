@@ -16,7 +16,18 @@
             @include('admin.instituciones.conciliacion._status-tabs')
             <button type="button" class="cp-primary cp-create-launch" data-period-create-open aria-haspopup="dialog">Crear periodo</button>
         </div>
-        @if ($createdCount)<p role="status" class="cp-created">{{ $createdCount === 1 ? 'Periodo creado.' : $createdCount.' periodos creados, uno por hospital.' }} Abre Ver en cada renglón para revisar las remisiones antes de enviar.</p>@endif
+        @if ($createdCount)
+            <p role="status" class="cp-created">
+                {{ $createdCount === 1 ? 'Periodo creado.' : $createdCount.' periodos creados, uno por hospital.' }}
+                @if ($createdSentCount === $createdCount)
+                    {{ $createdCount === 1 ? 'Enviado al hospital correspondiente.' : 'Enviados a sus hospitales correspondientes.' }}
+                @elseif ($createdSentCount)
+                    {{ $createdSentCount }} enviados. Los borradores restantes pueden enviarse desde el botón Enviar de cada renglón.
+                @else
+                    {{ $createdCount === 1 ? 'Guardado en borrador.' : 'Guardados en borrador.' }} Puedes revisar las remisiones en Ver y enviarlas con el botón Enviar de cada renglón.
+                @endif
+            </p>
+        @endif
         @if ($errors->any())<p role="alert" class="cp-error">{{ $errors->first() }}</p>@endif
         <form class="conciliation-filters" method="GET" action="{{ route('admin.instituciones.reportes') }}">
             <input type="hidden" name="seccion" value="conciliacion"><input type="hidden" name="modalidad" value="periodo">
@@ -42,9 +53,10 @@
         <div class="ht-table-scroll" data-sticky-x-position="viewport" data-sticky-x-native data-sticky-x-always-visible tabindex="0" aria-label="Conciliaciones por periodo">
             <table class="ht-table cp-table conciliation-table" id="conciliation-period-table" data-disable-column-filters>
                 <thead><tr>
-                    @foreach (['Institución', 'Hospital', 'Periodo de la conciliación', 'Monto total de la conciliación (IVA incluido)', 'Detalle', 'Monto de Conciliación', 'Mezclas', 'Conciliables Sí', 'Conciliables No', 'Estatus de Conciliación', 'Observaciones', 'Autorización de cambios', 'Enviar'] as $label)
+                    @foreach (['Institución', 'Hospital', 'Periodo de la conciliación', 'Fecha de creación de la conciliación', 'Fecha de envío', 'Monto total de la conciliación (IVA incluido)', 'Detalle', 'Monto de Conciliación', 'Mezclas', 'Conciliables Sí', 'Conciliables No', 'Estatus de Conciliación', 'Observaciones', 'Autorización de cambios', 'Enviar'] as $label)
                         @php($headerLines = match ($label) {
                             'Periodo de la conciliación' => ['Periodo de la', 'conciliación'],
+                            'Fecha de creación de la conciliación' => ['Fecha de creación', 'de la conciliación'],
                             'Monto total de la conciliación (IVA incluido)' => ['Monto total de la', 'conciliación (IVA incluido)'],
                             'Monto de Conciliación' => ['Monto de', 'Conciliación'],
                             'Estatus de Conciliación' => ['Estatus de', 'Conciliación'],
@@ -60,6 +72,8 @@
                         <tr data-period-row="{{ $group['key'] }}" data-conciliation-differences="{{ $group['has_differences'] ? 'true' : 'false' }}">
                             <td>{{ $group['institution'] }}</td><td>{{ $group['hospital'] }}</td>
                             <td>{{ \Carbon\Carbon::parse($group['from'])->format('d/m/Y') }} –<br>{{ \Carbon\Carbon::parse($group['to'])->format('d/m/Y') }}</td>
+                            <td data-period-created-at data-filter-value="{{ $group['created_at'] ?: 'Sin crear' }}">{{ $group['created_at'] ?: 'Sin crear' }}</td>
+                            <td data-period-sent-at data-filter-value="{{ $group['sent_at'] ?: 'Sin enviar' }}">{{ $group['sent_at'] ?: 'Sin enviar' }}</td>
                             <td data-period-total>{{ \App\Services\HospitalConciliationSummary::money($group['total_cents']) }}</td>
                             <td data-filter-value="Ver"><button type="button" class="ht-view" data-period-open aria-label="Ver {{ $group['hospital'] }} del {{ $group['from'] }} al {{ $group['to'] }}">Ver</button></td>
                             <td data-filter-value="{{ \App\Services\HospitalConciliationSummary::money($group['new_cents']) }}" data-period-new-cell><output class="cp-amount" data-period-new title="Suma automática de las remisiones conciliables del periodo, con IVA incluido">{{ \App\Services\HospitalConciliationSummary::money($group['new_cents']) }}</output></td>
@@ -75,9 +89,9 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="13" class="ht-empty">No hay remisiones de entrega que coincidan con los filtros seleccionados.</td></tr>
+                        <tr><td colspan="15" class="ht-empty">No hay remisiones de entrega que coincidan con los filtros seleccionados.</td></tr>
                     @endforelse
-                    @if ($groups->isNotEmpty())<tr data-period-filter-empty hidden><td colspan="13" class="ht-empty">No hay periodos que coincidan con los filtros seleccionados.</td></tr>@endif
+                    @if ($groups->isNotEmpty())<tr data-period-filter-empty hidden><td colspan="15" class="ht-empty">No hay periodos que coincidan con los filtros seleccionados.</td></tr>@endif
                 </tbody>
             </table>
         </div>

@@ -22,14 +22,29 @@
             <tbody data-create-rows></tbody>
         </table>
     </div>
-    <p class="cp-note">Puedes seleccionar varios hospitales de la misma institución. Se creará un periodo por cada hospital con remisiones seleccionadas.</p>
+    <p class="cp-note">Al elegir Todos los hospitales, se creará un periodo independiente por cada hospital con remisiones seleccionadas. No se crearán periodos vacíos.</p>
     <div class="cp-create-summary" aria-live="polite">
         <div><span>Periodo</span><strong data-create-range>Sin definir</strong></div>
         <div><strong data-create-selected>0 remisiones seleccionadas</strong></div>
         <div><strong data-create-period-count>0 periodos</strong></div>
         <div><span>Total con IVA</span><strong data-create-total>$0.00 MXN</strong></div>
     </div>
+    <section class="cp-create-destinations" data-create-destinations aria-labelledby="cp-create-destinations-title" hidden>
+        <h3 id="cp-create-destinations-title">Periodos por hospital</h3>
+        <p>Al enviar cada periodo, su hospital recibirá únicamente sus propias remisiones.</p>
+        <ul data-create-hospitals></ul>
+    </section>
     <p data-create-error role="alert" class="cp-error" hidden></p>
     <button type="button" class="cp-secondary" data-create-refresh hidden>Actualizar remisiones</button>
     <footer><button type="button" class="cp-secondary" data-create-close>Cancelar</button><p>La selección se conserva al cambiar los filtros.</p><button type="button" class="cp-primary" data-create-submit disabled>Crear periodo</button></footer>
+</dialog>
+<dialog class="cp-dialog cp-create-confirm" data-period-create-confirm aria-labelledby="cp-create-confirm-title" aria-describedby="cp-create-confirm-description">
+    <header><h2 id="cp-create-confirm-title" tabindex="-1">Estás creando un nuevo periodo de conciliación.</h2></header>
+    <p id="cp-create-confirm-description">¿Qué quieres hacer?</p>
+    <div class="cp-create-confirm-actions">
+        <button type="button" class="cp-secondary" data-create-confirm-cancel>Cancelar</button>
+        <button type="button" class="cp-secondary" data-create-action="draft">Crear periodo y enviar a borrador</button>
+        <button type="button" class="cp-primary" data-create-action="send">Crear periodo y enviarlo a los hospitales</button>
+    </div>
+    <p class="cp-note" data-create-confirm-status role="status" hidden></p>
 </dialog>

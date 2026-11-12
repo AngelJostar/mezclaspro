@@ -16,7 +16,7 @@ $user = App\Models\User::findOrFail(2);
 $user->syncRoles(Spatie\Permission\Models\Role::findOrCreate('Super Admin', 'web'));
 Illuminate\Support\Facades\Auth::setUser($user);
 parse_str($argv[1] ?? '', $query);
-$request = Illuminate\Http\Request::create('https://conciliation.test/admin/instituciones-reportes', 'GET', ['seccion' => 'conciliacion'] + $query);
+$request = Illuminate\Http\Request::create('https://conciliation.test/admin/instituciones-reportes', 'GET', ['seccion' => 'conciliacion', 'modalidad' => 'remision'] + $query);
 $request->setUserResolver(fn () => $user);
 $request->setRouteResolver(fn () => app('router')->getRoutes()->getByName('admin.instituciones.reportes'));
 $app->instance('request', $request);

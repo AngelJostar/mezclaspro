@@ -4,8 +4,9 @@
         <button type="button" class="training-secondary-button" data-refresh-assignments>Actualizar</button>
     </header>
     <p data-own-assignment-status role="status">Cargando capacitaciones…</p>
-    <div data-own-assignment-list class="assigned-programs" aria-label="Programas asignados"></div>
-    <div data-assigned-syllabus></div>
+    <div data-assigned-syllabus>
+        <div data-own-assignment-list class="assigned-programs" aria-label="Programas asignados"></div>
+    </div>
 </section>
 <dialog class="training-program-modal training-assigned-reader" data-assigned-reader aria-labelledby="assigned-reader-title">
     <header class="assigned-heading">
@@ -26,18 +27,22 @@
 .assigned-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; }
 .assigned-heading h2 { font-size:23px; margin:0 0 6px; }
 .assigned-heading p, [data-own-assignment-status], .assigned-muted { color:#60708d; font-size:13px; }
-.assigned-programs { display:flex; gap:12px; overflow-x:auto; padding:18px 1px; }
-.assigned-programs .training-program-carousel-card { min-width:265px; flex:0 0 290px; }
+[data-assigned-syllabus] { display:grid; grid-template-columns:minmax(240px,29%) minmax(0,1fr); gap:20px; margin-top:18px; }
+.assigned-programs { display:flex; gap:12px; min-width:0; overflow-x:auto; padding:1px 1px 9px; scroll-snap-type:x mandatory; }
+.assigned-programs .training-program-carousel-card { min-width:0; flex:0 0 100%; scroll-snap-align:start; }
 .assigned-programs .training-program-carousel-select { width:100%; text-align:left; }
 .assigned-programs progress, .assigned-summary progress { display:block; width:100%; height:8px; accent-color:#00a992; margin-top:9px; }
 .assigned-programs progress, .assigned-summary progress { appearance:none; border:0; border-radius:8px; overflow:hidden; background:#e1e6ee; }
 .assigned-programs progress::-webkit-progress-bar, .assigned-summary progress::-webkit-progress-bar { background:#e1e6ee; }
 .assigned-programs progress::-webkit-progress-value, .assigned-summary progress::-webkit-progress-value { background:linear-gradient(90deg,#4265e8,#00a992); border-radius:8px; }
 .assigned-programs progress::-moz-progress-bar, .assigned-summary progress::-moz-progress-bar { background:linear-gradient(90deg,#4265e8,#00a992); border-radius:8px; }
-.assigned-summary { padding:18px; border:1px solid #b8e5dd; border-radius:9px; background:#f0fbf8; margin:8px 0 20px; }
+.assigned-summary { display:flex; flex-direction:column; justify-content:center; min-width:0; padding:20px; border:1px solid #b8e5dd; border-radius:9px; background:#f0fbf8; margin:1px 0 9px; }
+.assigned-summary .assigned-heading { flex-wrap:wrap; }
+.assigned-summary .assigned-heading > div { flex:1 1 280px; min-width:0; overflow-wrap:anywhere; }
+.assigned-summary .assigned-heading > button { flex-shrink:0; }
 .assigned-summary h3 { font-size:19px; margin:0 0 5px; }
 .assigned-summary p { margin:6px 0; }
-[data-assigned-syllabus] .training-module-workspace { grid-template-columns:minmax(240px,30%) minmax(0,1fr); align-items:start; }
+[data-assigned-syllabus] .training-module-workspace { grid-column:1/-1; grid-template-columns:minmax(240px,30%) minmax(0,1fr); align-items:start; }
 [data-assigned-syllabus] .training-module-item { width:100%; text-align:left; }
 [data-assigned-syllabus] .training-module-item small { display:block; }
 .assigned-status { display:inline-flex; border-radius:20px; padding:4px 10px; font-size:12px; background:#eef2ff; color:#3a4ba0; }
@@ -71,6 +76,6 @@ dialog.training-program-modal.assigned-activity-dialog { width:min(900px,94vw); 
 .assigned-activity-dialog legend { font-weight:700; }
 .assigned-activity-dialog input[type=radio], .assigned-activity-dialog input[type=checkbox] { margin-right:10px; }
 [data-assigned-activity-error], [data-assignment-error] { color:#b42318; }
-@media(max-width:700px) { .assigned-heading { align-items:stretch; flex-direction:column; } .training-own-assignments { padding:14px; } [data-assigned-syllabus] .training-module-workspace { grid-template-columns:1fr; } .training-assigned-reader-body { padding:16px; } }
+@media(max-width:700px) { .assigned-heading { align-items:stretch; flex-direction:column; } .training-own-assignments { padding:14px; } [data-assigned-syllabus] { grid-template-columns:1fr; gap:12px; } .assigned-summary .assigned-heading > div { flex-basis:auto; } [data-assigned-syllabus] .training-module-workspace { grid-template-columns:1fr; } .training-assigned-reader-body { padding:16px; } }
 </style>
 @endpush

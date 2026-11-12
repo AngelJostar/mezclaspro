@@ -6,7 +6,8 @@
     .cp-primary:disabled { opacity: .55; cursor: default; }
     .cp-panel button:focus-visible { outline: 2px solid #3d377b; outline-offset: 3px; }
     .cp-table small { display: block; margin-top: .25rem; font-size: .7rem; }
-    .conciliation-view .cp-table.conciliation-table { min-width: 1850px; }
+    .conciliation-view .cp-table.conciliation-table { min-width: 2180px; }
+    .cp-table [data-period-created-at], .cp-table [data-period-sent-at] { white-space: nowrap; }
     .cp-reconciliation-status { display: inline-flex; justify-content: center; align-items: center; min-height: 30px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: #fef3c7; color: #92400e; }
     .cp-reconciliation-status[data-period-status="Aceptada"] { background: #d1fae5; color: #047857; }
     .cp-reconciliation-status[data-period-status="Con cambios"] { background: #fee2e2; color: #b91c1c; }
@@ -61,6 +62,12 @@
     .cp-created { margin-bottom: 12px; color: #047857; }
     .cp-create-dialog { margin: auto; width: min(1480px, calc(100vw - 32px)); background: white; }
     .cp-create-dialog [hidden] { display: none !important; }
+    .cp-create-confirm { margin: auto; width: min(620px, calc(100vw - 32px)); background: white; }
+    .cp-create-confirm h2 { font-size: 1.25rem; line-height: 1.5; }
+    .cp-create-confirm > p { margin: 12px 0; }
+    .cp-create-confirm-actions { display: grid; gap: 12px; margin-top: 20px; }
+    .cp-create-confirm-actions button { width: 100%; white-space: normal; min-height: 44px; }
+    .cp-create-confirm-actions button:disabled { opacity: .55; cursor: wait; }
     .cp-create-filters { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; padding: 0 0 16px; border-bottom: 1px solid #dbe2ee; }
     .cp-create-filters label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
     .cp-required { color: #b91c1c; font-weight: 700; }
@@ -86,6 +93,15 @@
     .cp-create-summary > div + div { border-left: 1px solid #c7e6e0; padding-left: 14px; }
     .cp-create-summary span { font-size: 11px; line-height: 16px; }
     .cp-create-summary strong { font-size: 12px; line-height: 18px; font-weight: 600; }
+    .cp-create-destinations { margin: 12px 0; padding: 12px 14px; border: 1px solid #c7e6e0; border-radius: 6px; background: #f7fcfb; }
+    .cp-create-destinations h3 { font-size: 14px; font-weight: 600; }
+    .cp-create-destinations p { margin: 4px 0 8px; color: #627393; font-size: 12px; }
+    .cp-create-destinations ul { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; }
+    .cp-create-destinations li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px 20px; padding: 8px 0; font-size: 12px; align-items: baseline; }
+    .cp-create-destinations li + li { border-top: 1px solid #dceeea; }
+    .cp-create-destinations li strong { overflow-wrap: anywhere; }
+    .cp-create-destinations li span { white-space: nowrap; }
+    @media(max-width: 520px) { .cp-create-destinations li { grid-template-columns: 1fr auto; } .cp-create-destinations li strong { grid-column: 1 / -1; } }
     .cp-create-dialog footer { align-items: center; }
     .cp-create-dialog footer p { font-size: 12px; color: #7081a0; text-align: center; }
     @media(max-width: 900px) { .cp-create-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cp-create-filters .cp-secondary { justify-self: start; } }

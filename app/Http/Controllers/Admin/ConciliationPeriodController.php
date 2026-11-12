@@ -70,15 +70,20 @@ class ConciliationPeriodController extends Controller
         $createdIds = $created?->creation_batch_key
             ? ConciliationPeriod::where('creation_batch_key', $created->creation_batch_key)->pluck('id') : [$created?->id];
         $createdCount = $groups->whereNotNull('period_id')->whereIn('period_id', $createdIds)->count();
-        return view('admin.instituciones.conciliacion.period', compact('groups', 'filters', 'institutions', 'hospitals', 'activeTab', 'tabCounts', 'filterQuery', 'createdCount'));
+        $createdSentCount = $groups->whereNotNull('period_id')->whereIn('period_id', $createdIds)->whereNotNull('sent_at')->count();
+        return view('admin.instituciones.conciliacion.period', compact('groups', 'filters', 'institutions', 'hospitals', 'activeTab', 'tabCounts', 'filterQuery', 'createdCount', 'createdSentCount'));
     }
 
     private function group(array $filters): array
     {
         $group = $this->periods->groups($filters)->first(fn ($group) => $group['from'] === $filters['desde'] && $group['to'] === $filters['hasta']
+            && $group['institution_id'] == $filters['institucion_id'] && $group['hospital_id'] == $filters['hospital_id']
             && ($group['period_id'] ?? null) == ($filters['period_id'] ?? null));
         abort_unless($group, 404, 'No hay remisiones para este periodo. Actualiza el listado.');
         abort_if(collect($group['rows'])->contains(fn ($row) => $row['unavailable'] ?? false), 409, 'Una remisión del periodo dejó de estar disponible. Revisa sus datos antes de continuar.');
+        abort_unless(count($group['rows']) && collect($group['rows'])->every(fn ($row) =>
+            $row['institution_id'] == $group['institution_id'] && $row['hospital_id'] == $group['hospital_id']),
+            409, 'Todas las remisiones del periodo deben pertenecer al mismo hospital e institución. Revisa el periodo antes de continuar.');
         return $group;
     }
 
@@ -93,6 +98,7 @@ class ConciliationPeriodController extends Controller
         $this->authorizeInternal($request);
         $data = $request->validate([
             'creation_key' => ['required', 'uuid'],
+            'creation_action' => ['sometimes', 'required', Rule::in(['draft', 'send'])],
             'hospital_id' => ['nullable', 'integer', 'exists:hospitals,id'],
             'institucion_id' => ['required', 'integer', 'exists:clientes,id'],
             'desde' => ['required', 'date_format:Y-m-d'],
@@ -107,8 +113,11 @@ class ConciliationPeriodController extends Controller
         ]);
         $data['hospital_id'] = !empty($data['hospital_id']) ? (int) $data['hospital_id'] : null;
         $data['institucion_id'] = (int) $data['institucion_id'];
+        $data['creation_action'] = $data['creation_action'] ?? 'draft';
         ksort($data['selection']);
-        $hash = HospitalConciliationSummary::signature([$request->user()->id, $data['hospital_id'], $data['institucion_id'], $data['selection'], $data['desde'], $data['hasta']]);
+        $hashInput = [$request->user()->id, $data['hospital_id'], $data['institucion_id'], $data['selection'], $data['desde'], $data['hasta']];
+        if ($data['creation_action'] === 'send') $hashInput[] = 'send';
+        $hash = HospitalConciliationSummary::signature($hashInput);
         return DB::transaction(function () use ($request, $data, $hash) {
             // Serialize creation for this institution, including retries of a multi-hospital batch.
             Institucion::whereKey($data['institucion_id'])->lockForUpdate()->firstOrFail();
@@ -135,6 +144,8 @@ class ConciliationPeriodController extends Controller
                     'Una remisión seleccionada ya está incluida en otro periodo. Actualiza las remisiones.');
                 $selected->push($row);
             }
+            abort_if($data['creation_action'] === 'send' && $selected->contains(fn ($row) => $row['amount_cents'] === null), 422,
+                'Registra el precio de todas las remisiones antes de enviarlas a los hospitales. Puedes crear el periodo en borrador.');
             $periods = collect();
             $from = $data['desde'];
             $to = $data['hasta'];
@@ -147,6 +158,19 @@ class ConciliationPeriodController extends Controller
                 ]);
                 $period->items()->createMany($items->map(fn ($row) => ['kind' => $row['kind'], 'mixture_id' => $row['id'], 'snapshot' => $row])->all());
                 $periods->push($period);
+            }
+            if ($data['creation_action'] === 'send') {
+                $groups = $this->periods->groups($data)->whereIn('period_id', $periods->pluck('id'))->keyBy('period_id');
+                foreach ($periods as $period) {
+                    $group = $groups->get($period->id);
+                    abort_unless($group && count($group['rows']) === $period->items()->count()
+                        && collect($group['rows'])->every(fn ($row) => empty($row['unavailable'])
+                            && $row['hospital_id'] == $period->hospital_id && $row['institution_id'] == $period->institution_id),
+                        409, 'Una remisión cambió de hospital o dejó de estar disponible. Actualiza la selección.');
+                    $this->createSubmission($request, $group, (string) Str::uuid(), HospitalConciliationSummary::signature([
+                        'create_and_send', $request->user()->id, $data['creation_key'], $period->id, $group['version'],
+                    ]));
+                }
             }
             return $this->createdResponse($periods, 201);
         }, 3);
@@ -290,23 +314,33 @@ class ConciliationPeriodController extends Controller
             $existing = HospitalConciliationSubmission::where('submission_key', $data['submission_key'])->first();
             if ($existing) {
                 abort_unless(hash_equals($existing->request_hash ?? '', $hash), 409, 'Este envío corresponde a otro resumen. Actualiza el listado.');
-                return response()->json(['folio' => $existing->folio()]);
+                return $this->sentResponse($existing);
             }
             $group = $this->group($filters);
             $this->checkVersion($group, $data['version']);
             abort_if($group['missing_prices'], 422, 'Registra el precio de todas las remisiones antes de enviar el periodo.');
-            if ($group['sent_folio']) return response()->json(['folio' => $group['sent_folio']]);
-            $submission = HospitalConciliationSubmission::create([
-                'submission_key' => $data['submission_key'], 'request_hash' => $hash, 'direction' => 'sent',
-                'hospital_id' => $group['hospital_id'], 'hospital_name' => $group['hospital'],
-                'submitted_by' => $request->user()->id, 'sender_name' => $request->user()->name,
-                'period_from' => $group['from'], 'period_to' => $group['to'],
-                'filters' => ['institucion_id' => $group['institution_id'], 'period_content_hash' => $group['version'], 'modalidad' => 'periodo']
-                    + (isset($group['period_id']) ? ['period_id' => $group['period_id']] : []),
-                'mixture_count' => count($group['rows']), 'conciliable_count' => collect($group['rows'])->where('conciliable', true)->count(),
-                'snapshot' => ConciliationPeriodData::snapshot($group),
-            ]);
-            return response()->json(['folio' => $submission->folio()]);
+            if ($group['sent_folio']) return response()->json(['folio' => $group['sent_folio'], 'sent_at' => $group['sent_at']]);
+            return $this->sentResponse($this->createSubmission($request, $group, $data['submission_key'], $hash));
         });
+    }
+
+    private function createSubmission(Request $request, array $group, string $key, string $hash): HospitalConciliationSubmission
+    {
+        abort_if($group['missing_prices'], 422, 'Registra el precio de todas las remisiones antes de enviar el periodo.');
+        return HospitalConciliationSubmission::create([
+            'submission_key' => $key, 'request_hash' => $hash, 'direction' => 'sent',
+            'hospital_id' => $group['hospital_id'], 'hospital_name' => $group['hospital'],
+            'submitted_by' => $request->user()->id, 'sender_name' => $request->user()->name,
+            'period_from' => $group['from'], 'period_to' => $group['to'],
+            'filters' => ['institucion_id' => $group['institution_id'], 'period_content_hash' => $group['version'], 'modalidad' => 'periodo']
+                + (isset($group['period_id']) ? ['period_id' => $group['period_id']] : []),
+            'mixture_count' => count($group['rows']), 'conciliable_count' => collect($group['rows'])->where('conciliable', true)->count(),
+            'snapshot' => ConciliationPeriodData::snapshot($group),
+        ]);
+    }
+
+    private function sentResponse(HospitalConciliationSubmission $submission)
+    {
+        return response()->json(['folio' => $submission->folio(), 'sent_at' => $submission->created_at?->format('d/m/Y H:i')]);
     }
 }

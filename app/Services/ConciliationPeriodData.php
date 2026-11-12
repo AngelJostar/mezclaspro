@@ -124,20 +124,21 @@ class ConciliationPeriodData
                 $row['to'] = min($row['to'], $filters['hasta']);
                 return $row;
             });
-        $submissions = HospitalConciliationSubmission::whereIn('hospital_id', $allRows->pluck('hospital_id')->unique())->latest('id')->get();
+        $saved = ConciliationPeriod::with('items')
+            ->when($filters['institucion_id'] ?? null, fn ($q, $id) => $q->where('institution_id', $id))
+            ->when($filters['hospital_id'] ?? null, fn ($q, $id) => $q->where('hospital_id', $id))
+            ->whereDate('period_from', '<=', $filters['hasta'])->whereDate('period_to', '>=', $filters['desde'])->get();
+        $submissions = HospitalConciliationSubmission::whereIn('hospital_id', $allRows->pluck('hospital_id')->merge($saved->pluck('hospital_id'))->unique())->latest('id')->get();
         $latest = ConciliationInboxData::indexSubmissions($submissions);
         $groups = $rows->groupBy(fn ($row) => implode(':', [$row['institution_id'], $row['hospital_id'], $row['from'], $row['to']]))
             ->map(function ($items, $key) {
                 $first = $items->first();
                 $group = array_intersect_key($first, array_flip(['institution_id', 'institution', 'hospital_id', 'hospital', 'from', 'to']));
                 $group['key'] = hash('sha256', $key);
+                $group['created_at'] = null;
                 $group['rows'] = $items->sortBy('key', SORT_NATURAL)->values()->all();
                 return $group;
             })->values();
-        $saved = ConciliationPeriod::with('items')
-            ->when($filters['institucion_id'] ?? null, fn ($q, $id) => $q->where('institution_id', $id))
-            ->when($filters['hospital_id'] ?? null, fn ($q, $id) => $q->where('hospital_id', $id))
-            ->whereDate('period_from', '<=', $filters['hasta'])->whereDate('period_to', '>=', $filters['desde'])->get();
         foreach ($saved as $period) {
             $items = $period->items->map(function ($item) use ($allRows, $period) {
                 $row = $allRows->get($item->kind.'-'.$item->mixture_id);
@@ -154,6 +155,10 @@ class ConciliationPeriodData
                 return array_replace($row, ['from' => $period->period_from->toDateString(), 'to' => $period->period_to->toDateString()]);
             })->sortBy('key', SORT_NATURAL)->values();
             $group = array_intersect_key($items->first(), array_flip(['institution_id', 'institution', 'hospital_id', 'hospital', 'from', 'to']));
+            // A saved period keeps its original recipient even if a source remittance changes hospital.
+            $group['institution_id'] = $period->institution_id;
+            $group['hospital_id'] = $period->hospital_id;
+            $group['created_at'] = $period->created_at?->format('d/m/Y H:i');
             $groups->push($group + ['key' => 'period-'.$period->id, 'period_id' => $period->id, 'rows' => $items->all()]);
         }
         $decisions = ConciliationPeriodDecision::whereIn('group_key', $groups->pluck('key'))->latest('id')->get()->groupBy('group_key');
@@ -161,8 +166,18 @@ class ConciliationPeriodData
             $group += self::totals($group['rows']);
             $group['version'] = self::version($group);
             $sent = $submissions->first(fn ($submission) => $submission->direction === 'sent'
+                && $submission->hospital_id == $group['hospital_id']
                 && ($submission->filters['period_content_hash'] ?? null) === $group['version']);
             $group['sent_folio'] = $sent?->folio();
+            // Keep the last delivery date visible after edits, without mixing periods or recipients.
+            $lastSent = $submissions->first(fn ($submission) => $submission->direction === 'sent'
+                && $submission->hospital_id == $group['hospital_id']
+                && ($submission->filters['institucion_id'] ?? null) == $group['institution_id']
+                && ($submission->filters['modalidad'] ?? null) === 'periodo'
+                && ($submission->filters['period_id'] ?? null) == ($group['period_id'] ?? null)
+                && $submission->period_from?->toDateString() === $group['from']
+                && $submission->period_to?->toDateString() === $group['to']);
+            $group['sent_at'] = $lastSent?->created_at?->format('d/m/Y H:i');
             $directions = collect($group['rows'])->map(fn ($row) => ($latest[$row['hospital_id'].':'.$row['kind'].':'.$row['id']] ?? null)?->direction);
             $group['bucket'] = $directions->contains(null) ? 'pendientes' : ($directions->contains(fn ($direction) => $direction !== 'sent') ? 'recibidas' : 'enviadas');
             $group['submission_key'] = (string) Str::uuid();

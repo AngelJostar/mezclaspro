@@ -2,12 +2,17 @@
     const section = root.querySelector('[data-own-assignments]');
     if (!section) return;
     root.dataset.persistedLearning = 'true';
-    const home = section.closest('[data-learner-panel]');
+    const home = root.querySelector('[data-learner-panel="home"]');
+    const training = section.closest('[data-learner-panel]');
+    const dashboard = home.querySelector('[data-learner-dashboard]');
+    const dashboardContent = dashboard.querySelector('[data-dashboard-content]');
+    const dashboardMessage = dashboard.querySelector('[data-dashboard-message]');
     const rolePanel = section.closest('[data-role-panel]');
     const list = section.querySelector('[data-own-assignment-list]');
     const syllabus = section.querySelector('[data-assigned-syllabus]');
     const status = section.querySelector('[data-own-assignment-status]');
     const refresh = section.querySelector('[data-refresh-assignments]');
+    const refreshDashboard = dashboard.querySelector('[data-refresh-dashboard]');
     const dialog = root.querySelector('[data-assigned-reader]');
     const chapters = dialog.querySelector('[data-assigned-chapters]');
     const activity = root.querySelector('[data-assigned-activity]');
@@ -47,7 +52,7 @@
 
     // Retain the established navigation while replacing the browser-only learner preview.
     const mounts = {};
-    ['tasks', 'training', 'results', 'certificates'].forEach(id => {
+    ['tasks', 'results', 'certificates'].forEach(id => {
         const panel = root.querySelector('[data-learner-panel="' + id + '"]');
         Array.from(panel.children).forEach(child => { child.hidden = true; });
         mounts[id] = element('section', '', 'assigned-activities'); panel.append(mounts[id]);
@@ -55,7 +60,8 @@
     mounts.exams = root.querySelector('[data-assigned-exams]');
     mounts.exams.className = 'assigned-activities';
     const applyNavigation = () => {
-        Array.from(home.children).filter(child => ![section, dialog, activity].includes(child)).forEach(child => { child.hidden = true; });
+        Array.from(home.children).forEach(child => { child.hidden = child !== dashboard; });
+        Array.from(training.children).forEach(child => { child.hidden = child !== section; });
         root.querySelector('.training-obligation-flow').hidden = true;
         root.querySelectorAll('[data-learner-tab]').forEach(tab => { tab.hidden = false; });
     };
@@ -88,7 +94,7 @@
     function moduleState(module) { return module.state === 'completed' ? 'Completado' : module.state === 'locked' ? 'Pendiente' : 'En curso'; }
 
     function renderSyllabus() {
-        syllabus.replaceChildren();
+        syllabus.replaceChildren(list);
         const assigned = currentAssignment(); if (!assigned) return;
         const summary = element('section', '', 'assigned-summary');
         const heading = element('div', '', 'assigned-heading');
@@ -325,9 +331,17 @@
         if (!tasks) mounts.tasks.append(element('p', 'No hay tareas publicadas para tus módulos asignados.'));
         if (!exams) mounts.exams.append(element('p', 'No hay exámenes publicados para tus módulos asignados.'));
         if (!results) mounts.results.append(element('p', 'Aún no has entregado exámenes.'));
-        mounts.training.replaceChildren(element('h2', 'Mi capacitación'), element('p', 'Consulta el temario y retoma tu capítulo actual desde Inicio.'), button('Ir a mi temario', () => activateLearnerTab('home', true)));
         mounts.certificates.replaceChildren(element('h2', 'Certificados'), element('p', 'Los resultados de tus capacitaciones se muestran en Resultados. Solicita al administrador la emisión de tu certificado.'));
+        const completed = assignments.filter(assigned => assigned.status === 'completed');
+        completed.forEach(assigned => {
+            const card = element('article');
+            card.append(element('h3', assigned.title), badge('Capacitación concluida', 'completed'), element('p', 'Consulta con tu administrador la emisión de este certificado.'));
+            mounts.certificates.append(card);
+        });
+        if (!completed.length) mounts.certificates.append(element('p', 'Aún no tienes capacitaciones concluidas para consultar su certificación.'));
     }
+
+    @include('admin.capacitaciones.partials.learner-dashboard-script')
 
     function render() {
         applyNavigation(); list.replaceChildren();
@@ -342,11 +356,12 @@
                 element('small', assigned.modules.length + ' módulos · Inicio ' + assigned.start_date.split('-').reverse().join('/')), element('b', assigned.progress + '%'), progressBar(assigned.progress));
             card.append(choice); list.append(card);
         });
-        renderSyllabus(); renderActivities();
+        renderSyllabus(); renderActivities(); renderDashboard();
     }
     async function load() {
         if (loading || busy || activity.open) return;
-        loading = true; refresh.disabled = true; const version = generation;
+        loading = true; refresh.disabled = true; refreshDashboard.disabled = true; const version = generation;
+        dashboard.setAttribute('aria-busy', 'true');
         try {
             const url = new URL(@json(route('admin.capacitaciones.asignaciones.index')), location.href);
             if (canManage && viewedUserId) url.searchParams.set('user_id', viewedUserId);
@@ -354,6 +369,7 @@
             if (version !== generation) return;
             assignments = data.assignments; readOnly = data.read_only || false; canReview = data.can_review || false;
             section.querySelector('[data-assigned-student-name]').textContent = data.student?.name || @json(auth()->user()?->name);
+            dashboard.querySelector('[data-dashboard-student-name]').textContent = data.student?.name || @json(auth()->user()?->name);
             render();
             if (dialog.open) {
                 const updated = assignments.find(item => item.id === activeReaderId);
@@ -361,16 +377,31 @@
                 else if (dialog.dataset.learningPosition !== JSON.stringify(updated.next) + ':' + updated.completed_steps) renderReader(updated);
             }
         } catch (error) {
+            if (version !== generation) return;
+            assignments = [];
             list.replaceChildren(); syllabus.replaceChildren(); closeReader();
             status.textContent = 'No se pudieron cargar las capacitaciones. Pulsa Actualizar para intentar nuevamente.';
-        } finally { loading = false; refresh.disabled = false; if (version !== generation && visible()) load(); }
+            dashboardContent.hidden = true; dashboardMessage.textContent = status.textContent;
+            Object.values(mounts).forEach(mount => mount.replaceChildren(element('p', status.textContent)));
+        } finally {
+            loading = false; refresh.disabled = false; refreshDashboard.disabled = false;
+            dashboard.setAttribute('aria-busy', 'false');
+            if (version !== generation && visible()) load();
+        }
     }
     root.querySelector('[data-open-learner-panel]')?.addEventListener('click', () => {
         if (!canManage) return;
         viewedUserId = Number(selector?.selectedOptions[0]?.dataset.userId) || currentUserId;
-        generation++; assignments = []; selectedId = null; closeReader(); closeActivity(); load();
+        generation++; assignments = []; selectedId = null; moduleId = null; closeReader(); closeActivity();
+        list.replaceChildren(); syllabus.replaceChildren();
+        Object.values(mounts).forEach(mount => mount.replaceChildren());
+        section.querySelector('[data-assigned-student-name]').textContent = '';
+        dashboard.querySelector('[data-dashboard-student-name]').textContent = '';
+        dashboardContent.hidden = true; dashboardMessage.textContent = 'Cargando resumen…';
+        status.textContent = 'Cargando capacitaciones…'; load();
     });
     refresh.addEventListener('click', load);
+    refreshDashboard.addEventListener('click', load);
     root.addEventListener('training-role-change', () => { applyNavigation(); if (visible()) load(); });
     root.addEventListener('training-learner-tab', () => { applyNavigation(); if (visible()) load(); });
     window.addEventListener('focus', () => { if (visible()) load(); });

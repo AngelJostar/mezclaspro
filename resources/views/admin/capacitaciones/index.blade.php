@@ -1455,7 +1455,7 @@
 
             <div id="learner-panel-home" class="training-learner-view" data-learner-panel="home"
                 role="tabpanel" aria-labelledby="learner-tab-home">
-                @include('admin.capacitaciones.partials.assigned-training')
+                @include('admin.capacitaciones.partials.learner-dashboard')
                 <div class="training-learner-hero">
                     <div>
                         <span data-next-obligation-eyebrow>Siguiente obligacion</span>
@@ -1504,6 +1504,7 @@
 
             <div id="learner-panel-training" class="training-learner-view" data-learner-panel="training"
                 role="tabpanel" aria-labelledby="learner-tab-training" hidden>
+                @include('admin.capacitaciones.partials.assigned-training')
                 <section class="training-learner-section">
                     <header class="training-learner-section-heading">
                         <div>
