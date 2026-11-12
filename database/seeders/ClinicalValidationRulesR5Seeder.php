@@ -180,7 +180,12 @@ class ClinicalValidationRulesR5Seeder extends Seeder
             ['MAGNESIUM', 'Magnesio', 'groups.magnesium.total_meq', 15], ['CALCIUM_PHOSPHATE', 'Calcio y fosfato combinados', 'groups.calcium_phosphate.total_meq', 45],
             ['CHLORIDE', 'Cloro', 'groups.chloride.total_meq', 180], ['ACETATE', 'Acetato', 'groups.acetate.total_meq', 85],
         ] as [$key, $label, $source, $limit]) {
-            $add("NP.R5.CHEM.{$key}.PER1000", "Concentración final de {$label}", 'both', 'blocking', $source, 'amount_per_1000_ml', $key === 'CALCIUM_PHOSPHATE' ? '<=' : '<', ['threshold_value' => $limit], 'mEq/1000 mL', "La concentración de {$label} excede el límite químico permitido.");
+            $formula = $key === 'CALCIUM_PHOSPHATE' ? 'volume_capacity_per_1000_ml' : 'amount_per_1000_ml';
+            $unit = $key === 'CALCIUM_PHOSPHATE' ? 'mEq' : 'mEq/1000 mL';
+            $message = $key === 'CALCIUM_PHOSPHATE'
+                ? 'La suma de calcio y fosfato excede la capacidad máxima que soporta el volumen total.'
+                : "La concentración de {$label} excede el límite químico permitido.";
+            $add("NP.R5.CHEM.{$key}.PER1000", "Concentración final de {$label}", 'both', 'blocking', $source, $formula, $key === 'CALCIUM_PHOSPHATE' ? '<=' : '<', ['threshold_value' => $limit], $unit, $message);
         }
         $add('NP.R5.CHEM.WATER.PERCENT', 'Agua máxima cuando hay lípidos', 'both', 'blocking', 'groups.water.volume_ml', 'percentage_of_volume', '<=', ['threshold_value' => 60], '%', 'El agua no debe exceder el 60% del volumen total cuando la mezcla contiene lípidos.', ['required_group' => 'lipids']);
 

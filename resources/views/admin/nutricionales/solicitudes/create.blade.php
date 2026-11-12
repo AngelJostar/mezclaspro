@@ -5,6 +5,14 @@
             <span class="h-10 w-10 shrink-0" aria-hidden="true"></span>
             <h1 data-workflow-heading class="flex-1 text-center text-2xl font-medium text-gray-800">SOLICITUD DE NUTRICIÓN PARENTERAL</h1>
             <div class="flex shrink-0 items-center gap-2">
+                <button type="button" data-export-validation-evidence
+                    data-export-url="{{ route('admin.nutricionales.solicitudes.evidencia-validacion') }}"
+                    data-form-id="nutrition-request-form"
+                    class="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-indigo-600 px-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    title="Exportar los valores y errores visibles como evidencia temporal">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M9 15h6"/><path d="M12 12v6"/></svg>
+                    <span>Exportar evidencia PDF</span>
+                </button>
                 @role('Super Admin')
                     <button type="button" id="toggle-macro-layout"
                         class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-emerald-600 text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"

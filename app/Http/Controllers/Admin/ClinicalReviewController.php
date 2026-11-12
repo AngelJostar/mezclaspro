@@ -17,7 +17,11 @@ class ClinicalReviewController extends Controller
     public function validateRules(Request $request, string $kind, ClinicalPayload $payload, ClinicalRuleEvaluator $rules)
     {
         abort_unless($kind === 'nutricionales', 404);
-        abort_unless($request->user()->can('nutricionales_solicitudes_update'), 403);
+        abort_unless(
+            $request->user()->can('nutricionales_solicitudes_store')
+                || $request->user()->can('nutricionales_solicitudes_update'),
+            403
+        );
         $data = $payload->withNutritionUnits($request->all());
         $payload->validatePatient($kind, $data);
         $result = $rules->evaluate($payload->normalize($kind, $data));

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Nutricionales\Input;
 use App\Models\ValidationRule;
+use App\Services\Agents\AgentAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -68,13 +69,15 @@ class ValidationRuleController extends Controller
         'amount_per_weight_per_day' => 'Cantidad ÷ peso ÷ día',
         'percentage_of_volume' => '(Cantidad × 100) ÷ volumen total',
         'amount_per_1000_ml' => '(Cantidad × 1000) ÷ volumen total',
+        'volume_capacity_per_1000_ml' => 'Capacidad máxima: (volumen total × límite) ÷ 1000',
         'dose_times_weight_percentage_of_volume' => '(Dosis × peso × 100) ÷ volumen total',
     ];
 
     public function index(Request $request)
     {
         $canManage = $request->user()->hasRole('Super Admin');
-        $canApprove = $canManage || $request->user()->hasRole('Auxiliar de responsable sanitario');
+        $canEdit = app(AgentAccess::class)->canEditValidationRules($request->user());
+        $canApprove = app(AgentAccess::class)->canApproveValidationRules($request->user());
         $engine = in_array($request->string('engine')->toString(), ValidationRule::ENGINES, true)
             ? $request->string('engine')->toString()
             : null;
@@ -102,9 +105,15 @@ class ValidationRuleController extends Controller
         $approveRouteName = $canManage
             ? 'admin.superadministrator.validation-rules.approve'
             : 'admin.validation-rules.approve';
+        $editRouteName = $canManage
+            ? 'admin.superadministrator.validation-rules.edit'
+            : 'admin.validation-rules.edit';
+        $deactivateRouteName = $canManage
+            ? 'admin.superadministrator.validation-rules.deactivate'
+            : 'admin.validation-rules.deactivate';
 
         return view('admin.validation-rules.index', compact(
-            'rules', 'engine', 'search', 'canManage', 'canApprove', 'indexRouteName', 'approveRouteName'
+            'rules', 'engine', 'search', 'canManage', 'canEdit', 'canApprove', 'indexRouteName', 'approveRouteName', 'editRouteName', 'deactivateRouteName'
         ));
     }
 
@@ -149,14 +158,28 @@ class ValidationRuleController extends Controller
             ->with('status', 'La regla se guardó como configuración no activa.');
     }
 
-    public function edit(ValidationRule $validationRule)
+    public function edit(Request $request, ValidationRule $validationRule)
     {
         if ($validationRule->is_enforced) {
-            return redirect()->route('admin.superadministrator.validation-rules.index')
+            $indexRouteName = $request->user()->hasRole('Super Admin')
+                ? 'admin.superadministrator.validation-rules.index'
+                : 'admin.validation-rules.index';
+
+            return redirect()->route($indexRouteName)
                 ->withErrors(['rule' => 'Desactiva la regla antes de modificarla.']);
         }
 
-        return view('admin.validation-rules.edit', $this->formData(compact('validationRule')));
+        $canManage = $request->user()->hasRole('Super Admin');
+        $updateRouteName = $canManage
+            ? 'admin.superadministrator.validation-rules.update'
+            : 'admin.validation-rules.update';
+        $indexRouteName = $canManage
+            ? 'admin.superadministrator.validation-rules.index'
+            : 'admin.validation-rules.index';
+
+        return view('admin.validation-rules.edit', $this->formData(compact(
+            'validationRule', 'updateRouteName', 'indexRouteName'
+        )));
     }
 
     public function update(Request $request, ValidationRule $validationRule)
@@ -172,7 +195,11 @@ class ValidationRuleController extends Controller
         $data['version'] = $validationRule->version + 1;
         $validationRule->update($data);
 
-        return redirect()->route('admin.superadministrator.validation-rules.index')
+        $indexRouteName = $request->user()->hasRole('Super Admin')
+            ? 'admin.superadministrator.validation-rules.index'
+            : 'admin.validation-rules.index';
+
+        return redirect()->route($indexRouteName)
             ->with('status', 'La regla se actualizó. Continúa sin aplicarse a solicitudes.');
     }
 
@@ -386,6 +413,12 @@ class ValidationRuleController extends Controller
         }
         if ($data['operator'] !== 'between' && !isset($data['threshold_value'])) {
             throw ValidationException::withMessages(['threshold_value' => 'Captura el valor contra el que se comparará el resultado.']);
+        }
+        if ($data['formula_template'] === 'volume_capacity_per_1000_ml') {
+            if ($data['operator'] !== '<=') {
+                throw ValidationException::withMessages(['operator' => 'La capacidad máxima del volumen debe compararse como menor o igual.']);
+            }
+            $data['unit'] = 'mEq';
         }
 
         $data['applicability'] = array_filter([

@@ -36,6 +36,7 @@ class ClinicalRuleEvaluator
         $findings = [];
         $evaluations = [];
         foreach ($case['mixtures'] ?? [] as $mixtureIndex => $mixture) {
+            $firstFindingIndex = count($findings);
             $facts = $this->facts($case, $mixture);
             $matchedCompositionCode = null;
             foreach ($rules as $rule) {
@@ -74,6 +75,9 @@ class ClinicalRuleEvaluator
                     $findings[] = $this->finding($rule, $mixtureIndex, $facts, $result, $matchedCompositionCode);
                 }
             }
+
+            $mixtureFindings = array_splice($findings, $firstFindingIndex);
+            array_push($findings, ...$this->prioritizeDependentFindings($mixtureFindings));
         }
 
         return ['findings' => $findings, 'evaluations' => $evaluations];
@@ -304,7 +308,7 @@ class ClinicalRuleEvaluator
             ? $this->compositionExplanation($result['result'] ?? [])
             : null;
         $calculation = $rule->engine === 'mathematical'
-            ? 'Resultado: '.($result['value'] ?? 'no disponible').' '.($result['unit'] ?? '').'; criterio: '.$this->criterion($rule->configuration).'.'
+            ? $this->mathematicalCalculation($rule->configuration, $result)
             : $compositionExplanation['calculation'];
         $mathematicalSuggestion = $rule->engine === 'mathematical'
             ? $this->mathematicalSuggestion($rule, $facts, $result, $match[1] ?? null)
@@ -337,8 +341,10 @@ class ClinicalRuleEvaluator
         $value = (float) $result['value'];
         $component = implode(' / ', $facts['group_component_names'][$group] ?? []) ?: $this->groupLabel((string) $group);
 
-        if ($formula === 'direct_value') {
-            $rawTarget = match ($operator) {
+        if (in_array($formula, ['direct_value', 'volume_capacity_per_1000_ml'], true)) {
+            $rawTarget = $formula === 'volume_capacity_per_1000_ml'
+                ? ($result['comparison_value'] ?? null)
+                : match ($operator) {
                 '<', '<=', '>', '>=' => isset($configuration['threshold_value']) ? (float) $configuration['threshold_value'] : null,
                 'between' => $value < (float) ($configuration['threshold_min'] ?? 0)
                     ? (float) $configuration['threshold_min']
@@ -574,6 +580,49 @@ class ClinicalRuleEvaluator
         return ($configuration['operator'] ?? null) === 'between'
             ? 'entre '.$configuration['threshold_min'].' y '.$configuration['threshold_max'].' '.$unit
             : ($configuration['operator'] ?? '').' '.($configuration['threshold_value'] ?? '').' '.$unit;
+    }
+
+    private function mathematicalCalculation(array $configuration, array $result): string
+    {
+        $value = $result['value'] ?? 'no disponible';
+        $unit = $result['unit'] ?? '';
+        if (($configuration['formula_template'] ?? null) === 'volume_capacity_per_1000_ml') {
+            return 'La suma de mEq capturados: '.$value.' '.$unit.'; capacidad máxima es de: '
+                .($result['comparison_value'] ?? 'no disponible').' '.$unit
+                .' = (volumen total × '.($configuration['threshold_value'] ?? '—').') ÷ 1000.';
+        }
+
+        return 'Resultado: '.$value.' '.$unit.'; criterio: '.$this->criterion($configuration).'.';
+    }
+
+    private function prioritizeDependentFindings(array $findings): array
+    {
+        $waterFailure = collect($findings)->first(
+            fn (array $finding) => str_ends_with((string) ($finding['rule_code'] ?? ''), '.CHEM.WATER.PERCENT')
+        );
+
+        if (! $waterFailure) return $findings;
+
+        foreach ($findings as &$finding) {
+            if (str_ends_with((string) ($finding['rule_code'] ?? ''), '.CHEM.CALCIUM_PHOSPHATE.PER1000')) {
+                $finding['suggestion'] = 'Ajusta primero el volumen total de acuerdo con el error de agua y vuelve a validar. '
+                    .'La capacidad máxima de calcio y fosfato se recalculará con el nuevo volumen total.';
+            }
+        }
+        unset($finding);
+
+        usort($findings, function (array $left, array $right): int {
+            $priority = static function (array $finding): int {
+                $code = (string) ($finding['rule_code'] ?? '');
+                if (str_ends_with($code, '.CHEM.WATER.PERCENT')) return 0;
+                if (str_ends_with($code, '.CHEM.CALCIUM_PHOSPHATE.PER1000')) return 2;
+                return 1;
+            };
+
+            return $priority($left) <=> $priority($right);
+        });
+
+        return $findings;
     }
 
     private function audit(ValidationRule $rule, int $mixtureIndex, string $status, array $result = []): array

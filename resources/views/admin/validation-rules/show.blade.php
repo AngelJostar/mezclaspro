@@ -46,12 +46,17 @@
                 $sourceLabelWithoutUnit = preg_replace('/\s*\([^)]*\)\s*$/u', '', $sourceLabel);
                 $operatorSymbols = ['<' => '<', '<=' => '≤', '>' => '>', '>=' => '≥', '==' => '=', 'between' => 'entre'];
                 $formulaTemplate = $config['formula_template'] ?? 'direct_value';
-                $formulaExpression = $formulaTemplate === 'direct_value'
-                    ? $sourceLabelWithoutUnit
-                    : $sourceLabelWithoutUnit.' · '.($formulas[$formulaTemplate] ?? $formulaTemplate);
-                $readableExpression = $operator === 'between'
-                    ? $formulaExpression.' entre '.($config['threshold_min'] ?? '—').' y '.($config['threshold_max'] ?? '—').' '.($config['unit'] ?? '')
-                    : $formulaExpression.' '.($operatorSymbols[$operator] ?? $operator).' '.($config['threshold_value'] ?? '—').' '.($config['unit'] ?? '');
+                if ($formulaTemplate === 'volume_capacity_per_1000_ml') {
+                    $readableExpression = 'Capacidad máxima = (volumen total × '.($config['threshold_value'] ?? '—').') ÷ 1000; '
+                        .$sourceLabelWithoutUnit.' '.($operatorSymbols[$operator] ?? $operator).' capacidad máxima '.($config['unit'] ?? '');
+                } else {
+                    $formulaExpression = $formulaTemplate === 'direct_value'
+                        ? $sourceLabelWithoutUnit
+                        : $sourceLabelWithoutUnit.' · '.($formulas[$formulaTemplate] ?? $formulaTemplate);
+                    $readableExpression = $operator === 'between'
+                        ? $formulaExpression.' entre '.($config['threshold_min'] ?? '—').' y '.($config['threshold_max'] ?? '—').' '.($config['unit'] ?? '')
+                        : $formulaExpression.' '.($operatorSymbols[$operator] ?? $operator).' '.($config['threshold_value'] ?? '—').' '.($config['unit'] ?? '');
+                }
                 $applicability = array_filter([
                     'Grupo obligatorio' => isset($config['applicability']['required_group']) ? ($groups[$config['applicability']['required_group']] ?? $config['applicability']['required_group']) : null,
                     'Grupo clínico del paciente' => $config['applicability']['patient_group'] ?? null,

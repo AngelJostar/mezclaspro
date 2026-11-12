@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AiAgent;
+use App\Models\ClinicalSource;
 use App\Services\Agents\AgentAccess;
 use App\Services\Agents\AgentConfiguration;
 use App\Services\Agents\AgentRunner;
+use App\Services\Clinical\ClinicalEvidence;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class AgentPortalController extends Controller
@@ -24,6 +27,7 @@ class AgentPortalController extends Controller
         $hospitalIds = $hospitalScoped ? $user->accessibleHospitalIds() : [];
         $findings = null;
         $runs = collect();
+        $clinicalManuals = collect();
         if ($agent) {
             $query = $agent->findings();
             $runQuery = $agent->runs();
@@ -37,8 +41,20 @@ class AgentPortalController extends Controller
             if ($hospitalScoped) {
                 $runs = $runs->filter(fn ($run) => !array_diff($run->configuration['access_hospital_ids'] ?? [], $hospitalIds));
             }
+
+            if ($agent->integration_key === ClinicalEvidence::KEY) {
+                $clinicalManuals = ClinicalSource::current()
+                    ->where('category', 'nutricionales')
+                    ->where('is_manual', true)
+                    ->whereIn('manual_type', ['npt_adulto', 'npt_pediatrico'])
+                    ->orderByDesc('approved_at')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->unique('manual_type')
+                    ->keyBy('manual_type');
+            }
         }
-        return view('admin.agents.index', compact('agents', 'agent', 'permissions', 'configuration', 'hospitalScoped', 'findings', 'runs'));
+        return view('admin.agents.index', compact('agents', 'agent', 'permissions', 'configuration', 'hospitalScoped', 'findings', 'runs', 'clinicalManuals'));
     }
 
     public function update(Request $request, AiAgent $agent, AgentAccess $access)
@@ -54,6 +70,24 @@ class AgentPortalController extends Controller
         $agent->source_fingerprint = null;
         $agent->save();
         return redirect()->route('admin.agents.show', $agent)->with('status', 'Información e instrucciones del agente actualizadas.');
+    }
+
+    public function manual(Request $request, ClinicalSource $source, AgentAccess $access)
+    {
+        abort_unless($access->canViewValidationRules($request->user()), 403);
+        abort_unless(
+            $source->is_manual
+                && !$source->superseded_at
+                && in_array($source->manual_type, ['npt_adulto', 'npt_pediatrico'], true)
+                && $source->file_path
+                && Storage::disk('local')->exists($source->file_path),
+            404
+        );
+
+        return Storage::disk('local')->download($source->file_path, $source->file_name, [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function run(Request $request, AiAgent $agent, AgentAccess $access, AgentRunner $runner)

@@ -109,6 +109,9 @@
                 expression() {
                     let label = this.variableLabels[this.source] || 'Dato evaluado';
                     label = label.replace(/\s*\([^)]*\)\s*$/, '');
+                    if (this.formula === 'volume_capacity_per_1000_ml') {
+                        return `Capacidad máxima = (volumen total × ${this.threshold || '—'}) ÷ 1000; ${label} ${this.operator === '<=' ? '≤' : this.operator} capacidad máxima ${this.unit}`.trim();
+                    }
                     if (this.formula !== 'direct_value') label += ' · ' + (this.formulaLabels[this.formula] || this.formula);
                     if (this.operator === 'between') return `${label} entre ${this.minimum || '—'} y ${this.maximum || '—'} ${this.unit}`.trim();
                     const symbols = { '<': '<', '<=': '≤', '>': '>', '>=': '≥', '==': '=' };
@@ -139,5 +142,5 @@
         </section>
     @endif
 
-    <div class="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5"><a href="{{ route('admin.superadministrator.validation-rules.index') }}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancelar</a><button class="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800">Guardar configuración</button></div>
+    <div class="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5"><a href="{{ route($indexRouteName ?? 'admin.superadministrator.validation-rules.index') }}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancelar</a><button class="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800">Guardar configuración</button></div>
 </div>

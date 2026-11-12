@@ -129,7 +129,7 @@ Route::get('solicitudes/mensajes/estado', [MixtureMessageController::class, 'sum
 Route::post('solicitudes/validacion-clinica/{kind}', [\App\Http\Controllers\Admin\ClinicalReviewController::class, 'validateRequest'])
     ->where('kind', 'nutricionales|oncologicos|antibioticos')->middleware('throttle:10,1')->name('solicitudes.clinical.validate');
 Route::post('solicitudes/validacion-reglas/{kind}', [\App\Http\Controllers\Admin\ClinicalReviewController::class, 'validateRules'])
-    ->where('kind', 'nutricionales')->middleware('throttle:30,1')->name('solicitudes.rules.validate');
+    ->where('kind', 'nutricionales')->middleware('throttle:120,1')->name('solicitudes.rules.validate');
 Route::prefix('solicitudes/mensajes/{kind}/{target}')
     ->where(['kind' => 'nutricionales|oncologicos|antibioticos', 'target' => '[0-9]+'])
     ->group(function () {
@@ -224,6 +224,7 @@ Route::prefix('distribucion')
 
 Route::prefix('centro-de-agentes')->name('agents.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Admin\AgentPortalController::class, 'index'])->name('index');
+    Route::get('/manuales/{source}/archivo', [\App\Http\Controllers\Admin\AgentPortalController::class, 'manual'])->whereNumber('source')->name('manual');
     Route::get('/{agent}', [\App\Http\Controllers\Admin\AgentPortalController::class, 'index'])->whereNumber('agent')->name('show');
     Route::put('/{agent}', [\App\Http\Controllers\Admin\AgentPortalController::class, 'update'])->whereNumber('agent')->name('update');
     Route::post('/{agent}/ejecutar', [\App\Http\Controllers\Admin\AgentPortalController::class, 'run'])->whereNumber('agent')->middleware('throttle:10,1')->name('run');
@@ -254,13 +255,23 @@ Route::prefix('superadministrador')
 
 Route::prefix('motores-validacion')
     ->name('validation-rules.')
-    ->middleware(['role:Super Admin|Auxiliar de responsable sanitario'])
+    ->middleware(['validation-rules.view'])
     ->group(function () {
         Route::get('/reglas', [ValidationRuleController::class, 'index'])
             ->name('index');
         Route::get('/reglas/{validationRule}', [ValidationRuleController::class, 'show'])
             ->name('show');
+        Route::get('/reglas/{validationRule}/editar', [ValidationRuleController::class, 'edit'])
+            ->middleware('validation-rules.edit')
+            ->name('edit');
+        Route::put('/reglas/{validationRule}', [ValidationRuleController::class, 'update'])
+            ->middleware('validation-rules.edit')
+            ->name('update');
+        Route::patch('/reglas/{validationRule}/desactivar', [ValidationRuleController::class, 'deactivate'])
+            ->middleware('validation-rules.edit')
+            ->name('deactivate');
         Route::patch('/reglas/{validationRule}/aprobar', [ValidationRuleController::class, 'approve'])
+            ->middleware('validation-rules.approve')
             ->name('approve');
     });
 
@@ -355,6 +366,10 @@ Route::get('nutricionales/solicitudes', [SolicitudController::class, 'index'])->
 // Ruta para mostrar el formulario de creación de solicitud
 Route::get('nutricionales/solicitudes/create', [SolicitudController::class, 'create'])->name('nutricionales.solicitudes.create')
     ->middleware(['can:nutricionales_solicitudes_create']);
+
+Route::post('nutricionales/solicitudes/evidencia-validacion/pdf', \App\Http\Controllers\Admin\NutritionEvidencePdfController::class)
+    ->name('nutricionales.solicitudes.evidencia-validacion')
+    ->middleware('throttle:20,1');
 
 // Ruta para almacenar una nueva solicitud
 Route::post('nutricionales/solicitudes', [SolicitudController::class, 'store'])->name('nutricionales.solicitudes.store')

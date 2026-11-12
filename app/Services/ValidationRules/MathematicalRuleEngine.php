@@ -16,11 +16,13 @@ class MathematicalRuleEngine
             return $this->incomplete('No se encontró un valor numérico para el dato de origen.');
         }
 
-        $value = match ($configuration['formula_template'] ?? null) {
+        $formula = $configuration['formula_template'] ?? null;
+        $value = match ($formula) {
             'direct_value' => (float) $source,
             'amount_per_weight', 'amount_per_weight_per_day' => $this->divide((float) $source, data_get($facts, 'patient.weight_kg'), 'peso'),
             'percentage_of_volume' => $this->divide((float) $source * 100, data_get($facts, 'mixture.total_volume_ml'), 'volumen total'),
             'amount_per_1000_ml' => $this->divide((float) $source * 1000, data_get($facts, 'mixture.total_volume_ml'), 'volumen total'),
+            'volume_capacity_per_1000_ml' => (float) $source,
             'dose_times_weight_percentage_of_volume' => $this->dosePercentage((float) $source, $facts),
             default => throw new InvalidArgumentException('Plantilla matemática no permitida.'),
         };
@@ -30,12 +32,20 @@ class MathematicalRuleEngine
         }
 
         $operator = $configuration['operator'] ?? null;
+        $comparisonValue = (float) ($configuration['threshold_value'] ?? 0);
+        if ($formula === 'volume_capacity_per_1000_ml') {
+            $volume = data_get($facts, 'mixture.total_volume_ml');
+            if (!is_numeric($volume) || (float) $volume <= 0) {
+                return $this->incomplete('Falta un volumen total válido para calcular la capacidad máxima.');
+            }
+            $comparisonValue = (float) $volume * $comparisonValue / 1000;
+        }
         $passed = match ($operator) {
-            '<' => $value < (float) $configuration['threshold_value'],
-            '<=' => $value <= (float) $configuration['threshold_value'],
-            '>' => $value > (float) $configuration['threshold_value'],
-            '>=' => $value >= (float) $configuration['threshold_value'],
-            '==' => abs($value - (float) $configuration['threshold_value']) < 0.000001,
+            '<' => $value < $comparisonValue,
+            '<=' => $value <= $comparisonValue,
+            '>' => $value > $comparisonValue,
+            '>=' => $value >= $comparisonValue,
+            '==' => abs($value - $comparisonValue) < 0.000001,
             'between' => $value >= (float) $configuration['threshold_min'] && $value <= (float) $configuration['threshold_max'],
             default => throw new InvalidArgumentException('Operador matemático no permitido.'),
         };
@@ -45,6 +55,7 @@ class MathematicalRuleEngine
             'incomplete' => false,
             'value' => round($value, 6),
             'unit' => $configuration['unit'] ?? null,
+            'comparison_value' => round($comparisonValue, 6),
             'message' => $passed ? null : ($configuration['failure_message'] ?? 'El resultado no cumple la regla.'),
         ];
     }

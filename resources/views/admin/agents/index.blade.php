@@ -15,7 +15,7 @@
                     </a>
                 @endforeach
             </nav>
-            <article class="agent-overview" x-data="{ editing: {{ $errors->hasAny(['name', 'description', 'instructions']) ? 'true' : 'false' }} }">
+            <article class="agent-overview" x-data="{ editing: {{ $errors->hasAny(['name', 'description', 'instructions']) ? 'true' : 'false' }}, previewManual: null }">
                 <header class="overview-title">
                     <div><h2>{{ $agent->name }}</h2><p class="agent-access-help">Tus permisos: {{ collect(\App\Services\Agents\AgentAccess::LABELS)->filter(fn ($label, $key) => $permissions[$key])->implode(' · ') }}</p></div>
                     <span class="overview-badge" data-active="{{ $agent->is_active ? 'true' : 'false' }}">{{ $agent->is_active ? 'Activo' : 'Inactivo' }}</span>
@@ -29,12 +29,56 @@
                     <dl class="agent-portal-facts"><div><dt>Área</dt><dd>{{ $configuration['owner'] ?: 'Sin asignar' }}</dd></div><div><dt>Ejecución</dt><dd>{{ \App\Services\Agents\AgentConfiguration::ACTIVATIONS[$configuration['activation']] ?? 'Manual' }}</dd></div></dl>
                 </div>
                 <div class="overview-columns agent-portal-details">
-                    <section class="overview-card"><h3>Instrucciones del agente</h3><p class="agent-portal-instructions">{{ $agent->instructions ?: 'Sin instrucciones registradas' }}</p>
-                        <h4>Objetivo</h4><p>{{ $configuration['objective'] ?: 'Sin definir' }}</p>
+                    <section class="overview-card">
+                        @if ($agent->integration_key === \App\Services\Clinical\ClinicalEvidence::KEY)
+                            <h3>Manuales maestros vigentes</h3>
+                            <p>El agente utiliza únicamente el manual revisado que corresponde al tipo de nutrición parenteral seleccionado en la solicitud.</p>
+                            <div class="clinical-manual-grid">
+                                @foreach (['npt_adulto' => 'Nutrición Parenteral Adulto', 'npt_pediatrico' => 'Nutrición Parenteral Pediátrico'] as $manualType => $manualLabel)
+                                    @php($manual = $clinicalManuals->get($manualType))
+                                    <article class="clinical-manual-card">
+                                        <h4>{{ $manualLabel }}</h4>
+                                        @if ($manual)
+                                            <p class="clinical-manual-reference">{{ $manual->title }}</p>
+                                            <p>{{ $manual->file_name ?: $manual->reference }}</p>
+                                            <div class="clinical-manual-badges">
+                                                <span>Versión {{ $manual->manual_version ?: 'actual' }}</span>
+                                                <span data-reviewed="{{ $manual->isReviewed() ? 'true' : 'false' }}">{{ $manual->isReviewed() ? 'Revisada' : 'Pendiente de revisión' }}</span>
+                                            </div>
+                                            <button type="button" class="overview-edit clinical-manual-open" @click="previewManual = {{ $manual->id }}">Ver manual</button>
+                                            <details class="clinical-manual-details"><summary>Consultar referencia</summary><p>{{ $manual->reference }}</p></details>
+
+                                            <div class="agent-modal-overlay clinical-manual-overlay" x-show="previewManual === {{ $manual->id }}" x-cloak @keydown.escape.window="previewManual = null">
+                                                <section class="agent-modal clinical-manual-modal" role="dialog" aria-modal="true" aria-labelledby="manual-title-{{ $manual->id }}" @click.outside="previewManual = null">
+                                                    <header class="agent-modal-header">
+                                                        <div><p class="clinical-manual-modal-kicker">Consulta de manual · Solo lectura</p><h3 id="manual-title-{{ $manual->id }}">{{ $manualLabel }}</h3><p>{{ $manual->file_name ?: $manual->title }}</p></div>
+                                                        <button type="button" @click="previewManual = null" class="agent-edit" aria-label="Cerrar vista previa">×</button>
+                                                    </header>
+                                                    <div class="clinical-manual-preview">
+                                                        <article>{{ $manual->content ?: 'Este manual no tiene texto disponible para vista previa.' }}</article>
+                                                    </div>
+                                                    <footer class="agent-modal-actions">
+                                                        @if ($manual->file_path)<a class="agent-cancel" href="{{ route('admin.agents.manual', $manual) }}">Descargar archivo</a>@endif
+                                                        <button type="button" class="agent-save" @click="previewManual = null">Cerrar</button>
+                                                    </footer>
+                                                </section>
+                                            </div>
+                                        @else
+                                            <p class="agent-error">No hay un manual vigente registrado para esta población.</p>
+                                        @endif
+                                    </article>
+                                @endforeach
+                            </div>
+                            <h4>Objetivo</h4><p>Validar cada solicitud con el manual de Adulto o Pediátrico que corresponda, sin mezclar criterios entre poblaciones.</p>
+                        @else
+                            <h3>Instrucciones del agente</h3><p class="agent-portal-instructions">{{ $agent->instructions ?: 'Sin instrucciones registradas' }}</p>
+                            <h4>Objetivo</h4><p>{{ $configuration['objective'] ?: 'Sin definir' }}</p>
+                        @endif
                     </section>
                     <section class="overview-card"><h3>Cómo se ejecuta</h3>
                         @if ($agent->integration_key === \App\Services\Clinical\ClinicalEvidence::KEY)
                             <p>Este agente se utiliza al validar una solicitud o desde Mensajes de una mezcla, según tus permisos de acceso a solicitudes.</p>
+                            <a href="{{ route('admin.validation-rules.index') }}" class="overview-edit overview-run">Abrir motor de validaciones</a>
                         @elseif ($permissions['can_run'])
                             <p>Ejecuta una revisión de los registros disponibles en el alcance del agente.</p>
                             <form method="POST" action="{{ route('admin.agents.run', $agent) }}" x-data="{ running: false }" @submit="running = true">

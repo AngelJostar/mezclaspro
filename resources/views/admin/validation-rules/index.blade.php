@@ -16,8 +16,12 @@
         <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
             @if ($canManage)
                 <strong>Flujo de aprobación:</strong> prepara la regla como borrador, envíala a revisión química y actívala únicamente después de aprobar su contenido.
-            @else
+            @elseif ($canEdit)
+                <strong>Edición autorizada:</strong> puedes desactivar una regla activa, editarla y volver a aprobarla cuando quede en revisión. La eliminación permanece reservada al Super Admin.
+            @elseif ($canApprove)
                 <strong>Revisión sanitaria:</strong> puedes consultar todas las reglas y aprobar aquellas que estén pendientes de revisión. La creación, edición, desactivación y eliminación están reservadas al Super Admin.
+            @else
+                <strong>Consulta:</strong> puedes revisar la formulación, el estado y el historial de las reglas. La edición, aprobación y administración requieren autorización.
             @endif
         </div>
 
@@ -64,12 +68,10 @@
                             <th class="px-4 py-3">Severidad</th>
                             <th class="px-4 py-3">Estado</th>
                             <th class="px-3 py-3 text-center">Ver</th>
-                            @if ($canManage)<th class="px-3 py-3 text-center">Editar</th>@endif
+                            @if ($canEdit)<th class="px-3 py-3 text-center">Editar</th>@endif
                             @if ($canApprove)<th class="px-3 py-3 text-center">Aprobar</th>@endif
-                            @if ($canManage)
-                                <th class="px-3 py-3 text-center">Desactivar</th>
-                                <th class="px-3 py-3 text-center">Eliminar</th>
-                            @endif
+                            @if ($canEdit)<th class="px-3 py-3 text-center">Desactivar</th>@endif
+                            @if ($canManage)<th class="px-3 py-3 text-center">Eliminar</th>@endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -93,10 +95,10 @@
                                 <td class="px-3 py-4 text-center">
                                     <a href="{{ route('admin.validation-rules.show', $rule) }}" class="inline-flex rounded-md border border-indigo-200 px-3 py-1.5 font-medium text-indigo-700 hover:bg-indigo-50">Ver</a>
                                 </td>
-                                @if ($canManage)
+                                @if ($canEdit)
                                     <td class="px-3 py-4 text-center">
                                         @if (!$rule->is_enforced)
-                                            <a href="{{ route('admin.superadministrator.validation-rules.edit', $rule) }}" class="inline-flex rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 font-medium text-sky-800 hover:bg-sky-100">Editar</a>
+                                            <a href="{{ route($editRouteName, $rule) }}" class="inline-flex rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 font-medium text-sky-800 hover:bg-sky-100">Editar</a>
                                         @else
                                             <button type="button" disabled title="Desactiva la regla para poder editarla" class="cursor-not-allowed rounded-md border border-slate-200 bg-slate-100 px-3 py-1.5 font-medium text-slate-400">Editar</button>
                                         @endif
@@ -111,14 +113,16 @@
                                         @endif
                                     </td>
                                 @endif
-                                @if ($canManage)
+                                @if ($canEdit)
                                     <td class="px-3 py-4 text-center">
                                         @if ($rule->is_enforced)
-                                            <form method="POST" action="{{ route('admin.superadministrator.validation-rules.deactivate', $rule) }}" onsubmit="return confirm('¿Desactivar esta regla? Dejará de aplicarse a nuevas validaciones.')">@csrf @method('PATCH')<button type="submit" class="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 font-medium text-amber-800 hover:bg-amber-100">Desactivar</button></form>
+                                            <form method="POST" action="{{ route($deactivateRouteName, $rule) }}" onsubmit="return confirm('¿Desactivar esta regla? Dejará de aplicarse a nuevas validaciones y podrá editarse.')">@csrf @method('PATCH')<button type="submit" class="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 font-medium text-amber-800 hover:bg-amber-100">Desactivar</button></form>
                                         @else
                                             <button type="button" disabled title="La regla ya se encuentra inactiva" class="cursor-not-allowed rounded-md border border-slate-200 bg-slate-100 px-3 py-1.5 font-medium text-slate-400">Desactivar</button>
                                         @endif
                                     </td>
+                                @endif
+                                @if ($canManage)
                                     <td class="px-3 py-4 text-center">
                                         @if (!$rule->approved_at)
                                             <form method="POST" action="{{ route('admin.superadministrator.validation-rules.destroy', $rule) }}" onsubmit="return confirm('¿Eliminar definitivamente esta regla? Esta acción no se puede deshacer.')">@csrf @method('DELETE')<button type="submit" class="rounded-md border border-red-300 bg-red-50 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100">Eliminar</button></form>
@@ -129,7 +133,7 @@
                                 @endif
                             </tr>
                         @empty
-                            <tr><td colspan="{{ 6 + ($canManage ? 3 : 0) + ($canApprove ? 1 : 0) }}" class="px-4 py-12 text-center text-slate-500">
+                            <tr><td colspan="{{ 6 + ($canEdit ? 2 : 0) + ($canManage ? 1 : 0) + ($canApprove ? 1 : 0) }}" class="px-4 py-12 text-center text-slate-500">
                                 @if ($search !== '')
                                     No se encontraron reglas para “{{ $search }}”.
                                 @else

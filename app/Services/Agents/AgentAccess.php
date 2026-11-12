@@ -5,6 +5,7 @@ namespace App\Services\Agents;
 use App\Models\AiAgent;
 use App\Models\PersonnelProfile;
 use App\Models\User;
+use App\Services\Clinical\ClinicalEvidence;
 use App\Support\AdminMenuAccess;
 use App\Support\PersonnelPositions;
 use Illuminate\Support\Collection;
@@ -44,6 +45,37 @@ class AgentAccess
     public function authorize(User $user, AiAgent $agent, string $permission = 'can_view'): void
     {
         abort_unless($this->permissions($user, $agent)[$permission] ?? false, 403, 'No tienes esta autorización para el agente.');
+    }
+
+    public function canViewValidationRules(User $user): bool
+    {
+        if ($user->hasAnyRole(['Super Admin', 'Auxiliar de responsable sanitario'])) return true;
+
+        return $this->clinicalAgentPermission($user, 'can_view');
+    }
+
+    public function canEditValidationRules(User $user): bool
+    {
+        if ($user->hasRole('Super Admin')) return true;
+
+        return $this->clinicalAgentPermission($user, 'can_edit');
+    }
+
+    public function canApproveValidationRules(User $user): bool
+    {
+        if ($user->hasAnyRole(['Super Admin', 'Auxiliar de responsable sanitario'])) return true;
+
+        return $this->clinicalAgentPermission($user, 'can_edit');
+    }
+
+    private function clinicalAgentPermission(User $user, string $permission): bool
+    {
+        $clinicalAgent = AiAgent::query()
+            ->where('integration_key', ClinicalEvidence::KEY)
+            ->first();
+
+        return $clinicalAgent !== null
+            && ($this->permissions($user, $clinicalAgent)[$permission] ?? false);
     }
 
     public function isHospitalScoped(User $user): bool

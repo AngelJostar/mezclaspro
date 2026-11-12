@@ -154,6 +154,46 @@ class ClinicalRuleSuggestionTest extends TestCase
         $this->assertSame('El volumen total sugerido es de 218.7152 mL.', $suggestion);
     }
 
+    public function test_water_failure_is_shown_before_calcium_phosphate_and_defers_its_adjustment(): void
+    {
+        $reflection = new ReflectionClass(ClinicalRuleEvaluator::class);
+        $service = $reflection->newInstanceWithoutConstructor();
+        $method = $reflection->getMethod('prioritizeDependentFindings');
+        $method->setAccessible(true);
+
+        $findings = $method->invoke($service, [
+            ['rule_code' => 'NP.R6.CHEM.CALCIUM_PHOSPHATE.PER1000', 'suggestion' => 'Reduce calcio y fosfato.'],
+            ['rule_code' => 'NP.R6.CHEM.WATER.PERCENT', 'suggestion' => 'El volumen total sugerido es de 166.4367 mL.'],
+        ]);
+
+        $this->assertSame('NP.R6.CHEM.WATER.PERCENT', $findings[0]['rule_code']);
+        $this->assertSame('NP.R6.CHEM.CALCIUM_PHOSPHATE.PER1000', $findings[1]['rule_code']);
+        $this->assertStringContainsString('Ajusta primero el volumen total', $findings[1]['suggestion']);
+        $this->assertStringContainsString('se recalculará con el nuevo volumen total', $findings[1]['suggestion']);
+    }
+
+    public function test_calcium_phosphate_calculation_explains_sum_capacity_and_formula(): void
+    {
+        $reflection = new ReflectionClass(ClinicalRuleEvaluator::class);
+        $service = $reflection->newInstanceWithoutConstructor();
+        $method = $reflection->getMethod('mathematicalCalculation');
+        $method->setAccessible(true);
+
+        $message = $method->invoke($service, [
+            'formula_template' => 'volume_capacity_per_1000_ml',
+            'threshold_value' => 45,
+        ], [
+            'value' => 15.4,
+            'comparison_value' => 13.5,
+            'unit' => 'mEq',
+        ]);
+
+        $this->assertSame(
+            'La suma de mEq capturados: 15.4 mEq; capacidad máxima es de: 13.5 mEq = (volumen total × 45) ÷ 1000.',
+            $message
+        );
+    }
+
     public function test_combined_electrolyte_limit_distributes_the_total_across_inputs(): void
     {
         $rule = new ValidationRule(['configuration' => [

@@ -18,6 +18,10 @@
 .clinical-field-error, .clinical-field-required-error { outline: 2px solid #b42318 !important; outline-offset: 2px; border-color: #b42318 !important; }
 .clinical-field-advisory { outline: 2px solid #b7791f !important; outline-offset: 2px; border-color: #b7791f !important; }
 .clinical-status { font-weight: 600; color: #136639; }
+.clinical-live-status { margin:10px 0 4px; color:#526a83; font-size:12px; font-weight:600; }
+.clinical-live-status[data-state="checking"]::before { content:""; display:inline-block; width:9px; height:9px; margin-right:7px; border:2px solid #9fb4c8; border-top-color:#147664; border-radius:50%; animation:clinical-live-spin .7s linear infinite; }
+.clinical-live-status[data-state="updated"] { color:#136639; }
+@keyframes clinical-live-spin { to { transform:rotate(360deg); } }
 [data-clinical-status=blocked] .clinical-status { color: #a32222; }
 [data-clinical-status=needs_review] .clinical-status { color: #8b580d; }
 [data-clinical-status=authorization_required] .clinical-status { color: #8b580d; }

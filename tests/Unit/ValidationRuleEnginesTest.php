@@ -43,6 +43,34 @@ class ValidationRuleEnginesTest extends TestCase
         $this->assertSame(2.0, $result['value']);
     }
 
+    public function test_volume_capacity_template_compares_total_amount_against_supported_meq(): void
+    {
+        $engine = new MathematicalRuleEngine();
+        $configuration = [
+            'source_variable' => 'groups.calcium_phosphate.total_meq',
+            'formula_template' => 'volume_capacity_per_1000_ml',
+            'operator' => '<=',
+            'threshold_value' => 45,
+            'unit' => 'mEq',
+            'failure_message' => 'Excede la capacidad máxima.',
+        ];
+
+        $failed = $engine->evaluate($configuration, [
+            'groups' => ['calcium_phosphate' => ['total_meq' => 50]],
+            'mixture' => ['total_volume_ml' => 1000],
+        ]);
+        $this->assertFalse($failed['passed']);
+        $this->assertSame(50.0, $failed['value']);
+        $this->assertSame(45.0, $failed['comparison_value']);
+
+        $passed = $engine->evaluate($configuration, [
+            'groups' => ['calcium_phosphate' => ['total_meq' => 50]],
+            'mixture' => ['total_volume_ml' => 1200],
+        ]);
+        $this->assertTrue($passed['passed']);
+        $this->assertSame(54.0, $passed['comparison_value']);
+    }
+
     public function test_allowed_catalog_accepts_any_matching_alternative(): void
     {
         $result = (new CompositionRuleEngine())->evaluate([

@@ -50,7 +50,118 @@ export function renderClinicalResult(container, data) {
 const states = new WeakMap();
 const fingerprint = form => JSON.stringify([...new FormData(form)].filter(([key]) => !['_token', 'clinical_review_token', 'clinical_acknowledged'].includes(key) && !key.startsWith('medical_authorization[')));
 
-function markField(form, name, required = false, advisory = false) {
+const cleanEvidenceLabel = element => {
+    if (!element) return '';
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll('input, select, textarea, option, svg, button, small, p').forEach(child => child.remove());
+    return clone.textContent.replace(/\s+/g, ' ').replace(/[\s:*]+$/g, '').trim();
+};
+
+const evidenceLabel = field => {
+    const component = field.closest('[data-nutrition-component]');
+    if (component) return cleanEvidenceLabel(component.querySelector('label')) || field.name;
+
+    if (field.name.startsWith('nutrition_diluents[')) {
+        const card = field.closest('.rounded-md');
+        const product = cleanEvidenceLabel(card?.querySelector('h3'));
+        const property = cleanEvidenceLabel(field.closest('label'));
+        return [product, property].filter(Boolean).join(' · ') || field.name;
+    }
+
+    const explicit = field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null;
+    const nearby = explicit || field.closest('label') || field.closest('.mb-4')?.querySelector('label');
+    return field.getAttribute('aria-label') || cleanEvidenceLabel(nearby)
+        || field.name.replace(/\[|\]|_/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const evidenceSection = field => {
+    const component = field.closest('[data-nutrition-component]');
+    if (component) {
+        return ({ 1: 'Macronutrientes', 2: 'Macronutrientes', 3: 'Macronutrientes', 4: 'Electrolitos', 5: 'Aditivos', 8: 'Macronutrientes' })[Number(component.dataset.categoryId)] || 'Componentes';
+    }
+    if (field.name.startsWith('nutrition_diluents[')) return 'Diluyentes o vehículos';
+    if (field.name.startsWith('clinical_context[')) return 'Datos para revisión clínica';
+    if (field.name === 'observaciones') return 'Observaciones';
+    return 'Datos generales';
+};
+
+const evidenceValue = field => {
+    if (field instanceof HTMLSelectElement) return field.selectedOptions[0]?.textContent?.trim() || field.value;
+    if (field.type === 'checkbox' || field.type === 'radio') return field.checked ? 'Sí' : '';
+    return String(field.value || '').trim();
+};
+
+const collectEvidenceFields = form => {
+    const excluded = new Set(['_token', 'clinical_review_token', 'clinical_acknowledged', 'request_popup']);
+    return [...form.elements].flatMap(field => {
+        if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)) return [];
+        if (!field.name || field.type === 'hidden' || field.disabled || excluded.has(field.name) || field.name.startsWith('medical_authorization[')) return [];
+        const value = evidenceValue(field);
+        if (value === '') return [];
+        if ((/^i_\d+/.test(field.name) || field.name.startsWith('nutrition_diluents[')) && Number.parseFloat(value) === 0) return [];
+        return [{ section: evidenceSection(field), label: evidenceLabel(field), value }];
+    });
+};
+
+const collectEvidenceFindings = form => {
+    const findings = [...form.querySelectorAll('[data-clinical-result] li')].map(item => {
+        const paragraphs = [...item.querySelectorAll(':scope > p')];
+        const status = item.querySelector('.clinical-status')?.textContent?.trim() || 'Hallazgo';
+        const rule = item.querySelector('.clinical-rule-code')?.textContent?.trim() || '';
+        const composition = item.querySelector('.clinical-composition-code')?.textContent?.trim() || '';
+        const suggestion = item.querySelector('.clinical-suggestion')?.textContent?.replace(/^Sugerencia:\s*/i, '').trim() || '';
+        const body = paragraphs.filter(p => !p.matches('.clinical-status, .clinical-rule-code, .clinical-composition-code, .clinical-suggestion'));
+        return {
+            severity: item.dataset.severity || '', title: status,
+            rule_code: rule.replace(/^Regla que falló:\s*/i, ''),
+            composition_code: composition.replace(/^Combinación detectada:\s*/i, ''),
+            message: body[0]?.textContent?.trim() || item.textContent.trim(),
+            calculation: body[1]?.textContent?.trim() || '', suggestion,
+        };
+    });
+    const volumeError = form.querySelector('#volume-components-error:not(.hidden)');
+    if (volumeError?.textContent.trim()) {
+        findings.unshift({ severity: 'blocking', title: 'Error:', rule_code: '', composition_code: '', message: volumeError.textContent.trim(), calculation: '', suggestion: '' });
+    }
+    return findings;
+};
+
+const initializeEvidenceExports = () => document.querySelectorAll('[data-export-validation-evidence]').forEach(button => {
+    if (button.dataset.bound === 'true') return;
+    button.dataset.bound = 'true';
+    button.addEventListener('click', async () => {
+        const form = document.getElementById(button.dataset.formId || '');
+        if (!form || button.disabled) return;
+        const original = button.innerHTML;
+        button.disabled = true;
+        button.querySelector('span').textContent = 'Generando PDF…';
+        try {
+            const response = await fetch(button.dataset.exportUrl, {
+                method: 'POST', credentials: 'same-origin', cache: 'no-store',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/pdf', 'X-CSRF-TOKEN': form.elements._token?.value || '' },
+                body: JSON.stringify({ fields: collectEvidenceFields(form), findings: collectEvidenceFindings(form) }),
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || 'No se pudo generar el PDF de evidencia.');
+            }
+            const blob = await response.blob();
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'evidencia-validacion-nutricional.pdf';
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (failure) {
+            window.alert(failure.message);
+        } finally {
+            button.disabled = false;
+            button.innerHTML = original;
+        }
+    });
+});
+
+function markField(form, name, required = false, advisory = false, live = false) {
     const bracketName = name.replace(/\.([^.[\]]+)/g, '[$1]');
     let field = form.elements.namedItem(name) || form.elements.namedItem(bracketName);
     const match = /^mezclas\.(\d+)\.(?:medicamentos\.(\d+)\.)?(\w+)$/.exec(name);
@@ -61,6 +172,7 @@ function markField(form, name, required = false, advisory = false) {
     }
     if (!(field instanceof HTMLElement)) return;
     field.classList.add(required ? 'clinical-field-required-error' : (advisory ? 'clinical-field-advisory' : 'clinical-field-error'));
+    if (live) field.classList.add('clinical-live-field');
     field.setAttribute('aria-invalid', 'true');
     const details = field.closest('[data-clinical-context]');
     if (details) details.open = true;
@@ -74,8 +186,90 @@ function bind(form) {
         ack: form.elements.clinical_acknowledged, ackText: panel.querySelector('[data-clinical-ack-text]'), error: panel.querySelector('[data-clinical-error]'), result: panel.querySelector('[data-clinical-result]'),
         authorization: panel.querySelector('[data-medical-authorization]'), authorizationFindings: panel.querySelector('[data-medical-authorization-findings]'),
         authorizationError: panel.querySelector('[data-medical-authorization-error]'), authorizationSubmit: panel.querySelector('[data-medical-authorization-submit]'),
-        requiresAuthorization: false,
+        rulesUrl: panel.dataset.rulesValidationUrl || '', liveStatus: panel.querySelector('[data-clinical-live-status]'),
+        liveTimer: null, liveController: null, liveSnapshot: '', requiresAuthorization: false,
         requiresAcknowledgement: true, fieldError: false };
+
+    const clearLiveMarks = () => {
+        form.querySelectorAll('.clinical-live-field').forEach(field => {
+            field.classList.remove('clinical-live-field', 'clinical-field-error', 'clinical-field-advisory');
+            if (!field.classList.contains('clinical-field-required-error')) field.removeAttribute('aria-invalid');
+        });
+    };
+    const relevantForLiveRules = field => {
+        const name = String(field?.name || '');
+        return ['peso', 'fecha_nacimiento', 'sexo', 'npt', 'volumen_total', 'via_administracion', 'tiempo_infusion_min', 'velocidad_infusion'].includes(name)
+            || /^i_\d+/.test(name)
+            || /^nutrition_diluents\[\d+\]\[volume_ml\]$/.test(name);
+    };
+    const hasLiveMinimum = () => {
+        const positiveComponent = [...form.querySelectorAll('input[name^="i_"], input[name^="nutrition_diluents"][name$="[volume_ml]"]')]
+            .some(field => !field.disabled && Number.parseFloat(field.value || '0') > 0);
+        return Number.parseFloat(form.elements.peso?.value || '0') > 0
+            && Boolean(form.elements.fecha_nacimiento?.value)
+            && ['ADULT', 'INF'].includes(form.elements.npt?.value)
+            && Number.parseFloat(form.elements.volumen_total?.value || '0') > 0
+            && Boolean(form.elements.via_administracion?.value)
+            && positiveComponent;
+    };
+    const setLiveStatus = (message = '', status = '') => {
+        if (!state.liveStatus) return;
+        state.liveStatus.textContent = message;
+        state.liveStatus.dataset.state = status;
+        state.liveStatus.hidden = message === '';
+    };
+    const runLiveRules = async () => {
+        if (!state.rulesUrl || state.busy || !hasLiveMinimum()) {
+            setLiveStatus();
+            return;
+        }
+        const currentSnapshot = fingerprint(form);
+        if (currentSnapshot === state.liveSnapshot) return;
+        state.liveController?.abort();
+        state.liveController = new AbortController();
+        setLiveStatus('Actualizando reglas matemáticas…', 'checking');
+        try {
+            const response = await fetch(state.rulesUrl, {
+                method: 'POST', credentials: 'same-origin', cache: 'no-store', body: new FormData(form),
+                signal: state.liveController.signal,
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': form.elements._token?.value || '' },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                if (response.status === 422) { setLiveStatus(); return; }
+                throw new Error(data.message || 'No fue posible actualizar las reglas.');
+            }
+            if (fingerprint(form) !== currentSnapshot) return;
+            state.liveSnapshot = currentSnapshot;
+            clearLiveMarks();
+            renderClinicalResult(state.result, {
+                result: {
+                    status: data.status === 'passed' ? 'no_blockers' : (data.status === 'blocked' ? 'blocked' : 'authorization_required'),
+                    findings: data.findings || [],
+                },
+            });
+            for (const finding of data.findings || []) {
+                if (finding.severity === 'information') continue;
+                markField(form, finding.field, false, finding.severity === 'advisory', true);
+            }
+            setLiveStatus('Reglas matemáticas actualizadas.', 'updated');
+        } catch (failure) {
+            if (failure.name !== 'AbortError') setLiveStatus(failure.message, 'error');
+        }
+    };
+    const scheduleLiveRules = field => {
+        if (!state.rulesUrl || !relevantForLiveRules(field)) return;
+        clearTimeout(state.liveTimer);
+        state.liveController?.abort();
+        state.liveSnapshot = '';
+        setLiveStatus(hasLiveMinimum() ? 'Esperando cambios…' : '', 'waiting');
+        state.liveTimer = setTimeout(runLiveRules, 800);
+    };
+    state.cancelLive = () => {
+        clearTimeout(state.liveTimer);
+        state.liveController?.abort();
+        setLiveStatus();
+    };
     const closeAuthorization = () => {
         if (!state.authorization) return;
         if (typeof state.authorization.close === 'function' && state.authorization.open) state.authorization.close();
@@ -107,7 +301,7 @@ function bind(form) {
         }
         if (!state.busy) button.textContent = 'Validar y Continuar';
         form.querySelectorAll('.clinical-field-error, .clinical-field-advisory').forEach(el => {
-            el.classList.remove('clinical-field-error', 'clinical-field-advisory'); el.removeAttribute('aria-invalid');
+            el.classList.remove('clinical-field-error', 'clinical-field-advisory', 'clinical-live-field'); el.removeAttribute('aria-invalid');
         });
     };
     const changed = event => {
@@ -118,6 +312,7 @@ function bind(form) {
         if (state.fieldError && !form.querySelector(':invalid')) {
             state.error.hidden = true; state.fieldError = false;
         }
+        scheduleLiveRules(field);
     };
     form.addEventListener('input', changed);
     form.addEventListener('change', changed);
@@ -152,6 +347,7 @@ function bind(form) {
 window.validateClinicalRequest = async form => {
     const state = bind(form);
     if (!state || state.busy) return;
+    state.cancelLive?.();
     const snapshot = fingerprint(form);
     if (state.token.value && state.snapshot === snapshot && state.expires > Date.now()) {
         if (state.requiresAuthorization) {
@@ -236,8 +432,8 @@ window.validateClinicalRequest = async form => {
 };
 
 const initialize = () => document.querySelectorAll('form:has([data-clinical-review])').forEach(bind);
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });
-else initialize();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { initialize(); initializeEvidenceExports(); }, { once: true });
+else { initialize(); initializeEvidenceExports(); }
 window.addEventListener('pageshow', () => {
     document.querySelectorAll('form:has([data-clinical-review])').forEach(form => {
         const state = bind(form); state.busy = false; state.reset(); state.button.disabled = false;

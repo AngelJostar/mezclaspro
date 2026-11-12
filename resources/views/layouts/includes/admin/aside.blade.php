@@ -380,19 +380,6 @@
                 </li>
             @endhasanyrole
 
-            @hasanyrole('Auxiliar de responsable sanitario')
-                <li class="rounded-lg border border-indigo-200 bg-indigo-50 p-1 dark:border-indigo-700 dark:bg-indigo-900/20">
-                    <a href="{{ route('admin.validation-rules.index') }}" aria-label="Motor de validaciones"
-                        x-on:click="open = false"
-                        class="flex w-full min-w-0 items-center rounded-lg p-2 text-gray-900 hover:bg-indigo-100 dark:text-white dark:hover:bg-indigo-800/50 {{ request()->routeIs('admin.validation-rules.*') ? 'bg-indigo-100 dark:bg-indigo-800/50' : '' }}">
-                        <span class="min-w-0 text-left text-xs font-bold leading-4">
-                            <span class="block">Motor de</span>
-                            <span class="block">validaciones</span>
-                        </span>
-                    </a>
-                </li>
-            @endhasanyrole
-
             @if ($sidebarUser && !$sidebarUser->hasRole('Super Admin'))
                 <li class="rounded-lg border border-sky-200 bg-sky-50 p-1">
                     <a href="{{ route('admin.agents.index') }}" x-on:click="open = false" aria-label="Centro de agentes"

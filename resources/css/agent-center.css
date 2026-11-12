@@ -47,6 +47,29 @@
 .agent-portal-facts dt { font-weight:600; }
 .agent-portal-details { margin-top:16px; }
 .agent-portal-instructions { white-space:pre-wrap; margin-bottom:20px; }
+.clinical-manual-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0 20px; }
+.clinical-manual-card { min-width:0; padding:16px; border:1px solid #8ddfe0; border-radius:9px; background:#f2ffff; }
+.clinical-manual-card h4 { color:#11164d; }
+.clinical-manual-card p { margin:5px 0; overflow-wrap:anywhere; }
+.clinical-manual-reference { font-weight:600; }
+.clinical-manual-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.clinical-manual-badges span { padding:3px 8px; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:11px; }
+.clinical-manual-badges span[data-reviewed="true"] { background:#d1fae5; color:#047857; }
+.clinical-manual-badges span[data-reviewed="false"] { background:#ffedd5; color:#c2410c; }
+.clinical-manual-details { margin-top:12px; font-size:12px; }
+.clinical-manual-details summary { cursor:pointer; color:#245bb6; font-weight:600; }
+.agent-overview .clinical-manual-open { display:inline-flex; margin-top:12px; background:#009fa3; border-color:#009fa3; color:#fff; }
+.clinical-manual-overlay { z-index:70; }
+.clinical-manual-modal { width:min(960px,calc(100vw - 32px)); max-width:960px; max-height:calc(100vh - 40px); }
+.clinical-manual-modal .agent-modal-header { align-items:flex-start; }
+.clinical-manual-modal .agent-modal-header h3 { margin:2px 0 4px; font-size:20px; }
+.clinical-manual-modal .agent-modal-header p { margin:0; color:#61738c; font-size:12px; overflow-wrap:anywhere; }
+.clinical-manual-modal-kicker { color:#245bb6 !important; font-weight:600; }
+.clinical-manual-preview { min-height:0; overflow:auto; padding:20px; background:#edf3fa; border-top:1px solid #dce3ed; border-bottom:1px solid #dce3ed; }
+.clinical-manual-preview article { min-height:360px; padding:24px; background:#fff; border:1px solid #d5dfeb; color:#344563; font-size:14px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+.clinical-manual-modal .agent-modal-actions a { display:inline-flex; align-items:center; justify-content:center; min-width:120px; min-height:38px; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:600; text-decoration:none; }
+@media(max-width:600px) { .clinical-manual-preview { padding:10px; } .clinical-manual-preview article { min-height:280px; padding:16px; } }
+@media(max-width:700px) { .clinical-manual-grid { grid-template-columns:1fr; } }
 .agent-portal-run { padding:14px 0; border-bottom:1px solid #e7edf6; }
 .agent-portal-run summary { cursor:pointer; color:#245bb6; }
 .agent-portal-finding { padding:14px 0; border-bottom:1px solid #e7edf6; font-size:14px; }

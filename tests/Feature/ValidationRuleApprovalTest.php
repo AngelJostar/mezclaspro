@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiAgent;
 use App\Models\User;
 use App\Models\ValidationRule;
+use App\Services\Clinical\ClinicalEvidence;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -85,6 +87,65 @@ class ValidationRuleApprovalTest extends TestCase
         $this->actingAs($assistant)
             ->patch(route('admin.superadministrator.validation-rules.deactivate', $rule))
             ->assertForbidden();
+    }
+
+    public function test_user_authorized_to_edit_clinical_agent_can_complete_rule_editing_cycle(): void
+    {
+        $super = $this->superadministrator();
+        $user = User::factory()->create(['hospital_id' => null]);
+        $user->assignRole(Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']));
+        $agent = AiAgent::forceCreate([
+            'name' => ClinicalEvidence::NAME,
+            'integration_key' => ClinicalEvidence::KEY,
+            'is_active' => true,
+        ]);
+        $agent->accessGrants()->create([
+            'subject_type' => 'user',
+            'subject_key' => (string) $user->id,
+            'can_view' => true,
+            'can_run' => true,
+            'can_edit' => true,
+            'granted_by' => $super->id,
+        ]);
+        $rule = $this->rule(['status' => 'review']);
+
+        $this->actingAs($user)
+            ->get(route('admin.validation-rules.index'))
+            ->assertOk()
+            ->assertSee('Edición autorizada:')
+            ->assertSee('>Editar<', false)
+            ->assertSee('>Aprobar<', false)
+            ->assertSee('>Desactivar<', false);
+
+        $this->get(route('admin.validation-rules.edit', $rule))
+            ->assertOk()
+            ->assertSee('Editar regla')
+            ->assertSee(route('admin.validation-rules.update', $rule), false);
+
+        $activeRule = $this->rule(['status' => 'active', 'is_enforced' => true]);
+        $this->patch(route('admin.validation-rules.deactivate', $activeRule))
+            ->assertRedirect()
+            ->assertSessionHas('status');
+        $this->assertSame('inactive', $activeRule->fresh()->status);
+        $this->assertFalse($activeRule->fresh()->is_enforced);
+        $this->get(route('admin.validation-rules.edit', $activeRule))->assertOk();
+
+        $sidebar = view('layouts.includes.admin.aside', [
+            'pendingSolicitudesCount' => 0,
+            'myPurchaseOrdersCount' => 0,
+        ])->render();
+        $this->assertStringNotContainsString('aria-label="Motor de validaciones"', $sidebar);
+
+        $this->get(route('admin.agents.show', $agent))
+            ->assertOk()
+            ->assertSee('Abrir motor de validaciones')
+            ->assertSee(route('admin.validation-rules.index'), false);
+
+        $this->patch(route('admin.validation-rules.approve', $rule))
+            ->assertRedirect()
+            ->assertSessionHas('status');
+        $this->assertTrue($rule->fresh()->is_enforced);
+        $this->assertSame('active', $rule->fresh()->status);
     }
 
     public function test_active_rule_can_be_viewed_without_deactivating_it(): void
