@@ -9,9 +9,9 @@
 
 ## Ejecucion
 
-Cada agente requiere objetivo, reglas, fuentes autorizadas, alcance y responsable. Solo Super Admin puede configurar, ejecutar o revisar hallazgos. Un perfil sin alcance no ejecuta consultas. La activacion ON no sustituye la configuracion.
+Cada agente de auditoría requiere objetivo, reglas, fuentes autorizadas, alcance y responsable. Super Admin administra activación, configuración y accesos; puede conceder consulta, ejecución y edición de información a usuarios, roles y puestos desde Autorizaciones. Un perfil sin alcance no ejecuta consultas. La activacion ON no sustituye la configuracion.
 
-El motor calcula hallazgos reales en modo de solo lectura. Solo escribe en las tablas de agentes, ejecuciones, hallazgos y seguimiento. No modifica registros operativos. Los permisos son una lista cerrada de herramientas; las instrucciones nunca conceden permisos. La configuracion y el texto del perfil quedan registrados en cada ejecucion.
+El motor de auditoría calcula hallazgos en modo de solo lectura. Solo escribe en las tablas de agentes, ejecuciones, hallazgos y seguimiento. El agente operativo de conciliaciones descrito abajo sí crea y envía periodos. Los permisos son una lista cerrada de herramientas; las instrucciones nunca conceden permisos. La configuracion y el texto del perfil quedan registrados en cada ejecucion.
 
 La fecha de corte, registros revisados, limites y errores aparecen en Seguimiento. Las reglas tienen cobertura concreta, mostrada en la pantalla: no equivalen a una auditoria clinica, a un calculo completo de rentabilidad ni a una conciliacion bancaria. Las fuentes no disponibles producen resultados parciales o errores, nunca registros inventados.
 
@@ -42,3 +42,29 @@ Laravel registra el comando cada minuto en Kernel. En un servidor con scheduler 
 `node --test tests/Browser/agent-center.test.cjs` (Playwright con Edge en Windows).
 
 Las pruebas de OpenAI usan respuestas simuladas: no consumen API ni envian datos. Se requiere una clave real para verificar acceso y cuota del proveedor.
+
+## Orden personal y agentes operativos (noviembre de 2026)
+
+Ejecutar la migración `2026_11_12_000001_create_operational_agent_tables.php`, el seeder idempotente `OperationalAgentsSeeder` y `npm run build`. El seeder agrega dos agentes apagados sin modificar los existentes. No usan servicios externos de IA: ejecutan procedimientos y cálculos locales verificables.
+
+Super Admin puede arrastrar las tarjetas o usar Alt + flecha izquierda/derecha. El orden se guarda por usuario; Todos y Crear nuevo conservan sus posiciones. Se rechazan listas incompletas o con agentes desconocidos.
+
+### Envío automático de conciliaciones
+
+- Solo Super Admin guarda la programación y activa el agente. Los usuarios con permiso de ejecución pueden iniciar un envío manual con esa configuración, limitado a sus hospitales autorizados. Predeterminado: mensual, día 1 a las 09:00 de Ciudad de México, con remisiones del mes calendario anterior. También admite día o semana anterior.
+- Elegir hospitales activos, o Seleccionar todos, y guardar. No se generan periodos vacíos. Cada hospital recibe exclusivamente sus remisiones; los periodos y envíos se crean mediante el mismo servicio transaccional que la pantalla de conciliaciones.
+- Se excluyen remisiones ya asignadas a periodos o enviadas previamente. Un identificador único por agente/institución/hospital/fechas evita repetir entregas. Si hay precios inválidos, se revierte únicamente ese hospital y se muestra el motivo.
+- El programador conserva el ciclo pendiente tras un error y reintenta después de 15 minutos. Las entregas ya completadas se conservan. Al recuperarse procesa los ciclos atrasados, uno por agente y pasada, sin saltar al mes actual.
+- El seguimiento muestra folio, fecha, respuesta pendiente/aceptada/con cambios, responsable y motivos reportados por el hospital.
+- Correo OFF por defecto. Con ON se requieren el correo del hospital y de la institución; se sugieren los del catálogo/cuenta institucional y se pueden ajustar antes de guardar. El aviso contiene folio, periodo y enlace de acceso, sin datos de pacientes ni adjuntos clínicos.
+- Se necesita un transporte real configurado en Laravel Mail. `log` y `array` no cuentan como envío. La bandeja registra destinatario, fecha y error; reintenta cada 15 minutos hasta cinco intentos, con opción manual Reintentar correo. Apagar el agente o las notificaciones detiene los correos pendientes; los enviados no se repiten.
+
+### Comparativo de nutriciones por paciente
+
+Seleccionar hospital y expediente; alternativamente, nombre completo y fecha de nacimiento. El rango incluye solo solicitudes entregadas/finalizadas del hospital elegido. Un expediente asociado a identidades distintas se rechaza. Los usuarios hospitalarios e institucionales solo consultan hospitales de su alcance, tanto en el panel como en la descarga PDF.
+
+El informe conserva una copia de los resultados: peso registrado, cambios contra la nutrición anterior, cantidades prescritas, volumen y concentración por 100 mL. Para las categorías pediátricas por kg se usa el peso de cada solicitud. No se suman recetas del mismo día ni se convierten ausencias en ceros. Las unidades provienen del catálogo al generar el informe. Son comparaciones descriptivas, sin diagnósticos ni recomendaciones de tratamiento.
+
+El resultado queda en Centro de agentes con PDF descargable: resumen, matriz por día/nutriente y detalle de cada nutrición. Máximo 1,000 nutriciones por informe; el usuario debe acotar fechas si lo supera. Se conservan los permisos consultar/ejecutar/editar; editar modifica descripción e instrucciones, nunca las fórmulas, la programación ni los accesos.
+
+Pruebas adicionales: `tests/Feature/OperationalAgentsTest.php` y `tests/Browser/agent-operations.test.cjs`. Usan SQLite y pacientes ficticios, transporte simulado y un navegador con datos aislados. El PDF sintético opcional se genera al definir `AGENT_PDF_SAMPLE=1`.

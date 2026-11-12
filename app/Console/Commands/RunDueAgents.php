@@ -17,18 +17,21 @@ class RunDueAgents extends Command
     public function handle(AgentRunner $runner): int
     {
         Cache::put('agents:scheduler-heartbeat', now()->toIso8601String(), 300);
-        foreach (AiAgent::where('is_active', true)->whereNotNull('configuration')->where(fn ($q) => $q->whereNull('next_run_at')->orWhere('next_run_at', '<=', now()))->cursor() as $agent) {
+        foreach (AiAgent::where('is_active', true)->whereNotNull('configuration')->where(fn ($q) => $q->whereNull('next_run_at')->orWhere('next_run_at', '<=', now()))->lazyById(100) as $agent) {
             if (($agent->configuration['activation'] ?? 'manual') === 'manual') continue;
             $actor = User::find($agent->configured_by);
             if (! $actor?->hasRole('Super Admin') || (isset($actor->is_active) && ! $actor->is_active)) continue;
             try {
-                $run = $runner->run($agent, $actor, 'scheduled');
+                $run = $agent->integration_key === \App\Services\Agents\OperationalAgents::CONCILIATION
+                    ? app(\App\Services\Agents\AutomaticConciliation::class)->run($agent, $actor, 'scheduled')
+                    : $runner->run($agent, $actor, 'scheduled');
                 if ($run) $this->line('Agente '.$agent->id.': '.$run->status.' (#'.$run->id.').');
             } catch (\Throwable $e) {
                 Log::warning('Scheduled agent not runnable', ['agent_id' => $agent->id, 'exception' => get_class($e)]);
                 $this->warn('Agente '.$agent->id.': revisar configuración o ejecución en curso.');
             }
         }
+        app(\App\Services\Agents\ConciliationDeliveryMailer::class)->pending();
         return self::SUCCESS;
     }
 }

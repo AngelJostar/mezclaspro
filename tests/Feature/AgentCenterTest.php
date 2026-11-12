@@ -12,6 +12,17 @@ use Tests\TestCase;
 
 class AgentCenterTest extends TestCase
 {
+    public function test_agent_order_is_persisted_per_super_administrator_and_rejects_incomplete_lists(): void
+    {
+        $first = AiAgent::create(['name'=>'Primero']); $second = AiAgent::create(['name'=>'Segundo']);
+        Livewire::test(AgentCenter::class)->call('reorderAgents',[$second->id,$first->id])->assertHasNoErrors();
+        $this->assertSame([$second->id,$first->id],\App\Services\Agents\AgentOrder::agents(auth()->user())->pluck('id')->all());
+        Livewire::test(AgentCenter::class)->call('reorderAgents',[$first->id])->assertHasErrors('agentOrder');
+        $other = User::forceCreate(['name'=>'Otro superadministrador']); $other->assignRole('Super Admin');
+        $this->assertSame([$first->id,$second->id],\App\Services\Agents\AgentOrder::agents($other)->pluck('id')->all());
+        $component = Livewire::test(AgentCenter::class); $this->actingAs(User::forceCreate(['name'=>'Sin permiso']));
+        $component->call('reorderAgents',[$first->id,$second->id])->assertForbidden();
+    }
     protected function setUp(): void
     {
         parent::setUp();

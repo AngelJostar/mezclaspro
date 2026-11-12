@@ -223,6 +223,7 @@ Route::prefix('distribucion')
     });
 
 Route::prefix('centro-de-agentes')->name('agents.')->group(function () {
+    Route::get('/informes-nutricionales/{run}/pdf', \App\Http\Controllers\Admin\AgentNutritionReportController::class)->whereNumber('run')->name('nutrition-report');
     Route::get('/', [\App\Http\Controllers\Admin\AgentPortalController::class, 'index'])->name('index');
     Route::get('/manuales/{source}/archivo', [\App\Http\Controllers\Admin\AgentPortalController::class, 'manual'])->whereNumber('source')->name('manual');
     Route::get('/{agent}', [\App\Http\Controllers\Admin\AgentPortalController::class, 'index'])->whereNumber('agent')->name('show');

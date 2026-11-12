@@ -1,5 +1,6 @@
 <section class="agent-center" aria-labelledby="agent-center-title"
     x-data="{
+        ...window.agentCarouselOrder($wire),
         previous: false, next: false,
         updateNavigation() {
             const track = this.$refs.agentTrack;
@@ -10,7 +11,7 @@
             this.$refs.agentTrack.scrollBy({ left: direction * 240, behavior: 'smooth' });
         }
     }"
-    x-init="$nextTick(() => updateNavigation())" @resize.window.debounce.100ms="updateNavigation()"
+    x-init="$nextTick(() => updateNavigation())" @resize.window.debounce.100ms="updateNavigation()" @operational-agent-changed.window="$wire.$refresh()"
     @agent-saved.window="$nextTick(() => { updateNavigation(); $refs.agentTrack.querySelector('[aria-pressed=true][data-agent-select]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); })">
     <div class="agent-center-heading">
         <h2 id="agent-center-title">Centro de agentes</h2>
@@ -24,12 +25,15 @@
         </div>
     </div>
 
+    <p class="agent-order-help">Arrastra los recuadros para ordenar tus agentes. También puedes usar Alt + flecha izquierda o derecha sobre un agente.</p>
+
     <div class="agent-carousel">
         <button type="button" class="agent-carousel-arrow" @click="move(-1)" :disabled="!previous" disabled
             aria-label="Agentes anteriores" title="Agentes anteriores">
             <span aria-hidden="true" wire:ignore x-init="$nextTick(() => window.refreshAgentIcons?.($el))"><i data-agent-icon="chevron-left"></i></span>
         </button>
         <div class="agent-carousel-track" x-ref="agentTrack" @scroll.debounce.50ms="updateNavigation()"
+            @pointerdown="startOrder($event)" @pointermove.window="moveOrder($event)" @pointerup.window="finishOrder($event)" @pointercancel.window="cancelOrder()" @keydown="keyOrder($event)" @click.capture="suppressOrderClick($event)" @dragstart.prevent
             data-disable-sticky-x role="group" aria-label="Seleccionar agente">
             <button type="button" class="agent-choice" wire:click="selectAgent('all')"
                 aria-pressed="{{ $selection === 'all' ? 'true' : 'false' }}"
@@ -67,15 +71,20 @@
     @endif
     @error('execution')<p class="agent-error" role="alert">{{ $message }}</p>@enderror
     @error('agentConfig')<p class="agent-error" role="alert">{{ $message }}</p>@enderror
+    @error('agentOrder')<p class="agent-error" role="alert">{{ $message }}</p>@enderror
     <div id="agent-information" aria-live="polite">
         @if ($selection !== '')
             @forelse ($agents->filter(fn ($agent) => $selection === 'all' || $selection === (string) $agent->id) as $agent)
                 <article class="agent-information" wire:key="agent-information-{{ $agent->id }}" data-agent-information="{{ $agent->id }}">
+                    @if (\App\Services\Agents\OperationalAgents::handles($agent))
+                        <livewire:admin.operational-agent-panel :agent-id="$agent->id" :manage-access="true" :key="'operational-agent-'.$agent->id" />
+                    @else
                     @include('livewire.admin.agent-overview')
                     @if ($agent->integration_key === \App\Services\Clinical\ClinicalEvidence::KEY)
                         @include('livewire.admin.agent-clinical-details')
                     @else
                         @include('livewire.admin.agent-center-details')
+                    @endif
                     @endif
                 </article>
             @empty

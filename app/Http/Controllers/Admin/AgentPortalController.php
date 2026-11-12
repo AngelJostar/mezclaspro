@@ -66,7 +66,7 @@ class AgentPortalController extends Controller
         ]);
         // Delegated editing does not change grants, execution scope, activation or provider credentials.
         $agent->fill($data);
-        $agent->configured_by = $request->user()->id;
+        if (!\App\Services\Agents\OperationalAgents::handles($agent)) $agent->configured_by = $request->user()->id;
         $agent->source_fingerprint = null;
         $agent->save();
         return redirect()->route('admin.agents.show', $agent)->with('status', 'Información e instrucciones del agente actualizadas.');
@@ -93,6 +93,9 @@ class AgentPortalController extends Controller
     public function run(Request $request, AiAgent $agent, AgentAccess $access, AgentRunner $runner)
     {
         $access->authorize($request->user(), $agent, 'can_run');
+        if (\App\Services\Agents\OperationalAgents::handles($agent)) {
+            return redirect()->route('admin.agents.show', $agent)->with('status', 'Utiliza los controles de este agente para seleccionar el periodo o los datos del paciente.');
+        }
         $run = $runner->run($agent, $request->user());
         $status = match ($run?->status) {
             'completed' => 'Ejecución completada. Consulta los resultados.',

@@ -28,6 +28,7 @@ class AgentCenter
         (require database_path('migrations/2026_09_14_000005_add_agent_execution.php'))->up();
         (require database_path('migrations/2026_09_16_000001_add_integration_key_to_ai_agents.php'))->up();
         (require database_path('migrations/2026_11_04_000001_create_ai_agent_access_grants.php'))->up();
+        (require database_path('migrations/2026_11_12_000001_create_operational_agent_tables.php'))->up();
         Schema::create('personnel_profiles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id');

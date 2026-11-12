@@ -6,13 +6,15 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:', 'session.driver' => 'array', 'cache.default' => 'array', 'services.openai.api_key' => null]);
 Illuminate\Support\Facades\Http::preventStrayRequests();
 Illuminate\Support\Facades\DB::purge('sqlite');
-if (($argv[1] ?? '') === 'promesa') {
+if (($argv[1] ?? '') === 'operational') {
+    Tests\Fixtures\OperationalAgentData::seed();
+} elseif (($argv[1] ?? '') === 'promesa') {
     Tests\Fixtures\AgentCenter::seed();
     (new Database\Seeders\PromesaAiAgentsSeeder())->run();
 } else {
     Tests\Fixtures\AgentCenter::seed((int) ($argv[1] ?? 8));
 }
-Tests\Fixtures\AgentAuditData::seed();
+if (($argv[1] ?? '') !== 'operational') Tests\Fixtures\AgentAuditData::seed();
 if (($argv[1] ?? '') === 'access') {
     App\Models\AiAgent::create(['name' => 'Auditoría de prueba', 'description' => 'Revisión de entregas', 'instructions' => 'Revisar los registros asignados.']);
     $member = App\Models\User::forceCreate(['name' => 'Ana García', 'username' => 'ana.prueba']);
@@ -37,7 +39,7 @@ if (($argv[1] ?? '') === 'clinical-chat') {
         ]]]]);
     }]);
 }
-Illuminate\Support\Facades\DB::table('medicine_batches')->insert(['lote' => 'LOTE-PRUEBA', 'stock_actual' => 3, 'stock_reservado' => 0, 'caducidad' => now()->addDays(5)->toDateString(), 'is_active' => 1, 'costo_unitario' => 100, 'laboratory_id' => 1, 'warehouse_id' => 1]);
+if (($argv[1] ?? '') !== 'operational') Illuminate\Support\Facades\DB::table('medicine_batches')->insert(['lote' => 'LOTE-PRUEBA', 'stock_actual' => 3, 'stock_reservado' => 0, 'caducidad' => now()->addDays(5)->toDateString(), 'is_active' => 1, 'costo_unitario' => 100, 'laboratory_id' => 1, 'warehouse_id' => 1]);
 
 // Keep the synthetic database alive while the browser exercises real Livewire updates.
 while (($line = fgets(STDIN)) !== false) {

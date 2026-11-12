@@ -116,6 +116,7 @@ class AgentCenter extends Component
         $this->authorizeAccess();
         abort_unless($this->accessAgentId, 403);
         app(\App\Services\Agents\AgentAccess::class)->replace(Auth::user(), AiAgent::findOrFail($this->accessAgentId), $this->accessRows, $this->accessRevision);
+        $this->dispatch('agent-access-saved', id: $this->accessAgentId);
         $this->closeAccess();
         $this->status = 'Autorizaciones del agente guardadas.';
     }
@@ -148,6 +149,13 @@ class AgentCenter extends Component
         $this->selection = $this->selection === $selection ? '' : $selection;
         $this->reset('historyLimit', 'findingLimit');
         $this->resetValidation();
+    }
+
+    public function reorderAgents(array $ids): void
+    {
+        $this->authorizeAccess();
+        \App\Services\Agents\AgentOrder::save(Auth::user(), $ids);
+        $this->status = 'Orden de agentes guardado para tu usuario.';
     }
 
     public function openCreate(): void
@@ -333,7 +341,7 @@ class AgentCenter extends Component
         $provider = OpenAiProviderConfiguration::resolve();
 
         return view('livewire.admin.agent-center', [
-            'agents' => AiAgent::query()->orderBy('name')->get(),
+            'agents' => \App\Services\Agents\AgentOrder::agents(Auth::user()),
             'configOptions' => AgentConfiguration::class,
             'institutions' => $this->showAgentForm ? Institucion::orderBy('nombre')->get(['id', 'nombre']) : collect(),
             'laboratories' => $this->showAgentForm ? Laboratory::orderBy('nombre')->get(['id', 'nombre']) : collect(),

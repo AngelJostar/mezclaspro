@@ -248,3 +248,45 @@
         .agent-overview .overview-full pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:300px; overflow:auto; font:inherit; margin-top:12px; }
         @media(max-width:1000px) { .agent-overview .overview-summary { grid-template-columns:1fr 1fr; } .agent-overview .overview-summary > div + div { border:0; padding:0; } .agent-overview .overview-columns { grid-template-columns:1fr; } }
         @media(max-width:600px) { .agent-overview .overview-title { align-items:flex-start; flex-direction:column; } .agent-overview h3 { font-size:22px; } .agent-overview .overview-summary,.agent-overview .overview-methods { grid-template-columns:1fr; } .agent-overview .overview-card-heading { flex-wrap:wrap; } }
+.agent-order-help { color:#657995; font-size:12px; margin:8px 0 0; }
+.agent-choice[data-agent-select] { cursor:grab; touch-action:pan-y; user-select:none; }
+.agent-choice.agent-dragging { cursor:grabbing; opacity:.6; outline:2px dashed #2479dc; outline-offset:3px; }
+.operational-agent { display:grid; gap:18px; min-width:0; }
+.operational-agent .agent-save,.operational-agent .agent-cancel { display:inline-flex; align-items:center; justify-content:center; border-radius:7px; padding:10px 16px; font-size:13px; font-weight:600; }
+.operational-agent .agent-save:disabled { opacity:.5; cursor:not-allowed; }
+.operational-agent .agent-save { background:#00a58e; }
+.operational-agent .agent-save:hover { background:#008e7a; }
+.operational-agent .agent-status { color:#00856f; padding:12px 16px; border:1px solid #a8ded5; background:#effbf9; border-radius:7px; }
+.operational-agent .overview-card { min-width:0; }
+.operational-agent .agent-modal-header h3 { font-size:17px; }
+.operational-agent .overview-step-copy { min-width:0; }
+.operational-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr)); gap:16px; margin:18px 0; }
+.operational-fields label { display:flex; flex-direction:column; gap:7px; font-size:12px; font-weight:600; }
+.operational-fields input,.operational-fields select,.operational-fields textarea,.operational-hospital-header input[type=search] { border:1px solid #cddcee; border-radius:7px; padding:10px 12px; font-size:13px; width:100%; background:white; color:#17365d; }
+.operational-agent small { display:block; color:#657995; font-size:11px; font-weight:400; line-height:1.5; }
+.operational-hospital-header { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin:22px 0 12px; }
+.operational-hospital-header h4 { margin:0; }
+.operational-hospital-header label { display:flex; align-items:center; gap:8px; font-size:13px; }
+.operational-hospital-header input[type=search] { max-width:380px; margin-left:auto; }
+.operational-hospital-list { max-height:280px; overflow:auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr)); border:1px solid #d7e2ef; border-radius:8px; }
+.operational-hospital-list label { display:flex; align-items:flex-start; gap:12px; padding:14px; border-bottom:1px solid #e7edf5; font-size:12px; }
+.operational-hospital-list input,.operational-hospital-header input[type=checkbox] { flex-shrink:0; width:18px; height:18px; margin-top:2px; border-color:#b0c6df; border-radius:4px; color:#00a58e; }
+.operational-hospital-list label:has(input:checked) { background:#effbf9; }
+.operational-hospital-list label:has(input:disabled) { opacity:.55; }
+.operational-email-toggle { display:flex; justify-content:space-between; gap:20px; align-items:center; margin:24px 0 12px; padding:16px; border:1px solid #d7e2ef; border-radius:8px; background:#f6faff; }
+.operational-email-toggle p { margin:0; }
+.operational-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; font-size:12px; color:#60748f; margin:12px 0; }
+.operational-actions h4 { margin-right:auto; }
+.operational-table-scroll { overflow:auto; border:1px solid #d7e2ef; border-radius:8px; margin-top:15px; }
+.operational-table { width:100%; border-collapse:collapse; font-size:12px; text-align:left; min-width:800px; }
+.operational-table th { background:#f0f6fd; font-weight:600; }
+.operational-table th,.operational-table td { padding:13px 14px; border-bottom:1px solid #e3ebf5; vertical-align:top; }
+.operational-table tbody tr:nth-child(even) { background:#fafcff; }
+.operational-history { margin:12px 0; padding:12px 0; border-top:1px solid #e3ebf5; font-size:13px; }
+.operational-history summary { cursor:pointer; font-weight:600; }
+.nutrition-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr)); gap:12px; margin:20px 0; }
+.nutrition-summary > div { background:#f1f9fc; border:1px solid #d3e6ef; border-radius:8px; padding:16px; }
+.nutrition-summary span { font-size:12px; color:#60748f; display:block; }
+.nutrition-summary strong { font-size:22px; display:block; margin:8px 0; }
+.nutrition-matrix th,.nutrition-matrix td { min-width:170px; }
+@media(max-width:600px) { .operational-hospital-header input[type=search] { max-width:none; } }

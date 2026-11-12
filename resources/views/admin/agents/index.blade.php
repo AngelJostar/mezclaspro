@@ -15,6 +15,9 @@
                     </a>
                 @endforeach
             </nav>
+            @if (\App\Services\Agents\OperationalAgents::handles($agent))
+                <livewire:admin.operational-agent-panel :agent-id="$agent->id" :key="'operational-portal-'.$agent->id" />
+            @else
             <article class="agent-overview" x-data="{ editing: {{ $errors->hasAny(['name', 'description', 'instructions']) ? 'true' : 'false' }}, previewManual: null }">
                 <header class="overview-title">
                     <div><h2>{{ $agent->name }}</h2><p class="agent-access-help">Tus permisos: {{ collect(\App\Services\Agents\AgentAccess::LABELS)->filter(fn ($label, $key) => $permissions[$key])->implode(' · ') }}</p></div>
@@ -127,6 +130,7 @@
                 @empty<p>No hay hallazgos registrados para tu alcance.</p>@endforelse
                 {{ $findings->links() }}
             </section>
+            @endif
         @endif
     </section>
 </x-admin-layout>

@@ -20,9 +20,19 @@ class InstitutionReadOnlyAccess
         if ($route === 'logout') return $next($request);
         abort_unless($user->hasRole('Institucion'), 403, 'La cuenta debe conservar el perfil de institución.');
         // Explicit per-agent permissions allow only these delegated actions; business operations remain read-only.
-        if (($request->isMethod('GET') || $request->isMethod('HEAD')) && $request->routeIs('admin.agents.index', 'admin.agents.show')) return $next($request);
+        if (($request->isMethod('GET') || $request->isMethod('HEAD')) && $request->routeIs('admin.agents.index', 'admin.agents.show', 'admin.agents.nutrition-report')) return $next($request);
         if ($request->isMethod('PUT') && $request->routeIs('admin.agents.update')) return $next($request);
         if ($request->isMethod('POST') && $request->routeIs('admin.agents.run')) return $next($request);
+        if ($request->isMethod('POST') && $request->routeIs('default.livewire.update', 'livewire.update')) {
+            $components = $request->input('components');
+            // Livewire verifies each snapshot signature; this component rechecks agent grants and hospital scope on every action.
+            // Do not open updates for other components in the institution's read-only portal.
+            if (is_array($components) && count($components) > 0 && count($components) <= 10
+                && collect($components)->every(fn ($component) => is_string($component['snapshot'] ?? null)
+                    && data_get(json_decode($component['snapshot'], true), 'memo.name') === 'admin.operational-agent-panel')) {
+                return $next($request);
+            }
+        }
         if ($request->isMethod('GET') && ($request->path() === '/' || in_array($route, ['login', 'admin.dashboard'], true))) {
             return redirect()->route('admin.solicitudes.index');
         }
